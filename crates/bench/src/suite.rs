@@ -259,6 +259,7 @@ pub fn cpu() -> Vec<CpuRecord> {
     cpu_dag(&mut out);
     cpu_edits(&mut out);
     cpu_gpu(&mut out);
+    cpu_world(&mut out);
     cpu_render(&mut out);
     out
 }
@@ -526,6 +527,27 @@ fn cpu_gpu(out: &mut Vec<CpuRecord>) {
     ));
 }
 
+fn cpu_world(out: &mut Vec<CpuRecord>) {
+    let dir = temp_dir("world-tick");
+    let mut world = World::new(
+        &dir,
+        Box::new(|p: ChunkPos, dense: &mut [u16]| {
+            dense.copy_from_slice(&patterns::terrain(p.x, p.z));
+        }),
+        MemSink::default(),
+    )
+    .expect("open world");
+    world.load(ChunkPos::new(0, 0, 0)).expect("load chunk");
+    let now = Instant::now();
+    out.push(bench_ops(
+        "world/tick_idle",
+        "policy check with no pending overlays",
+        || black_box(world.tick(now).expect("tick")),
+    ));
+    drop(world);
+    std::fs::remove_dir_all(dir).ok();
+}
+
 fn cpu_render(out: &mut Vec<CpuRecord>) {
     const BLOCKS: usize = 65_536;
     let registry = fixtures::registry(BLOCKS);
@@ -636,6 +658,66 @@ pub fn latency() -> Vec<LatencyRecord> {
                 .set(x, y, z, MaterialId::from_raw(1))
                 .expect("set voxel");
         },
+    ));
+    drop(world);
+    std::fs::remove_dir_all(dir).ok();
+
+    // Policy path: an idle frame is a cheap check; an event-triggered fold pays
+    // the DAG rebuild and the disk sync.
+    let dir = temp_dir("world-policy");
+    let mut world = World::new(
+        &dir,
+        Box::new(|p: ChunkPos, dense: &mut [u16]| {
+            dense.copy_from_slice(&patterns::terrain(p.x, p.z));
+        }),
+        MemSink::default(),
+    )
+    .expect("open world");
+    world.load(ChunkPos::new(0, 0, 0)).expect("load chunk");
+    let now = Instant::now();
+    out.push(latency_case(
+        "latency/world_tick_idle",
+        "policy check with no pending overlays",
+        2_000,
+        |_| {
+            black_box(world.tick(now).expect("tick"));
+        },
+    ));
+
+    let mut next = 0u32;
+    let mut next_voxel = || {
+        let index = next;
+        next = next.wrapping_add(1);
+        (
+            (index & 63) as i32,
+            ((index >> 6) & 63) as i32,
+            (index >> 12) as i32,
+        )
+    };
+    for _ in 0..16 {
+        let (x, y, z) = next_voxel();
+        world
+            .set(x, y, z, MaterialId::from_raw(4))
+            .expect("set voxel");
+        let r = world.consolidate(1).expect("consolidate");
+        assert_eq!(r.remaining, 0);
+        world.reclaim(r.epoch);
+    }
+    let mut durations = Vec::with_capacity(512);
+    for _ in 0..512 {
+        let (x, y, z) = next_voxel();
+        let start = Instant::now();
+        world
+            .set(x, y, z, MaterialId::from_raw(4))
+            .expect("set voxel");
+        let r = world.consolidate(1).expect("consolidate");
+        durations.push(start.elapsed().as_nanos() as f64 / 1_000.0);
+        world.reclaim(r.epoch);
+    }
+    out.push(summarize(
+        "latency/world_consolidate_1",
+        "one edit + event fold; DAG rebuild and disk sync included",
+        durations,
     ));
     drop(world);
     std::fs::remove_dir_all(dir).ok();

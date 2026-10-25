@@ -269,6 +269,7 @@ pub fn summarize(report: &Report) -> BTreeMap<String, f64> {
         ("gpu_apply_edits_100_ns", "gpu/apply_edits/100"),
         ("gpu_overlay_set_100_ns", "gpu/overlay_set/100"),
         ("gpu_overlay_flush_64_ns", "gpu/overlay_flush/64_loaded"),
+        ("world_tick_idle_ns", "world/tick_idle"),
     ] {
         if let Some(record) = report.cpu.iter().find(|record| record.case == case) {
             metrics.insert(key.into(), record.ns_per_op);
@@ -281,6 +282,8 @@ pub fn summarize(report: &Report) -> BTreeMap<String, f64> {
         ("gpu_edit_p99_us", "latency/gpu_edit_1"),
         ("gpu_overlay_set_p99_us", "latency/gpu_overlay_set"),
         ("world_set_p99_us", "latency/world_set"),
+        ("world_tick_idle_p99_us", "latency/world_tick_idle"),
+        ("world_consolidate_p99_us", "latency/world_consolidate_1"),
     ] {
         if let Some(record) = report.latency.iter().find(|record| record.case == case) {
             metrics.insert(key.into(), record.p99_us);
@@ -412,11 +415,14 @@ const TREND: &[(&str, &str, &str)] = &[
     ("gpu_apply_edits_100_ns", "GPU edit 100", "ns"),
     ("gpu_overlay_set_100_ns", "GPU overlay set 100", "ns"),
     ("gpu_overlay_flush_64_ns", "GPU overlay flush 64", "ns"),
+    ("world_tick_idle_ns", "World tick (idle)", "ns"),
     ("hot_lookup_p99_us", "Hot lookup p99", "us"),
     ("dag_get_p99_us", "DAG get p99", "us"),
     ("gpu_edit_p99_us", "GPU edit p99", "us"),
     ("gpu_overlay_set_p99_us", "GPU overlay set p99", "us"),
     ("world_set_p99_us", "World set p99", "us"),
+    ("world_tick_idle_p99_us", "World tick p99", "us"),
+    ("world_consolidate_p99_us", "World consolidate p99", "us"),
 ];
 
 fn order(a: &RunSummary, b: &RunSummary) -> std::cmp::Ordering {

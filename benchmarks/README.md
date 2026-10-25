@@ -80,6 +80,7 @@ Re-recording the same label is allowed and gets a numeric suffix.
 | registry freeze, hot lookup, resolved lookup, palette resolve | CPU |
 | DAG build/get, GPU lookup, GPU overlay lookup, 100-edit COW, overlay set/flush | CPU |
 | hot lookup, DAG get, GPU edit, GPU overlay set, `World::set` p99 | latency |
+| world tick idle, world consolidate p99 | latency |
 
 Peak RSS and CPU time are whole-run totals: adding a case raises them without
 any code regression. Each run stores a suite fingerprint, and `HISTORY.md`

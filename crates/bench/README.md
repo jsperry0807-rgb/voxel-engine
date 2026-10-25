@@ -65,7 +65,9 @@ operation and bytes per operation.
 
 **Latency** takes 2 000 individual samples after a warmup and reports the
 percentiles, which is the honest way to check the 60 Hz edit requirement:
-a mean of 100 µs is irrelevant if p99 is 20 ms.
+a mean of 100 µs is irrelevant if p99 is 20 ms. The policy path is measured
+separately: `latency/world_tick_idle` is the trigger check, and
+`latency/world_consolidate_1` pays one edit, the DAG rebuild and the disk sync.
 
 ## Caveats
 

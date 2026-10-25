@@ -1,8 +1,9 @@
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 use voxel_block::{BlockRegistryBuilder, MaterialId};
 use voxel_storage::dag::Svdag;
 use voxel_storage::gpu::{BLOCKS_PER_CHUNK, GpuStore, MemSink, OVERLAY_VALUES, OVERLAY_WORDS};
-use voxel_storage::world::World;
+use voxel_storage::world::{ConsolidationPolicy, World};
 use voxel_storage::{CHUNK_VOLUME, ChunkPos};
 
 fn id(raw: u16) -> MaterialId {
@@ -437,5 +438,114 @@ fn registry_ids_drive_chunk_storage() {
     assert_eq!(w.get(3, 4, 5), Some(dirt));
     assert_eq!(w.get(3, 40, 5), Some(water));
 
+    std::fs::remove_dir_all(dir).ok();
+}
+
+fn policy(
+    size_trigger: usize,
+    idle_secs: u64,
+    frame_budget: Duration,
+    max_chunks: usize,
+) -> ConsolidationPolicy {
+    ConsolidationPolicy {
+        size_trigger,
+        idle_trigger: Duration::from_secs(idle_secs),
+        frame_budget,
+        max_chunks,
+    }
+}
+
+#[test]
+fn consolidation_policy_waits_for_idle() {
+    let dir = tmp("policy-idle");
+    let mut w = World::new(&dir, flat(), MemSink::default()).unwrap();
+    w.set_policy(policy(usize::MAX, 30, Duration::from_secs(10), 8));
+
+    w.set(5, 10, 5, id(0)).unwrap();
+    assert_eq!(w.pending_chunks(), 1);
+    assert!(w.tick(Instant::now()).unwrap().is_none(), "no trigger yet");
+
+    let later = Instant::now() + Duration::from_secs(31);
+    let r = w.tick(later).unwrap().expect("idle trigger");
+    assert_eq!(r.chunks, 1);
+    assert_eq!(r.remaining, 0);
+    assert_eq!(w.pending_chunks(), 0);
+    assert_eq!(w.gpu().lookup(ChunkPos::new(0, 0, 0), 5, 10, 5), 0);
+    w.reclaim(r.epoch);
+
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn consolidation_policy_size_trigger_folds_without_idle() {
+    let dir = tmp("policy-size");
+    let mut w = World::new(&dir, flat(), MemSink::default()).unwrap();
+    w.set_policy(policy(2, 3_600, Duration::from_secs(10), 8));
+
+    w.set(1, 1, 1, id(0)).unwrap();
+    assert!(
+        w.tick(Instant::now()).unwrap().is_none(),
+        "one entry is below the size trigger"
+    );
+
+    w.set(2, 2, 2, id(0)).unwrap();
+    let r = w.tick(Instant::now()).unwrap().expect("size trigger");
+    assert_eq!(r.chunks, 1);
+    assert_eq!(r.remaining, 0);
+    assert_eq!(w.pending_chunks(), 0);
+    w.reclaim(r.epoch);
+
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn consolidation_policy_budget_stops_between_chunks() {
+    let dir = tmp("policy-budget");
+    let mut w = World::new(&dir, flat(), MemSink::default()).unwrap();
+    w.set_policy(policy(1, 3_600, Duration::ZERO, 8));
+
+    w.set(1, 1, 1, id(0)).unwrap();
+    w.set(65, 1, 1, id(0)).unwrap(); // chunk (1, 0, 0), local x = 1
+    assert_eq!(w.pending_chunks(), 2);
+
+    let first = w.tick(Instant::now()).unwrap().expect("size trigger");
+    assert_eq!(first.chunks, 1, "a zero budget still makes progress");
+    assert_eq!(first.remaining, 1);
+
+    let second = w.tick(Instant::now()).unwrap().expect("size trigger again");
+    assert_eq!(second.chunks, 1);
+    assert_eq!(second.remaining, 0);
+
+    w.reclaim(first.epoch);
+    w.reclaim(second.epoch);
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn pending_chunks_ignores_a_fully_reverted_overlay() {
+    let dir = tmp("policy-revert");
+    let mut w = World::new(&dir, flat(), MemSink::default()).unwrap();
+    w.set_policy(policy(1, 30, Duration::from_secs(10), 8));
+
+    w.set(1, 1, 1, id(0)).unwrap();
+    w.set(1, 1, 1, id(1)).unwrap(); // back to the DAG value
+    assert_eq!(w.pending_chunks(), 0);
+    assert_eq!(w.dirty_chunks(), 1, "still needs an empty diff write");
+    assert!(
+        w.tick(Instant::now() + Duration::from_secs(31))
+            .unwrap()
+            .is_none()
+    );
+
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn consolidation_policy_max_chunks_zero_disables_tick() {
+    let dir = tmp("policy-disabled");
+    let mut w = World::new(&dir, flat(), MemSink::default()).unwrap();
+    w.set_policy(policy(1, 0, Duration::from_secs(10), 0));
+    w.set(1, 1, 1, id(0)).unwrap();
+    assert!(w.tick(Instant::now()).unwrap().is_none());
     std::fs::remove_dir_all(dir).ok();
 }

@@ -1,6 +1,7 @@
 //! Tier 2: resident chunks. Mining/placing is O(1) in the overlay, and the same
 //! override goes straight to the GPU overlay so the next frame sees it. The
-//! compressed DAG is rebuilt in batches by `consolidate`.
+//! compressed DAG is rebuilt by [`World::tick`] when a
+//! [`ConsolidationPolicy`] trigger fires, or explicitly on save/LOD events.
 use crate::dag::Svdag;
 use crate::disk::RegionStore;
 use crate::gpu::{GpuSink, GpuStore};
@@ -10,10 +11,47 @@ use crate::{CHUNK_VOLUME, ChunkPos, local_xyz, split_voxel};
 use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use voxel_block::MaterialId;
 
 /// Fill a zeroed dense chunk (index = x + y*64 + z*4096) with raw [`MaterialId`]s for `pos`.
 pub type Generator = Box<dyn FnMut(ChunkPos, &mut [u16]) + Send>;
+
+/// When to fold overlays into the DAG (ADR §10.2).
+///
+/// The overlay is the interactive path; folding it is maintenance. Folding
+/// eagerly costs the frame that does it, folding never costs memory and makes
+/// the GPU table grow. The policy is deliberately trigger-based:
+///
+/// * **size** — one chunk at [`Self::size_trigger`] entries is folded even when
+///   the frame budget is otherwise idle;
+/// * **idle** — after [`Self::idle_trigger`] with no edits, drain everything;
+/// * **budget** — never spend more than [`Self::frame_budget`] folding per
+///   [`World::tick`], so a large backlog spreads over frames;
+/// * **event** — call [`World::consolidate`] directly on save, unload, or an
+///   LOD transition when the caller needs the DAG to be authoritative.
+#[derive(Clone, Debug)]
+pub struct ConsolidationPolicy {
+    /// Fold a chunk once its overlay reaches this many entries.
+    pub size_trigger: usize,
+    /// Drain all pending overlays after this long with no edits.
+    pub idle_trigger: Duration,
+    /// Maximum wall time spent folding per [`World::tick`].
+    pub frame_budget: Duration,
+    /// Safety cap on chunks folded per tick, even when the budget allows more.
+    pub max_chunks: usize,
+}
+
+impl Default for ConsolidationPolicy {
+    fn default() -> Self {
+        Self {
+            size_trigger: 4_096,
+            idle_trigger: Duration::from_secs(30),
+            frame_budget: Duration::from_millis(2),
+            max_chunks: 8,
+        }
+    }
+}
 
 pub struct Chunk {
     pub dag: Arc<Svdag>,
@@ -25,6 +63,8 @@ pub struct Consolidated {
     pub chunks: usize,
     /// pass to `World::reclaim` after GPU frames submitted before this flush have finished
     pub epoch: u64,
+    /// dirty chunks still holding at least one overlay entry
+    pub remaining: usize,
 }
 
 pub struct World<S: GpuSink> {
@@ -35,6 +75,9 @@ pub struct World<S: GpuSink> {
     sink: S,
     generator: Generator,
     scratch: Vec<u16>,
+    policy: ConsolidationPolicy,
+    last_edit: Instant,
+    oversized: bool,
 }
 
 impl<S: GpuSink> World<S> {
@@ -47,6 +90,9 @@ impl<S: GpuSink> World<S> {
             sink,
             generator,
             scratch: vec![0; CHUNK_VOLUME],
+            policy: ConsolidationPolicy::default(),
+            last_edit: Instant::now(),
+            oversized: false,
         })
     }
 
@@ -67,6 +113,9 @@ impl<S: GpuSink> World<S> {
         if !overlay.is_empty() {
             self.gpu.set_chunk_overlay(p, overlay.iter());
             self.edited.insert(p);
+            if overlay.len() >= self.policy.size_trigger {
+                self.oversized = true;
+            }
         }
         self.chunks.insert(
             p,
@@ -98,7 +147,7 @@ impl<S: GpuSink> World<S> {
     pub fn set(&mut self, x: i32, y: i32, z: i32, v: MaterialId) -> io::Result<()> {
         let (p, li) = split_voxel(x, y, z);
         self.load(p)?;
-        let revert = {
+        let (revert, len) = {
             let c = self.chunks.get_mut(&p).unwrap();
             let (lx, ly, lz) = local_xyz(li);
             let revert = v.as_raw() == c.dag.get(lx, ly, lz);
@@ -108,7 +157,7 @@ impl<S: GpuSink> World<S> {
                 c.overlay.set(li, v.as_raw());
             }
             c.unsaved = true;
-            revert
+            (revert, c.overlay.len())
         };
         if revert {
             self.gpu.clear_overlay(p, li);
@@ -116,6 +165,10 @@ impl<S: GpuSink> World<S> {
             self.gpu.set_overlay(p, li, v.as_raw());
         }
         self.edited.insert(p);
+        if len >= self.policy.size_trigger {
+            self.oversized = true;
+        }
+        self.last_edit = Instant::now();
         Ok(())
     }
 
@@ -143,12 +196,79 @@ impl<S: GpuSink> World<S> {
                 self.edited.remove(&p);
             }
         }
+        self.refresh_oversized();
         self.disk.sync()
+    }
+
+    /// Chunks that still hold at least one overlay entry.
+    ///
+    /// [`Self::dirty_chunks`] also counts entries whose overlay was fully
+    /// reverted and is waiting for [`Self::flush_edits`] to persist the empty
+    /// diff, so use this for consolidation decisions.
+    pub fn pending_chunks(&self) -> usize {
+        self.edited
+            .iter()
+            .filter(|p| {
+                self.chunks
+                    .get(p)
+                    .is_some_and(|chunk| !chunk.overlay.is_empty())
+            })
+            .count()
+    }
+
+    /// The current consolidation policy.
+    pub fn policy(&self) -> &ConsolidationPolicy {
+        &self.policy
+    }
+
+    /// Replace the policy and re-evaluate the size trigger.
+    pub fn set_policy(&mut self, policy: ConsolidationPolicy) {
+        self.policy = policy;
+        self.refresh_oversized();
+    }
+
+    /// Frame hook: fold overlays when the policy says so, within the frame budget.
+    ///
+    /// Returns `None` when no trigger fired. Call this once per frame; it is
+    /// cheap when there is nothing to do. The caller must still call
+    /// [`Self::reclaim`] with the returned epoch after the GPU work submitted
+    /// before the following flush has completed.
+    pub fn tick(&mut self, now: Instant) -> io::Result<Option<Consolidated>> {
+        if self.dirty_chunks() == 0 || self.policy.max_chunks == 0 {
+            return Ok(None);
+        }
+        let idle = now.saturating_duration_since(self.last_edit) >= self.policy.idle_trigger;
+        if !self.oversized && !idle {
+            return Ok(None);
+        }
+        // A reverted edit can leave an "edited" slot with no entries.
+        if self.pending_chunks() == 0 {
+            self.oversized = false;
+            return Ok(None);
+        }
+        self.consolidate_budgeted(self.policy.max_chunks, self.policy.frame_budget)
+            .map(Some)
+    }
+
+    /// Event trigger: fold up to `max_chunks` overlays now.
+    ///
+    /// Use this on save, unload, or an LOD transition when the caller needs the
+    /// DAG to be authoritative. For the per-frame path use [`Self::tick`].
+    pub fn consolidate(&mut self, max_chunks: usize) -> io::Result<Consolidated> {
+        self.consolidate_budgeted(max_chunks, Duration::MAX)
     }
 
     /// Fold up to `max_chunks` overlays (largest first) into new DAGs, persist them, and push
     /// the whole batch to the GPU tier in one COW pass + one upload flush.
-    pub fn consolidate(&mut self, max_chunks: usize) -> io::Result<Consolidated> {
+    ///
+    /// Stops starting a new chunk once `budget` has elapsed, but always makes
+    /// progress on at least one chunk when there is work.
+    pub fn consolidate_budgeted(
+        &mut self,
+        max_chunks: usize,
+        budget: Duration,
+    ) -> io::Result<Consolidated> {
+        let started = Instant::now();
         let mut cand: Vec<(usize, ChunkPos)> = self
             .edited
             .iter()
@@ -162,6 +282,9 @@ impl<S: GpuSink> World<S> {
 
         let mut done = 0usize;
         for (_, p) in cand {
+            if done > 0 && started.elapsed() >= budget {
+                break;
+            }
             let c = self.chunks.get_mut(&p).unwrap();
             // Clear the GPU overlay first: the folded DAG writes land in the same flush,
             // so no frame sees a hole between the two updates.
@@ -178,10 +301,21 @@ impl<S: GpuSink> World<S> {
         let epoch = self.gpu.end_batch();
         self.gpu.flush(&mut self.sink);
         self.disk.sync()?;
+        self.refresh_oversized();
         Ok(Consolidated {
             chunks: done,
             epoch,
+            remaining: self.pending_chunks(),
         })
+    }
+
+    fn refresh_oversized(&mut self) {
+        let threshold = self.policy.size_trigger;
+        self.oversized = self.edited.iter().any(|p| {
+            self.chunks
+                .get(p)
+                .is_some_and(|chunk| chunk.overlay.len() >= threshold)
+        });
     }
 
     /// Push pending loads/evictions to the GPU without consolidating edits.
@@ -199,6 +333,7 @@ impl<S: GpuSink> World<S> {
         if self.chunks.remove(&p).is_some() {
             self.edited.remove(&p);
             self.gpu.remove_chunk(p);
+            self.refresh_oversized();
         }
         Ok(())
     }
