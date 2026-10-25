@@ -2,7 +2,7 @@
 //!
 //! T1 `disk`    region files: append-only log of serialized SVDAGs + overlay snapshots
 //! T2 `world`   `FxMap<ChunkPos, Chunk{Arc<Svdag>, Overlay}>`; edits hit the O(1) overlay only
-//! T3 `gpu`     global deduped node pool + dynamic chunk hash table, batched COW consolidation
+//! T3 `gpu`     global deduped node pool + dynamic chunk hash table + per-chunk edit overlay
 pub mod dag;
 pub mod disk;
 pub mod gpu;

@@ -47,6 +47,19 @@ fn gpu_scene() -> (GpuStore, Vec<(u32, u32, u32)>) {
     (store, coords)
 }
 
+fn gpu_overlay_scene() -> (GpuStore, Vec<(u32, u32, u32)>) {
+    let (mut store, coords) = gpu_scene();
+    let pos = ChunkPos::new(0, 0, 0);
+    // One full 16^3 block, so the deterministic run crosses both bitmap states.
+    for within in 0..4096u32 {
+        let x = within & 15;
+        let y = (within >> 4) & 15;
+        let z = (within >> 8) & 15;
+        store.set_overlay(pos, x | (y << 6) | (z << 12), 4);
+    }
+    (store, coords)
+}
+
 fn material_scene() -> voxel_block::BlockRegistry {
     fixtures::registry(65_536)
 }
@@ -101,6 +114,17 @@ fn gpu_lookup((store, coords): (GpuStore, Vec<(u32, u32, u32)>)) -> u32 {
 }
 
 #[library_benchmark]
+#[bench::gpu_lookup_overlay(gpu_overlay_scene())]
+fn gpu_lookup_overlay((store, coords): (GpuStore, Vec<(u32, u32, u32)>)) -> u32 {
+    let pos = ChunkPos::new(0, 0, 0);
+    let mut acc = 0u32;
+    for (x, y, z) in coords {
+        acc = acc.wrapping_add(store.lookup(pos, x, y, z) as u32);
+    }
+    black_box(acc)
+}
+
+#[library_benchmark]
 #[bench::material_words(material_scene())]
 fn material_words(registry: voxel_block::BlockRegistry) -> usize {
     black_box(registry.gpu_hot_words().len() + registry.gpu_texture_set_words().len())
@@ -108,7 +132,7 @@ fn material_words(registry: voxel_block::BlockRegistry) -> usize {
 
 library_benchmark_group!(
     name = voxel;
-    benchmarks = hot_lookup, resolved_lookup, dag_get, dag_build, gpu_lookup, material_words
+    benchmarks = hot_lookup, resolved_lookup, dag_get, dag_build, gpu_lookup, gpu_lookup_overlay, material_words
 );
 
 main!(library_benchmark_groups = voxel);

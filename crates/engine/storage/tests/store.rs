@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use voxel_block::{BlockRegistryBuilder, MaterialId};
 use voxel_storage::dag::Svdag;
-use voxel_storage::gpu::{GpuStore, MemSink};
+use voxel_storage::gpu::{BLOCKS_PER_CHUNK, GpuStore, MemSink, OVERLAY_VALUES, OVERLAY_WORDS};
 use voxel_storage::world::World;
 use voxel_storage::{CHUNK_VOLUME, ChunkPos};
 
@@ -31,6 +31,10 @@ fn flat() -> FillFn {
             }
         }
     })
+}
+
+fn air() -> FillFn {
+    Box::new(|_, _| {})
 }
 
 #[test]
@@ -75,9 +79,29 @@ fn overlay_then_batched_consolidation() {
     assert_eq!(w.get(5, 10, 5), Some(id(0)));
     assert_eq!(w.get(5, 40, 5), Some(id(2)));
     assert_eq!(w.get(-1, 0, -1), Some(id(3)));
-    // GPU still shows the old DAG until the batch
-    assert_eq!(w.gpu().lookup(c0, 5, 10, 5), 1);
+    // The GPU overlay shadows the DAG immediately, before the batch.
+    assert_eq!(w.gpu().lookup(c0, 5, 10, 5), 0);
+    assert_eq!(w.gpu().lookup(c0, 5, 40, 5), 2);
+    assert_eq!(w.gpu().lookup(ChunkPos::new(-1, 0, -1), 63, 0, 63), 3);
     assert_eq!(w.dirty_chunks(), 2);
+    // A carved voxel is represented by the presence bit, not by a zero value.
+    let idx = 5 | (10 << 6) | (5 << 12);
+    let within = voxel_storage::gpu::block_index(idx);
+    let slot = w
+        .gpu()
+        .block_overlay_slot(c0, idx)
+        .expect("chunk 0 has an overlay");
+    let base = slot as usize * OVERLAY_WORDS;
+    assert_eq!(
+        w.gpu().overlays()[base + OVERLAY_VALUES + (within >> 5) as usize] & (1 << (within & 31)),
+        1 << (within & 31),
+    );
+    w.flush_gpu();
+    assert_eq!(w.sink().table, w.gpu().table());
+    assert_eq!(
+        &w.sink().overlays[..w.gpu().overlays().len()],
+        w.gpu().overlays()
+    );
 
     let r = w.consolidate(16).unwrap();
     assert_eq!(r.chunks, 2);
@@ -85,6 +109,8 @@ fn overlay_then_batched_consolidation() {
     assert_eq!(w.gpu().lookup(c0, 5, 10, 5), 0);
     assert_eq!(w.gpu().lookup(c0, 5, 40, 5), 2);
     assert_eq!(w.gpu().lookup(ChunkPos::new(-1, 0, -1), 63, 0, 63), 3);
+    // Folding clears the overlay; the DAG now carries the edit.
+    assert!(w.gpu().block_table_slot(c0).is_none());
     // sink mirrors CPU copy
     let g = w.gpu();
     assert_eq!(&w.sink().nodes[..g.pool().len()], g.pool());
@@ -94,7 +120,111 @@ fn overlay_then_batched_consolidation() {
     // reverting an edit removes the overlay entry
     w.set(5, 10, 5, id(0)).unwrap();
     assert_eq!(w.chunk(c0).unwrap().overlay.len(), 0);
+    assert!(w.gpu().block_table_slot(c0).is_none());
     std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn overlay_only_chunk_survives_and_folds() {
+    let dir = tmp("overlay-only");
+    let mut w = World::new(&dir, air(), MemSink::default()).unwrap();
+    let p = ChunkPos::new(0, 0, 0);
+
+    // An all-air chunk has no DAG; the overlay alone keeps it addressable.
+    w.set(1, 2, 3, id(3)).unwrap();
+    assert_eq!(w.gpu().lookup(p, 1, 2, 3), 3);
+    assert!(w.gpu().contains(p));
+    assert_eq!(w.gpu().root_of(p), voxel_storage::dag::NONE);
+    assert!(w.gpu().block_table_slot(p).is_some());
+
+    // Reverting to air removes the override and the now-empty chunk entry.
+    w.set(1, 2, 3, id(0)).unwrap();
+    assert!(!w.gpu().contains(p));
+    assert!(w.gpu().block_table_slot(p).is_none());
+
+    // A fresh placement folds into a real DAG at consolidation.
+    w.set(4, 5, 6, id(3)).unwrap();
+    let r = w.consolidate(4).unwrap();
+    assert_eq!(r.chunks, 1);
+    assert!(w.gpu().block_table_slot(p).is_none());
+    assert_eq!(w.gpu().lookup(p, 4, 5, 6), 3);
+    w.reclaim(r.epoch);
+
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn gpu_overlay_is_restored_from_disk() {
+    let dir = tmp("overlay-disk");
+    let p = ChunkPos::new(0, 0, 0);
+    {
+        let mut w = World::new(&dir, air(), MemSink::default()).unwrap();
+        w.set(2, 3, 4, id(5)).unwrap();
+        w.flush_edits().unwrap();
+        w.evict(p).unwrap();
+        assert!(!w.gpu().contains(p));
+    }
+    {
+        let mut w = World::new(
+            &dir,
+            Box::new(|_, _| panic!("must load from disk")),
+            MemSink::default(),
+        )
+        .unwrap();
+        w.load(p).unwrap();
+        assert_eq!(w.get(2, 3, 4), Some(id(5)));
+        assert_eq!(w.gpu().lookup(p, 2, 3, 4), 5);
+        assert!(w.gpu().block_table_slot(p).is_some());
+    }
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn overlay_slots_are_retired_and_reused() {
+    let mut g = GpuStore::new();
+    let p = ChunkPos::new(0, 0, 0);
+    for i in 0..4 {
+        g.set_overlay(p, i, 2);
+    }
+    let first_table = g.block_table_slot(p).expect("block table attached");
+    let first_overlay = g.block_overlay_slot(p, 0).expect("overlay attached");
+    g.clear_chunk_overlay(p);
+    assert!(!g.contains(p));
+    assert!(g.block_table_slot(p).is_none());
+
+    let tag = g.end_batch();
+    g.reclaim(tag);
+    g.set_overlay(p, 9, 3);
+    assert_eq!(g.block_table_slot(p), Some(first_table), "recycled table");
+    assert_eq!(
+        g.block_overlay_slot(p, 9),
+        Some(first_overlay),
+        "recycled overlay"
+    );
+    assert_eq!(g.lookup(p, 9, 0, 0), 3);
+    assert_eq!(g.lookup(p, 0, 0, 0), 0, "stale entries were cleared");
+}
+
+#[test]
+fn overlay_pool_grows_and_reuses_slots() {
+    let mut g = GpuStore::new();
+    for i in 0..8 {
+        g.set_overlay(ChunkPos::new(i, 0, 0), 0, 4);
+    }
+    assert_eq!(g.overlays().len(), 8 * OVERLAY_WORDS);
+    assert_eq!(g.block_tables().len(), 8 * BLOCKS_PER_CHUNK);
+
+    for i in 0..8 {
+        g.clear_chunk_overlay(ChunkPos::new(i, 0, 0));
+    }
+    assert_eq!(g.chunk_count(), 0);
+    let tag = g.end_batch();
+    g.reclaim(tag);
+
+    g.set_overlay(ChunkPos::new(0, 0, 0), 0, 4);
+    assert!(g.block_overlay_slot(ChunkPos::new(0, 0, 0), 0).unwrap() < 8);
+    assert_eq!(g.overlays().len(), 8 * OVERLAY_WORDS);
+    assert_eq!(g.block_tables().len(), 8 * BLOCKS_PER_CHUNK);
 }
 
 #[test]

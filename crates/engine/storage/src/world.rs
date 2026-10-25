@@ -1,5 +1,6 @@
-//! Tier 2: resident chunks. Mining/placing only touches the overlay (O(1)).
-//! The compressed DAG is rebuilt in batches by `consolidate`, then pushed to the GPU tier.
+//! Tier 2: resident chunks. Mining/placing is O(1) in the overlay, and the same
+//! override goes straight to the GPU overlay so the next frame sees it. The
+//! compressed DAG is rebuilt in batches by `consolidate`.
 use crate::dag::Svdag;
 use crate::disk::RegionStore;
 use crate::gpu::{GpuSink, GpuStore};
@@ -64,6 +65,7 @@ impl<S: GpuSink> World<S> {
         };
         self.gpu.set_chunk(p, &dag);
         if !overlay.is_empty() {
+            self.gpu.set_chunk_overlay(p, overlay.iter());
             self.edited.insert(p);
         }
         self.chunks.insert(
@@ -90,17 +92,29 @@ impl<S: GpuSink> World<S> {
     }
 
     /// O(1): overlay insert (or removal when the edit reverts to the DAG value).
+    ///
+    /// The GPU overlay is updated in the same call, so the edit is visible to the
+    /// next frame after [`Self::flush_gpu`] — no consolidation needed.
     pub fn set(&mut self, x: i32, y: i32, z: i32, v: MaterialId) -> io::Result<()> {
         let (p, li) = split_voxel(x, y, z);
         self.load(p)?;
-        let c = self.chunks.get_mut(&p).unwrap();
-        let (lx, ly, lz) = local_xyz(li);
-        if v.as_raw() == c.dag.get(lx, ly, lz) {
-            c.overlay.remove(li);
+        let revert = {
+            let c = self.chunks.get_mut(&p).unwrap();
+            let (lx, ly, lz) = local_xyz(li);
+            let revert = v.as_raw() == c.dag.get(lx, ly, lz);
+            if revert {
+                c.overlay.remove(li);
+            } else {
+                c.overlay.set(li, v.as_raw());
+            }
+            c.unsaved = true;
+            revert
+        };
+        if revert {
+            self.gpu.clear_overlay(p, li);
         } else {
-            c.overlay.set(li, v.as_raw());
+            self.gpu.set_overlay(p, li, v.as_raw());
         }
-        c.unsaved = true;
         self.edited.insert(p);
         Ok(())
     }
@@ -149,6 +163,9 @@ impl<S: GpuSink> World<S> {
         let mut done = 0usize;
         for (_, p) in cand {
             let c = self.chunks.get_mut(&p).unwrap();
+            // Clear the GPU overlay first: the folded DAG writes land in the same flush,
+            // so no frame sees a hole between the two updates.
+            self.gpu.clear_chunk_overlay(p);
             self.gpu.apply_edits(p, c.overlay.iter()); // GPU tier: edit changed paths in place
             let new = Arc::new(c.dag.apply_edits(c.overlay.iter())); // CPU tier: same edits
             self.disk.put_dag(p, &new)?; // supersedes the diff record
@@ -181,7 +198,7 @@ impl<S: GpuSink> World<S> {
         self.persist(p)?;
         if self.chunks.remove(&p).is_some() {
             self.edited.remove(&p);
-            self.gpu.set_chunk(p, &Svdag::empty());
+            self.gpu.remove_chunk(p);
         }
         Ok(())
     }

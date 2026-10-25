@@ -183,6 +183,8 @@ pub fn summarize(report: &Report) -> BTreeMap<String, f64> {
         ("chunk_terrain_mem", "memory", "chunk/terrain"),
         ("world_256_mem", "memory", "world/256_chunks_gpu"),
         ("gpu_tables_mem", "memory", "gpu_tables/65536"),
+        ("gpu_overlay_1_block_mem", "memory", "gpu_overlay/1"),
+        ("gpu_overlay_64_blocks_mem", "memory", "gpu_overlay/64"),
     ] {
         if let Some(value) = memory(report, expect.2) {
             metrics.insert(expect.0.into(), value.resident as f64);
@@ -197,7 +199,10 @@ pub fn summarize(report: &Report) -> BTreeMap<String, f64> {
         ("dag_build_terrain_ns", "dag/build/terrain"),
         ("dag_get_ns", "dag/get/random"),
         ("gpu_lookup_ns", "gpu/lookup"),
+        ("gpu_lookup_overlay_ns", "gpu/lookup_overlay"),
         ("gpu_apply_edits_100_ns", "gpu/apply_edits/100"),
+        ("gpu_overlay_set_100_ns", "gpu/overlay_set/100"),
+        ("gpu_overlay_flush_64_ns", "gpu/overlay_flush/64_loaded"),
     ] {
         if let Some(record) = report.cpu.iter().find(|record| record.case == case) {
             metrics.insert(key.into(), record.ns_per_op);
@@ -208,6 +213,7 @@ pub fn summarize(report: &Report) -> BTreeMap<String, f64> {
         ("hot_lookup_p99_us", "latency/hot_lookup"),
         ("dag_get_p99_us", "latency/dag_get"),
         ("gpu_edit_p99_us", "latency/gpu_edit_1"),
+        ("gpu_overlay_set_p99_us", "latency/gpu_overlay_set"),
         ("world_set_p99_us", "latency/world_set"),
     ] {
         if let Some(record) = report.latency.iter().find(|record| record.case == case) {
@@ -306,6 +312,12 @@ const TREND: &[(&str, &str, &str)] = &[
     ("chunk_terrain_mem", "Terrain chunk resident", "bytes"),
     ("world_256_mem", "256-chunk GPU world", "bytes"),
     ("gpu_tables_mem", "Material GPU tables", "bytes"),
+    ("gpu_overlay_1_block_mem", "GPU overlay, 1 block", "bytes"),
+    (
+        "gpu_overlay_64_blocks_mem",
+        "GPU overlay, 64 blocks",
+        "bytes",
+    ),
     ("registry_freeze_65536_ns", "Registry freeze 65k", "ns"),
     ("hot_lookup_ns", "Hot lookup", "ns"),
     ("resolved_lookup_ns", "Resolved lookup", "ns"),
@@ -313,10 +325,14 @@ const TREND: &[(&str, &str, &str)] = &[
     ("dag_build_terrain_ns", "DAG build terrain", "ns"),
     ("dag_get_ns", "DAG get", "ns"),
     ("gpu_lookup_ns", "GPU lookup", "ns"),
+    ("gpu_lookup_overlay_ns", "GPU lookup (overlay)", "ns"),
     ("gpu_apply_edits_100_ns", "GPU edit 100", "ns"),
+    ("gpu_overlay_set_100_ns", "GPU overlay set 100", "ns"),
+    ("gpu_overlay_flush_64_ns", "GPU overlay flush 64", "ns"),
     ("hot_lookup_p99_us", "Hot lookup p99", "us"),
     ("dag_get_p99_us", "DAG get p99", "us"),
     ("gpu_edit_p99_us", "GPU edit p99", "us"),
+    ("gpu_overlay_set_p99_us", "GPU overlay set p99", "us"),
     ("world_set_p99_us", "World set p99", "us"),
 ];
 

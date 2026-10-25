@@ -167,10 +167,14 @@ fn storage_flush_reaches_the_gpu_buffers() {
 
     let pos = ChunkPos::new(1, -2, 3);
     store.set_chunk(pos, &dag);
+    store.set_overlay(pos, 0, 7);
+    store.set_overlay(pos, CHUNK_VOLUME as u32 - 1, 8);
     store.flush(&mut sink);
 
     assert!(sink.node_words() >= store.pool().len());
     assert_eq!(sink.table_words(), store.table().len());
+    assert!(sink.overlay_words() >= store.overlays().len());
+    assert!(sink.block_table_words() >= store.block_tables().len());
     assert_eq!(
         read_words(device, queue, sink.nodes(), store.pool().len()),
         store.pool(),
@@ -178,6 +182,19 @@ fn storage_flush_reaches_the_gpu_buffers() {
     assert_eq!(
         read_words(device, queue, sink.table(), store.table().len()),
         store.table(),
+    );
+    assert_eq!(
+        read_words(device, queue, sink.overlays(), store.overlays().len()),
+        store.overlays(),
+    );
+    assert_eq!(
+        read_words(
+            device,
+            queue,
+            sink.block_tables(),
+            store.block_tables().len()
+        ),
+        store.block_tables(),
     );
 }
 
@@ -204,6 +221,14 @@ fn world_edits_flush_and_bind() {
     world.flush();
     assert_eq!(world.store().lookup(pos, 1, 0, 0), 2);
     assert_eq!(world.store().lookup(pos, 0, 0, 0), 1);
+
+    // Overlay edits are visible without folding them into the DAG.
+    world.set_overlay(pos, 2, 3);
+    world.flush();
+    assert_eq!(world.store().lookup(pos, 2, 0, 0), 3);
+    world.clear_overlay(pos, 2);
+    world.flush();
+    assert_eq!(world.store().lookup(pos, 2, 0, 0), 0);
 }
 
 /// A one-thread compute probe that reads the same buffers a renderer would.
@@ -254,6 +279,55 @@ fn shader_reads_the_uploaded_tables() {
     let dense = vec![probe.as_raw(); CHUNK_VOLUME];
     world.set_chunk(ChunkPos::new(0, 0, 0), &Svdag::from_dense(&dense));
     world.flush();
+
+    let got = run_probe(gpu, &world);
+    assert_eq!(got[0], probe.as_raw() as u32, "material id");
+    assert_eq!(got[1], RenderType::Cutout.to_bits(), "render type");
+    assert_eq!(
+        got[2],
+        (BlockFlags::SOLID | BlockFlags::CULLS_SELF).as_bits(),
+        "hot flags",
+    );
+    assert_eq!(got[3], 7, "light emission");
+    assert_eq!(got[4], 5, "light opacity");
+
+    let faces = registry
+        .face_textures(probe)
+        .expect("probe block has textures");
+    for face in voxel_block::face::Face::ALL {
+        assert_eq!(
+            got[5 + face.index()],
+            faces.get(face).as_raw() as u32,
+            "texture for {face}",
+        );
+    }
+
+    // A carved voxel must shadow the solid DAG with air. The presence bit, not
+    // the value, is what makes the overlay win.
+    let pos = ChunkPos::new(0, 0, 0);
+    world.set_overlay(pos, 0, 0);
+    world.flush();
+    assert_eq!(
+        world.store().lookup(pos, 0, 0, 0),
+        0,
+        "CPU overlay shadows the DAG"
+    );
+    assert_eq!(world.store().block_table_slot(pos), Some(0));
+    assert!(world.store().block_overlay_slot(pos, 0).is_some());
+    let got = run_probe(gpu, &world);
+    assert_eq!(got[0], 0, "overlay carves the DAG voxel to air");
+
+    // An overlay-only chunk has no DAG at all; the override is still sampled.
+    world.set_chunk(pos, &Svdag::empty());
+    world.set_overlay(pos, 0, probe.as_raw());
+    world.flush();
+    let got = run_probe(gpu, &world);
+    assert_eq!(got[0], probe.as_raw() as u32, "overlay without a DAG");
+}
+
+/// Runs the one-voxel compute probe and returns its 11 output words.
+fn run_probe(gpu: &Gpu, world: &GpuWorld) -> Vec<u32> {
+    let (device, queue) = (&gpu.device, &gpu.queue);
 
     // Group 2: the probe's output.
     let output_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -332,25 +406,5 @@ fn shader_reads_the_uploaded_tables() {
         })
         .expect("device poll");
 
-    let got = read_words(device, queue, &output, 11);
-    assert_eq!(got[0], probe.as_raw() as u32, "material id");
-    assert_eq!(got[1], RenderType::Cutout.to_bits(), "render type");
-    assert_eq!(
-        got[2],
-        (BlockFlags::SOLID | BlockFlags::CULLS_SELF).as_bits(),
-        "hot flags",
-    );
-    assert_eq!(got[3], 7, "light emission");
-    assert_eq!(got[4], 5, "light opacity");
-
-    let faces = registry
-        .face_textures(probe)
-        .expect("probe block has textures");
-    for face in voxel_block::face::Face::ALL {
-        assert_eq!(
-            got[5 + face.index()],
-            faces.get(face).as_raw() as u32,
-            "texture for {face}",
-        );
-    }
+    read_words(device, queue, &output, 11)
 }

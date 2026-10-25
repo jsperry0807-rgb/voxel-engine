@@ -135,5 +135,64 @@ fn bench_gpu_upload(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_material_words, bench_flush, bench_gpu_upload);
+fn bench_overlay(c: &mut Criterion) {
+    let dag = Svdag::from_dense(&patterns::terrain(0, 0));
+    let pos = ChunkPos::new(0, 0, 0);
+
+    let mut group = c.benchmark_group("overlay_gpu");
+    group.bench_function("set_one", |b| {
+        let mut store = GpuStore::new();
+        store.set_chunk(pos, &dag);
+        store.set_overlay(pos, 0, 4); // allocate table + slot outside the samples
+        let mut idx = 0u32;
+        b.iter(|| {
+            idx = (idx + 1) & 0xFFF;
+            store.set_overlay(pos, idx, 4);
+        })
+    });
+    group.bench_function("lookup_hit", |b| {
+        let mut store = GpuStore::new();
+        store.set_chunk(pos, &dag);
+        for within in 0..4096u32 {
+            let x = within & 15;
+            let y = (within >> 4) & 15;
+            let z = (within >> 8) & 15;
+            store.set_overlay(pos, x | (y << 6) | (z << 12), 4);
+        }
+        b.iter(|| black_box(store.lookup(pos, 5, 5, 5)))
+    });
+    group.bench_function("flush_64", |b| {
+        let mut store = GpuStore::new();
+        for i in 0..64i32 {
+            let (x, z) = (i % 8, i / 8);
+            store.set_chunk(
+                ChunkPos::new(x, 0, z),
+                &Svdag::from_dense(&patterns::terrain(x, z)),
+            );
+            store.end_batch();
+        }
+        let mut sink = MemSink::default();
+        let mut idx = 0u32;
+        b.iter(|| {
+            idx = idx.wrapping_add(1);
+            for i in 0..64i32 {
+                let (x, z) = (i % 8, i / 8);
+                store.set_overlay(ChunkPos::new(x, 0, z), idx & 0xFFF, 4);
+            }
+            store.flush(&mut sink);
+            let tag = store.end_batch();
+            store.reclaim(tag);
+            black_box(sink.bytes_written)
+        })
+    });
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_material_words,
+    bench_flush,
+    bench_overlay,
+    bench_gpu_upload
+);
 criterion_main!(benches);

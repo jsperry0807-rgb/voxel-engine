@@ -33,6 +33,7 @@ pub fn memory() -> Vec<MemoryRecord> {
     memory_world(&mut out);
     memory_gpu_tables(&mut out);
     memory_overlay(&mut out);
+    memory_gpu_overlay(&mut out);
     memory_disk(&mut out);
     out
 }
@@ -175,6 +176,35 @@ fn memory_overlay(out: &mut Vec<MemoryRecord>) {
                 overlay.len(),
                 stats.resident as f64 / edits as f64,
                 bytes(stats.peak),
+            ),
+        });
+    }
+}
+
+fn memory_gpu_overlay(out: &mut Vec<MemoryRecord>) {
+    let pos = ChunkPos::new(0, 0, 0);
+    let dag = Svdag::from_dense(&patterns::terrain(0, 0));
+    for blocks in [1usize, 64] {
+        let (store, stats) = mem::measure(|| {
+            let mut store = GpuStore::new();
+            store.set_chunk(pos, &dag);
+            for b in 0..blocks as u32 {
+                // The first voxel of block `b`, so every write allocates one slot.
+                let idx = ((b & 3) << 4) | (((b >> 2) & 3) << 10) | (((b >> 4) & 3) << 16);
+                store.set_overlay(pos, idx, 3);
+            }
+            store
+        });
+        out.push(MemoryRecord {
+            case: format!("gpu_overlay/{blocks}"),
+            resident: stats.resident,
+            allocated: stats.allocated,
+            allocs: stats.allocs,
+            peak: stats.peak,
+            note: format!(
+                "{blocks} edited 16^3 block(s); {} overlay words ({:.1} KiB/block)",
+                store.overlays().len(),
+                store.overlays().len() as f64 * 4.0 / blocks as f64 / 1024.0,
             ),
         });
     }
@@ -397,6 +427,41 @@ fn cpu_gpu(out: &mut Vec<CpuRecord>) {
         },
     ));
 
+    // Block 0 fully overridden, so the coordinates below hit the overlay path.
+    let mut overlay_store = GpuStore::new();
+    overlay_store.set_chunk(pos, &dag);
+    for within in 0..4096u32 {
+        let x = within & 15;
+        let y = (within >> 4) & 15;
+        let z = (within >> 8) & 15;
+        overlay_store.set_overlay(pos, x | (y << 6) | (z << 12), 4);
+    }
+    let mut overlay_coords = random_coords(1 << 16, 0x8765_4321)
+        .into_iter()
+        .map(|(x, y, z)| (x & 15, y & 15, z & 15))
+        .cycle();
+    out.push(bench_ops(
+        "gpu/lookup_overlay",
+        "probe + block table + presence bitmap hit",
+        || {
+            let (x, y, z) = overlay_coords.next().expect("cycle is infinite");
+            black_box(overlay_store.lookup(pos, x, y, z))
+        },
+    ));
+
+    let mut overlay_index = 0u32;
+    out.push(bench_ops(
+        "gpu/overlay_set/100",
+        "100 overlay writes in one 16^3 block",
+        || {
+            for _ in 0..100 {
+                overlay_index = (overlay_index + 1) & 0xFFF;
+                overlay_store.set_overlay(pos, overlay_index, 4);
+            }
+            black_box(overlay_index)
+        },
+    ));
+
     let edits: Vec<(u32, u16)> = random_indices(100, 0x9999)
         .into_iter()
         .map(|index| (index, 4))
@@ -428,6 +493,31 @@ fn cpu_gpu(out: &mut Vec<CpuRecord>) {
         || {
             index = index.wrapping_add(1);
             store.apply_edits(pos, [(index % CHUNK_VOLUME as u32, 4)]);
+            store.flush(&mut sink);
+            let tag = store.end_batch();
+            store.reclaim(tag);
+            black_box(sink.bytes_written)
+        },
+    ));
+
+    let mut store = GpuStore::new();
+    for i in 0..64i32 {
+        let (x, z) = (i % 8, i / 8);
+        let dag = Svdag::from_dense(&patterns::terrain(x, z));
+        store.set_chunk(ChunkPos::new(x, 0, z), &dag);
+        store.end_batch();
+    }
+    let mut sink = MemSink::default();
+    let mut index = 0u32;
+    out.push(bench_ops(
+        "gpu/overlay_flush/64_loaded",
+        "one overlay write per chunk, dirty ranges folded, in-memory sink",
+        || {
+            index = index.wrapping_add(1);
+            for i in 0..64i32 {
+                let (x, z) = (i % 8, i / 8);
+                store.set_overlay(ChunkPos::new(x, 0, z), index & 0xFFF, 4);
+            }
             store.flush(&mut sink);
             let tag = store.end_batch();
             store.reclaim(tag);
@@ -502,6 +592,23 @@ pub fn latency() -> Vec<LatencyRecord> {
     out.push(summarize(
         "latency/gpu_edit_1",
         "one COW edit on a resident chunk; reclaim excluded",
+        durations,
+    ));
+
+    let mut store = GpuStore::new();
+    store.set_chunk(pos, &terrain);
+    store.set_overlay(pos, 0, 4); // allocate the block table + overlay slot outside the samples
+    let mut overlay_index = 0u32;
+    let mut durations = Vec::with_capacity(2_000);
+    for _ in 0..2_000 {
+        overlay_index = (overlay_index + 1) & 0xFFF;
+        let start = Instant::now();
+        store.set_overlay(pos, overlay_index, 4);
+        durations.push(start.elapsed().as_nanos() as f64 / 1_000.0);
+    }
+    out.push(summarize(
+        "latency/gpu_overlay_set",
+        "one overlay write; block table + slot already resident",
         durations,
     ));
 

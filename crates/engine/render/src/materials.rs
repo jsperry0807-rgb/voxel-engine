@@ -103,7 +103,7 @@ impl MaterialBuffers {
 
 /// Bind-group layout matching `material.wgsl` (group 1).
 pub fn material_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-    storage_bind_group_layout(device, "voxel-material-layout")
+    storage_bind_group_layout(device, "voxel-material-layout", 2)
 }
 
 fn upload_words(

@@ -1,4 +1,4 @@
-//! One place to own the three GPU tables a frame reads.
+//! One place to own the GPU tables a frame reads.
 //!
 //! [`GpuWorld`] is a thin composition, not a renderer: it keeps the storage
 //! tier's [`GpuStore`], the wgpu [`WgpuSink`] that receives its dirty ranges,
@@ -44,10 +44,41 @@ impl GpuWorld {
 
     /// Points a chunk at `dag`, copying it into the GPU node pool.
     ///
-    /// Empty DAGs remove the chunk. This is copy-on-write; the previous tree is
-    /// retired and freed by [`Self::reclaim`] once the GPU has finished with it.
+    /// Empty DAGs clear the root. The chunk stays addressable while it has an
+    /// overlay. This is copy-on-write; the previous tree is retired and freed by
+    /// [`Self::reclaim`] once the GPU has finished with it.
     pub fn set_chunk(&mut self, pos: ChunkPos, dag: &Svdag) {
         self.store.set_chunk(pos, dag);
+    }
+
+    /// Applies `(local voxel index, material)` edits to a chunk's overlay.
+    ///
+    /// The overlay shadows the DAG in `sample_chunk`, so the edit is visible to
+    /// the next frame after [`Self::flush`]. Storage is allocated per 16^3
+    /// block: one edit costs one ~8 KiB block slot, not one per chunk. Call
+    /// [`Self::clear_chunk_overlay`] after folding the same edits into the DAG
+    /// with [`Self::apply_edits`].
+    pub fn set_overlay(&mut self, pos: ChunkPos, idx: u32, material: u16) {
+        self.store.set_overlay(pos, idx, material);
+    }
+
+    /// Removes one overlay entry, falling back to the DAG value.
+    pub fn clear_overlay(&mut self, pos: ChunkPos, idx: u32) {
+        self.store.clear_overlay(pos, idx);
+    }
+
+    /// Installs a whole overlay snapshot, e.g. after loading a chunk from disk.
+    pub fn set_chunk_overlay(
+        &mut self,
+        pos: ChunkPos,
+        edits: impl IntoIterator<Item = (u32, u16)>,
+    ) {
+        self.store.set_chunk_overlay(pos, edits);
+    }
+
+    /// Drops a chunk's overlay without folding it into the DAG.
+    pub fn clear_chunk_overlay(&mut self, pos: ChunkPos) {
+        self.store.clear_chunk_overlay(pos);
     }
 
     /// Applies `(local voxel index, material)` edits to a chunk in place.

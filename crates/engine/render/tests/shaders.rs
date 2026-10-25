@@ -33,3 +33,25 @@ fn shader_bindings_use_separate_groups() {
     assert!(!SVDAG_WGSL.contains("@group(1)"));
     assert!(!MATERIAL_WGSL.contains("@group(0)"));
 }
+
+#[test]
+fn shader_layout_constants_match_the_cpu_tables() {
+    use voxel_storage::gpu::{
+        BLOCKS_PER_CHUNK, OVERLAY_BITS, OVERLAY_VALUES, OVERLAY_WORDS, SLOT_WORDS,
+    };
+
+    for (name, value) in [
+        ("SLOT_WORDS", SLOT_WORDS),
+        ("BLOCKS_PER_CHUNK", BLOCKS_PER_CHUNK),
+        ("OVERLAY_VALUES", OVERLAY_VALUES),
+        ("OVERLAY_BITS", OVERLAY_BITS),
+        ("OVERLAY_WORDS", OVERLAY_WORDS),
+    ] {
+        let needle = format!("const {name}: u32 = {value}u;");
+        assert!(SVDAG_WGSL.contains(&needle), "missing {needle}");
+    }
+    assert_eq!(OVERLAY_WORDS, OVERLAY_VALUES + OVERLAY_BITS);
+    // The block overlay and block table are bindings 2 and 3 of the terrain group.
+    assert!(SVDAG_WGSL.contains("@group(0) @binding(2)"));
+    assert!(SVDAG_WGSL.contains("@group(0) @binding(3)"));
+}

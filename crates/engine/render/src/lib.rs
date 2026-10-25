@@ -14,7 +14,7 @@
 //!   and [`voxel_block::BlockRegistry::gpu_texture_set_words`] word for word.
 //! - [`GpuWorld`] wires one [`voxel_storage::gpu::GpuStore`], one [`WgpuSink`]
 //!   and one [`MaterialBuffers`] together, so a frame can edit chunks, flush
-//!   the dirty ranges, and bind both tables in one place.
+//!   the dirty ranges, and bind the tables in one place.
 //!
 //! # Shader contract
 //!
@@ -26,22 +26,25 @@
 //! | Group | Binding | Buffer | Rust owner |
 //! |---|---|---|---|
 //! | 0 | 0 | node pool (`array<u32>`) | [`WgpuSink::nodes`] |
-//! | 0 | 1 | chunk table, 4 words per slot | [`WgpuSink::table`] |
+//! | 0 | 1 | chunk table, 5 words per slot | [`WgpuSink::table`] |
+//! | 0 | 2 | block overlays, 2 176 words per slot | [`WgpuSink::overlays`] |
+//! | 0 | 3 | block tables, 64 words per chunk | [`WgpuSink::block_tables`] |
 //! | 1 | 0 | hot records, 2 words per block | [`MaterialBuffers::hot`] |
 //! | 1 | 1 | texture sets, 3 words per set | [`MaterialBuffers::texture_sets`] |
 //!
-//! [`SVDAG_WGSL`] exposes `chunk_root`, `dag_get` and `sample_chunk`;
+//! [`SVDAG_WGSL`] exposes `chunk_slot`, `chunk_root`, `dag_get` and
+//! `sample_chunk`; `sample_chunk` checks the 16^3 block overlay before
+//! descending the DAG, so an unconsolidated edit is visible to the next frame.
 //! [`MATERIAL_WGSL`] exposes the hot-record and per-face texture accessors.
 //! [`SVDAG_WGSL`] returns a raw [`voxel_block::MaterialId`] value, which the
 //! caller hands to the material accessors.
 //!
 //! # Binding lifetime
 //!
-//! [`WgpuSink`] reallocates its buffers when the storage tier grows the node
-//! pool or the chunk table. A bind group created before such a resize keeps
-//! pointing at the old buffer, so create bind groups *after* the frame's
-//! [`GpuWorld::flush`], or recreate them whenever
-//! [`WgpuSink::node_words`] or [`WgpuSink::table_words`] changes.
+//! [`WgpuSink`] reallocates its buffers when the storage tier grows a table. A
+//! bind group created before such a resize keeps pointing at the old buffer, so
+//! create bind groups *after* the frame's [`GpuWorld::flush`], or recreate them
+//! whenever any `*_words` capacity changes.
 //!
 //! ```
 //! use voxel_block::{BlockKind, BlockRegistryBuilder};

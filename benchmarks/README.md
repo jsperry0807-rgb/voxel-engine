@@ -62,6 +62,7 @@ Use a label that says what changed, not just when it ran:
 - `before-hot-cold-split`
 - `hot-cold-split`
 - `gpu-upload-layer`
+- `gpu-overlay`
 - `sve-on` / `sve-off`
 
 The timestamp makes the folder unique; the label makes the history readable.
@@ -72,12 +73,13 @@ Re-recording the same label is allowed and gets a numeric suffix.
 `HISTORY.md` tracks the metrics that actually change decisions:
 
 | Metric | Lens |
-|---|---|
+| --- | --- |
 | peak RSS, CPU time | process |
 | registry 65k, terrain chunk, 256-chunk GPU world, material GPU tables | memory |
+| GPU overlay for 1 block and 64 blocks | memory |
 | registry freeze, hot lookup, resolved lookup, palette resolve | CPU |
-| DAG build/get, GPU lookup, 100-edit COW | CPU |
-| hot lookup, DAG get, GPU edit, `World::set` p99 | latency |
+| DAG build/get, GPU lookup, GPU overlay lookup, 100-edit COW, overlay set/flush | CPU |
+| hot lookup, DAG get, GPU edit, GPU overlay set, `World::set` p99 | latency |
 
 The full case list is in each run's `report.md`.
 

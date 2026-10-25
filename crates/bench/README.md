@@ -55,6 +55,7 @@ Cases:
   dedup ratio.
 - `gpu_tables/65536` — hot records plus deduplicated texture-set words.
 - `overlay/{1024,4096}` — hash-map bytes per pending edit.
+- `gpu_overlay/{1,64}` — GPU block-overlay slots (8.5 KiB per edited 16³ block).
 - `disk/64_chunks` — region-file bytes per chunk.
 
 **CPU** runs each operation for a calibrated ~20 ms, three rounds, and keeps

@@ -1,10 +1,19 @@
-//! Tier 3: GPU-resident SVDAG.
+//! Tier 3: GPU-resident SVDAG plus the edit overlay.
 //!
 //! * `pool`   : global u32 node pool, same layout as `dag.rs`, absolute offsets, shared by all chunks
 //!   (cross-chunk dedup via content-hash table). Per-node refcounts live CPU-side only.
-//! * `table`  : dynamic open-addressing chunk table, 4 u32 per slot `[x, y, z, root]`,
-//!   root == 0xFFFFFFFF empty, 0xFFFFFFFE tombstone. Power-of-two capacity, linear probe,
-//!   load <= 0.5 (tombstones included), grows/rehashes -> full re-upload.
+//! * `table`  : dynamic open-addressing chunk table, 5 u32 per slot `[x, y, z, root, blocks]`,
+//!   root == 0xFFFFFFFF means "no DAG", blocks == 0xFFFFFFFF means "no overlay", and a
+//!   tombstone is root == 0xFFFFFFFE. A slot is occupied when it has a DAG root or a block
+//!   table, so a chunk whose edits carved every voxel out of an empty DAG is still visible.
+//!   Power-of-two capacity, linear probe, load <= 0.5 (tombstones included),
+//!   grows/rehashes -> full re-upload.
+//! * overlay  : per edited 16^3 block, a 4 096-entry override buffer. A chunk's block table
+//!   has 64 words, one per block, each pointing at an 8 KiB overlay slot (2 048 words of
+//!   packed `u16` material ids followed by 128 words of presence bits). The bit, not the
+//!   value, means "edited": a carved voxel stores material 0 and must shadow the DAG with
+//!   air. Block tables and overlay slots are allocated lazily, uploaded as coalesced dirty
+//!   ranges, and retired by epoch like nodes.
 //! * COW      : `consolidate` imports each new chunk DAG into fresh/free slots (never in place),
 //!   repoints the table root, and defers decref of the old root until `reclaim(epoch)`
 //!   so in-flight frames never see freed nodes.
@@ -16,15 +25,45 @@
 //!   var h = u32(p.x)*73856093u ^ u32(p.y)*19349663u ^ u32(p.z)*83492791u;
 //!   h ^= h>>16u; h *= 0x7feb352du; h ^= h>>15u; h *= 0x846ca68bu; h ^= h>>16u; return h;
 //! }
-//! // i = slot_hash(p) & (cap-1); loop { s = table[i]; if s.root==EMPTY {miss}
+//! // i = slot_hash(p) & (cap-1); loop { s = table[i*5..]; if s.root==EMPTY && s.blocks==NONE {miss}
 //! //   if s.root!=TOMB && s.xyz==p {hit}; i=(i+1)&(cap-1); }
 //! ```
+use crate::CHUNK_VOLUME;
 use crate::ChunkPos;
 use crate::dag::{NONE, ROOT_LEVEL, Svdag, dag_get, hdr_level, hdr_mask, header, morton};
 use crate::hash::{FxMap, hash_words};
+use crate::local_index;
 
 pub const EMPTY: u32 = u32::MAX;
 pub const TOMB: u32 = u32::MAX - 1;
+/// No overlay attached to a block-table entry.
+pub const NO_OVERLAY: u32 = u32::MAX;
+/// No block table attached to a chunk-table slot.
+pub const NO_TABLE: u32 = u32::MAX;
+/// Words per chunk-table slot: `[x, y, z, root, block_table]`.
+pub const SLOT_WORDS: usize = 5;
+/// 16^3-voxel blocks per 64^3 chunk, one block table word each.
+pub const BLOCKS_PER_CHUNK: usize = 64;
+/// Packed `u16` overlay values for one block, two voxels per word.
+pub const OVERLAY_VALUES: usize = 4096 / 2;
+/// Overlay presence bits for one block, one per voxel.
+pub const OVERLAY_BITS: usize = 4096 / 32;
+/// Words per block-overlay slot: values first, then the presence bitmap.
+pub const OVERLAY_WORDS: usize = OVERLAY_VALUES + OVERLAY_BITS;
+
+/// Block index (0..64) inside a chunk for a chunk-local voxel index.
+#[inline]
+pub fn chunk_block(idx: u32) -> u32 {
+    let (x, y, z) = (idx & 63, (idx >> 6) & 63, idx >> 12);
+    (x >> 4) | ((y >> 4) << 2) | ((z >> 4) << 4)
+}
+
+/// Voxel index (0..4096) inside its 16^3 block for a chunk-local voxel index.
+#[inline]
+pub fn block_index(idx: u32) -> u32 {
+    let (x, y, z) = (idx & 63, (idx >> 6) & 63, idx >> 12);
+    (x & 15) | ((y & 15) << 4) | ((z & 15) << 8)
+}
 
 /// Implemented by voxel-render over wgpu buffers. `resize_*` may reallocate and discard
 /// contents; the store re-uploads everything right after any resize.
@@ -33,6 +72,10 @@ pub trait GpuSink {
     fn write_nodes(&mut self, word_off: usize, data: &[u32]);
     fn resize_table(&mut self, words: usize);
     fn write_table(&mut self, word_off: usize, data: &[u32]);
+    fn resize_overlays(&mut self, words: usize);
+    fn write_overlays(&mut self, word_off: usize, data: &[u32]);
+    fn resize_block_tables(&mut self, words: usize);
+    fn write_block_tables(&mut self, word_off: usize, data: &[u32]);
 }
 
 /// In-memory sink for tests/headless.
@@ -40,6 +83,8 @@ pub trait GpuSink {
 pub struct MemSink {
     pub nodes: Vec<u32>,
     pub table: Vec<u32>,
+    pub overlays: Vec<u32>,
+    pub block_tables: Vec<u32>,
     pub bytes_written: usize,
 }
 
@@ -56,6 +101,20 @@ impl GpuSink for MemSink {
     }
     fn write_table(&mut self, o: usize, d: &[u32]) {
         self.table[o..o + d.len()].copy_from_slice(d);
+        self.bytes_written += d.len() * 4;
+    }
+    fn resize_overlays(&mut self, words: usize) {
+        self.overlays.resize(words, 0)
+    }
+    fn write_overlays(&mut self, o: usize, d: &[u32]) {
+        self.overlays[o..o + d.len()].copy_from_slice(d);
+        self.bytes_written += d.len() * 4;
+    }
+    fn resize_block_tables(&mut self, words: usize) {
+        self.block_tables.resize(words, NO_OVERLAY)
+    }
+    fn write_block_tables(&mut self, o: usize, d: &[u32]) {
+        self.block_tables[o..o + d.len()].copy_from_slice(d);
         self.bytes_written += d.len() * 4;
     }
 }
@@ -77,13 +136,25 @@ pub struct GpuStore {
     free: [Vec<u32>; 10], // by node size in words (2..=9)
     dedup: FxMap<u64, u32>,
     table: Vec<u32>,
+    overlays: Vec<u32>,
+    overlay_counts: Vec<u32>,
+    overlay_free: Vec<u32>,
+    block_tables: Vec<u32>,
+    table_counts: Vec<u32>,
+    table_free: Vec<u32>,
     live: usize,
     tombs: usize,
     node_dirty: Vec<(usize, usize)>,
     table_dirty: Vec<(usize, usize)>,
+    overlay_dirty: Vec<(usize, usize)>,
+    block_table_dirty: Vec<(usize, usize)>,
     gpu_node_cap: usize,
     gpu_table_cap: usize,
+    gpu_overlay_cap: usize,
+    gpu_block_table_cap: usize,
     retire: Vec<(u64, u32)>,
+    retire_overlay: Vec<(u64, u32)>,
+    retire_table: Vec<(u64, u32)>,
     epoch: u64,
     import_memo: FxMap<u32, u32>,
 }
@@ -113,14 +184,26 @@ impl GpuStore {
             rc: Vec::new(),
             free: Default::default(),
             dedup: FxMap::default(),
-            table: vec![EMPTY; 1024 * 4],
+            table: vec![EMPTY; 1024 * SLOT_WORDS],
+            overlays: Vec::new(),
+            overlay_counts: Vec::new(),
+            overlay_free: Vec::new(),
+            block_tables: Vec::new(),
+            table_counts: Vec::new(),
+            table_free: Vec::new(),
             live: 0,
             tombs: 0,
             node_dirty: Vec::new(),
-            table_dirty: vec![(0, 1024 * 4)],
+            table_dirty: vec![(0, 1024 * SLOT_WORDS)],
+            overlay_dirty: Vec::new(),
+            block_table_dirty: Vec::new(),
             gpu_node_cap: 0,
             gpu_table_cap: 0,
+            gpu_overlay_cap: 0,
+            gpu_block_table_cap: 0,
             retire: Vec::new(),
+            retire_overlay: Vec::new(),
+            retire_table: Vec::new(),
             epoch: 0,
             import_memo: FxMap::default(),
         }
@@ -129,36 +212,41 @@ impl GpuStore {
     // ---------- chunk table ----------
 
     fn probe(&self, p: ChunkPos) -> Result<usize, usize> {
-        let mask = self.table.len() / 4 - 1;
+        let mask = self.table.len() / SLOT_WORDS - 1;
         let mut i = slot_hash(p) as usize & mask;
         let mut tomb = None;
         loop {
-            let s = &self.table[i * 4..i * 4 + 4];
-            match s[3] {
-                EMPTY => return Err(tomb.unwrap_or(i)),
-                TOMB => {
-                    tomb.get_or_insert(i);
-                }
-                _ if s[0] == p.x as u32 && s[1] == p.y as u32 && s[2] == p.z as u32 => {
-                    return Ok(i);
-                }
-                _ => {}
+            let b = i * SLOT_WORDS;
+            let root = self.table[b + 3];
+            let blocks = self.table[b + 4];
+            if root == TOMB {
+                tomb.get_or_insert(i);
+            } else if root == EMPTY && blocks == NO_TABLE {
+                return Err(tomb.unwrap_or(i));
+            } else if self.table[b] == p.x as u32
+                && self.table[b + 1] == p.y as u32
+                && self.table[b + 2] == p.z as u32
+            {
+                return Ok(i);
             }
             i = (i + 1) & mask;
         }
     }
 
     fn rehash(&mut self) {
-        let cap = self.table.len() / 4;
+        let cap = self.table.len() / SLOT_WORDS;
         let new_cap = if self.live * 4 > cap { cap * 2 } else { cap };
-        let old = std::mem::replace(&mut self.table, vec![EMPTY; new_cap * 4]);
+        let old = std::mem::replace(&mut self.table, vec![EMPTY; new_cap * SLOT_WORDS]);
         self.live = 0;
         self.tombs = 0;
-        for s in old.as_chunks::<4>().0 {
-            if s[3] < TOMB {
+        for s in old.as_chunks::<SLOT_WORDS>().0 {
+            let root = s[3];
+            let occupied = root != TOMB && (root != EMPTY || s[4] != NO_TABLE);
+            if occupied {
                 let p = ChunkPos::new(s[0] as i32, s[1] as i32, s[2] as i32);
                 let i = self.probe(p).unwrap_err();
-                self.table[i * 4..i * 4 + 4].copy_from_slice(s);
+                let b = i * SLOT_WORDS;
+                self.table[b..b + SLOT_WORDS].copy_from_slice(s);
                 self.live += 1;
             }
         }
@@ -166,42 +254,224 @@ impl GpuStore {
         self.table_dirty.push((0, self.table.len()));
     }
 
-    fn table_set(&mut self, p: ChunkPos, root: u32) -> Option<u32> {
-        if (self.live + self.tombs + 1) * 2 > self.table.len() / 4 {
+    /// Room check plus probe, so callers can tell `Ok(existing)` from `Err(insert_at)`.
+    fn ensure_slot(&mut self, p: ChunkPos) -> Result<usize, usize> {
+        if (self.live + self.tombs + 1) * 2 > self.table.len() / SLOT_WORDS {
             self.rehash();
         }
-        match self.probe(p) {
+        self.probe(p)
+    }
+
+    fn insert_slot_at(&mut self, i: usize, p: ChunkPos, root: u32, blocks: u32) {
+        let b = i * SLOT_WORDS;
+        if self.table[b + 3] == TOMB {
+            self.tombs -= 1;
+        }
+        self.table[b..b + SLOT_WORDS]
+            .copy_from_slice(&[p.x as u32, p.y as u32, p.z as u32, root, blocks]);
+        self.live += 1;
+        self.table_dirty.push((b, SLOT_WORDS));
+    }
+
+    fn tombstone_at(&mut self, i: usize) {
+        let b = i * SLOT_WORDS;
+        self.table[b + 3] = TOMB;
+        self.table[b + 4] = NO_TABLE;
+        self.live -= 1;
+        self.tombs += 1;
+        self.table_dirty.push((b + 3, 2));
+    }
+
+    fn retire_root(&mut self, old: u32) {
+        if old < TOMB {
+            self.retire.push((self.epoch, old));
+        }
+    }
+
+    /// Writes the DAG root for `p`, inserting a slot if needed. An empty root keeps the
+    /// slot alive only while an overlay exists.
+    fn table_set_root(&mut self, p: ChunkPos, root: u32) -> Option<u32> {
+        match self.ensure_slot(p) {
             Ok(i) => {
-                let old = self.table[i * 4 + 3];
-                self.table[i * 4 + 3] = root;
-                self.table_dirty.push((i * 4 + 3, 1));
+                let b = i * SLOT_WORDS;
+                let old = self.table[b + 3];
+                self.table[b + 3] = root;
+                self.table_dirty.push((b + 3, 1));
+                if root == EMPTY && self.table[b + 4] == NO_TABLE {
+                    self.tombstone_at(i);
+                }
                 Some(old)
             }
             Err(i) => {
-                if self.table[i * 4 + 3] == TOMB {
-                    self.tombs -= 1;
+                if root == EMPTY {
+                    return None;
                 }
-                self.table[i * 4..i * 4 + 4]
-                    .copy_from_slice(&[p.x as u32, p.y as u32, p.z as u32, root]);
-                self.live += 1;
-                self.table_dirty.push((i * 4, 4));
+                self.insert_slot_at(i, p, root, NO_TABLE);
                 None
             }
         }
     }
 
-    fn table_remove(&mut self, p: ChunkPos) -> Option<u32> {
-        match self.probe(p) {
-            Ok(i) => {
-                let old = self.table[i * 4 + 3];
-                self.table[i * 4 + 3] = TOMB;
-                self.live -= 1;
-                self.tombs += 1;
-                self.table_dirty.push((i * 4 + 3, 1));
-                Some(old)
+    // ---------- per-chunk block tables, then per-block overlays ----------
+
+    fn alloc_table(&mut self) -> u32 {
+        let slot = match self.table_free.pop() {
+            Some(s) => s,
+            None => {
+                let s = (self.block_tables.len() / BLOCKS_PER_CHUNK) as u32;
+                self.block_tables
+                    .resize(self.block_tables.len() + BLOCKS_PER_CHUNK, NO_OVERLAY);
+                self.table_counts.push(0);
+                s
             }
-            Err(_) => None,
+        };
+        let base = slot as usize * BLOCKS_PER_CHUNK;
+        self.block_tables[base..base + BLOCKS_PER_CHUNK].fill(NO_OVERLAY);
+        self.table_counts[slot as usize] = 0;
+        self.block_table_dirty.push((base, BLOCKS_PER_CHUNK));
+        slot
+    }
+
+    fn alloc_overlay(&mut self) -> u32 {
+        let slot = match self.overlay_free.pop() {
+            Some(s) => s,
+            None => {
+                let s = (self.overlays.len() / OVERLAY_WORDS) as u32;
+                self.overlays.resize(self.overlays.len() + OVERLAY_WORDS, 0);
+                self.overlay_counts.push(0);
+                s
+            }
+        };
+        let base = slot as usize * OVERLAY_WORDS;
+        // A recycled slot must start with an empty bitmap, or stale presence bits
+        // would shadow DAG voxels that were never edited.
+        self.overlays[base..base + OVERLAY_WORDS].fill(0);
+        self.overlay_counts[slot as usize] = 0;
+        self.overlay_dirty.push((base, OVERLAY_WORDS));
+        slot
+    }
+
+    /// Chunk-table index plus the chunk's block-table slot, allocating either if needed.
+    fn ensure_block_table(&mut self, p: ChunkPos) -> (usize, u32) {
+        match self.ensure_slot(p) {
+            Ok(i) => {
+                let b = i * SLOT_WORDS;
+                if self.table[b + 4] == NO_TABLE {
+                    let slot = self.alloc_table();
+                    self.table[b + 4] = slot;
+                    self.table_dirty.push((b + 4, 1));
+                }
+                (i, self.table[b + 4])
+            }
+            Err(i) => {
+                let slot = self.alloc_table();
+                self.insert_slot_at(i, p, EMPTY, slot);
+                (i, slot)
+            }
         }
+    }
+
+    fn overlay_set(&mut self, slot: u32, idx: u32, v: u16) {
+        let base = slot as usize * OVERLAY_WORDS;
+        let word = base + (idx >> 1) as usize;
+        let shift = (idx & 1) * 16;
+        let old = self.overlays[word];
+        let new = (old & !(0xffff << shift)) | ((v as u32) << shift);
+        if new != old {
+            self.overlays[word] = new;
+            self.overlay_dirty.push((word, 1));
+        }
+
+        let bit_word = base + OVERLAY_VALUES + (idx >> 5) as usize;
+        let bit = 1u32 << (idx & 31);
+        if self.overlays[bit_word] & bit == 0 {
+            self.overlays[bit_word] |= bit;
+            self.overlay_dirty.push((bit_word, 1));
+            self.overlay_counts[slot as usize] += 1;
+        }
+    }
+
+    /// Returns true when that was the last presence bit in the block slot.
+    fn overlay_clear(&mut self, slot: u32, idx: u32) -> bool {
+        let base = slot as usize * OVERLAY_WORDS;
+        let bit_word = base + OVERLAY_VALUES + (idx >> 5) as usize;
+        let bit = 1u32 << (idx & 31);
+        if self.overlays[bit_word] & bit != 0 {
+            self.overlays[bit_word] &= !bit;
+            self.overlay_dirty.push((bit_word, 1));
+            self.overlay_counts[slot as usize] -= 1;
+        }
+        self.overlay_counts[slot as usize] == 0
+    }
+
+    fn set_in_table(&mut self, table_slot: u32, idx: u32, v: u16) {
+        assert!((idx as usize) < CHUNK_VOLUME, "voxel index out of range");
+        let bt = table_slot as usize * BLOCKS_PER_CHUNK + chunk_block(idx) as usize;
+        let slot = match self.block_tables[bt] {
+            NO_OVERLAY => {
+                let slot = self.alloc_overlay();
+                self.block_tables[bt] = slot;
+                self.block_table_dirty.push((bt, 1));
+                self.table_counts[table_slot as usize] += 1;
+                slot
+            }
+            slot => slot,
+        };
+        self.overlay_set(slot, block_index(idx), v);
+    }
+
+    fn clear_in_table(&mut self, i: usize, table_slot: u32, idx: u32) {
+        assert!((idx as usize) < CHUNK_VOLUME, "voxel index out of range");
+        let bt = table_slot as usize * BLOCKS_PER_CHUNK + chunk_block(idx) as usize;
+        let slot = self.block_tables[bt];
+        if slot == NO_OVERLAY {
+            return;
+        }
+        if self.overlay_clear(slot, block_index(idx)) {
+            self.retire_overlay.push((self.epoch, slot));
+            self.overlay_counts[slot as usize] = 0;
+            self.block_tables[bt] = NO_OVERLAY;
+            self.block_table_dirty.push((bt, 1));
+            self.table_counts[table_slot as usize] -= 1;
+            if self.table_counts[table_slot as usize] == 0 {
+                self.drop_table(i, table_slot);
+            }
+        }
+    }
+
+    fn drop_table_slots(&mut self, table_slot: u32) {
+        let base = table_slot as usize * BLOCKS_PER_CHUNK;
+        for k in 0..BLOCKS_PER_CHUNK {
+            let slot = self.block_tables[base + k];
+            if slot != NO_OVERLAY {
+                self.retire_overlay.push((self.epoch, slot));
+                self.overlay_counts[slot as usize] = 0;
+                self.block_tables[base + k] = NO_OVERLAY;
+                self.block_table_dirty.push((base + k, 1));
+            }
+        }
+        self.table_counts[table_slot as usize] = 0;
+        self.retire_table.push((self.epoch, table_slot));
+    }
+
+    fn drop_table(&mut self, i: usize, table_slot: u32) {
+        self.drop_table_slots(table_slot);
+        let b = i * SLOT_WORDS;
+        if self.table[b + 3] == EMPTY {
+            self.tombstone_at(i);
+        } else {
+            self.table[b + 4] = NO_TABLE;
+            self.table_dirty.push((b + 4, 1));
+        }
+    }
+
+    fn drop_chunk_overlay(&mut self, i: usize) {
+        let b = i * SLOT_WORDS;
+        let table_slot = self.table[b + 4];
+        if table_slot == NO_TABLE {
+            return;
+        }
+        self.drop_table(i, table_slot);
     }
 
     // ---------- node pool ----------
@@ -294,22 +564,88 @@ impl GpuStore {
 
     // ---------- public API ----------
 
-    /// Point `p` at `dag` (copy-on-write). Empty dag removes the chunk.
+    /// Point `p` at `dag` (copy-on-write). An empty DAG clears the root but keeps the chunk
+    /// visible while it still has an overlay.
     pub fn set_chunk(&mut self, p: ChunkPos, dag: &Svdag) {
-        if dag.is_empty() {
-            if let Some(old) = self.table_remove(p) {
-                self.retire.push((self.epoch, old));
-            }
+        let root = if dag.is_empty() {
+            EMPTY
+        } else {
+            let mut memo = std::mem::take(&mut self.import_memo);
+            memo.clear();
+            let g = self.import(&dag.pool, dag.root, &mut memo);
+            self.import_memo = memo;
+            self.rc[g as usize] += 1;
+            g
+        };
+        if let Some(old) = self.table_set_root(p, root) {
+            self.retire_root(old);
+        }
+    }
+
+    /// Records one `(local voxel index, material)` override and uploads it on the next `flush`.
+    ///
+    /// The overlay shadows the DAG, so the edit is visible to the next frame without a
+    /// consolidation pass. Material `0` carves the voxel to air; the presence bit, not the
+    /// value, marks it as edited. Storage is allocated per 16^3 block, so a single edit costs
+    /// one 8 KiB overlay slot, not one per chunk.
+    pub fn set_overlay(&mut self, p: ChunkPos, idx: u32, v: u16) {
+        assert!((idx as usize) < CHUNK_VOLUME, "voxel index out of range");
+        let (_, table_slot) = self.ensure_block_table(p);
+        self.set_in_table(table_slot, idx, v);
+    }
+
+    /// Removes one override, falling back to the DAG value. Frees the block overlay when the
+    /// last entry in that block goes away, and the chunk-table slot when it has no DAG.
+    pub fn clear_overlay(&mut self, p: ChunkPos, idx: u32) {
+        assert!((idx as usize) < CHUNK_VOLUME, "voxel index out of range");
+        let Ok(i) = self.probe(p) else {
+            return;
+        };
+        let table_slot = self.table[i * SLOT_WORDS + 4];
+        if table_slot == NO_TABLE {
             return;
         }
-        let mut memo = std::mem::take(&mut self.import_memo);
-        memo.clear();
-        let g = self.import(&dag.pool, dag.root, &mut memo);
-        self.import_memo = memo;
-        self.rc[g as usize] += 1;
-        if let Some(old) = self.table_set(p, g) {
-            self.retire.push((self.epoch, old));
+        self.clear_in_table(i, table_slot, idx);
+    }
+
+    /// Installs a whole overlay snapshot, e.g. when a chunk is loaded from disk.
+    pub fn set_chunk_overlay(&mut self, p: ChunkPos, edits: impl IntoIterator<Item = (u32, u16)>) {
+        let mut edits = edits.into_iter();
+        let Some((first_idx, first_value)) = edits.next() else {
+            return;
+        };
+        assert!(
+            (first_idx as usize) < CHUNK_VOLUME,
+            "voxel index out of range"
+        );
+        let (_, table_slot) = self.ensure_block_table(p);
+        self.set_in_table(table_slot, first_idx, first_value);
+        for (idx, v) in edits {
+            self.set_in_table(table_slot, idx, v);
         }
+    }
+
+    /// Drops the overlay without folding it into the DAG. Used after `apply_edits` has folded
+    /// it, and by eviction.
+    pub fn clear_chunk_overlay(&mut self, p: ChunkPos) {
+        if let Ok(i) = self.probe(p) {
+            self.drop_chunk_overlay(i);
+        }
+    }
+
+    /// Drops the chunk, its DAG root and its overlay. In-flight frames keep reading the old
+    /// nodes and overlay until `reclaim(epoch)`.
+    pub fn remove_chunk(&mut self, p: ChunkPos) {
+        let Ok(i) = self.probe(p) else {
+            return;
+        };
+        let b = i * SLOT_WORDS;
+        self.retire_root(self.table[b + 3]);
+        let table_slot = self.table[b + 4];
+        if table_slot != NO_TABLE {
+            self.drop_table_slots(table_slot);
+        }
+        self.tombstone_at(i);
     }
 
     /// In-place COW edit of a chunk already (or not yet) in the pool: only the paths to edited
@@ -322,17 +658,21 @@ impl GpuStore {
             return;
         }
         e.sort_unstable_by_key(|x| x.0);
-        let old = self.probe(p).ok().map(|i| self.table[i * 4 + 3]);
+        let old = self
+            .probe(p)
+            .ok()
+            .map(|i| self.table[i * SLOT_WORDS + 3])
+            .filter(|&root| root != EMPTY);
         match self.gedit(old, ROOT_LEVEL, &e) {
             Some(g) => {
                 self.rc[g as usize] += 1;
-                if let Some(o) = self.table_set(p, g) {
-                    self.retire.push((self.epoch, o));
+                if let Some(o) = self.table_set_root(p, g) {
+                    self.retire_root(o);
                 }
             }
             None => {
-                if let Some(o) = self.table_remove(p) {
-                    self.retire.push((self.epoch, o));
+                if let Some(o) = self.table_set_root(p, EMPTY) {
+                    self.retire_root(o);
                 }
             }
         }
@@ -407,13 +747,31 @@ impl GpuStore {
         self.end_batch()
     }
 
-    /// Free nodes retired at epochs <= `completed`.
+    /// Free nodes and overlays retired at epochs <= `completed`.
     pub fn reclaim(&mut self, completed: u64) {
         let mut i = 0;
         while i < self.retire.len() {
             if self.retire[i].0 <= completed {
                 let (_, root) = self.retire.swap_remove(i);
                 self.decref(root);
+            } else {
+                i += 1;
+            }
+        }
+        let mut i = 0;
+        while i < self.retire_overlay.len() {
+            if self.retire_overlay[i].0 <= completed {
+                let (_, slot) = self.retire_overlay.swap_remove(i);
+                self.overlay_free.push(slot);
+            } else {
+                i += 1;
+            }
+        }
+        let mut i = 0;
+        while i < self.retire_table.len() {
+            if self.retire_table[i].0 <= completed {
+                let (_, slot) = self.retire_table.swap_remove(i);
+                self.table_free.push(slot);
             } else {
                 i += 1;
             }
@@ -434,18 +792,56 @@ impl GpuStore {
             self.table_dirty.clear();
             self.table_dirty.push((0, self.table.len()));
         }
+        if self.overlays.len() > self.gpu_overlay_cap {
+            let cap = self.overlays.len().next_power_of_two().max(1 << 12);
+            sink.resize_overlays(cap);
+            self.gpu_overlay_cap = cap;
+            self.overlay_dirty.clear();
+            self.overlay_dirty.push((0, self.overlays.len()));
+        }
+        if self.block_tables.len() > self.gpu_block_table_cap {
+            let cap = self.block_tables.len().next_power_of_two().max(1 << 10);
+            sink.resize_block_tables(cap);
+            self.gpu_block_table_cap = cap;
+            self.block_table_dirty.clear();
+            self.block_table_dirty.push((0, self.block_tables.len()));
+        }
         for (s, l) in coalesce(std::mem::take(&mut self.node_dirty)) {
             sink.write_nodes(s, &self.pool[s..s + l]);
         }
         for (s, l) in coalesce(std::mem::take(&mut self.table_dirty)) {
             sink.write_table(s, &self.table[s..s + l]);
         }
+        for (s, l) in coalesce(std::mem::take(&mut self.overlay_dirty)) {
+            sink.write_overlays(s, &self.overlays[s..s + l]);
+        }
+        for (s, l) in coalesce(std::mem::take(&mut self.block_table_dirty)) {
+            sink.write_block_tables(s, &self.block_tables[s..s + l]);
+        }
     }
 
     /// CPU replica of the shader traversal (tests / CPU fallback renderer).
     pub fn lookup(&self, p: ChunkPos, x: u32, y: u32, z: u32) -> u16 {
         match self.probe(p) {
-            Ok(i) => dag_get(&self.pool, self.table[i * 4 + 3], x, y, z),
+            Ok(i) => {
+                let b = i * SLOT_WORDS;
+                let table_slot = self.table[b + 4];
+                if table_slot != NO_TABLE {
+                    let idx = local_index(x, y, z);
+                    let bt = table_slot as usize * BLOCKS_PER_CHUNK + chunk_block(idx) as usize;
+                    let slot = self.block_tables[bt];
+                    if slot != NO_OVERLAY {
+                        let within = block_index(idx);
+                        let bit_word =
+                            slot as usize * OVERLAY_WORDS + OVERLAY_VALUES + (within >> 5) as usize;
+                        if self.overlays[bit_word] & (1u32 << (within & 31)) != 0 {
+                            let word = slot as usize * OVERLAY_WORDS + (within >> 1) as usize;
+                            return (self.overlays[word] >> ((within & 1) * 16)) as u16;
+                        }
+                    }
+                }
+                dag_get(&self.pool, self.table[b + 3], x, y, z)
+            }
             Err(_) => 0,
         }
     }
@@ -462,13 +858,39 @@ impl GpuStore {
     pub fn table(&self) -> &[u32] {
         &self.table
     }
+    pub fn overlays(&self) -> &[u32] {
+        &self.overlays
+    }
+    pub fn block_tables(&self) -> &[u32] {
+        &self.block_tables
+    }
     pub fn unique_nodes(&self) -> usize {
         self.dedup.len()
     }
     pub fn chunk_count(&self) -> usize {
         self.live
     }
+    /// The chunk's block-table slot, or `None` when it has no overlay at all.
+    pub fn block_table_slot(&self, p: ChunkPos) -> Option<u32> {
+        match self.probe(p) {
+            Ok(i) => {
+                let slot = self.table[i * SLOT_WORDS + 4];
+                (slot != NO_TABLE).then_some(slot)
+            }
+            Err(_) => None,
+        }
+    }
+    /// The block-overlay slot for the 16^3 block containing `idx`, if edited.
+    pub fn block_overlay_slot(&self, p: ChunkPos, idx: u32) -> Option<u32> {
+        let table_slot = self.block_table_slot(p)?;
+        let bt = table_slot as usize * BLOCKS_PER_CHUNK + chunk_block(idx) as usize;
+        let slot = self.block_tables[bt];
+        (slot != NO_OVERLAY).then_some(slot)
+    }
     pub fn root_of(&self, p: ChunkPos) -> u32 {
-        self.probe(p).map_or(NONE, |i| self.table[i * 4 + 3])
+        self.probe(p).map_or(NONE, |i| {
+            let root = self.table[i * SLOT_WORDS + 3];
+            if root == EMPTY { NONE } else { root }
+        })
     }
 }
