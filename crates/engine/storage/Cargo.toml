@@ -1,0 +1,15 @@
+[package]
+name = "voxel-storage"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+voxel-block = { path = "../block" }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "store"
+harness = false

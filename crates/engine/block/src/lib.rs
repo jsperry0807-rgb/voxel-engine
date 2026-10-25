@@ -1,0 +1,97 @@
+//! Block definitions for the voxel engine.
+//!
+//! The crate separates a block's *identity* from its *data*:
+//!
+//! - [`NamespacedKey`] is the stable, human-readable identity
+//!   ("`mymod:copper_ore`") used by assets, data files and save games.
+//! - [`BlockId`] is a dense runtime index assigned at startup, small enough to
+//!   store directly in chunk voxel arrays (`u16`). Id `0` is always air, so a
+//!   zero-filled chunk means "empty" with no per-cell initialization.
+//! - [`BlockProperties`] describes how a block renders ([`RenderType`],
+//!   [`FaceTextures`]) and behaves ([`BlockFlags`], light, hardness).
+//! - [`BlockRecord`] is the same block in its resolved form: textures as
+//!   [`TextureId`]s instead of keys, and only the fields a per-voxel loop
+//!   reads. The registry produces it in a one-time resolution pass, and both
+//!   shapes are kept side by side.
+//! - [`BlockRegistry`] is the frozen key/id/properties mapping shared by every
+//!   system; it is built once via [`BlockRegistryBuilder`], whose
+//!   [`BlockRegistryBuilder::freeze`] is the one-time resolution boundary and
+//!   reports [`FreezeError`] rather than failing silently.
+//! - [`BlockKind`] optionally names the built-in blocks, and [`BlockTags`]
+//!   groups blocks into namespaced-key-tagged sets for gameplay queries.
+//! - [`Palette`] is the persisted shape of a block list — keys only — and
+//!   [`BlockRegistry::resolve_palette`] turns one back into this session's
+//!   ids.
+//!
+//! ```
+//! use voxel_block::{BlockKind, BlockRegistryBuilder};
+//!
+//! let mut builder = BlockRegistryBuilder::new();
+//! builder.register_kind(BlockKind::Stone).unwrap();
+//! let registry = builder.freeze().unwrap();
+//!
+//! let stone = registry.id_of("voxel:stone").unwrap();
+//! assert!(registry.get(stone).unwrap().is_solid());
+//! ```
+//!
+//! # Limits
+//!
+//! A registry has two hard caps, both at 65 536, and they are reached in
+//! different places:
+//!
+//! - **Block ids.** A registry holds at most 65 536 blocks, because ids are
+//!   `u16`. The limit is hit while *registering*, and reported as
+//!   [`RegistryError::Exhausted`].
+//! - **Distinct textures.** A registry may name at most 65 536 distinct
+//!   textures, because resolved texture ids are `u16`. The limit is hit while
+//!   *freezing*, and reported as [`FreezeError::TooManyTextures`].
+//!
+//! The texture table is therefore the practical ceiling. A block may name six
+//! distinct textures, so a registry that gives every block its own set runs
+//! out of texture ids at about the 10 923rd block — far short of the 65 536
+//! blocks the id space allows. Sharing textures between blocks is what keeps a
+//! large registry inside the limit.
+//!
+//! # Boundaries
+//!
+//! Ids are session-local, so anything that outlives a session names blocks by
+//! [`NamespacedKey`] instead and resolves them on the way in. Three rules hold
+//! that line, and they are enforced by types rather than by convention:
+//!
+//! - **Parse, don't validate.** A [`NamespacedKey`] is either a valid key or
+//!   it does not exist; a [`Palette`] holds only valid keys, and
+//!   [`Palette::parse`] returns a palette or an error, never a palette
+//!   holding half a key.
+//! - **Total, not partial.** [`BlockRegistry::resolve_palette`] answers for
+//!   *every* input with a [`Resolution`] or a typed [`PaletteError`]. It never
+//!   panics and never substitutes silently. This is the counterpart to
+//!   [`BlockRegistry::resolved`], which is partial by design: it panics on an
+//!   unknown id, because it only ever sees ids the registry itself produced.
+//! - **Palette remapping.** Resolution goes through keys, so a palette
+//!   written by one session loads correctly into another, whatever order
+//!   either registered its blocks in.
+//!
+//! Texture ids are session-local too, and are *derived* at
+//! [`BlockRegistryBuilder::freeze`] rather than persisted. A file that names
+//! a block gets the textures that block has in the session loading it. The
+//! format contract is `docs/save-format.md`.
+
+pub mod id;
+pub mod kind;
+pub mod palette;
+pub mod properties;
+pub mod registry;
+pub mod ron;
+pub mod tags;
+pub mod texture;
+
+pub use id::{AIR_ID, BUILTIN_NAMESPACE, BlockId, KeyError, NamespacedKey};
+pub use kind::BlockKind;
+pub use palette::{
+    KeyContext, MissingBlockPolicy, MissingKey, Omission, Palette, PaletteError, Resolution,
+};
+pub use properties::{BlockFlags, BlockProperties, BlockRecord, FaceTextures, RenderType};
+pub use registry::{BlockRegistry, BlockRegistryBuilder, FreezeError, RegistryError};
+pub use tags::BlockTags;
+pub use texture::{FaceTextureIds, TextureId, TextureTable};
+pub use voxel_core::face;
