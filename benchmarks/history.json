@@ -110,6 +110,50 @@
         "world_256_mem": 27590688.0,
         "world_set_p99_us": 0.16
       }
+    },
+    {
+      "id": "20261025T200221Z-consolidation-policy",
+      "label": "consolidation-policy",
+      "timestamp_unix": 1792958541,
+      "git_commit": "19a77389e573f62c9d2d44681d57fdee0b43830e",
+      "git_dirty": false,
+      "cpu_model": "AMD Ryzen 5 7600 6-Core Processor",
+      "os": "linux",
+      "arch": "x86_64",
+      "path": "runs/20261025T200221Z-consolidation-policy",
+      "note": "size/idle/frame-budget policy",
+      "suite": "m15-c26-l7-362215d5905add9f",
+      "metrics": {
+        "chunk_terrain_mem": 73728.0,
+        "dag_build_terrain_ns": 379531.875,
+        "dag_get_ns": 13.033633708953856,
+        "dag_get_p99_us": 0.12,
+        "gpu_apply_edits_100_ns": 19762.720703125,
+        "gpu_edit_p99_us": 0.381,
+        "gpu_lookup_ns": 20.56240940093994,
+        "gpu_lookup_overlay_ns": 8.109186172485352,
+        "gpu_overlay_1_block_mem": 316416.0,
+        "gpu_overlay_64_blocks_mem": 871024.0,
+        "gpu_overlay_flush_64_ns": 660.561767578125,
+        "gpu_overlay_set_100_ns": 1074.27001953125,
+        "gpu_overlay_set_p99_us": 0.04,
+        "gpu_tables_mem": 525056.0,
+        "hot_lookup_ns": 0.719188928604126,
+        "hot_lookup_p99_us": 0.021,
+        "palette_resolve_ns": 55868.55859375,
+        "peak_rss_bytes": 103071744.0,
+        "process_cpu_ns": 4343973000.0,
+        "process_cpu_percent": 99.975406081358,
+        "process_wall_ns": 4345041616.0,
+        "registry_65536_mem": 24112595.0,
+        "registry_freeze_65536_ns": 50214015.0,
+        "resolved_lookup_ns": 6.162089109420776,
+        "world_256_mem": 27590688.0,
+        "world_consolidate_p99_us": 295.291,
+        "world_set_p99_us": 0.111,
+        "world_tick_idle_ns": 6.444110870361328,
+        "world_tick_idle_p99_us": 0.03
+      }
     }
   ]
 }

@@ -1,0 +1,58 @@
+   Compiling voxel-storage v0.1.0 (/home/jace/Voxel-Stuff/voxel-approved/crates/engine/storage)
+   Compiling voxel-bench v0.1.0 (/home/jace/Voxel-Stuff/voxel-approved/crates/bench)
+   Compiling voxel-render v0.1.0 (/home/jace/Voxel-Stuff/voxel-approved/crates/engine/render)
+    Finished `bench` profile [optimized] target(s) in 1.98s
+warning: the following packages contain code that will be rejected by a future version of Rust: proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running benches/iai.rs (target/release/deps/iai-0e06547f0c5f8535)
+iai::voxel::hot_lookup hot_lookup:lookup_scene()
+  Instructions:                      673963|673934               (+0.00430%) [+1.00004x]
+  L1 Hits:                           963546|963465               (+0.00841%) [+1.00008x]
+  LL Hits:                            12308|12360                (-0.42071%) [-1.00422x]
+  RAM Hits:                              28|29                   (-3.44828%) [-1.03571x]
+  Total read+write:                  975882|975854               (+0.00287%) [+1.00003x]
+  Estimated Cycles:                 1026066|1026280              (-0.02085%) [-1.00021x]
+iai::voxel::resolved_lookup resolved_lookup:lookup_scene()
+  Instructions:                      953515|953515               (No change)
+  L1 Hits:                          1403537|1403578              (-0.00292%) [-1.00003x]
+  LL Hits:                            15675|15640                (+0.22379%) [+1.00224x]
+  RAM Hits:                              32|31                   (+3.22581%) [+1.03226x]
+  Total read+write:                 1419244|1419249              (-0.00035%) [-1.00000x]
+  Estimated Cycles:                 1483032|1482863              (+0.01140%) [+1.00011x]
+iai::voxel::dag_get dag_get:dag_scene()
+  Instructions:                      515707|515707               (No change)
+  L1 Hits:                           589294|589294               (No change)
+  LL Hits:                             3655|3655                 (No change)
+  RAM Hits:                              15|15                   (No change)
+  Total read+write:                  592964|592964               (No change)
+  Estimated Cycles:                  608094|608094               (No change)
+iai::voxel::dag_build dag_build:patterns :: terrain(0, 0)
+  Instructions:                     6858287|6858287              (No change)
+  L1 Hits:                          8848537|8848557              (-0.00023%) [-1.00000x]
+  LL Hits:                            36609|36587                (+0.06013%) [+1.00060x]
+  RAM Hits:                            3098|3100                 (-0.06452%) [-1.00065x]
+  Total read+write:                 8888244|8888244              (No change)
+  Estimated Cycles:                 9140012|9139992              (+0.00022%) [+1.00000x]
+iai::voxel::gpu_lookup gpu_lookup:gpu_scene()
+  Instructions:                      984768|984768               (No change)
+  L1 Hits:                          1226793|1226790              (+0.00024%) [+1.00000x]
+  LL Hits:                             3739|3742                 (-0.08017%) [-1.00080x]
+  RAM Hits:                              33|33                   (No change)
+  Total read+write:                 1230565|1230565              (No change)
+  Estimated Cycles:                 1246643|1246655              (-0.00096%) [-1.00001x]
+iai::voxel::gpu_lookup_overlay gpu_lookup_overlay:gpu_overlay_scene()
+  Instructions:                     1085804|1085804              (No change)
+  L1 Hits:                          1338787|1338779              (+0.00060%) [+1.00001x]
+  LL Hits:                             3888|3895                 (-0.17972%) [-1.00180x]
+  RAM Hits:                              35|36                   (-2.77778%) [-1.02857x]
+  Total read+write:                 1342710|1342710              (No change)
+  Estimated Cycles:                 1359452|1359514              (-0.00456%) [-1.00005x]
+iai::voxel::material_words material_words:material_scene()
+  Instructions:                    40929633|40929895             (-0.00064%) [-1.00001x]
+  L1 Hits:                         58729137|58729470             (-0.00057%) [-1.00001x]
+  LL Hits:                           370758|370748               (+0.00270%) [+1.00003x]
+  RAM Hits:                          595675|595506               (+0.02838%) [+1.00028x]
+  Total read+write:                59695570|59695724             (-0.00026%) [-1.00000x]
+  Estimated Cycles:                81431552|81425920             (+0.00692%) [+1.00007x]
+
+Iai-Callgrind result: Ok. 7 without regressions; 0 regressed; 7 benchmarks finished in 5.33815s
