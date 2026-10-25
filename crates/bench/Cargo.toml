@@ -1,0 +1,36 @@
+[package]
+name = "voxel-bench"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+voxel-block = { path = "../engine/block" }
+voxel-storage = { path = "../engine/storage" }
+libc = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+criterion = "0.5"
+voxel-render = { path = "../engine/render" }
+wgpu = "30"
+pollster = "1"
+iai-callgrind = "0.16"
+
+[features]
+# Gates the iai-callgrind bench target; the dependency itself is a dev-dep.
+iai = []
+
+[[bench]]
+name = "block"
+harness = false
+
+[[bench]]
+name = "render"
+harness = false
+
+[[bench]]
+name = "iai"
+harness = false
+required-features = ["iai"]
