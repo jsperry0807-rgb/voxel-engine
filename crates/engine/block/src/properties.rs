@@ -31,6 +31,29 @@ pub enum RenderType {
     Invisible,
 }
 
+impl RenderType {
+    /// Stable 3-bit encoding used by [`crate::HotRecord`]. Explicit rather than
+    /// `as u8`, so reordering the enum can never change the packed format.
+    pub const fn to_bits(self) -> u32 {
+        match self {
+            RenderType::Solid => 0,
+            RenderType::Cutout => 1,
+            RenderType::Translucent => 2,
+            RenderType::Invisible => 3,
+        }
+    }
+
+    /// Inverse of [`Self::to_bits`]. Unknown encodings read as `Invisible`.
+    pub const fn from_bits(bits: u32) -> Self {
+        match bits {
+            0 => RenderType::Solid,
+            1 => RenderType::Cutout,
+            2 => RenderType::Translucent,
+            _ => RenderType::Invisible,
+        }
+    }
+}
+
 /// Texture-array layer keys for each face of a block.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct FaceTextures {
@@ -109,6 +132,13 @@ impl BlockFlags {
     /// Faces between two blocks of the same kind are culled (glass, water).
     /// Without this, adjacent glass panes would draw the hidden interface.
     pub const CULLS_SELF: Self = Self(1 << 4);
+
+    /// The flag bits a [`crate::HotRecord`] carries: the low 16.
+    ///
+    /// Bits 16..32 are *cold-only*: they survive in [`BlockProperties::flags`]
+    /// but are not copied into the hot table. Define a flag a raymarcher or
+    /// mesher must read in the low 16 bits; put pure gameplay flags above.
+    pub const HOT_MASK: Self = Self(0xFFFF);
 
     /// True if every flag in `other` is set.
     pub const fn contains(self, other: Self) -> bool {
@@ -306,25 +336,25 @@ impl BlockProperties {
     }
 }
 
-/// The runtime half of a block's static data.
+/// A block's resolved data, assembled on demand.
 ///
-/// [`BlockProperties`] is the *authoring* shape: it names textures by key and
-/// carries strings, which is convenient to write and cheap to author, but fat
-/// — a texture key is a 24-byte handle, and the whole record is 200 bytes.
+/// This is a convenience *view*, not the storage. The registry keeps the
+/// runtime data split by how it is read:
 ///
-/// [`BlockRecord`] is the *resolved* shape: the same block as the hot path
-/// wants to see it — a texture id per face, a render type, flags, the two
-/// light bytes, and the optional sub-block template root — and nothing more.
-/// The registry produces it in a one-time resolution pass, and it is `Copy`,
-/// so a per-voxel lookup is a plain indexed load.
+/// - [`crate::HotRecord`] — 8 bytes per block: render type, hot flags, light,
+///   and a [`crate::TextureSetId`]. This is what a per-voxel or per-hit loop
+///   reads ([`crate::BlockRegistry::hot`]).
+/// - texture sets — each distinct six-face set stored once, read only on a
+///   surface hit ([`crate::BlockRegistry::texture_set`]).
+/// - template roots — sparse, read only at placement
+///   ([`crate::BlockRegistry::template_root`]).
 ///
-/// Records stay immutable and small enough to live in the raymarching hot
-/// path. Dynamic per-position data, such as wear and directional cracks, does
-/// not belong here; it lives in the separate per-chunk `DamageStore`.
+/// [`crate::BlockRegistry::resolved`] stitches the pieces back into this
+/// shape for code that wants everything at once (tooling, tests, placement).
+/// Do not call it in a per-voxel loop; use `hot` there.
 ///
-/// The split is deliberate, not exhaustive: whatever a per-voxel loop does not
-/// read stays in [`BlockProperties`], where it remains available through
-/// [`crate::BlockRegistry::get`]. Cold data is retained, not dropped.
+/// Dynamic per-position data, such as wear and directional cracks, does not
+/// belong here; it lives in the separate per-chunk `DamageStore`.
 ///
 /// Fields are added here when a consumer needs one, not in anticipation of
 /// one.
@@ -337,7 +367,7 @@ pub struct BlockRecord {
     pub template_root: Option<u64>,
     /// Rasterization mode.
     pub render_type: RenderType,
-    /// Coarse behavioral flags.
+    /// Coarse behavioral flags (all 32 bits, including cold-only ones).
     pub flags: BlockFlags,
     /// Light emitted by the block, `0..=15`.
     pub light_emission: u8,

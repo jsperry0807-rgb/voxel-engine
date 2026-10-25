@@ -12,10 +12,14 @@
 //! - [`BlockProperties`] describes how a block renders ([`RenderType`],
 //!   [`FaceTextures`]) and behaves ([`BlockFlags`], light, hardness), and
 //!   optionally names the SVDAG root of its 16x16x16 sub-block template.
-//! - [`BlockRecord`] is the same block in its resolved form: textures as
-//!   [`TextureId`]s instead of keys, the optional template root, and only the
-//!   fields a per-voxel loop reads. The registry produces it in a one-time
-//!   resolution pass, and both shapes are kept side by side.
+//! - The registry's runtime data is split by how it is read. [`HotRecord`] is
+//!   8 bytes per block — render type, hot flags, light, and a
+//!   [`TextureSetId`] — for per-voxel and per-hit loops
+//!   ([`BlockRegistry::hot`]). Each distinct six-face texture set is stored
+//!   once ([`BlockRegistry::texture_set`]), and template roots are sparse
+//!   ([`BlockRegistry::template_root`]). [`BlockRecord`] is the whole block
+//!   assembled from those pieces ([`BlockRegistry::resolved`]), for code that
+//!   wants everything at once.
 //! - [`BlockRegistry`] is the frozen key/id/properties mapping shared by every
 //!   system; it is built once via [`BlockRegistryBuilder`], whose
 //!   [`BlockRegistryBuilder::freeze`] is the one-time resolution boundary and
@@ -80,6 +84,7 @@
 //! a block gets the textures that block has in the session loading it. The
 //! format contract is `docs/save-format.md`.
 
+pub mod hot;
 pub mod id;
 pub mod kind;
 pub mod palette;
@@ -89,6 +94,7 @@ pub mod ron;
 pub mod tags;
 pub mod texture;
 
+pub use hot::HotRecord;
 pub use id::{AIR_ID, BUILTIN_NAMESPACE, KeyError, MaterialId, NamespacedKey};
 pub use kind::BlockKind;
 pub use palette::{
@@ -97,5 +103,5 @@ pub use palette::{
 pub use properties::{BlockFlags, BlockProperties, BlockRecord, FaceTextures, RenderType};
 pub use registry::{BlockRegistry, BlockRegistryBuilder, FreezeError, RegistryError};
 pub use tags::BlockTags;
-pub use texture::{FaceTextureIds, TextureId, TextureTable};
+pub use texture::{FaceTextureIds, TextureId, TextureSetId, TextureTable};
 pub use voxel_core::face;

@@ -77,6 +77,45 @@ impl fmt::Debug for TextureId {
     }
 }
 
+/// Dense index of a distinct six-face texture set within one registry.
+///
+/// Many blocks share the same six textures (every uniform block, every log of
+/// the same species), so the registry stores each distinct [`FaceTextureIds`]
+/// once and a block refers to it by this 16-bit id. Session-local, like every
+/// other id here: derived at freeze, never persisted.
+///
+/// A registry holds at most 65 536 blocks, so it never holds more than 65 536
+/// distinct sets and the id always fits.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct TextureSetId(u16);
+
+impl TextureSetId {
+    pub const fn from_raw(raw: u16) -> Self {
+        Self(raw)
+    }
+
+    pub const fn as_raw(self) -> u16 {
+        self.0
+    }
+
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl fmt::Display for TextureSetId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "TextureSetId({})", self.0)
+    }
+}
+
+impl fmt::Debug for TextureSetId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
 /// The six face slots of a block, resolved to texture ids.
 ///
 /// Mirrors [`crate::properties::FaceTextures`] slot for slot, except every
@@ -93,6 +132,21 @@ impl FaceTextureIds {
     /// The texture for a given face.
     pub const fn get(&self, face: Face) -> TextureId {
         self.0[face.index()]
+    }
+
+    /// The six ids in [`Face::ALL`] order.
+    pub const fn as_array(&self) -> [TextureId; 6] {
+        self.0
+    }
+
+    /// Packed for GPU upload: three little-endian `u32` words, two 16-bit
+    /// texture ids each, in [`Face::ALL`] order (word 0 = faces 0 and 1, ...).
+    pub const fn to_words(&self) -> [u32; 3] {
+        [
+            self.0[0].0 as u32 | (self.0[1].0 as u32) << 16,
+            self.0[2].0 as u32 | (self.0[3].0 as u32) << 16,
+            self.0[4].0 as u32 | (self.0[5].0 as u32) << 16,
+        ]
     }
 }
 
@@ -231,6 +285,20 @@ mod tests {
         assert_eq!(table.len(), 0);
         assert_eq!(table.get(TextureId::from_raw(0)), None);
         assert_eq!(table.id(&NamespacedKey::builtin("block/stone")), None);
+    }
+
+    #[test]
+    fn texture_set_id_is_layout_identical_to_u16() {
+        assert_eq!(size_of::<TextureSetId>(), size_of::<u16>());
+        assert_eq!(align_of::<TextureSetId>(), align_of::<u16>());
+    }
+
+    #[test]
+    fn face_texture_ids_pack_to_three_words() {
+        let ids = [1u16, 2, 3, 4, 0xFFFF, 6].map(TextureId::from_raw);
+        let words = FaceTextureIds::new(ids).to_words();
+        assert_eq!(words, [1 | 2 << 16, 3 | 4 << 16, 0xFFFF | 6 << 16]);
+        assert_eq!(FaceTextureIds::new(ids).as_array(), ids);
     }
 
     #[test]

@@ -17,8 +17,9 @@ use crate::id::{AIR_ID, MaterialId, NamespacedKey};
 use crate::kind::BlockKind;
 use voxel_core::Face;
 
+use crate::hot::HotRecord;
 use crate::properties::{BlockProperties, BlockRecord};
-use crate::texture::{FaceTextureIds, TextureId, TextureTable};
+use crate::texture::{FaceTextureIds, TextureId, TextureSetId, TextureTable};
 
 /// Error returned when registration fails.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -272,33 +273,50 @@ impl BlockRegistryBuilder {
         let BlockRegistryBuilder { entries, index } = self;
         let (keys, properties): (Vec<Option<NamespacedKey>>, Vec<BlockProperties>) =
             entries.into_iter().unzip();
-        let (records, textures) = resolve(&properties)?;
+        let Resolved {
+            hot,
+            templates,
+            texture_sets,
+            textures,
+        } = resolve(&properties)?;
         Ok(BlockRegistry {
             keys,
             properties,
-            records,
+            hot,
+            templates,
+            texture_sets,
             textures,
             by_key: index,
         })
     }
 }
 
-/// One-time resolution of authoring data into runtime records.
-///
-/// Walks the blocks in id order, so a texture's id is a deterministic
-/// function of the registration order: the same blocks registered in the same
-/// order always resolve to the same ids.
-///
-/// Every key a block refers to lands in the table exactly once, no matter how
-/// many blocks or faces reference it.
-fn resolve(
-    properties: &[BlockProperties],
-) -> Result<(Vec<BlockRecord>, TextureTable), FreezeError> {
-    let mut table = TextureTable::default();
-    let mut records = Vec::with_capacity(properties.len());
+/// The runtime tables produced by [`resolve`].
+struct Resolved {
+    hot: Vec<HotRecord>,
+    templates: HashMap<MaterialId, u64>,
+    texture_sets: Vec<FaceTextureIds>,
+    textures: TextureTable,
+}
 
-    for props in properties {
-        let textures = match &props.textures {
+/// One-time resolution of authoring data into runtime tables.
+///
+/// Walks the blocks in id order, so a texture's id (and a texture set's id)
+/// is a deterministic function of the registration order: the same blocks
+/// registered in the same order always resolve to the same ids.
+///
+/// Every key a block refers to lands in the texture table exactly once, and
+/// every distinct six-face combination lands in the set table exactly once,
+/// no matter how many blocks or faces reference it.
+fn resolve(properties: &[BlockProperties]) -> Result<Resolved, FreezeError> {
+    let mut table = TextureTable::default();
+    let mut hot = Vec::with_capacity(properties.len());
+    let mut templates = HashMap::new();
+    let mut texture_sets: Vec<FaceTextureIds> = Vec::new();
+    let mut set_ids: HashMap<FaceTextureIds, TextureSetId> = HashMap::new();
+
+    for (index, props) in properties.iter().enumerate() {
+        let set = match &props.textures {
             None => None,
             Some(faces) => {
                 let mut ids = [TextureId::default(); 6];
@@ -310,21 +328,40 @@ fn resolve(
                                 count: table.len() + 1,
                             })?;
                 }
-                Some(FaceTextureIds::new(ids))
+                let ids = FaceTextureIds::new(ids);
+                // At most one set per block, and a registry holds at most
+                // 65 536 blocks, so the set index always fits in a u16.
+                let id = match set_ids.entry(ids) {
+                    Entry::Occupied(slot) => *slot.get(),
+                    Entry::Vacant(slot) => {
+                        let id = TextureSetId::from_raw(texture_sets.len() as u16);
+                        texture_sets.push(ids);
+                        *slot.insert(id)
+                    }
+                };
+                Some(id)
             }
         };
 
-        records.push(BlockRecord {
-            textures,
-            template_root: props.template_root,
-            render_type: props.render_type,
-            flags: props.flags,
-            light_emission: props.light_emission,
-            light_opacity: props.light_opacity,
-        });
+        if let Some(root) = props.template_root {
+            templates.insert(MaterialId::from_raw(index as u16), root);
+        }
+
+        hot.push(HotRecord::pack(
+            props.render_type,
+            props.flags,
+            props.light_emission,
+            props.light_opacity,
+            set,
+        ));
     }
 
-    Ok((records, table))
+    Ok(Resolved {
+        hot,
+        templates,
+        texture_sets,
+        textures: table,
+    })
 }
 
 /// Immutable mapping between [`NamespacedKey`]s, [`MaterialId`]s and
@@ -337,8 +374,11 @@ fn resolve(
 ///
 /// - the *authoring* view ([`Self::get`]) — keys and strings, kept whole,
 ///   for mods, tooling and the texture-array builder;
-/// - the *runtime* view ([`Self::resolved`]) — texture ids and small fields,
-///   for per-voxel code.
+/// - the *runtime* view — split by access pattern: an 8-byte [`HotRecord`]
+///   per block ([`Self::hot`]), deduplicated texture sets read on a surface
+///   hit ([`Self::texture_set`]), and sparse template roots read at
+///   placement ([`Self::template_root`]). [`Self::resolved`] assembles all
+///   of it for code that wants the whole block.
 #[derive(Debug)]
 pub struct BlockRegistry {
     /// `keys[i]` and `properties[i]` describe `MaterialId(i)`.
@@ -348,10 +388,13 @@ pub struct BlockRegistry {
     keys: Vec<Option<NamespacedKey>>,
     /// Authoring-shape data, kept whole. The domain mods and tooling read.
     properties: Vec<BlockProperties>,
-    /// Runtime-shape data, indexed the same way. The domain per-voxel code
-    /// reads.
-    records: Vec<BlockRecord>,
-    /// The resolved texture names behind the ids in `records`.
+    /// Hot runtime data, indexed like `properties`: 8 bytes per block.
+    hot: Vec<HotRecord>,
+    /// Template roots, sparse: most blocks are flat materials with none.
+    templates: HashMap<MaterialId, u64>,
+    /// Each distinct six-face texture set, once; `TextureSetId` indexes it.
+    texture_sets: Vec<FaceTextureIds>,
+    /// The resolved texture names behind the ids in `texture_sets`.
     textures: TextureTable,
     by_key: HashMap<NamespacedKey, MaterialId>,
 }
@@ -381,20 +424,18 @@ impl BlockRegistry {
         self.properties.get(id.index())
     }
 
-    /// The resolved runtime record for an id.
+    /// The hot runtime record for an id: 8 bytes, returned by value.
     ///
-    /// This is the hot-path accessor: the record holds texture ids rather
-    /// than keys, so reading it costs an indexed load of a few bytes instead
-    /// of a pointer chase into a string.
+    /// This is the per-voxel / per-hit accessor. It is one indexed load from a
+    /// dense table that is 512 KiB for a full 65 536-block registry.
     ///
     /// # Why not an `Option`
     ///
     /// Ids reach this accessor from the registry's *own* dense id space — a
     /// chunk stores the ids the registry handed out — so an id that is not
-    /// registered is a bug, not a case to handle. A plain reference says so
-    /// in the type: the hot path has no `Option` to unwrap on every voxel,
-    /// and an out-of-range id fails loudly instead of silently becoming
-    /// "no block".
+    /// registered is a bug, not a case to handle. A plain value says so in the
+    /// type: the hot path has no `Option` to unwrap on every voxel, and an
+    /// out-of-range id fails loudly instead of silently becoming "no block".
     ///
     /// Absence is still *reported*, just not here: [`Self::get`] and
     /// [`Self::id`] are the paths that answer "is this block registered?"
@@ -402,15 +443,99 @@ impl BlockRegistry {
     /// # Panics
     ///
     /// Panics if the id was never registered — a corrupted save or a bug in
-    /// the caller. Use [`Self::len`] to check a range, or resolve the id
-    /// from a key with [`Self::id`], which reports absence instead.
-    pub fn resolved(&self, id: MaterialId) -> &BlockRecord {
-        self.records.get(id.index()).unwrap_or_else(|| {
-            panic!(
-                "material id {id} is outside the registry's {} blocks",
-                self.records.len()
-            )
-        })
+    /// the caller.
+    #[inline]
+    pub fn hot(&self, id: MaterialId) -> HotRecord {
+        match self.hot.get(id.index()) {
+            Some(record) => *record,
+            None => self.unregistered(id),
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn unregistered(&self, id: MaterialId) -> ! {
+        panic!(
+            "material id {id} is outside the registry's {} blocks",
+            self.hot.len()
+        )
+    }
+
+    /// The whole hot table, indexed by [`MaterialId`], for bulk work.
+    pub fn hot_table(&self) -> &[HotRecord] {
+        &self.hot
+    }
+
+    /// A block's six resolved face textures, or `None` if it never draws.
+    ///
+    /// Two dependent loads (hot record, then set). Read this on a surface hit,
+    /// not per voxel.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the id was never registered.
+    #[inline]
+    pub fn face_textures(&self, id: MaterialId) -> Option<FaceTextureIds> {
+        self.hot(id).texture_set().map(|set| self.texture_set(set))
+    }
+
+    /// A texture set by id.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the id did not come from this registry.
+    #[inline]
+    pub fn texture_set(&self, set: TextureSetId) -> FaceTextureIds {
+        self.texture_sets[set.index()]
+    }
+
+    /// Every distinct texture set, in [`TextureSetId`] order.
+    pub fn texture_sets(&self) -> &[FaceTextureIds] {
+        &self.texture_sets
+    }
+
+    /// The SVDAG root of a block's sub-block template, or `None` for a flat
+    /// material (or an id that was never registered).
+    ///
+    /// Placement-time data: a hash lookup, deliberately kept out of the hot
+    /// table.
+    pub fn template_root(&self, id: MaterialId) -> Option<u64> {
+        self.templates.get(&id).copied()
+    }
+
+    /// The whole block, assembled from the hot record, texture sets and
+    /// template table. Flags are the full 32 bits from the authoring data.
+    ///
+    /// For tooling, placement and tests. Per-voxel code wants [`Self::hot`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the id was never registered.
+    pub fn resolved(&self, id: MaterialId) -> BlockRecord {
+        let hot = self.hot(id);
+        BlockRecord {
+            textures: hot.texture_set().map(|set| self.texture_set(set)),
+            template_root: self.template_root(id),
+            render_type: hot.render_type(),
+            flags: self.properties[id.index()].flags,
+            light_emission: hot.light_emission(),
+            light_opacity: hot.light_opacity(),
+        }
+    }
+
+    /// The hot table as raw `u32` words (two per block), ready to upload to a
+    /// GPU storage buffer. Layout: see [`crate::hot`].
+    pub fn gpu_hot_words(&self) -> Vec<u32> {
+        self.hot.iter().flat_map(|h| h.to_words()).collect()
+    }
+
+    /// The texture sets as raw `u32` words (three per set), ready to upload to
+    /// a GPU storage buffer. Layout: see [`FaceTextureIds::to_words`].
+    pub fn gpu_texture_set_words(&self) -> Vec<u32> {
+        self.texture_sets
+            .iter()
+            .flat_map(|s| s.to_words())
+            .collect()
     }
 
     /// The resolved texture table: `TextureId` to key.
@@ -1106,7 +1231,7 @@ mod tests {
         builder.register_kind(BlockKind::Dirt).unwrap();
         let registry = builder.freeze().unwrap();
 
-        assert_eq!(registry.records.len(), registry.properties.len());
+        assert_eq!(registry.hot.len(), registry.properties.len());
         for (id, props) in registry.iter() {
             let record = registry.resolved(id);
             assert_eq!(record.render_type, props.render_type, "{id}");
@@ -1150,13 +1275,176 @@ mod tests {
     }
 
     #[test]
-    fn the_runtime_record_stays_small() {
-        // Canary for "hot data minimized": the record is what a per-voxel loop
-        // touches, so it has to stay far below the authoring shape it came
-        // from. Bump this when a consumer genuinely needs another field.
-        // 40 bytes: the 16-byte `Option<u64>` template root plus the resolved
-        // hot-path fields. Still far below the authoring shape.
-        assert!(size_of::<BlockRecord>() <= 40);
+    fn the_hot_record_stays_eight_bytes() {
+        // Canary for "hot data minimized": this is what a per-voxel or per-hit
+        // loop touches, so eight of them must share one 64-byte cache line.
+        assert_eq!(size_of::<HotRecord>(), 8);
+        assert_eq!(64 / size_of::<HotRecord>(), 8);
+        // The assembled view is a convenience, never stored; it is allowed to
+        // be larger, but should stay well below the authoring shape.
         assert!(size_of::<BlockRecord>() * 4 <= size_of::<BlockProperties>());
+    }
+
+    #[test]
+    fn hot_records_mirror_the_authoring_properties_for_every_builtin() {
+        let mut builder = BlockRegistryBuilder::new();
+        for kind in BlockKind::ALL {
+            if kind != BlockKind::Air {
+                builder.register_kind(kind).unwrap();
+            }
+        }
+        let registry = builder.freeze().unwrap();
+
+        for (id, props) in registry.iter() {
+            let hot = registry.hot(id);
+            assert_eq!(hot.render_type(), props.render_type, "{id}");
+            assert_eq!(hot.flags(), props.flags & BlockFlags::HOT_MASK, "{id}");
+            assert_eq!(hot.light_emission(), props.light_emission, "{id}");
+            assert_eq!(hot.light_opacity(), props.light_opacity, "{id}");
+            assert_eq!(
+                hot.texture_set().is_some(),
+                props.textures.is_some(),
+                "{id}"
+            );
+
+            // The assembled view agrees with the pieces.
+            let whole = registry.resolved(id);
+            assert_eq!(whole.render_type, hot.render_type(), "{id}");
+            assert_eq!(whole.flags, props.flags, "{id}");
+            assert_eq!(whole.textures, registry.face_textures(id), "{id}");
+            assert_eq!(whole.template_root, props.template_root, "{id}");
+        }
+    }
+
+    #[test]
+    fn blocks_with_the_same_six_textures_share_one_texture_set() {
+        let mut builder = BlockRegistryBuilder::new();
+        let stone = builder.register_kind(BlockKind::Stone).unwrap();
+        let copy = builder
+            .register(
+                NamespacedKey::builtin("stone_copy"),
+                BlockProperties::new()
+                    .with_render_type(RenderType::Solid)
+                    .with_textures(FaceTextures::all(NamespacedKey::builtin("block/stone"))),
+            )
+            .unwrap();
+        let dirt = builder.register_kind(BlockKind::Dirt).unwrap();
+        let registry = builder.freeze().unwrap();
+
+        assert_eq!(
+            registry.hot(stone).texture_set(),
+            registry.hot(copy).texture_set()
+        );
+        assert_ne!(
+            registry.hot(stone).texture_set(),
+            registry.hot(dirt).texture_set()
+        );
+        assert_eq!(
+            registry.texture_sets().len(),
+            2,
+            "stone/stone_copy share a set; dirt has its own"
+        );
+        assert_eq!(registry.face_textures(stone), registry.face_textures(copy));
+    }
+
+    #[test]
+    fn many_blocks_over_few_sets_keeps_the_set_table_small() {
+        let mut builder = BlockRegistryBuilder::new();
+        for i in 0..5_000u32 {
+            // 5 000 blocks, 8 distinct textures (so at most 8 distinct sets).
+            let tex = NamespacedKey::builtin(&format!("block/t{}", i % 8));
+            builder
+                .register(
+                    NamespacedKey::builtin(&format!("b{i}")),
+                    BlockProperties::new()
+                        .with_render_type(RenderType::Solid)
+                        .with_textures(FaceTextures::all(tex)),
+                )
+                .unwrap();
+        }
+        let registry = builder.freeze().unwrap();
+        assert_eq!(registry.len(), 5_001);
+        assert_eq!(registry.texture_sets().len(), 8);
+        assert_eq!(registry.hot_table().len(), 5_001);
+    }
+
+    #[test]
+    fn template_roots_are_sparse_and_cold() {
+        let mut builder = BlockRegistryBuilder::new();
+        let flat = builder.register_kind(BlockKind::Stone).unwrap();
+        let stairs = builder
+            .register(
+                NamespacedKey::builtin("stairs"),
+                BlockProperties::new().with_template_root(0),
+            )
+            .unwrap();
+        let registry = builder.freeze().unwrap();
+
+        // Root 0 is a legal root and must stay distinguishable from "none".
+        assert_eq!(registry.template_root(stairs), Some(0));
+        assert_eq!(registry.template_root(flat), None);
+        assert_eq!(registry.template_root(AIR_ID), None);
+        assert_eq!(registry.templates.len(), 1, "only one block has a template");
+    }
+
+    #[test]
+    fn flag_bits_above_the_hot_mask_are_cold_only() {
+        let cold = BlockFlags::from_bits(1 << 20);
+        let mut builder = BlockRegistryBuilder::new();
+        let id = builder
+            .register(
+                NamespacedKey::builtin("odd"),
+                BlockProperties::new().with_flags(BlockFlags::SOLID | cold),
+            )
+            .unwrap();
+        let registry = builder.freeze().unwrap();
+
+        assert!(registry.hot(id).flags().contains(BlockFlags::SOLID));
+        assert!(!registry.hot(id).flags().contains(cold));
+        assert!(
+            registry.resolved(id).flags.contains(cold),
+            "still in the full view"
+        );
+        assert!(registry.get(id).unwrap().flags.contains(cold));
+    }
+
+    #[test]
+    fn gpu_words_match_the_typed_tables() {
+        let mut builder = BlockRegistryBuilder::new();
+        builder.register_kind(BlockKind::Grass).unwrap();
+        builder.register_kind(BlockKind::Stone).unwrap();
+        let registry = builder.freeze().unwrap();
+
+        let hot = registry.gpu_hot_words();
+        assert_eq!(hot.len(), registry.len() * 2);
+        for (id, _) in registry.iter() {
+            assert_eq!(
+                &hot[id.index() * 2..id.index() * 2 + 2],
+                registry.hot(id).to_words()
+            );
+        }
+
+        let sets = registry.gpu_texture_set_words();
+        assert_eq!(sets.len(), registry.texture_sets().len() * 3);
+
+        // Decode a face the way the WGSL in `crate::hot` does.
+        let grass = registry.id_of("voxel:grass_block").unwrap();
+        let set = registry.hot(grass).texture_set().unwrap().index();
+        for face in Face::ALL {
+            let f = face.index();
+            let word = sets[3 * set + f / 2];
+            let tex = (word >> (16 * (f & 1))) & 0xFFFF;
+            assert_eq!(
+                tex,
+                registry.face_textures(grass).unwrap().get(face).as_raw() as u32
+            );
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "outside the registry")]
+    fn hot_lookup_of_an_unregistered_id_panics() {
+        let registry = BlockRegistryBuilder::new().freeze().unwrap();
+        let _ = registry.hot(MaterialId::from_raw(99));
     }
 }
