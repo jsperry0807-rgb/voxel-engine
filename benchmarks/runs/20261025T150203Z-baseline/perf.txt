@@ -1,0 +1,18 @@
+
+ Performance counter stats for './target/release/voxel-bench cpu --out target/bench/perf-run':
+
+        3197576980      task-clock:u                     #    1.000 CPUs utilized             
+       15610898255      cycles:u                         #    4.882 GHz                       
+       48310561701      instructions:u                   #    3.09  insn per cycle            
+        1304638054      cache-references:u               #  408.008 M/sec                     
+          78981456      cache-misses:u                   #    6.05% of all cache refs         
+        7474182318      branch-instructions:u            #    2.337 G/sec                     
+          50708592      branch-misses:u                  #    0.68% of all branches           
+            108151      page-faults:u                    #   33.823 K/sec                     
+
+       3.198580435 seconds time elapsed
+
+       3.029990000 seconds user
+       0.168110000 seconds sys
+
+
