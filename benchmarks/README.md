@@ -74,12 +74,17 @@ Re-recording the same label is allowed and gets a numeric suffix.
 
 | Metric | Lens |
 | --- | --- |
-| peak RSS, CPU time | process |
+| peak RSS, CPU time | process (only when the case set matches) |
 | registry 65k, terrain chunk, 256-chunk GPU world, material GPU tables | memory |
 | GPU overlay for 1 block and 64 blocks | memory |
 | registry freeze, hot lookup, resolved lookup, palette resolve | CPU |
 | DAG build/get, GPU lookup, GPU overlay lookup, 100-edit COW, overlay set/flush | CPU |
 | hot lookup, DAG get, GPU edit, GPU overlay set, `World::set` p99 | latency |
+
+Peak RSS and CPU time are whole-run totals: adding a case raises them without
+any code regression. Each run stores a suite fingerprint, and `HISTORY.md`
+omits those two deltas when the fingerprint changes. Re-record a baseline after
+adding cases if you need the process comparison.
 
 The full case list is in each run's `report.md`.
 
@@ -96,6 +101,9 @@ The full case list is in each run's `report.md`.
    archive the ones that establish a baseline or prove a change.
 5. **Read the whole table.** A change that improves ns/op but doubles peak RSS
    is not a win for a render-distance-bound engine.
+6. **Keep the case set fixed between compared runs.** Adding a case is a suite
+   change, not an optimization; the history drops the whole-run deltas when the
+   suite fingerprint differs.
 
 ## Caveats
 

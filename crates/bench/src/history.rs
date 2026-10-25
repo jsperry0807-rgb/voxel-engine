@@ -37,6 +37,10 @@ pub struct RunSummary {
     /// Run directory relative to the archive root, e.g. `runs/<id>`.
     pub path: String,
     pub note: Option<String>,
+    /// Fingerprint of the executed case set. Process-wide metrics (peak RSS,
+    /// CPU time) are only comparable between runs with the same fingerprint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suite: Option<String>,
     /// Stable metric keys, extracted from the report.
     pub metrics: BTreeMap<String, f64>,
 }
@@ -115,6 +119,7 @@ pub fn record(
         arch: report.meta.arch.clone(),
         path: format!("runs/{id}"),
         note: note.map(str::to_owned),
+        suite: Some(suite_fingerprint(&report)),
         metrics: summarize(&report),
     };
 
@@ -145,23 +150,84 @@ pub fn record(
 }
 
 /// Loads `history.json`, or an empty history when the archive is new.
+///
+/// Runs recorded before the suite fingerprint existed are backfilled from their
+/// archived `report.json`, so a refresh can classify them without re-running.
 pub fn load(archive: &Path) -> io::Result<History> {
     let path = archive.join("history.json");
-    match fs::read_to_string(&path) {
+    let mut history = match fs::read_to_string(&path) {
         Ok(text) => serde_json::from_str(&text)
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string())),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(History::default()),
-        Err(error) => Err(error),
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => History::default(),
+        Err(error) => return Err(error),
+    };
+    for run in &mut history.runs {
+        if run.suite.is_none() {
+            run.suite = archived_suite(archive, run);
+        }
     }
+    Ok(history)
+}
+
+fn archived_suite(archive: &Path, run: &RunSummary) -> Option<String> {
+    let path = archive.join(&run.path).join("report.json");
+    let raw = fs::read_to_string(path).ok()?;
+    let report: Report = serde_json::from_str(&raw).ok()?;
+    Some(suite_fingerprint(&report))
 }
 
 /// Regenerates `HISTORY.md` from `history.json` without recording a run.
 pub fn refresh(archive: &Path) -> io::Result<PathBuf> {
     let history = load(archive)?;
     fs::create_dir_all(archive)?;
+    // Persist any backfilled suite fingerprints so the next load is cheap.
+    fs::write(
+        archive.join("history.json"),
+        serde_json::to_vec_pretty(&history).map_err(|error| io::Error::other(error.to_string()))?,
+    )?;
     let path = archive.join("HISTORY.md");
     fs::write(&path, render(&history))?;
     Ok(path)
+}
+
+/// FNV-1a fingerprint of the sorted case names.
+///
+/// Counts are part of the key so a truncated or extended suite is obvious in
+/// the note, while the hash distinguishes same-size suites with renamed cases.
+fn suite_fingerprint(report: &Report) -> String {
+    let cases = report
+        .memory
+        .iter()
+        .map(|record| record.case.as_str())
+        .chain(report.cpu.iter().map(|record| record.case.as_str()))
+        .chain(report.latency.iter().map(|record| record.case.as_str()));
+    suite_key(
+        cases,
+        report.memory.len(),
+        report.cpu.len(),
+        report.latency.len(),
+    )
+}
+
+fn suite_key<'a>(
+    cases: impl IntoIterator<Item = &'a str>,
+    memory: usize,
+    cpu: usize,
+    latency: usize,
+) -> String {
+    let mut names: Vec<&str> = cases.into_iter().collect();
+    names.sort_unstable();
+    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+    for name in names {
+        for byte in name.as_bytes() {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        // Separator, so ["ab", "c"] and ["a", "bc"] do not collide.
+        hash ^= 0xff;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("m{memory}-c{cpu}-l{latency}-{hash:016x}")
 }
 
 /// Extracts stable metrics from a report.
@@ -278,14 +344,23 @@ fn render(history: &History) -> String {
         ));
     }
 
+    out.push_str(
+        "\nPeak RSS and CPU time cover the whole run, not one case; the comparison \
+         below omits them when the suite fingerprint changes.\n",
+    );
+
     if runs.len() >= 2 {
         let latest = runs.last().expect("at least two runs");
         let previous = &runs[runs.len() - 2];
+        let same_suite = latest.suite == previous.suite;
         out.push_str(&format!(
             "\n## Latest vs previous\n\n`{}` vs `{}`\n\n| Metric | Previous | Latest | Change |\n|---|---:|---:|---:|\n",
             latest.label, previous.label,
         ));
         for (key, label, unit) in TREND {
+            if !same_suite && matches!(*key, "peak_rss_bytes" | "process_cpu_ns") {
+                continue;
+            }
             let (Some(a), Some(b)) = (previous.metrics.get(*key), latest.metrics.get(*key)) else {
                 continue;
             };
@@ -294,6 +369,14 @@ fn render(history: &History) -> String {
                 format_unit(*a, unit),
                 format_unit(*b, unit),
                 change(*a, *b),
+            ));
+        }
+        if !same_suite {
+            out.push_str(&format!(
+                "\n_Process metrics omitted: the case set changed (`{}` → `{}`). \
+                 Adding or removing a case moves the whole-run totals._\n",
+                previous.suite.as_deref().unwrap_or("unfingerprinted"),
+                latest.suite.as_deref().unwrap_or("unfingerprinted"),
             ));
         }
         out.push_str(
@@ -517,5 +600,79 @@ mod tests {
         assert_eq!(change(100.0, 110.0), "+10.0%");
         assert_eq!(change(100.0, 90.0), "-10.0%");
         assert_eq!(change(0.0, 10.0), "n/a");
+    }
+
+    #[test]
+    fn suite_fingerprint_ignores_order_and_separates_names() {
+        assert_eq!(
+            suite_key(["b", "a"], 1, 1, 0),
+            suite_key(["a", "b"], 1, 1, 0)
+        );
+        assert_ne!(
+            suite_key(["a", "b"], 1, 1, 0),
+            suite_key(["a", "b", "c"], 2, 1, 0)
+        );
+        assert_ne!(
+            suite_key(["ab", "c"], 1, 1, 0),
+            suite_key(["a", "bc"], 1, 1, 0)
+        );
+    }
+
+    fn run(label: &str, timestamp: u64, suite: &str) -> RunSummary {
+        let mut metrics = BTreeMap::new();
+        metrics.insert("peak_rss_bytes".into(), 1_000_000.0);
+        metrics.insert("process_cpu_ns".into(), 2_000_000.0);
+        metrics.insert("hot_lookup_ns".into(), 1.0);
+        RunSummary {
+            id: label.into(),
+            label: label.into(),
+            timestamp_unix: timestamp,
+            git_commit: None,
+            git_dirty: Some(false),
+            cpu_model: None,
+            os: "linux".into(),
+            arch: "x86_64".into(),
+            path: format!("runs/{label}"),
+            note: None,
+            suite: Some(suite.into()),
+            metrics,
+        }
+    }
+
+    #[test]
+    fn process_metrics_are_omitted_when_the_suite_changes() {
+        let history = History {
+            runs: vec![
+                run("old", 1, "m1-c1-l0-aaaa"),
+                run("new", 2, "m2-c1-l0-bbbb"),
+            ],
+        };
+        let text = render(&history);
+        let trend = text
+            .split("## Latest vs previous")
+            .nth(1)
+            .expect("trend section");
+        assert!(!trend.contains("| Peak RSS |"));
+        assert!(!trend.contains("| CPU time |"));
+        assert!(trend.contains("case set changed"));
+        assert!(trend.contains("| Hot lookup |"));
+    }
+
+    #[test]
+    fn process_metrics_are_kept_for_the_same_suite() {
+        let history = History {
+            runs: vec![
+                run("old", 1, "m1-c1-l0-aaaa"),
+                run("new", 2, "m1-c1-l0-aaaa"),
+            ],
+        };
+        let trend = render(&history)
+            .split("## Latest vs previous")
+            .nth(1)
+            .expect("trend section")
+            .to_owned();
+        assert!(trend.contains("| Peak RSS |"));
+        assert!(trend.contains("| CPU time |"));
+        assert!(!trend.contains("case set changed"));
     }
 }
