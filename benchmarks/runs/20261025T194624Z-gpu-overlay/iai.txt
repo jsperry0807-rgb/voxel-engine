@@ -1,0 +1,55 @@
+    Finished `bench` profile [optimized] target(s) in 0.07s
+warning: the following packages contain code that will be rejected by a future version of Rust: proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running benches/iai.rs (target/release/deps/iai-0e06547f0c5f8535)
+iai::voxel::hot_lookup hot_lookup:lookup_scene()
+  Instructions:                      673934|673989               (-0.00816%) [-1.00008x]
+  L1 Hits:                           963465|963534               (-0.00716%) [-1.00007x]
+  LL Hits:                            12360|12340                (+0.16207%) [+1.00162x]
+  RAM Hits:                              29|29                   (No change)
+  Total read+write:                  975854|975903               (-0.00502%) [-1.00005x]
+  Estimated Cycles:                 1026280|1026249              (+0.00302%) [+1.00003x]
+iai::voxel::resolved_lookup resolved_lookup:lookup_scene()
+  Instructions:                      953515|953430               (+0.00892%) [+1.00009x]
+  L1 Hits:                          1403578|1403451              (+0.00905%) [+1.00009x]
+  LL Hits:                            15640|15689                (-0.31232%) [-1.00313x]
+  RAM Hits:                              31|31                   (No change)
+  Total read+write:                 1419249|1419171              (+0.00550%) [+1.00005x]
+  Estimated Cycles:                 1482863|1482981              (-0.00796%) [-1.00008x]
+iai::voxel::dag_get dag_get:dag_scene()
+  Instructions:                      515707|515707               (No change)
+  L1 Hits:                           589294|589294               (No change)
+  LL Hits:                             3655|3655                 (No change)
+  RAM Hits:                              15|15                   (No change)
+  Total read+write:                  592964|592964               (No change)
+  Estimated Cycles:                  608094|608094               (No change)
+iai::voxel::dag_build dag_build:patterns :: terrain(0, 0)
+  Instructions:                     6858287|6858287              (No change)
+  L1 Hits:                          8848557|8848557              (No change)
+  LL Hits:                            36587|36587                (No change)
+  RAM Hits:                            3100|3100                 (No change)
+  Total read+write:                 8888244|8888244              (No change)
+  Estimated Cycles:                 9139992|9139992              (No change)
+iai::voxel::gpu_lookup gpu_lookup:gpu_scene()
+  Instructions:                      984768|984768               (No change)
+  L1 Hits:                          1226790|1226790              (No change)
+  LL Hits:                             3742|3742                 (No change)
+  RAM Hits:                              33|33                   (No change)
+  Total read+write:                 1230565|1230565              (No change)
+  Estimated Cycles:                 1246655|1246655              (No change)
+iai::voxel::gpu_lookup_overlay gpu_lookup_overlay:gpu_overlay_scene()
+  Instructions:                     1085804|1085804              (No change)
+  L1 Hits:                          1338779|1338779              (No change)
+  LL Hits:                             3895|3895                 (No change)
+  RAM Hits:                              36|36                   (No change)
+  Total read+write:                 1342710|1342710              (No change)
+  Estimated Cycles:                 1359514|1359514              (No change)
+iai::voxel::material_words material_words:material_scene()
+  Instructions:                    40929895|40929718             (+0.00043%) [+1.00000x]
+  L1 Hits:                         58729470|58729326             (+0.00025%) [+1.00000x]
+  LL Hits:                           370748|370651               (+0.02617%) [+1.00026x]
+  RAM Hits:                          595506|595656               (-0.02518%) [-1.00025x]
+  Total read+write:                59695724|59695633             (+0.00015%) [+1.00000x]
+  Estimated Cycles:                81425920|81430541             (-0.00567%) [-1.00006x]
+
+Iai-Callgrind result: Ok. 7 without regressions; 0 regressed; 7 benchmarks finished in 5.48514s
