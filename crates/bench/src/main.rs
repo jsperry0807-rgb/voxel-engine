@@ -33,6 +33,10 @@ fn main() {
         record_mode(&args[1..]);
         return;
     }
+    if args.first().is_some_and(|arg| arg == "refresh") {
+        refresh_mode(&args[1..]);
+        return;
+    }
 
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
@@ -63,7 +67,11 @@ fn main() {
                      \x20                  [--note TEXT] [--attach FILE]...\n\
                      \n\
                      record   archive a run under benchmarks/runs and refresh\n\
-                     \x20        benchmarks/HISTORY.md"
+                     \x20        benchmarks/HISTORY.md\n\
+                     \n\
+                     voxel-bench refresh [--history DIR]\n\
+                     \n\
+                     refresh  regenerate HISTORY.md from history.json"
                 );
                 return;
             }
@@ -191,6 +199,32 @@ fn record_mode(args: &[String]) {
         }
         Err(error) => {
             eprintln!("failed to record run: {error}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn refresh_mode(args: &[String]) {
+    let mut archive = PathBuf::from("benchmarks");
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--history" => {
+                index += 1;
+                archive = PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--history needs a directory")),
+                );
+            }
+            other => usage(&format!("unknown refresh argument `{other}`")),
+        }
+        index += 1;
+    }
+
+    match history::refresh(&archive) {
+        Ok(path) => println!("refreshed {}", path.display()),
+        Err(error) => {
+            eprintln!("failed to refresh history: {error}");
             std::process::exit(1);
         }
     }

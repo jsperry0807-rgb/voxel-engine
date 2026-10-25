@@ -103,11 +103,6 @@ pub fn record(
     }
 
     let mut history = load(archive)?;
-    let previous = history
-        .runs
-        .iter()
-        .max_by_key(|run| run.timestamp_unix)
-        .cloned();
 
     let summary = RunSummary {
         id: id.clone(),
@@ -129,9 +124,12 @@ pub fn record(
     )?;
 
     history.runs.push(summary.clone());
-    history
+    history.runs.sort_by(order);
+    let previous = history
         .runs
-        .sort_by_key(|run: &RunSummary| run.timestamp_unix);
+        .len()
+        .checked_sub(2)
+        .map(|index| history.runs[index].clone());
     fs::create_dir_all(archive)?;
     fs::write(
         archive.join("history.json"),
@@ -226,7 +224,7 @@ fn memory<'a>(report: &'a Report, case: &str) -> Option<&'a report::MemoryRecord
 
 fn render(history: &History) -> String {
     let mut runs = history.runs.clone();
-    runs.sort_by_key(|run| run.timestamp_unix);
+    runs.sort_by(order);
 
     let mut out = String::from("# Benchmark history\n\n");
     out.push_str(
@@ -294,7 +292,7 @@ fn render(history: &History) -> String {
         }
         out.push_str(
             "\n`*` marks a run recorded with an uncommitted worktree. \
-             Lower is better for every value above except CPU percent.\n",
+             Lower is better for every value above.\n",
         );
     }
 
@@ -321,6 +319,12 @@ const TREND: &[(&str, &str, &str)] = &[
     ("gpu_edit_p99_us", "GPU edit p99", "us"),
     ("world_set_p99_us", "World set p99", "us"),
 ];
+
+fn order(a: &RunSummary, b: &RunSummary) -> std::cmp::Ordering {
+    a.timestamp_unix
+        .cmp(&b.timestamp_unix)
+        .then_with(|| a.id.cmp(&b.id))
+}
 
 fn metric(run: &RunSummary, key: &str, unit: &str) -> String {
     run.metrics
