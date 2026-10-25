@@ -49,15 +49,22 @@ pub struct RegionStore {
 fn bad(msg: &str) -> io::Error { io::Error::new(io::ErrorKind::InvalidData, msg.to_string()) }
 
 fn encode(kind: u8, cell: u16, payload: &[u8]) -> Vec<u8> {
+    let mut h = encode_header(kind, cell, payload.len() as u32);
+    h[12..16].copy_from_slice(&crc32(payload).to_le_bytes());
     let mut b = Vec::with_capacity(HDR + payload.len());
-    b.extend_from_slice(&MAGIC.to_le_bytes());
-    b.push(kind);
-    b.push(0);
-    b.extend_from_slice(&cell.to_le_bytes());
-    b.extend_from_slice(&(payload.len() as u32).to_le_bytes());
-    b.extend_from_slice(&crc32(payload).to_le_bytes());
+    b.extend_from_slice(&h);
     b.extend_from_slice(payload);
     b
+}
+
+fn encode_header(kind: u8, cell: u16, len: u32) -> [u8; HDR] {
+    let mut h = [0u8; HDR];
+    h[0..4].copy_from_slice(&MAGIC.to_le_bytes());
+    h[4] = kind;
+    h[6..8].copy_from_slice(&cell.to_le_bytes());
+    h[8..12].copy_from_slice(&len.to_le_bytes());
+    // CRC is filled by the caller, which has the payload.
+    h
 }
 
 fn scan(file: &mut File) -> io::Result<(u64, FxMap<u16, Entry>)> {
@@ -129,12 +136,14 @@ impl RegionStore {
 
     fn append(&mut self, p: ChunkPos, kind: u8, payload: &[u8]) -> io::Result<()> {
         let cell = p.cell();
-        let buf = encode(kind, cell, payload);
+        let mut hdr = encode_header(kind, cell, payload.len() as u32);
+        hdr[12..16].copy_from_slice(&crc32(payload).to_le_bytes());
         let reg = self.region(p.region(), true)?.unwrap();
         reg.file.seek(SeekFrom::Start(reg.len))?;
-        reg.file.write_all(&buf)?;
+        reg.file.write_all(&hdr)?;
+        reg.file.write_all(payload)?;
         let off = reg.len + HDR as u64;
-        reg.len += buf.len() as u64;
+        reg.len += (HDR + payload.len()) as u64;
         let e = reg.index.entry(cell).or_default();
         let loc = Some((off, payload.len() as u32));
         if kind == KIND_DAG {

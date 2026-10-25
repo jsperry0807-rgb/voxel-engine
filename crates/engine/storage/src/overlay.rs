@@ -38,6 +38,7 @@ impl Overlay {
             return None;
         }
         let mut o = Overlay::default();
+        o.map.reserve(n);
         for e in b[4..].chunks_exact(6) {
             let i = u32::from_le_bytes(e[0..4].try_into().unwrap());
             let m = u16::from_le_bytes(e[4..6].try_into().unwrap());

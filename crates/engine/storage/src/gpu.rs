@@ -85,6 +85,7 @@ pub struct GpuStore {
     gpu_table_cap: usize,
     retire: Vec<(u64, u32)>,
     epoch: u64,
+    import_memo: FxMap<u32, u32>,
 }
 
 fn coalesce(mut v: Vec<(usize, usize)>) -> Vec<(usize, usize)> {
@@ -121,6 +122,7 @@ impl GpuStore {
             gpu_table_cap: 0,
             retire: Vec::new(),
             epoch: 0,
+            import_memo: FxMap::default(),
         }
     }
 
@@ -300,8 +302,10 @@ impl GpuStore {
             }
             return;
         }
-        let mut memo = FxMap::default();
+        let mut memo = std::mem::take(&mut self.import_memo);
+        memo.clear();
         let g = self.import(&dag.pool, dag.root, &mut memo);
+        self.import_memo = memo;
         self.rc[g as usize] += 1;
         if let Some(old) = self.table_set(p, g) {
             self.retire.push((self.epoch, old));
@@ -405,12 +409,14 @@ impl GpuStore {
 
     /// Free nodes retired at epochs <= `completed`.
     pub fn reclaim(&mut self, completed: u64) {
-        let (done, keep): (Vec<_>, Vec<_>) = std::mem::take(&mut self.retire)
-            .into_iter()
-            .partition(|r| r.0 <= completed);
-        self.retire = keep;
-        for (_, root) in done {
-            self.decref(root);
+        let mut i = 0;
+        while i < self.retire.len() {
+            if self.retire[i].0 <= completed {
+                let (_, root) = self.retire.swap_remove(i);
+                self.decref(root);
+            } else {
+                i += 1;
+            }
         }
     }
 
