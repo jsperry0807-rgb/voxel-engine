@@ -25,10 +25,12 @@ The raw files are optional, depending on which tools existed on the machine.
 
 ## Recording a run
 
-Run the full suite and archive it in one step:
+`scripts/bench.sh` archives the run by default:
 
 ```sh
-RECORD=1 LABEL=baseline scripts/bench.sh
+scripts/bench.sh                 # auto-labeled auto-<short-commit>
+LABEL=baseline scripts/bench.sh  # name it yourself
+RECORD=0 scripts/bench.sh        # report only, keep it out of the archive
 ```
 
 or record an already-produced `target/bench` run:

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Run every benchmark lens that this machine can support.
 #
-#   scripts/bench.sh                     # software lenses + Criterion + iai + perf
-#   RECORD=1 LABEL=baseline scripts/bench.sh   # also archive under benchmarks/
+#   scripts/bench.sh                     # all lenses, report + archive in benchmarks/
+#   LABEL=my-change scripts/bench.sh     # name the archived run
+#   RECORD=0 scripts/bench.sh            # local report only, do not archive
 #   VOXEL_GPU_BENCH=1 scripts/bench.sh   # also wgpu upload benchmarks
 #   OUT=target/my-bench scripts/bench.sh # custom output directory
 #
@@ -48,16 +49,21 @@ if [[ "${VOXEL_GPU_BENCH:-}" == "1" ]]; then
   VOXEL_GPU_BENCH=1 cargo bench -p voxel-bench --bench render 2>&1 | tee "$OUT/gpu.txt"
 fi
 
-if [[ "${RECORD:-0}" == "1" ]]; then
+if [[ "${RECORD:-1}" == "1" ]]; then
   echo "== archive run =="
-  record_args=(--from "$OUT" --label "${LABEL:-baseline}")
+  if [[ -z "${LABEL:-}" ]]; then
+    commit="$(git rev-parse --short HEAD 2>/dev/null || true)"
+    LABEL="auto-${commit:-local}"
+  fi
+  record_args=(--from "$OUT" --label "$LABEL")
   [[ -n "${NOTE:-}" ]] && record_args+=(--note "$NOTE")
   for raw in criterion.txt iai.txt perf.txt gpu.txt; do
     [[ -f "$OUT/$raw" ]] && record_args+=(--attach "$OUT/$raw")
   done
   cargo run --release -p voxel-bench -- record "${record_args[@]}"
+  echo "history: benchmarks/HISTORY.md"
 else
-  echo "not archived: set RECORD=1 LABEL=<name> to add this run to benchmarks/"
+  echo "RECORD=0: kept the run in $OUT only (not archived)"
 fi
 
 echo

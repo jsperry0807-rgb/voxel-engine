@@ -32,8 +32,10 @@ cargo bench -p voxel-bench --features iai --bench iai
 # Real wgpu upload timings (needs an adapter)
 VOXEL_GPU_BENCH=1 cargo bench -p voxel-bench --bench render
 
-# Everything, with graceful skips
+# Everything, with graceful skips; archives into benchmarks/ by default
 scripts/bench.sh
+LABEL=my-change scripts/bench.sh  # name the archived run
+RECORD=0 scripts/bench.sh         # local report only
 ```
 
 ## What is measured
