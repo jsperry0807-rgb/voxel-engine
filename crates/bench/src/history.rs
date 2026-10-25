@@ -114,7 +114,7 @@ pub fn record(
         label: label.to_owned(),
         timestamp_unix: now,
         git_commit: git(&["rev-parse", "HEAD"]),
-        git_dirty: git(&["status", "--porcelain"]).map(|status| !status.is_empty()),
+        git_dirty: git_dirty(archive),
         cpu_model: report.meta.cpu_model.clone(),
         os: report.meta.os.clone(),
         arch: report.meta.arch.clone(),
@@ -435,6 +435,33 @@ fn unique_id(runs_dir: &Path, base: &str) -> String {
         suffix += 1;
     }
     id
+}
+
+/// True when the worktree has changes outside the benchmark archive itself.
+///
+/// Recording necessarily creates `benchmarks/...` files; counting those would
+/// mark every first archive of a clean tree as dirty, so the archive path is
+/// excluded from the check.
+fn git_dirty(archive: &Path) -> Option<bool> {
+    let status = git(&["status", "--porcelain"])?;
+    let root = git(&["rev-parse", "--show-toplevel"])?;
+    let archive = std::path::absolute(archive).ok()?;
+    let prefix = archive
+        .strip_prefix(Path::new(&root))
+        .ok()
+        .map(|path| path.to_string_lossy().replace('\\', "/"));
+
+    for line in status.lines() {
+        let path = line.get(3..).unwrap_or(line);
+        let path = path.split(" -> ").last().unwrap_or(path).trim_matches('"');
+        let inside_archive = prefix
+            .as_deref()
+            .is_some_and(|prefix| path == prefix || path.starts_with(&format!("{prefix}/")));
+        if !inside_archive {
+            return Some(true);
+        }
+    }
+    Some(false)
 }
 
 fn git(args: &[&str]) -> Option<String> {
