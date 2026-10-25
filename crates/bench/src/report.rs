@@ -4,10 +4,10 @@ use std::fmt::Write as _;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// One memory measurement.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MemoryRecord {
     pub case: String,
     /// Bytes the result keeps alive.
@@ -22,7 +22,7 @@ pub struct MemoryRecord {
 }
 
 /// One CPU/throughput measurement.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CpuRecord {
     pub case: String,
     pub iters: u64,
@@ -40,7 +40,7 @@ pub struct CpuRecord {
 }
 
 /// One latency distribution.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LatencyRecord {
     pub case: String,
     pub iters: u64,
@@ -52,7 +52,7 @@ pub struct LatencyRecord {
 }
 
 /// Process-level memory and CPU readings for the whole run.
-#[derive(Clone, Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ProcessReport {
     pub rss_start: Option<u64>,
     pub rss_end: Option<u64>,
@@ -63,7 +63,7 @@ pub struct ProcessReport {
 }
 
 /// Run metadata.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Meta {
     pub version: String,
     pub os: String,
@@ -74,7 +74,7 @@ pub struct Meta {
 }
 
 /// Everything the software lenses produced.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Report {
     pub meta: Meta,
     pub process: ProcessReport,

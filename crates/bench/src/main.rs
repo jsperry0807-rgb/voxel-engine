@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use voxel_bench::report::{ProcessReport, Report};
-use voxel_bench::{CountingAllocator, proc, report, suite};
+use voxel_bench::{CountingAllocator, history, proc, report, suite};
 
 #[global_allocator]
 static GLOBAL: CountingAllocator = CountingAllocator;
@@ -28,7 +28,13 @@ fn main() {
     let mut out_dir = PathBuf::from("target/bench");
     let mut print = false;
 
-    let mut args = std::env::args().skip(1);
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|arg| arg == "record") {
+        record_mode(&args[1..]);
+        return;
+    }
+
+    let mut args = args.into_iter();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "all" => mode = Mode::All,
@@ -51,7 +57,13 @@ fn main() {
                      cpu      process CPU time, ns/op, Mops/s and allocations/op\n\
                      latency  p50/p95/p99/max for the interactive paths\n\
                      --out    report directory (default: target/bench)\n\
-                     --print  also print the Markdown report"
+                     --print  also print the Markdown report\n\
+                     \n\
+                     voxel-bench record [--from DIR] [--history DIR] [--label NAME]\n\
+                     \x20                  [--note TEXT] [--attach FILE]...\n\
+                     \n\
+                     record   archive a run under benchmarks/runs and refresh\n\
+                     \x20        benchmarks/HISTORY.md"
                 );
                 return;
             }
@@ -112,6 +124,75 @@ fn main() {
 
     if print {
         print!("{}", result.markdown());
+    }
+}
+
+fn record_mode(args: &[String]) {
+    let mut from = PathBuf::from("target/bench");
+    let mut archive = PathBuf::from("benchmarks");
+    let mut label = String::from("run");
+    let mut note: Option<String> = None;
+    let mut attachments = Vec::new();
+
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--from" => {
+                index += 1;
+                from = PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--from needs a directory")),
+                );
+            }
+            "--history" => {
+                index += 1;
+                archive = PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--history needs a directory")),
+                );
+            }
+            "--label" => {
+                index += 1;
+                label = args
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_else(|| usage("--label needs a name"));
+            }
+            "--note" => {
+                index += 1;
+                note = Some(
+                    args.get(index)
+                        .cloned()
+                        .unwrap_or_else(|| usage("--note needs text")),
+                );
+            }
+            "--attach" => {
+                index += 1;
+                attachments.push(PathBuf::from(
+                    args.get(index)
+                        .cloned()
+                        .unwrap_or_else(|| usage("--attach needs a file")),
+                ));
+            }
+            other => usage(&format!("unknown record argument `{other}`")),
+        }
+        index += 1;
+    }
+
+    match history::record(&from, &archive, &label, note.as_deref(), &attachments) {
+        Ok(recorded) => {
+            println!(
+                "recorded `{}` -> {} ({} metrics)",
+                recorded.summary.id,
+                recorded.dir.display(),
+                recorded.summary.metrics.len(),
+            );
+            println!("history -> {}", archive.join("HISTORY.md").display());
+        }
+        Err(error) => {
+            eprintln!("failed to record run: {error}");
+            std::process::exit(1);
+        }
     }
 }
 

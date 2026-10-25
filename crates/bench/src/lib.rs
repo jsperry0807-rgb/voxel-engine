@@ -22,6 +22,7 @@
 //! `perf stat`.
 
 pub mod fixtures;
+pub mod history;
 pub mod mem;
 pub mod patterns;
 pub mod proc;
