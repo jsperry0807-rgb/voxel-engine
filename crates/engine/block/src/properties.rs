@@ -31,7 +31,7 @@ pub enum RenderType {
     Invisible,
 }
 
-/// Texture atlas keys for each face of a block.
+/// Texture-array layer keys for each face of a block.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct FaceTextures {
     pub top: NamespacedKey,
@@ -84,7 +84,7 @@ impl FaceTextures {
 ///
 /// These are deliberately few and orthogonal; anything that needs richer data
 /// (tool tiers, armor values) belongs in a gameplay-side component table keyed
-/// by [`crate::BlockId`].
+/// by [`crate::MaterialId`].
 ///
 /// `#[repr(transparent)]` keeps the in-memory layout identical to the raw
 /// `u32`, so packed block data can be written straight to disk or network
@@ -216,8 +216,14 @@ pub struct BlockProperties {
     pub display_name: String,
     /// Rasterization mode.
     pub render_type: RenderType,
-    /// Atlas keys per face; `None` for blocks that never draw.
+    /// Texture-array layer keys per face; `None` for blocks that never draw.
     pub textures: Option<FaceTextures>,
+    /// Root node of a 16x16x16 sub-block template in the SVDAG, or `None` for
+    /// a flat, uniform material.
+    ///
+    /// A template is copied into the chunk's SVDAG when this block is placed;
+    /// a uniform material expands to its single [`crate::MaterialId`] instead.
+    pub template_root: Option<u64>,
     /// Coarse behavioral flags.
     pub flags: BlockFlags,
     /// Light emitted by the block, `0..=15`.
@@ -242,6 +248,7 @@ impl BlockProperties {
             display_name: String::new(),
             render_type: RenderType::Invisible,
             textures: None,
+            template_root: None,
             flags: BlockFlags::NONE,
             light_emission: 0,
             light_opacity: 0,
@@ -261,6 +268,12 @@ impl BlockProperties {
 
     pub fn with_textures(mut self, textures: FaceTextures) -> Self {
         self.textures = Some(textures);
+        self
+    }
+
+    /// Sets the SVDAG root of the block's sub-block template.
+    pub fn with_template_root(mut self, template_root: u64) -> Self {
+        self.template_root = Some(template_root);
         self
     }
 
@@ -297,13 +310,17 @@ impl BlockProperties {
 ///
 /// [`BlockProperties`] is the *authoring* shape: it names textures by key and
 /// carries strings, which is convenient to write and cheap to author, but fat
-/// — a texture key is a 24-byte handle, and the whole record is 184 bytes.
+/// — a texture key is a 24-byte handle, and the whole record is 200 bytes.
 ///
 /// [`BlockRecord`] is the *resolved* shape: the same block as the hot path
-/// wants to see it — a texture id per face, a render type, flags, and the two
-/// light bytes — and nothing more. The registry produces it in a one-time
-/// resolution pass, and it is `Copy`, so a per-voxel lookup is a plain
-/// indexed load.
+/// wants to see it — a texture id per face, a render type, flags, the two
+/// light bytes, and the optional sub-block template root — and nothing more.
+/// The registry produces it in a one-time resolution pass, and it is `Copy`,
+/// so a per-voxel lookup is a plain indexed load.
+///
+/// Records stay immutable and small enough to live in the raymarching hot
+/// path. Dynamic per-position data, such as wear and directional cracks, does
+/// not belong here; it lives in the separate per-chunk `DamageStore`.
 ///
 /// The split is deliberate, not exhaustive: whatever a per-voxel loop does not
 /// read stays in [`BlockProperties`], where it remains available through
@@ -315,6 +332,9 @@ impl BlockProperties {
 pub struct BlockRecord {
     /// Resolved textures, one per face; `None` for blocks that never draw.
     pub textures: Option<FaceTextureIds>,
+    /// Root node of the block's 16x16x16 sub-block template, or `None` when
+    /// the block is a flat, uniform material.
+    pub template_root: Option<u64>,
     /// Rasterization mode.
     pub render_type: RenderType,
     /// Coarse behavioral flags.

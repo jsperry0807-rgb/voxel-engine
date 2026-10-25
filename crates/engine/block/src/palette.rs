@@ -1,6 +1,6 @@
 //! Key-based resolution at the persistence boundary.
 //!
-//! A chunk holds [`BlockId`]s, and a [`BlockId`] only means something against
+//! A chunk holds [`MaterialId`]s, and a [`MaterialId`] only means something against
 //! the registry that handed it out: ids are assigned in registration order,
 //! so a session that registers the same blocks in a different order numbers
 //! them differently. A file that outlives a session therefore cannot carry
@@ -29,7 +29,7 @@
 //!
 //! # Textures
 //!
-//! Texture ids are session-local for the same reason block ids are, so they
+//! Texture ids are session-local for the same reason material ids are, so they
 //! are *derived*, never persisted: the registry resolves texture keys to
 //! texture ids once, at [`BlockRegistryBuilder::freeze`](crate::BlockRegistryBuilder::freeze),
 //! and a file that names a block gets the textures that block has in *this*
@@ -38,7 +38,7 @@
 
 use core::fmt;
 
-use crate::id::{BlockId, KeyError, NamespacedKey};
+use crate::id::{KeyError, MaterialId, NamespacedKey};
 use crate::registry::BlockRegistry;
 
 /// Where a key was referenced from.
@@ -124,7 +124,7 @@ pub enum MissingBlockPolicy {
     /// registry's dense id space is rejected as
     /// [`PaletteError::InvalidSubstitute`] rather than written into a chunk
     /// where it would resolve to nonsense.
-    Substitute(BlockId),
+    Substitute(MaterialId),
     /// Leave the entry out entirely.
     ///
     /// Only meaningful where the list is a *set* (a tag's membership), never
@@ -158,7 +158,7 @@ pub enum PaletteError {
     /// The policy's stand-in block is not registered in this registry.
     InvalidSubstitute {
         /// The id the policy named.
-        id: BlockId,
+        id: MaterialId,
     },
     /// The policy cannot be applied to an index-addressed palette.
     UnsupportedPolicy {
@@ -207,7 +207,7 @@ impl std::error::Error for PaletteError {
 pub struct Omission {
     key: NamespacedKey,
     context: KeyContext,
-    replacement: Option<BlockId>,
+    replacement: Option<MaterialId>,
 }
 
 impl Omission {
@@ -224,7 +224,7 @@ impl Omission {
     /// The id that stood in for the missing block, if one did.
     ///
     /// `None` means the entry was dropped rather than replaced.
-    pub fn replacement(&self) -> Option<BlockId> {
+    pub fn replacement(&self) -> Option<MaterialId> {
         self.replacement
     }
 
@@ -244,18 +244,18 @@ impl Omission {
 /// [`Resolution::omissions`], so a caller can always say what went missing.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Resolution {
-    ids: Vec<BlockId>,
+    ids: Vec<MaterialId>,
     omissions: Vec<Omission>,
 }
 
 impl Resolution {
     /// The resolved ids, in the order of the keys they came from.
-    pub fn ids(&self) -> &[BlockId] {
+    pub fn ids(&self) -> &[MaterialId] {
         &self.ids
     }
 
     /// Takes the resolved ids.
-    pub fn into_ids(self) -> Vec<BlockId> {
+    pub fn into_ids(self) -> Vec<MaterialId> {
         self.ids
     }
 
@@ -287,7 +287,7 @@ impl Resolution {
 /// index means.
 ///
 /// It can only be built from keys. There is no constructor that takes a
-/// [`BlockId`], because a session id means nothing outside the session that
+/// [`MaterialId`], because a session id means nothing outside the session that
 /// produced it — the "keys in, ids never" rule is enforced by the type
 /// rather than by convention.
 ///
@@ -583,14 +583,14 @@ mod tests {
         let err = registry
             .resolve_palette(
                 &palette,
-                MissingBlockPolicy::Substitute(BlockId::from_raw(99)),
+                MissingBlockPolicy::Substitute(MaterialId::from_raw(99)),
             )
             .unwrap_err();
 
         assert_eq!(
             err,
             PaletteError::InvalidSubstitute {
-                id: BlockId::from_raw(99)
+                id: MaterialId::from_raw(99)
             }
         );
     }
@@ -607,11 +607,11 @@ mod tests {
         let resolution = registry
             .resolve_palette(
                 &palette,
-                MissingBlockPolicy::Substitute(BlockId::from_raw(1)),
+                MissingBlockPolicy::Substitute(MaterialId::from_raw(1)),
             )
             .unwrap();
 
-        assert_eq!(resolution.ids()[0], BlockId::from_raw(1));
+        assert_eq!(resolution.ids()[0], MaterialId::from_raw(1));
     }
 
     #[test]

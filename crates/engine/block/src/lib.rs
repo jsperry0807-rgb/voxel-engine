@@ -4,15 +4,18 @@
 //!
 //! - [`NamespacedKey`] is the stable, human-readable identity
 //!   ("`mymod:copper_ore`") used by assets, data files and save games.
-//! - [`BlockId`] is a dense runtime index assigned at startup, small enough to
-//!   store directly in chunk voxel arrays (`u16`). Id `0` is always air, so a
-//!   zero-filled chunk means "empty" with no per-cell initialization.
+//! - [`MaterialId`] is a dense runtime index assigned at startup, small enough to
+//!   store directly in chunk voxel arrays (`u16`). It is the voxel payload,
+//!   deliberately distinct from the SVDAG's internal 64-bit `BlockId` node
+//!   pointer. Id `0` is always air, so a zero-filled chunk means "empty" with
+//!   no per-cell initialization.
 //! - [`BlockProperties`] describes how a block renders ([`RenderType`],
-//!   [`FaceTextures`]) and behaves ([`BlockFlags`], light, hardness).
+//!   [`FaceTextures`]) and behaves ([`BlockFlags`], light, hardness), and
+//!   optionally names the SVDAG root of its 16x16x16 sub-block template.
 //! - [`BlockRecord`] is the same block in its resolved form: textures as
-//!   [`TextureId`]s instead of keys, and only the fields a per-voxel loop
-//!   reads. The registry produces it in a one-time resolution pass, and both
-//!   shapes are kept side by side.
+//!   [`TextureId`]s instead of keys, the optional template root, and only the
+//!   fields a per-voxel loop reads. The registry produces it in a one-time
+//!   resolution pass, and both shapes are kept side by side.
 //! - [`BlockRegistry`] is the frozen key/id/properties mapping shared by every
 //!   system; it is built once via [`BlockRegistryBuilder`], whose
 //!   [`BlockRegistryBuilder::freeze`] is the one-time resolution boundary and
@@ -39,11 +42,12 @@
 //! A registry has two hard caps, both at 65 536, and they are reached in
 //! different places:
 //!
-//! - **Block ids.** A registry holds at most 65 536 blocks, because ids are
+//! - **Material ids.** A registry holds at most 65 536 blocks, because ids are
 //!   `u16`. The limit is hit while *registering*, and reported as
 //!   [`RegistryError::Exhausted`].
 //! - **Distinct textures.** A registry may name at most 65 536 distinct
-//!   textures, because resolved texture ids are `u16`. The limit is hit while
+//!   textures, because resolved texture ids are `u16` indices into the GPU
+//!   `Texture2DArray`. The limit is hit while
 //!   *freezing*, and reported as [`FreezeError::TooManyTextures`].
 //!
 //! The texture table is therefore the practical ceiling. A block may name six
@@ -85,7 +89,7 @@ pub mod ron;
 pub mod tags;
 pub mod texture;
 
-pub use id::{AIR_ID, BUILTIN_NAMESPACE, BlockId, KeyError, NamespacedKey};
+pub use id::{AIR_ID, BUILTIN_NAMESPACE, KeyError, MaterialId, NamespacedKey};
 pub use kind::BlockKind;
 pub use palette::{
     KeyContext, MissingBlockPolicy, MissingKey, Omission, Palette, PaletteError, Resolution,

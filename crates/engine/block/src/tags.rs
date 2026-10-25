@@ -10,18 +10,18 @@
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeSet, HashMap};
 
-use crate::id::{BlockId, NamespacedKey};
+use crate::id::{MaterialId, NamespacedKey};
 
-/// A collection of named [`BlockId`] sets, with a reverse index.
+/// A collection of named [`MaterialId`] sets, with a reverse index.
 ///
 /// Uses sorted sets internally, so iteration order is deterministic and
 /// tests don't depend on hashing.
 #[derive(Debug, Default, Clone)]
 pub struct BlockTags {
     /// tag key -> member ids
-    tags: HashMap<NamespacedKey, BTreeSet<BlockId>>,
+    tags: HashMap<NamespacedKey, BTreeSet<MaterialId>>,
     /// member id -> tag keys, maintained in lockstep with `tags`
-    by_block: HashMap<BlockId, BTreeSet<NamespacedKey>>,
+    by_block: HashMap<MaterialId, BTreeSet<NamespacedKey>>,
 }
 
 impl BlockTags {
@@ -48,7 +48,7 @@ impl BlockTags {
     /// Adds `id` to `tag`. The tag is created if it does not exist yet.
     ///
     /// Returns `true` if the membership is new.
-    pub fn insert(&mut self, tag: &NamespacedKey, id: BlockId) -> bool {
+    pub fn insert(&mut self, tag: &NamespacedKey, id: MaterialId) -> bool {
         let new = self.tags.entry(tag.clone()).or_default().insert(id);
         if new {
             self.by_block.entry(id).or_default().insert(tag.clone());
@@ -66,7 +66,7 @@ impl BlockTags {
     pub fn insert_all(
         &mut self,
         tag: &NamespacedKey,
-        ids: impl IntoIterator<Item = BlockId>,
+        ids: impl IntoIterator<Item = MaterialId>,
     ) -> usize {
         let mut added = 0;
         for id in ids {
@@ -84,7 +84,7 @@ impl BlockTags {
     /// Each map is probed once via `entry` rather than the old `get_mut` +
     /// `remove` pair, so a removal hashes the tag (and the id) a single time
     /// instead of twice per map.
-    pub fn remove(&mut self, tag: &NamespacedKey, id: BlockId) -> bool {
+    pub fn remove(&mut self, tag: &NamespacedKey, id: MaterialId) -> bool {
         // Forward index: one probe; drop the tag entirely if it empties.
         let Entry::Occupied(mut tag_slot) = self.tags.entry(tag.clone()) else {
             return false;
@@ -107,19 +107,19 @@ impl BlockTags {
     }
 
     /// True if `id` is a member of `tag`.
-    pub fn contains(&self, tag: &NamespacedKey, id: BlockId) -> bool {
+    pub fn contains(&self, tag: &NamespacedKey, id: MaterialId) -> bool {
         self.tags
             .get(tag)
             .is_some_and(|members| members.contains(&id))
     }
 
     /// All ids in `tag`, in ascending id order.
-    pub fn ids(&self, tag: &NamespacedKey) -> impl Iterator<Item = BlockId> + '_ {
+    pub fn ids(&self, tag: &NamespacedKey) -> impl Iterator<Item = MaterialId> + '_ {
         self.tags.get(tag).into_iter().flatten().copied()
     }
 
     /// All tags `id` belongs to, in lexicographic key order.
-    pub fn tags_of(&self, id: BlockId) -> impl Iterator<Item = &NamespacedKey> + '_ {
+    pub fn tags_of(&self, id: MaterialId) -> impl Iterator<Item = &NamespacedKey> + '_ {
         self.by_block.get(&id).into_iter().flatten()
     }
 
@@ -153,8 +153,8 @@ impl BlockTags {
 mod tests {
     use super::*;
 
-    const STONE: BlockId = BlockId::from_raw(1);
-    const DIRT: BlockId = BlockId::from_raw(2);
+    const STONE: MaterialId = MaterialId::from_raw(1);
+    const DIRT: MaterialId = MaterialId::from_raw(2);
 
     /// Tags are parsed once and passed by reference, mirroring how a data
     /// loader would hold a table of pre-validated keys.

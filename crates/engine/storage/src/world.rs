@@ -9,9 +9,9 @@ use crate::{local_xyz, split_voxel, ChunkPos, CHUNK_VOLUME};
 use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
-use voxel_block::BlockId;
+use voxel_block::MaterialId;
 
-/// Fill a zeroed dense chunk (index = x + y*64 + z*4096) with raw [`BlockId`]s for `pos`.
+/// Fill a zeroed dense chunk (index = x + y*64 + z*4096) with raw [`MaterialId`]s for `pos`.
 pub type Generator = Box<dyn FnMut(ChunkPos, &mut [u16]) + Send>;
 
 pub struct Chunk {
@@ -78,17 +78,17 @@ impl<S: GpuSink> World<S> {
     }
 
     /// Overlay first, then DAG. None if the chunk isn't resident.
-    pub fn get(&self, x: i32, y: i32, z: i32) -> Option<BlockId> {
+    pub fn get(&self, x: i32, y: i32, z: i32) -> Option<MaterialId> {
         let (p, li) = split_voxel(x, y, z);
         let c = self.chunks.get(&p)?;
-        Some(BlockId::from_raw(c.overlay.get(li).unwrap_or_else(|| {
+        Some(MaterialId::from_raw(c.overlay.get(li).unwrap_or_else(|| {
             let (lx, ly, lz) = local_xyz(li);
             c.dag.get(lx, ly, lz)
         })))
     }
 
     /// O(1): overlay insert (or removal when the edit reverts to the DAG value).
-    pub fn set(&mut self, x: i32, y: i32, z: i32, v: BlockId) -> io::Result<()> {
+    pub fn set(&mut self, x: i32, y: i32, z: i32, v: MaterialId) -> io::Result<()> {
         let (p, li) = split_voxel(x, y, z);
         self.load(p)?;
         let c = self.chunks.get_mut(&p).unwrap();

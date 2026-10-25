@@ -6,11 +6,16 @@
 //! [`TextureTable`]. The resolved id is what per-voxel code carries: two
 //! bytes and no pointer chase, where the key is a 24-byte `Arc<str>` handle.
 //!
-//! Resolution runs one way. The table owns the mapping, the atlas builder
-//! (render crate) walks it to create GPU resources, and nothing downstream of
-//! the resolution boundary needs the key again.
+//! A resolved id is also the *slice index* of the texture in the renderer's
+//! GPU `Texture2DArray`, not an offset into a flat atlas. Every texture is a
+//! 256x256 array slice, so sampling, wrapping and mip generation stay inside
+//! one slice and cannot bleed into a neighboring texture.
 //!
-//! Texture ids are session-local, exactly like block ids: they are handed out
+//! Resolution runs one way. The table owns the mapping, the texture-array
+//! builder (render crate) walks it to create GPU resources, and nothing
+//! downstream of the resolution boundary needs the key again.
+//!
+//! Texture ids are session-local, exactly like material ids: they are handed out
 //! in first-use order, so two sessions that register the same blocks in a
 //! different order number their textures differently. They are therefore
 //! *derived*, never persisted — a file names blocks by key, and the registry
@@ -23,9 +28,14 @@ use std::collections::HashMap;
 use crate::id::NamespacedKey;
 use voxel_core::Face;
 
-/// Dense index of a texture within a [`TextureTable`].
+/// Dense index of a texture within a [`TextureTable`], used as the slice index
+/// of a 256x256 layer in the renderer's GPU `Texture2DArray`.
 ///
-/// Session-local, like [`crate::BlockId`]: ids are handed out in first-use
+/// This is a slice index, not a coordinate in a flat atlas: the shader samples
+/// `texture_2d_array[texture_id]`, so neighboring textures cannot bleed into
+/// each other at their edges.
+///
+/// Session-local, like [`crate::MaterialId`]: ids are handed out in first-use
 /// order, so they are only meaningful against the table that produced them.
 /// Saves and network payloads carry [`NamespacedKey`]s, not ids.
 ///
@@ -91,6 +101,9 @@ impl FaceTextureIds {
 /// Built during the registry's one-time resolution pass: every key a block
 /// refers to appears exactly once, and the table is dense — `TextureId(i)`
 /// indexes `keys[i]`.
+///
+/// A texture id is the slice index into the GPU `Texture2DArray`, so every key
+/// here corresponds to one 256x256 layer.
 ///
 /// A table holds at most 65 536 distinct textures, because ids are `u16`.
 /// That is the practical ceiling of the two registry caps (see the crate's

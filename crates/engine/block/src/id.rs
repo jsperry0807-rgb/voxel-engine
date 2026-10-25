@@ -1,6 +1,6 @@
-//! Block identity: dense runtime [`BlockId`]s and validated [`NamespacedKey`]s.
+//! Block identity: dense runtime [`MaterialId`]s and validated [`NamespacedKey`]s.
 //!
-//! At startup the [`crate::BlockRegistry`] assigns every block a `BlockId`, a
+//! At startup the [`crate::BlockRegistry`] assigns every block a `MaterialId`, a
 //! small integer that is cheap to copy and cheap to index with. Ids are dense
 //! (`0..len`) so they can index registry-ordered arrays directly, and id `0` is
 //! permanently reserved for air.
@@ -21,7 +21,7 @@ use core::str::FromStr;
 use std::sync::Arc;
 
 /// Id reserved for air. Every [`crate::BlockRegistry`] contains this block.
-pub const AIR_ID: BlockId = BlockId(0);
+pub const AIR_ID: MaterialId = MaterialId(0);
 
 /// Namespace that owns the engine's built-in blocks and textures.
 ///
@@ -38,28 +38,28 @@ pub const BUILTIN_NAMESPACE: &str = "voxel";
 /// renumbers everything after it.
 ///
 /// `#[repr(transparent)]` guarantees the same layout as `u16`, so storage can
-/// reinterpret `&[BlockId]` as `&[u16]` (and back) without copying element by
+/// reinterpret `&[MaterialId]` as `&[u16]` (and back) without copying element by
 /// element. That is an in-memory transcode optimization — network encoding,
 /// SIMD-friendly buffers — not a persistence format: the raw number is exactly
 /// as stable as the registration order that produced it, which is to say not
 /// stable at all across sessions.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct BlockId(u16);
+pub struct MaterialId(u16);
 
-impl BlockId {
+impl MaterialId {
     /// Largest id a registry can produce (`u16` storage bounds a world to
     /// 65 536 block types, which is far beyond practical limits).
     ///
     /// This is the *block* cap. The other one — 65 536 distinct textures per
     /// registry — is the practical ceiling, because a block may name six
     /// distinct textures; see the crate's *Limits* section.
-    pub const MAX: BlockId = BlockId(u16::MAX);
+    pub const MAX: MaterialId = MaterialId(u16::MAX);
 
     /// Builds an id from its raw representation.
     ///
     /// Prefer the id handed out by the registry. This exists for reading back
-    /// bytes written this session (see [`BlockId::as_raw`]), for remapping a
+    /// bytes written this session (see [`MaterialId::as_raw`]), for remapping a
     /// persisted key palette into the current session's ids, and for tests.
     ///
     /// The argument is not validated and carries no authority: `from_raw`
@@ -93,15 +93,15 @@ impl BlockId {
     }
 }
 
-impl fmt::Display for BlockId {
+impl fmt::Display for MaterialId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "BlockId({})", self.0)
+        write!(f, "MaterialId({})", self.0)
     }
 }
 
-impl fmt::Debug for BlockId {
+impl fmt::Debug for MaterialId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "BlockId({})", self.0)
+        write!(f, "MaterialId({})", self.0)
     }
 }
 
@@ -348,11 +348,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn block_id_roundtrips_through_raw() {
-        let id = BlockId::from_raw(42);
+    fn material_id_roundtrips_through_raw() {
+        let id = MaterialId::from_raw(42);
         assert_eq!(id.as_raw(), 42);
         assert_eq!(id.index(), 42);
-        assert_eq!(BlockId::MAX.as_raw(), u16::MAX);
+        assert_eq!(MaterialId::MAX.as_raw(), u16::MAX);
         assert_eq!(AIR_ID.as_raw(), 0);
     }
 
@@ -388,17 +388,17 @@ mod tests {
     #[test]
     fn is_air_is_exactly_the_zero_sentinel() {
         assert!(AIR_ID.is_air());
-        assert!(BlockId::from_raw(0).is_air());
-        assert!(!BlockId::from_raw(1).is_air());
-        assert!(!BlockId::MAX.is_air());
+        assert!(MaterialId::from_raw(0).is_air());
+        assert!(!MaterialId::from_raw(1).is_air());
+        assert!(!MaterialId::MAX.is_air());
     }
 
     #[test]
-    fn block_id_is_layout_identical_to_u16() {
+    fn material_id_is_layout_identical_to_u16() {
         // repr(transparent) makes this an assertion about the ABI, not just
         // about today's field count.
-        assert_eq!(size_of::<BlockId>(), size_of::<u16>());
-        assert_eq!(align_of::<BlockId>(), align_of::<u16>());
+        assert_eq!(size_of::<MaterialId>(), size_of::<u16>());
+        assert_eq!(align_of::<MaterialId>(), align_of::<u16>());
     }
 
     #[test]

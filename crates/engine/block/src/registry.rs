@@ -4,7 +4,7 @@
 //! The intended flow is:
 //!
 //! 1. During startup, systems and mods register blocks through the builder,
-//!    collecting a [`BlockId`] for each.
+//!    collecting a [`MaterialId`] for each.
 //! 2. The builder is frozen into a [`BlockRegistry`].
 //! 3. The frozen registry is shared immutably (typically behind an `Arc`) by
 //!    every system that needs block data.
@@ -13,7 +13,7 @@ use core::fmt;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
-use crate::id::{AIR_ID, BlockId, NamespacedKey};
+use crate::id::{AIR_ID, MaterialId, NamespacedKey};
 use crate::kind::BlockKind;
 use voxel_core::Face;
 
@@ -26,7 +26,7 @@ pub enum RegistryError {
     /// A block with this key was already registered. Ids are never reused, so
     /// silently overwriting would invalidate saved chunk data.
     DuplicateKey(NamespacedKey),
-    /// The first registered block must be air, so that `BlockId 0` is a usable
+    /// The first registered block must be air, so that `MaterialId 0` is a usable
     /// sentinel for "empty" in chunk storage.
     AirMustBeFirst,
     /// The `u16` id space is exhausted.
@@ -43,9 +43,9 @@ impl fmt::Display for RegistryError {
         match self {
             RegistryError::DuplicateKey(key) => write!(f, "block `{key}` is already registered"),
             RegistryError::AirMustBeFirst => {
-                write!(f, "air must be the first registered block (BlockId 0)")
+                write!(f, "air must be the first registered block (MaterialId 0)")
             }
-            RegistryError::Exhausted => write!(f, "block id space is exhausted"),
+            RegistryError::Exhausted => write!(f, "material id space is exhausted"),
         }
     }
 }
@@ -59,7 +59,7 @@ impl std::error::Error for RegistryError {}
 /// id can address fails here — loudly and recoverably — instead of panicking
 /// or silently handing out a duplicate id.
 ///
-/// The block id space has its own, earlier limit: it runs out during
+/// The material id space has its own, earlier limit: it runs out during
 /// registration and reports [`RegistryError::Exhausted`]. Of the two caps the
 /// texture table is the practical one — six distinct faces per block exhaust
 /// it at about the 10 923rd block — so this is the error a large mod pack is
@@ -93,7 +93,7 @@ impl std::error::Error for FreezeError {}
 
 /// Mutable block registry used during startup and data (re)loads.
 ///
-/// `BlockId 0` is always [`crate::AIR_ID`]: [`BlockRegistryBuilder::new`]
+/// `MaterialId 0` is always [`crate::AIR_ID`]: [`BlockRegistryBuilder::new`]
 /// pre-registers air under "`voxel:air`", and [`BlockRegistryBuilder::register`]
 /// refuses to place any other block at id 0. Chunk storage can therefore rely
 /// on "all zeroes" meaning "empty", so allocating a chunk needs no per-cell
@@ -105,13 +105,13 @@ impl std::error::Error for FreezeError {}
 /// properties yourself.
 #[derive(Default)]
 pub struct BlockRegistryBuilder {
-    /// `entries[i]` describes `BlockId(i)`; index is position, so ids stay
+    /// `entries[i]` describes `MaterialId(i)`; index is position, so ids stay
     /// dense without a lookup. The key is `None` for slots held by
     /// [`Self::reserve`], which deliberately have no identity.
     entries: Vec<(Option<NamespacedKey>, BlockProperties)>,
     /// Duplicate-check and `contains` in O(1) instead of scanning `entries`.
     /// Reserved slots are absent, by construction.
-    index: HashMap<NamespacedKey, BlockId>,
+    index: HashMap<NamespacedKey, MaterialId>,
 }
 
 impl BlockRegistryBuilder {
@@ -144,7 +144,7 @@ impl BlockRegistryBuilder {
     /// Registers a block, returning its dense id.
     ///
     /// Fails with [`RegistryError::AirMustBeFirst`] if the very first block is
-    /// not air, preserving `BlockId 0` as the "empty" sentinel.
+    /// not air, preserving `MaterialId 0` as the "empty" sentinel.
     ///
     /// O(1): a single `entry` probe replaces the old `contains_key` + `insert`
     /// pair, so the key is hashed once rather than twice per registration.
@@ -152,15 +152,15 @@ impl BlockRegistryBuilder {
         &mut self,
         key: NamespacedKey,
         mut properties: BlockProperties,
-    ) -> Result<BlockId, RegistryError> {
+    ) -> Result<MaterialId, RegistryError> {
         if self.entries.is_empty() && key != BlockKind::Air.key() {
             return Err(RegistryError::AirMustBeFirst);
         }
-        if self.entries.len() > BlockId::MAX.as_raw() as usize {
+        if self.entries.len() > MaterialId::MAX.as_raw() as usize {
             return Err(RegistryError::Exhausted);
         }
 
-        let id = BlockId::from_raw(self.entries.len() as u16);
+        let id = MaterialId::from_raw(self.entries.len() as u16);
         // One hash, not two: `entry` probes the map and hands back the slot to
         // fill. Deriving the display name inside `Vacant` keeps it off the
         // duplicate-error path, where it would be wasted work.
@@ -178,7 +178,7 @@ impl BlockRegistryBuilder {
     }
 
     /// Registers a built-in [`BlockKind`] with its default properties.
-    pub fn register_kind(&mut self, kind: BlockKind) -> Result<BlockId, RegistryError> {
+    pub fn register_kind(&mut self, kind: BlockKind) -> Result<MaterialId, RegistryError> {
         // `register` enforces the air-at-zero invariant, so no extra check
         // is needed here.
         self.register(kind.key(), kind.default_properties())
@@ -192,7 +192,7 @@ impl BlockRegistryBuilder {
     }
 
     /// Resolves an already-registered key to its id, in O(1).
-    pub fn id(&self, key: &NamespacedKey) -> Option<BlockId> {
+    pub fn id(&self, key: &NamespacedKey) -> Option<MaterialId> {
         self.index.get(key).copied()
     }
 
@@ -221,7 +221,7 @@ impl BlockRegistryBuilder {
     /// [`Self::contains`] and [`Self::id`] never see them.
     ///
     /// Reserving `0` returns the next id and changes nothing.
-    pub fn reserve(&mut self, count: usize) -> Result<BlockId, RegistryError> {
+    pub fn reserve(&mut self, count: usize) -> Result<MaterialId, RegistryError> {
         // Air must already hold id 0, or the reserved span would push it off
         // the sentinel.
         if self.entries.is_empty() {
@@ -229,7 +229,7 @@ impl BlockRegistryBuilder {
         }
 
         // Total slot count: ids run 0..=65535.
-        const SLOTS: usize = BlockId::MAX.as_raw() as usize + 1;
+        const SLOTS: usize = MaterialId::MAX.as_raw() as usize + 1;
 
         let start = self.entries.len();
         // A full registry has no "next id", so even `reserve(0)` must fail
@@ -246,7 +246,7 @@ impl BlockRegistryBuilder {
             (None, BlockProperties::new().with_display_name(RESERVED))
         });
 
-        Ok(BlockId::from_raw(start as u16))
+        Ok(MaterialId::from_raw(start as u16))
     }
 
     /// Freezes the builder into an immutable registry.
@@ -316,6 +316,7 @@ fn resolve(
 
         records.push(BlockRecord {
             textures,
+            template_root: props.template_root,
             render_type: props.render_type,
             flags: props.flags,
             light_emission: props.light_emission,
@@ -326,7 +327,7 @@ fn resolve(
     Ok((records, table))
 }
 
-/// Immutable mapping between [`NamespacedKey`]s, [`BlockId`]s and
+/// Immutable mapping between [`NamespacedKey`]s, [`MaterialId`]s and
 /// [`BlockProperties`].
 ///
 /// Has no mutating methods by construction: the only way to build one is to
@@ -335,12 +336,12 @@ fn resolve(
 /// The registry holds two views of the same blocks, one per domain:
 ///
 /// - the *authoring* view ([`Self::get`]) — keys and strings, kept whole,
-///   for mods, tooling and the atlas builder;
+///   for mods, tooling and the texture-array builder;
 /// - the *runtime* view ([`Self::resolved`]) — texture ids and small fields,
 ///   for per-voxel code.
 #[derive(Debug)]
 pub struct BlockRegistry {
-    /// `keys[i]` and `properties[i]` describe `BlockId(i)`.
+    /// `keys[i]` and `properties[i]` describe `MaterialId(i)`.
     ///
     /// `keys[i]` is `None` for a reserved slot: it occupies its position so
     /// indexing stays dense, but has no identity to look up.
@@ -352,7 +353,7 @@ pub struct BlockRegistry {
     records: Vec<BlockRecord>,
     /// The resolved texture names behind the ids in `records`.
     textures: TextureTable,
-    by_key: HashMap<NamespacedKey, BlockId>,
+    by_key: HashMap<NamespacedKey, MaterialId>,
 }
 
 impl BlockRegistry {
@@ -362,7 +363,7 @@ impl BlockRegistry {
     /// meshing loop does not need a special case for them.
     ///
     /// This is the authoring view: keys and strings, kept whole, for mods,
-    /// tooling and the atlas builder.
+    /// tooling and the texture-array builder.
     ///
     /// # Why an `Option`
     ///
@@ -376,7 +377,7 @@ impl BlockRegistry {
     /// Per-voxel code wants [`Self::resolved`] instead: the same block with
     /// its textures already resolved to ids, in a record small enough to read
     /// without a pointer chase.
-    pub fn get(&self, id: BlockId) -> Option<&BlockProperties> {
+    pub fn get(&self, id: MaterialId) -> Option<&BlockProperties> {
         self.properties.get(id.index())
     }
 
@@ -403,10 +404,10 @@ impl BlockRegistry {
     /// Panics if the id was never registered — a corrupted save or a bug in
     /// the caller. Use [`Self::len`] to check a range, or resolve the id
     /// from a key with [`Self::id`], which reports absence instead.
-    pub fn resolved(&self, id: BlockId) -> &BlockRecord {
+    pub fn resolved(&self, id: MaterialId) -> &BlockRecord {
         self.records.get(id.index()).unwrap_or_else(|| {
             panic!(
-                "block id {id} is outside the registry's {} blocks",
+                "material id {id} is outside the registry's {} blocks",
                 self.records.len()
             )
         })
@@ -414,15 +415,15 @@ impl BlockRegistry {
 
     /// The resolved texture table: `TextureId` to key.
     ///
-    /// The atlas builder walks this to turn texture ids into GPU resources;
-    /// nothing else needs the mapping back to keys.
+    /// The texture-array builder walks this to turn texture ids into layers of
+    /// the GPU `Texture2DArray`; nothing else needs the mapping back to keys.
     pub fn textures(&self) -> &TextureTable {
         &self.textures
     }
 
     /// Key for an id, or `None` if the id was never registered or is a
     /// reserved slot.
-    pub fn key(&self, id: BlockId) -> Option<&NamespacedKey> {
+    pub fn key(&self, id: MaterialId) -> Option<&NamespacedKey> {
         self.keys.get(id.index()).and_then(Option::as_ref)
     }
 
@@ -432,23 +433,23 @@ impl BlockRegistry {
     /// `keys` and `properties` are built together by [`BlockRegistryBuilder::freeze`]
     /// and are always the same length, so "the key slot exists but is empty"
     /// is exactly "reserved".
-    pub fn is_reserved(&self, id: BlockId) -> bool {
+    pub fn is_reserved(&self, id: MaterialId) -> bool {
         // Outer `Some`: in bounds. Inner `None`: no key was ever assigned.
         matches!(self.keys.get(id.index()), Some(None))
     }
 
     /// Resolves a key to its id.
-    pub fn id(&self, key: &NamespacedKey) -> Option<BlockId> {
+    pub fn id(&self, key: &NamespacedKey) -> Option<MaterialId> {
         self.by_key.get(key).copied()
     }
 
     /// Resolves a `namespace:path` string to its id.
-    pub fn id_of(&self, key: &str) -> Option<BlockId> {
+    pub fn id_of(&self, key: &str) -> Option<MaterialId> {
         self.by_key.get(&NamespacedKey::parse(key).ok()?).copied()
     }
 
     /// The reserved air id; always present.
-    pub fn air_id(&self) -> BlockId {
+    pub fn air_id(&self) -> MaterialId {
         AIR_ID
     }
 
@@ -468,18 +469,18 @@ impl BlockRegistry {
     /// Iterates the dense id space as `(id, properties)` in id order,
     /// including reserved slots (which carry invisible placeholder
     /// properties).
-    pub fn iter(&self) -> impl Iterator<Item = (BlockId, &BlockProperties)> {
+    pub fn iter(&self) -> impl Iterator<Item = (MaterialId, &BlockProperties)> {
         self.properties
             .iter()
             .enumerate()
-            .map(|(index, props)| (BlockId::from_raw(index as u16), props))
+            .map(|(index, props)| (MaterialId::from_raw(index as u16), props))
     }
 
     /// Iterates all registered keys in id order, skipping reserved slots.
-    pub fn keys(&self) -> impl Iterator<Item = (BlockId, &NamespacedKey)> {
+    pub fn keys(&self) -> impl Iterator<Item = (MaterialId, &NamespacedKey)> {
         self.keys.iter().enumerate().filter_map(|(index, key)| {
             key.as_ref()
-                .map(|key| (BlockId::from_raw(index as u16), key))
+                .map(|key| (MaterialId::from_raw(index as u16), key))
         })
     }
 }
@@ -527,8 +528,8 @@ mod tests {
     #[test]
     fn air_id_is_the_sentinel_zero() {
         assert!(AIR_ID.is_air());
-        assert!(BlockId::from_raw(0).is_air());
-        assert!(!BlockId::from_raw(1).is_air());
+        assert!(MaterialId::from_raw(0).is_air());
+        assert!(!MaterialId::from_raw(1).is_air());
 
         // The registry agrees: id 0 is a real, registered air block, not just
         // a magic out-of-band value.
@@ -555,7 +556,7 @@ mod tests {
 
         // And the last-registered key is still found, not just the first.
         let last = NamespacedKey::new("bench", "block_4999").unwrap();
-        assert_eq!(builder.id(&last), Some(BlockId::from_raw(5_000)));
+        assert_eq!(builder.id(&last), Some(MaterialId::from_raw(5_000)));
     }
 
     #[test]
@@ -590,7 +591,7 @@ mod tests {
         assert_eq!(registry.key(stone).unwrap().path(), "stone");
         assert_eq!(registry.id_of("voxel:water"), Some(water));
         assert_eq!(registry.id_of("mymod:nonexistent"), None);
-        assert!(registry.get(BlockId::from_raw(99)).is_none());
+        assert!(registry.get(MaterialId::from_raw(99)).is_none());
     }
 
     /// Registration order *is* id assignment (`id = entries.len()`), so an id
@@ -620,19 +621,19 @@ mod tests {
         // But the same key maps to a different number in each.
         assert_ne!(a.id(&stone), b.id(&stone));
         assert_ne!(a.id(&dirt), b.id(&dirt));
-        assert_eq!(a.id(&stone), Some(BlockId::from_raw(1)));
-        assert_eq!(b.id(&stone), Some(BlockId::from_raw(2)));
+        assert_eq!(a.id(&stone), Some(MaterialId::from_raw(1)));
+        assert_eq!(b.id(&stone), Some(MaterialId::from_raw(2)));
 
         // The key, by contrast, is the same identity in both — which is why
         // save data must round-trip through it (or an explicit palette).
-        assert_eq!(a.key(BlockId::from_raw(1)), Some(&stone));
-        assert_eq!(b.key(BlockId::from_raw(2)), Some(&stone));
+        assert_eq!(a.key(MaterialId::from_raw(1)), Some(&stone));
+        assert_eq!(b.key(MaterialId::from_raw(2)), Some(&stone));
     }
 
     /// A save is a set of ids plus the key each id stood for. Loading it into
     /// a registry that registered the same blocks in a *different* order has
     /// to remap through those keys — and the remap has to reach the textures
-    /// too, because texture ids are as session-local as block ids.
+    /// too, because texture ids are as session-local as material ids.
     #[test]
     fn a_save_remaps_through_keys_into_a_reverse_ordered_registry() {
         let mut writer = BlockRegistryBuilder::new();
@@ -643,7 +644,7 @@ mod tests {
         let written = writer.freeze().unwrap();
 
         // What the save file holds: the ids it saw, and the key behind each.
-        let save: Vec<(BlockId, NamespacedKey)> = [stone, dirt, grass, sand]
+        let save: Vec<(MaterialId, NamespacedKey)> = [stone, dirt, grass, sand]
             .into_iter()
             .map(|id| (id, written.key(id).unwrap().clone()))
             .collect();
@@ -727,7 +728,7 @@ mod tests {
         let mut builder = BlockRegistryBuilder::new();
 
         // Six distinct textures per block, so the table fills long before the
-        // u16 block id space does.
+        // u16 material id space does.
         for i in 0..11_000u32 {
             let textures = FaceTextures {
                 top: NamespacedKey::builtin(&format!("block/t{i}_top")),
@@ -799,7 +800,7 @@ mod tests {
         assert_eq!(registry.len(), 3);
         assert_eq!(
             registry.id(&BlockKind::Stone.key()),
-            Some(BlockId::from_raw(1))
+            Some(MaterialId::from_raw(1))
         );
     }
 
@@ -819,7 +820,7 @@ mod tests {
         let registry = builder.freeze().unwrap();
 
         assert_eq!(registry.len(), 2, "only air + stone are registered");
-        assert!(registry.get(BlockId::from_raw(63)).is_none());
+        assert!(registry.get(MaterialId::from_raw(63)).is_none());
     }
 
     #[test]
@@ -846,7 +847,7 @@ mod tests {
         builder.reserve(2).unwrap();
         let registry = builder.freeze().unwrap();
 
-        let reserved = BlockId::from_raw(1);
+        let reserved = MaterialId::from_raw(1);
         assert!(registry.is_reserved(reserved));
         assert!(!registry.is_reserved(AIR_ID));
 
@@ -891,7 +892,7 @@ mod tests {
         let mut builder = BlockRegistryBuilder::new();
         // One past the last valid id: `start + count` exceeds the u16 space.
         let err = builder
-            .reserve(BlockId::MAX.as_raw() as usize + 1)
+            .reserve(MaterialId::MAX.as_raw() as usize + 1)
             .expect_err("reserving past the id space must fail");
         assert_eq!(err, RegistryError::Exhausted);
         assert_eq!(builder.len(), 1, "a failed reserve must not grow the space");
@@ -931,8 +932,8 @@ mod tests {
         builder.register_kind(BlockKind::Stone).unwrap();
         let registry = builder.freeze().unwrap();
 
-        let ids: Vec<BlockId> = registry.iter().map(|(id, _)| id).collect();
-        assert_eq!(ids, vec![AIR_ID, BlockId::from_raw(1)]);
+        let ids: Vec<MaterialId> = registry.iter().map(|(id, _)| id).collect();
+        assert_eq!(ids, vec![AIR_ID, MaterialId::from_raw(1)]);
         for (id, props) in registry.iter() {
             assert!(registry.key(id).is_some());
             assert!(!props.display_name.is_empty());
@@ -954,7 +955,27 @@ mod tests {
         assert_eq!(record.flags, props.flags);
         assert_eq!(record.light_emission, props.light_emission);
         assert_eq!(record.light_opacity, props.light_opacity);
+        assert_eq!(record.template_root, props.template_root);
         assert!(record.textures.is_some());
+    }
+
+    #[test]
+    fn a_template_root_is_resolved_into_the_record() {
+        let mut builder = BlockRegistryBuilder::new();
+        let stairs = builder
+            .register(
+                NamespacedKey::builtin("stairs"),
+                BlockProperties::new().with_template_root(0xDEAD_BEEF),
+            )
+            .unwrap();
+        let registry = builder.freeze().unwrap();
+
+        assert_eq!(
+            registry.get(stairs).unwrap().template_root,
+            Some(0xDEAD_BEEF)
+        );
+        assert_eq!(registry.resolved(stairs).template_root, Some(0xDEAD_BEEF));
+        assert_eq!(registry.resolved(AIR_ID).template_root, None);
     }
 
     #[test]
@@ -1037,7 +1058,7 @@ mod tests {
         let table = registry.textures();
         assert_eq!(table.len(), 1, "one texture, two blocks");
 
-        let stone = registry.resolved(BlockId::from_raw(1));
+        let stone = registry.resolved(MaterialId::from_raw(1));
         let copy = registry.resolved(copy);
         assert_eq!(
             stone.textures.unwrap().get(Face::North),
@@ -1062,7 +1083,7 @@ mod tests {
     #[should_panic(expected = "outside the registry")]
     fn resolving_an_unregistered_id_panics() {
         let registry = BlockRegistryBuilder::new().freeze().unwrap();
-        let _ = registry.resolved(BlockId::from_raw(99));
+        let _ = registry.resolved(MaterialId::from_raw(99));
     }
 
     #[test]
@@ -1071,7 +1092,7 @@ mod tests {
         builder.reserve(2).unwrap();
         let registry = builder.freeze().unwrap();
 
-        let record = registry.resolved(BlockId::from_raw(1));
+        let record = registry.resolved(MaterialId::from_raw(1));
         assert!(record.textures.is_none());
         assert_eq!(record.render_type, RenderType::Invisible);
         assert!(!record.flags.contains(BlockFlags::SOLID));
@@ -1133,7 +1154,9 @@ mod tests {
         // Canary for "hot data minimized": the record is what a per-voxel loop
         // touches, so it has to stay far below the authoring shape it came
         // from. Bump this when a consumer genuinely needs another field.
-        assert!(size_of::<BlockRecord>() <= 32);
+        // 40 bytes: the 16-byte `Option<u64>` template root plus the resolved
+        // hot-path fields. Still far below the authoring shape.
+        assert!(size_of::<BlockRecord>() <= 40);
         assert!(size_of::<BlockRecord>() * 4 <= size_of::<BlockProperties>());
     }
 }

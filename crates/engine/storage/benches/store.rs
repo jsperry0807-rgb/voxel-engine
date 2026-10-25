@@ -4,7 +4,7 @@ use voxel_storage::dag::Svdag;
 use voxel_storage::gpu::{GpuStore, MemSink};
 use voxel_storage::overlay::Overlay;
 use voxel_storage::world::World;
-use voxel_storage::{BlockId, ChunkPos, CHUNK_VOLUME};
+use voxel_storage::{CHUNK_VOLUME, ChunkPos, MaterialId};
 
 fn rng(s: &mut u64) -> u64 {
     *s ^= *s << 13;
@@ -164,7 +164,7 @@ fn bench_overlay_world(c: &mut Criterion) {
                 (r & 255) as i32,
                 ((r >> 8) & 63) as i32,
                 ((r >> 16) & 255) as i32,
-                BlockId::from_raw(((r >> 32) & 3) as u16),
+                MaterialId::from_raw(((r >> 32) & 3) as u16),
             )
             .unwrap();
         })
@@ -207,7 +207,7 @@ fn bench_consolidate(c: &mut Criterion) {
                                 cx * 64 + (r & 63) as i32,
                                 ((r >> 8) & 63) as i32,
                                 cz * 64 + ((r >> 16) & 63) as i32,
-                                BlockId::from_raw(((r >> 32) % 5) as u16),
+                                MaterialId::from_raw(((r >> 32) % 5) as u16),
                             )
                             .unwrap();
                         }

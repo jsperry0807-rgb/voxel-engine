@@ -10,8 +10,11 @@ pub mod hash;
 pub mod overlay;
 pub mod world;
 
-/// Runtime block id stored in every voxel. Air is id `0`.
-pub use voxel_block::BlockId;
+/// Runtime material id stored in every voxel. Air is id `0`.
+///
+/// Named `MaterialId`, not `BlockId`: the SVDAG uses a 64-bit `BlockId` for
+/// tree node pointers, while this `u16` is the voxel payload.
+pub use voxel_block::MaterialId;
 
 pub const CHUNK_BITS: u32 = 6;
 pub const CHUNK_DIM: usize = 1 << CHUNK_BITS; // 64

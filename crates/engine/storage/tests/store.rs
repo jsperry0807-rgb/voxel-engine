@@ -1,12 +1,12 @@
 use std::path::PathBuf;
-use voxel_block::{BlockId, BlockRegistryBuilder};
+use voxel_block::{BlockRegistryBuilder, MaterialId};
 use voxel_storage::dag::Svdag;
 use voxel_storage::gpu::{GpuStore, MemSink};
 use voxel_storage::world::World;
 use voxel_storage::{ChunkPos, CHUNK_VOLUME};
 
-fn id(raw: u16) -> BlockId {
-    BlockId::from_raw(raw)
+fn id(raw: u16) -> MaterialId {
+    MaterialId::from_raw(raw)
 }
 
 fn tmp(name: &str) -> PathBuf {
@@ -294,7 +294,7 @@ fn registry_ids_drive_chunk_storage() {
     w.load(ChunkPos::new(0, 0, 0)).unwrap();
 
     assert_eq!(w.get(3, 4, 5), Some(stone));
-    assert_eq!(w.get(3, 40, 5), Some(BlockId::from_raw(0)));
+    assert_eq!(w.get(3, 40, 5), Some(MaterialId::from_raw(0)));
 
     w.set(3, 4, 5, dirt).unwrap();
     w.set(3, 40, 5, water).unwrap();

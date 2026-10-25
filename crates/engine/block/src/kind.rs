@@ -13,7 +13,7 @@ use crate::properties::{BlockFlags, FaceTextures, RenderType};
 /// Built-in block kinds shipped with the engine.
 ///
 /// Every variant has a stable `voxel:` [`NamespacedKey`]; the mapping to a
-/// runtime [`BlockId`] is resolved through the registry at startup.
+/// runtime [`MaterialId`] is resolved through the registry at startup.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum BlockKind {
     Air,

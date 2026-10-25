@@ -43,6 +43,8 @@ pub struct RonBlock {
     #[serde(default)]
     pub textures: Option<RonFaceTextures>,
     #[serde(default)]
+    pub template_root: Option<u64>,
+    #[serde(default)]
     pub flags: u32,
     #[serde(default)]
     pub light_emission: u8,
@@ -69,6 +71,9 @@ impl RonBlock {
         }
         if let Some(tex) = textures {
             props = props.with_textures(tex);
+        }
+        if let Some(root) = self.template_root {
+            props = props.with_template_root(root);
         }
         Ok((key, props))
     }
