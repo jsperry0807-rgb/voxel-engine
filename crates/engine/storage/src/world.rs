@@ -273,7 +273,7 @@ impl<S: GpuSink> World<S> {
             .edited
             .iter()
             .filter_map(|p| {
-                let n = self.chunks[p].overlay.len();
+                let n = self.chunks.get(p)?.overlay.len();
                 (n > 0).then_some((n, *p))
             })
             .collect();
@@ -341,6 +341,10 @@ impl<S: GpuSink> World<S> {
     pub fn chunk(&self, p: ChunkPos) -> Option<&Chunk> {
         self.chunks.get(&p)
     }
+    /// Chunks with an unsaved overlay snapshot.
+    ///
+    /// Includes fully reverted chunks that still need [`Self::flush_edits`] to
+    /// write the empty diff; use [`Self::pending_chunks`] for consolidation.
     pub fn dirty_chunks(&self) -> usize {
         self.edited.len()
     }
