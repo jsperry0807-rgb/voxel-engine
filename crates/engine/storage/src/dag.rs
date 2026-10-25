@@ -7,8 +7,8 @@
 //!   level > 1 : child word = pool offset of a level-1 node
 //!   level == 1: child word = voxel material id (non-zero; 0 = air = absent)
 //! Level is part of the header so identical-looking nodes at different levels never dedup.
-use crate::hash::{hash_words, FxMap};
 use crate::CHUNK_VOLUME;
+use crate::hash::{FxMap, hash_words};
 
 pub const NONE: u32 = u32::MAX;
 pub const ROOT_LEVEL: u32 = 6;
@@ -111,8 +111,10 @@ impl Svdag {
             return None;
         }
         let pool = b[8..]
-            .chunks_exact(4)
-            .map(|c| u32::from_le_bytes(c.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|c| u32::from_le_bytes(*c))
             .collect();
         Some(Self { pool, root })
     }
@@ -230,10 +232,10 @@ impl Builder {
     }
 
     fn build(&mut self, d: &[u16], level: u32, ox: usize, oy: usize, oz: usize) -> Option<u32> {
-        if level >= 3 {
-            if let Some(m) = uniform_block(d, ox, oy, oz, 1usize << level) {
-                return self.uniform(level, m);
-            }
+        if level >= 3
+            && let Some(m) = uniform_block(d, ox, oy, oz, 1usize << level)
+        {
+            return self.uniform(level, m);
         }
         let half = 1usize << (level - 1);
         let mut words = [0u32; 9];

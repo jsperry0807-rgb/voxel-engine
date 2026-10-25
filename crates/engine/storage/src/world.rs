@@ -5,7 +5,7 @@ use crate::disk::RegionStore;
 use crate::gpu::{GpuSink, GpuStore};
 use crate::hash::{FxMap, FxSet};
 use crate::overlay::Overlay;
-use crate::{local_xyz, split_voxel, ChunkPos, CHUNK_VOLUME};
+use crate::{CHUNK_VOLUME, ChunkPos, local_xyz, split_voxel};
 use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -81,10 +81,12 @@ impl<S: GpuSink> World<S> {
     pub fn get(&self, x: i32, y: i32, z: i32) -> Option<MaterialId> {
         let (p, li) = split_voxel(x, y, z);
         let c = self.chunks.get(&p)?;
-        Some(MaterialId::from_raw(c.overlay.get(li).unwrap_or_else(|| {
-            let (lx, ly, lz) = local_xyz(li);
-            c.dag.get(lx, ly, lz)
-        })))
+        Some(MaterialId::from_raw(c.overlay.get(li).unwrap_or_else(
+            || {
+                let (lx, ly, lz) = local_xyz(li);
+                c.dag.get(lx, ly, lz)
+            },
+        )))
     }
 
     /// O(1): overlay insert (or removal when the edit reverts to the DAG value).
@@ -141,7 +143,7 @@ impl<S: GpuSink> World<S> {
                 (n > 0).then_some((n, *p))
             })
             .collect();
-        cand.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+        cand.sort_unstable_by_key(|a| std::cmp::Reverse(a.0));
         cand.truncate(max_chunks);
 
         let mut done = 0usize;

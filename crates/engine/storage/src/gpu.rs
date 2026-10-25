@@ -1,13 +1,13 @@
 //! Tier 3: GPU-resident SVDAG.
 //!
 //! * `pool`   : global u32 node pool, same layout as `dag.rs`, absolute offsets, shared by all chunks
-//!              (cross-chunk dedup via content-hash table). Per-node refcounts live CPU-side only.
+//!   (cross-chunk dedup via content-hash table). Per-node refcounts live CPU-side only.
 //! * `table`  : dynamic open-addressing chunk table, 4 u32 per slot `[x, y, z, root]`,
-//!              root == 0xFFFFFFFF empty, 0xFFFFFFFE tombstone. Power-of-two capacity, linear probe,
-//!              load <= 0.5 (tombstones included), grows/rehashes -> full re-upload.
+//!   root == 0xFFFFFFFF empty, 0xFFFFFFFE tombstone. Power-of-two capacity, linear probe,
+//!   load <= 0.5 (tombstones included), grows/rehashes -> full re-upload.
 //! * COW      : `consolidate` imports each new chunk DAG into fresh/free slots (never in place),
-//!              repoints the table root, and defers decref of the old root until `reclaim(epoch)`
-//!              so in-flight frames never see freed nodes.
+//!   repoints the table root, and defers decref of the old root until `reclaim(epoch)`
+//!   so in-flight frames never see freed nodes.
 //! * upload   : dirty word ranges are coalesced and pushed through `GpuSink` in `flush`.
 //!
 //! WGSL probe (matches `slot_hash`):
@@ -19,9 +19,9 @@
 //! // i = slot_hash(p) & (cap-1); loop { s = table[i]; if s.root==EMPTY {miss}
 //! //   if s.root!=TOMB && s.xyz==p {hit}; i=(i+1)&(cap-1); }
 //! ```
-use crate::dag::{dag_get, hdr_level, hdr_mask, header, morton, Svdag, NONE, ROOT_LEVEL};
-use crate::hash::{hash_words, FxMap};
 use crate::ChunkPos;
+use crate::dag::{NONE, ROOT_LEVEL, Svdag, dag_get, hdr_level, hdr_mask, header, morton};
+use crate::hash::{FxMap, hash_words};
 
 pub const EMPTY: u32 = u32::MAX;
 pub const TOMB: u32 = u32::MAX - 1;
@@ -140,7 +140,7 @@ impl GpuStore {
                     tomb.get_or_insert(i);
                 }
                 _ if s[0] == p.x as u32 && s[1] == p.y as u32 && s[2] == p.z as u32 => {
-                    return Ok(i)
+                    return Ok(i);
                 }
                 _ => {}
             }
@@ -154,7 +154,7 @@ impl GpuStore {
         let old = std::mem::replace(&mut self.table, vec![EMPTY; new_cap * 4]);
         self.live = 0;
         self.tombs = 0;
-        for s in old.chunks_exact(4) {
+        for s in old.as_chunks::<4>().0 {
             if s[3] < TOMB {
                 let p = ChunkPos::new(s[0] as i32, s[1] as i32, s[2] as i32);
                 let i = self.probe(p).unwrap_err();

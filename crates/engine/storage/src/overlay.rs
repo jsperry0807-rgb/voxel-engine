@@ -1,6 +1,6 @@
 //! Mutable O(1) edit overlay: local voxel index -> material (0 = carved to air).
-use crate::hash::FxMap;
 use crate::CHUNK_VOLUME;
+use crate::hash::FxMap;
 
 #[derive(Default, Clone, Debug)]
 pub struct Overlay {
@@ -9,15 +9,29 @@ pub struct Overlay {
 
 impl Overlay {
     #[inline]
-    pub fn get(&self, idx: u32) -> Option<u16> { self.map.get(&idx).copied() }
+    pub fn get(&self, idx: u32) -> Option<u16> {
+        self.map.get(&idx).copied()
+    }
     #[inline]
-    pub fn set(&mut self, idx: u32, v: u16) { self.map.insert(idx, v); }
+    pub fn set(&mut self, idx: u32, v: u16) {
+        self.map.insert(idx, v);
+    }
     #[inline]
-    pub fn remove(&mut self, idx: u32) { self.map.remove(&idx); }
-    pub fn len(&self) -> usize { self.map.len() }
-    pub fn is_empty(&self) -> bool { self.map.is_empty() }
-    pub fn clear(&mut self) { self.map.clear(); }
-    pub fn iter(&self) -> impl Iterator<Item = (u32, u16)> + '_ { self.map.iter().map(|(&k, &v)| (k, v)) }
+    pub fn remove(&mut self, idx: u32) {
+        self.map.remove(&idx);
+    }
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+    pub fn clear(&mut self) {
+        self.map.clear();
+    }
+    pub fn iter(&self) -> impl Iterator<Item = (u32, u16)> + '_ {
+        self.map.iter().map(|(&k, &v)| (k, v))
+    }
 
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut v = Vec::with_capacity(4 + self.map.len() * 6);
@@ -39,7 +53,7 @@ impl Overlay {
         }
         let mut o = Overlay::default();
         o.map.reserve(n);
-        for e in b[4..].chunks_exact(6) {
+        for e in b[4..].as_chunks::<6>().0 {
             let i = u32::from_le_bytes(e[0..4].try_into().unwrap());
             let m = u16::from_le_bytes(e[4..6].try_into().unwrap());
             if i as usize >= CHUNK_VOLUME {

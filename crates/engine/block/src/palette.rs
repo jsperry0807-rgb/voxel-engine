@@ -410,7 +410,7 @@ impl BlockRegistry {
     /// read. A tag is a *set*, so [`MissingBlockPolicy::Drop`] is allowed
     /// here: a member this session does not have is simply not a member.
     ///
-    /// The result feeds straight into [`BlockTags::insert_all`].
+    /// The result feeds straight into [`crate::BlockTags::insert_all`].
     ///
     /// # Errors
     ///

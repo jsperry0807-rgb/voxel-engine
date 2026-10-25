@@ -4,10 +4,10 @@
 //!   kind 1 = serialized Svdag (supersedes everything before it for that cell, incl. diffs)
 //!   kind 2 = full Overlay snapshot (last one wins)
 //! Open scans each log, rebuilds the index, truncates any torn/corrupt tail.
-use crate::dag::Svdag;
-use crate::hash::{crc32, FxMap};
-use crate::overlay::Overlay;
 use crate::ChunkPos;
+use crate::dag::Svdag;
+use crate::hash::{FxMap, crc32};
+use crate::overlay::Overlay;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
@@ -19,7 +19,7 @@ const HDR: usize = 16;
 
 #[derive(Default, Clone, Copy)]
 struct Entry {
-    dag: Option<(u64, u32)>,  // (payload offset, len)
+    dag: Option<(u64, u32)>, // (payload offset, len)
     diff: Option<(u64, u32)>,
 }
 
@@ -46,7 +46,9 @@ pub struct RegionStore {
     dirty: bool,
 }
 
-fn bad(msg: &str) -> io::Error { io::Error::new(io::ErrorKind::InvalidData, msg.to_string()) }
+fn bad(msg: &str) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, msg.to_string())
+}
 
 fn encode(kind: u8, cell: u16, payload: &[u8]) -> Vec<u8> {
     let mut h = encode_header(kind, cell, payload.len() as u32);
@@ -114,7 +116,11 @@ impl RegionStore {
     pub fn open(dir: impl Into<PathBuf>) -> io::Result<Self> {
         let dir = dir.into();
         fs::create_dir_all(&dir)?;
-        Ok(Self { dir, regions: FxMap::default(), dirty: false })
+        Ok(Self {
+            dir,
+            regions: FxMap::default(),
+            dirty: false,
+        })
     }
 
     fn path(&self, rp: RegionPos) -> PathBuf {
@@ -127,7 +133,12 @@ impl RegionStore {
             if !create && !path.exists() {
                 return Ok(None);
             }
-            let mut file = OpenOptions::new().read(true).write(true).create(true).open(&path)?;
+            let mut file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(&path)?;
             let (len, index) = scan(&mut file)?;
             self.regions.insert(rp, Region { file, len, index });
         }
@@ -167,17 +178,28 @@ impl RegionStore {
 
     pub fn has_dag(&mut self, p: ChunkPos) -> io::Result<bool> {
         let cell = p.cell();
-        Ok(self.region(p.region(), false)?.map_or(false, |r| r.index.get(&cell).map_or(false, |e| e.dag.is_some())))
+        Ok(self
+            .region(p.region(), false)?
+            .is_some_and(|r| r.index.get(&cell).is_some_and(|e| e.dag.is_some())))
     }
 
     pub fn load(&mut self, p: ChunkPos) -> io::Result<Option<(Svdag, Overlay)>> {
         let cell = p.cell();
-        let Some(reg) = self.region(p.region(), false)? else { return Ok(None) };
-        let Some(e) = reg.index.get(&cell).copied() else { return Ok(None) };
-        let Some((off, len)) = e.dag else { return Ok(None) };
-        let dag = Svdag::from_bytes(&reg.read(off, len)?).ok_or_else(|| bad("corrupt dag record"))?;
+        let Some(reg) = self.region(p.region(), false)? else {
+            return Ok(None);
+        };
+        let Some(e) = reg.index.get(&cell).copied() else {
+            return Ok(None);
+        };
+        let Some((off, len)) = e.dag else {
+            return Ok(None);
+        };
+        let dag =
+            Svdag::from_bytes(&reg.read(off, len)?).ok_or_else(|| bad("corrupt dag record"))?;
         let ov = match e.diff {
-            Some((o, l)) => Overlay::from_bytes(&reg.read(o, l)?).ok_or_else(|| bad("corrupt diff record"))?,
+            Some((o, l)) => {
+                Overlay::from_bytes(&reg.read(o, l)?).ok_or_else(|| bad("corrupt diff record"))?
+            }
             None => Overlay::default(),
         };
         Ok(Some((dag, ov)))
@@ -195,7 +217,9 @@ impl RegionStore {
 
     /// Rewrite a region keeping only live records (latest dag + latest diff per cell).
     pub fn compact(&mut self, rp: RegionPos) -> io::Result<()> {
-        let Some(mut reg) = self.regions.remove(&rp) else { return Ok(()) };
+        let Some(mut reg) = self.regions.remove(&rp) else {
+            return Ok(());
+        };
         let path = self.path(rp);
         let tmp = path.with_extension("tmp");
         let mut out = File::create(&tmp)?;
@@ -216,5 +240,7 @@ impl RegionStore {
         fs::rename(&tmp, &path)
     }
 
-    pub fn open_regions(&self) -> Vec<RegionPos> { self.regions.keys().copied().collect() }
+    pub fn open_regions(&self) -> Vec<RegionPos> {
+        self.regions.keys().copied().collect()
+    }
 }

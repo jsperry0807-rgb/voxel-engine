@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion, Throughput};
+use criterion::{BatchSize, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use std::path::PathBuf;
 use voxel_storage::dag::Svdag;
 use voxel_storage::gpu::{GpuStore, MemSink};

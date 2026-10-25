@@ -13,24 +13,34 @@ impl Fx {
 
 impl Hasher for Fx {
     fn write(&mut self, b: &[u8]) {
-        let mut it = b.chunks_exact(8);
-        for c in &mut it {
-            self.add(u64::from_le_bytes(c.try_into().unwrap()));
+        let (chunks, remainder) = b.as_chunks::<8>();
+        for c in chunks {
+            self.add(u64::from_le_bytes(*c));
         }
-        for &x in it.remainder() {
+        for &x in remainder {
             self.add(x as u64);
         }
     }
     #[inline]
-    fn write_u16(&mut self, i: u16) { self.add(i as u64) }
+    fn write_u16(&mut self, i: u16) {
+        self.add(i as u64)
+    }
     #[inline]
-    fn write_u32(&mut self, i: u32) { self.add(i as u64) }
+    fn write_u32(&mut self, i: u32) {
+        self.add(i as u64)
+    }
     #[inline]
-    fn write_u64(&mut self, i: u64) { self.add(i) }
+    fn write_u64(&mut self, i: u64) {
+        self.add(i)
+    }
     #[inline]
-    fn write_usize(&mut self, i: usize) { self.add(i as u64) }
+    fn write_usize(&mut self, i: usize) {
+        self.add(i as u64)
+    }
     #[inline]
-    fn finish(&self) -> u64 { self.0 }
+    fn finish(&self) -> u64 {
+        self.0
+    }
 }
 
 pub type FxBuild = BuildHasherDefault<Fx>;
@@ -55,7 +65,11 @@ const fn make_crc_table() -> [u32; 256] {
         let mut c = i as u32;
         let mut k = 0;
         while k < 8 {
-            c = if c & 1 != 0 { 0xEDB8_8320 ^ (c >> 1) } else { c >> 1 };
+            c = if c & 1 != 0 {
+                0xEDB8_8320 ^ (c >> 1)
+            } else {
+                c >> 1
+            };
             k += 1;
         }
         t[i] = c;

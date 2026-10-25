@@ -3,7 +3,7 @@ use voxel_block::{BlockRegistryBuilder, MaterialId};
 use voxel_storage::dag::Svdag;
 use voxel_storage::gpu::{GpuStore, MemSink};
 use voxel_storage::world::World;
-use voxel_storage::{ChunkPos, CHUNK_VOLUME};
+use voxel_storage::{CHUNK_VOLUME, ChunkPos};
 
 fn id(raw: u16) -> MaterialId {
     MaterialId::from_raw(raw)
@@ -17,7 +17,9 @@ fn tmp(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!("vstore-{name}-{}-{t}", std::process::id()))
 }
 
-fn flat() -> Box<dyn FnMut(ChunkPos, &mut [u16]) + Send> {
+type FillFn = Box<dyn FnMut(ChunkPos, &mut [u16]) + Send>;
+
+fn flat() -> FillFn {
     Box::new(|p, d| {
         if p.y == 0 {
             for z in 0..64 {
@@ -35,10 +37,10 @@ fn flat() -> Box<dyn FnMut(ChunkPos, &mut [u16]) + Send> {
 fn dag_roundtrip() {
     let mut d = vec![0u16; CHUNK_VOLUME];
     let mut s = 12345u32;
-    for i in 0..CHUNK_VOLUME {
+    for cell in &mut d {
         s = s.wrapping_mul(1664525).wrapping_add(1013904223);
         if (s >> 24) < 40 {
-            d[i] = ((s >> 8) & 7) as u16;
+            *cell = ((s >> 8) & 7) as u16;
         }
     }
     let dag = Svdag::from_dense(&d);
