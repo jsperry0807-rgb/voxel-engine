@@ -4,6 +4,7 @@
 //! T2 `world`   `FxMap<ChunkPos, Chunk{Arc<Svdag>, Overlay}>`; edits hit the O(1) overlay only
 //! T3 `gpu`     global deduped node pool + dynamic chunk hash table + per-chunk edit overlay
 pub mod bands;
+pub mod chunk;
 pub mod dag;
 pub mod disk;
 pub mod gpu;
@@ -15,6 +16,7 @@ pub mod run;
 pub mod world;
 
 pub use bands::Bands;
+pub use chunk::ChunkDag;
 pub use leaf::{
     AIR, LEAF_MATERIAL_BYTES, LEAF_RUN_BYTES, LEAF_RUN_MATERIALS, LeafInterner, fetch_leaf,
     leaf_index, leaf_slot,
