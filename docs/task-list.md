@@ -106,7 +106,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M0-13 | ADR-005 probes: per-block near, half-res mid, none far | M0-07 | Defines invalid-in-solid fallback and LOD transition as a content event | review | 0.2 d | [ ] |
 | M0-14 | ADR-006 occlusion: block flood-fill primary, ray-test M2 | M0-07 | Explicitly says connectivity, not line-of-sight; names the granularity escalation and the kill criterion | review | 0.2 d | [x] |
 | M0-15 | ADR-007 A/B roots over the shared pool | M0-04 | Shows root-pair overhead is duplicated path, not 2× chunk; states the recycle rule | review | 0.2 d | [x] |
-| M0-16 | ADR-008 lifecycle: visibility × lifecycle, no readback | M0-02 | Lists what the CPU may and may not learn; maps old states to new | review | 0.2 d | [ ] |
+| M0-16 | ADR-008 lifecycle: visibility × lifecycle, no readback | M0-02 | Lists what the CPU may and may not learn; maps old states to new | review | 0.2 d | [x] |
 | M0-17 | ADR-009 render distance and LOD policy | M0-03 | Fixes 128 m LOD0 / 512 m LOD2 / 64 m height; names what M6 measures | review | 0.2 d | [ ] |
 | M0-18 | ADR-010 mesh granularity and vertex format | M0-04 | 16³ + apron; 16 B vertex; no UV attribute; 76 B indexed quad | review | 0.2 d | [ ] |
 | M0-19 | ADR-011 node layout: bands, 8 B nodes, run dedup, compaction | M0-05 | States run-granular sharing and its COW cost (≤ 64 B per level) | review | 0.2 d | [x] |
