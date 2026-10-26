@@ -111,7 +111,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M0-18 | ADR-010 mesh granularity and vertex format | M0-04 | 16³ + apron; 16 B vertex; no UV attribute; 76 B indexed quad | review | 0.2 d | [ ] |
 | M0-19 | ADR-011 node layout: bands, 8 B nodes, run dedup, compaction | M0-05 | States run-granular sharing and its COW cost (≤ 64 B per level) | review | 0.2 d | [x] |
 | M0-20 | ADR-012 traversal: workgroup-per-chunk, frontier-synchronous, warp-per-node | M0-02 | Names frontier capacity, overflow policy, four-dispatch order | review | 0.2 d | [x] |
-| M0-21 | ADR-013 state ownership: GPU per-frame, event-driven CPU | M0-16 | Lists the event set that wakes the ECS; forbids per-frame readback | review | 0.2 d | [ ] |
+| M0-21 | ADR-013 state ownership: GPU per-frame, event-driven CPU | M0-16 | Lists the event set that wakes the ECS; forbids per-frame readback | review | 0.2 d | [x] |
 
 ### 3.3 Repo and CI
 
