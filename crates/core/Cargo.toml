@@ -3,3 +3,8 @@ name = "voxel-core"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+
+[features]
+# Pre-registered 128³ chunk edge (`CHUNK_BITS = 7`). Not buildable until M1-24;
+# see the guard in `src/constants.rs`.
+chunk128 = []

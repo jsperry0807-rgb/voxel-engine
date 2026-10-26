@@ -40,11 +40,32 @@ pub const BLOCK_DIM: usize = 16;
 /// `log2(BLOCK_DIM)`: split levels between the chunk edge and the block edge.
 pub const BLOCK_BITS: u32 = 4;
 
+// Temporary guard (M0-08): code outside this module still assumes a 6-bit edge
+// in places that M1-19..M1-23 will parameterize (index packing, Morton codes,
+// serialization headers, shader constants). Until then a 7-bit build must fail
+// loudly here instead of compiling against those 6-bit assumptions and
+// producing silently wrong data. Remove this guard in M1-24.
+#[cfg(feature = "chunk128")]
+compile_error!(
+    "feature `chunk128` (CHUNK_BITS = 7) is not supported yet: code outside \
+     `voxel_core::constants` still assumes the 64³ edge. This guard is removed \
+     in M1-24."
+);
+
 /// `log2` of the chunk edge in voxels.
 ///
 /// This is the single parameter of the chunk layout: 6 gives the 64³ baseline,
-/// 7 gives the pre-registered 128³ target. Everything below is derived from it.
+/// 7 gives the pre-registered 128³ target, selected by the `chunk128` feature.
+/// Everything below is derived from it.
+#[cfg(not(feature = "chunk128"))]
 pub const CHUNK_BITS: u32 = 6;
+
+/// `log2` of the chunk edge in voxels, at the pre-registered 128³ edge.
+///
+/// Selected by the `chunk128` feature; guarded until M1-24. Everything below is
+/// derived from it.
+#[cfg(feature = "chunk128")]
+pub const CHUNK_BITS: u32 = 7;
 
 /// Voxels per chunk edge ([`CHUNK_BITS`] as a count).
 pub const CHUNK_DIM: usize = 1 << CHUNK_BITS;
@@ -134,6 +155,17 @@ const _: () = {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The default build is the 64³ M1 baseline. The 128³ edge is opt-in via
+    /// the `chunk128` feature and is guarded until M1-24.
+    #[cfg(not(feature = "chunk128"))]
+    #[test]
+    fn default_build_uses_the_64_edge() {
+        assert_eq!(CHUNK_BITS, 6);
+        assert_eq!(CHUNK_DIM, 64);
+        assert_eq!(ROOT_LEVEL, 6);
+        assert_eq!(BLOCK_LEVEL, 2);
+    }
 
     /// Compile-time assertions can only check what the compiler folds; this
     /// exercises the same relationships as values at runtime.
