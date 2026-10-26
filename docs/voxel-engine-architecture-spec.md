@@ -433,7 +433,7 @@ The gate lives in the roadmap's M0 and is written **before** M1 measures. Summar
 | Ocean | 35% of the surface |
 | Floor / sea / peak | y = 0 / 6,600 m / 12,000 m |
 | Chunk | 128³ voxels (8 m) at the target edge; 64³ (4 m) baseline |
-| View | Near voxels to 512 m; macro heightfield to 16–32 km |
+| View | Near voxels to 128 m (LOD2 512 m); macro heightfield to 16–32 km |
 
 Climate zones are compressed: 1,024 km stands in for a planet's pole-to-equator
 distance. This is deliberate and is part of the world's identity, not an error.
@@ -481,7 +481,7 @@ reuse the parent materials, so they cost zero atlas slots and preserve DAG shari
 ### 13.5 Streaming
 
 Surface-relative shell: a band around the surface, not a full 12 km column. Near
-radius 128 m, ±32 m vertically (~2 048 chunks). LOD1 at 256 m, LOD2 at 512 m, then
+radius 128 m, ±16 m vertically (~3 200 chunks). LOD1 at 256 m, LOD2 at 512 m, then
 the heightfield. A cave cache follows the player below the surface and is evicted
 on ascent. The near shell must fit the 40% VRAM budget together with the far field.
 

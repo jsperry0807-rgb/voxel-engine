@@ -82,9 +82,13 @@ Write the gate before anything is measured.
 
 **4.1 Pre-registration table** (binding; estimates to be replaced by M1 numbers):
 
+The frozen version, including the residency model and the fallback rules, is
+[`pre-registration.md`](pre-registration.md) (2026-10-26). The summary below is for
+orientation only; the pre-registration wins.
+
 | Parameter | Pre-registered value | Basis | Implied / check |
 |---|---|---|---|
-| VRAM budget for voxel data | **40% of total VRAM** (fraction, not absolute) | Survives hardware changes; leaves room for framebuffer, mesh, atlas, streaming | 8 GB → 3.2 GB target; gate at 4.8 GB |
+| VRAM budget for voxel data | **40% of total VRAM** (fraction, not absolute) | Survives hardware changes; leaves room for framebuffer, mesh, atlas, streaming | 8,188 MiB → 3,275 MiB target; gate at 4,913 MiB |
 | Target loaded chunk count @ max view distance | Computed **per chunk edge**; 64³ loads **8×** the chunks of 128³ at the same view distance | One chunk count for both edges makes the report meaningless | M0 fixes the ring config; M1 measures the count on the save |
 | SVDAG node budget/chunk | 64³ ≤ **200k**; 128³ ≤ **1.5M** unique nodes (sharing-adjusted) | 8 B/node × 2 roots = 16 B/node | 3.2 MB/chunk at 64³, 24 MB/chunk at 128³: **hard caps, not p95** |
 | Light volume/chunk | 64³: **64 cells**; 128³: **512 cells**; ~**16 B/cell** | Per-block, RGB+intensity or SH2 | 1 KiB / 8 KiB |

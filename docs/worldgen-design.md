@@ -83,10 +83,12 @@ Climate zones are **compressed**: 1,024 km stands in for a planet's 10,000 km po
 ### 3.2 Vertical and streaming
 
 - 12,000 m = 12,000 one-metre blocks = 192,000 voxels = **1,500 chunks** of 8 m.
-- Near shell: 128 m radius, **±32 m around the surface** → ~2,048 chunks.
+- Near shell: 128 m radius, **±16 m around the surface** → ~3,200 chunks (disc).
 - LOD1 at 256 m, LOD2 at 512 m; heightfield beyond.
 - Cave cache: a 128 m box around the player when below the surface, evicted on ascent.
-- At ~0.7 MiB/chunk the near shell is ~1.4 GiB; the far field adds < 50 MB. Fits 40% of 8 GB with the 1.5× gate, narrowly; the M1 gate must use these numbers.
+- At 1.2–3.2 MiB/chunk the near shell is **3.8–9.8 GiB**; the far field adds < 50 MB.
+  The 40% target is 3,275 MiB and the fail line is 4,913 MiB, so the Default profile
+  is the risk. See `pre-registration.md` §5.
 
 ### 3.3 Generation
 

@@ -8,7 +8,9 @@
 | [`voxel-engine-roadmap.md`](voxel-engine-roadmap.md) | Why the work is ordered this way; milestone gates |
 | [`task-list.md`](task-list.md) | Executable breakdown: every task, its dependency, done condition and verification |
 | [`worldgen-design.md`](worldgen-design.md) | World scale, macro map, biomes, blending, caves, rivers, far field, water |
-| `pre-registration.md` | **Created by M0-02.** The frozen M1 gate table, dated and signed off before measurement |
+| [`pre-registration.md`](pre-registration.md) | **Frozen 2026-10-26.** M1 gate: profiles, budgets, residency model, fallback rules |
+| [`reference-machine.md`](reference-machine.md) | The machine every gate number is measured on; gated profiles |
+| [`performance-targets.md`](performance-targets.md) | Frame, VRAM, RAM and CPU budgets; sacrifice ladder; CI policy |
 
 When these disagree, the spec wins, then the roadmap, then the task list. Any change to a
 binding number is made in the spec and the pre-registration, never only in a task.
