@@ -64,14 +64,33 @@ impl ChunkPos {
     }
 }
 
+/// Packs chunk-local coordinates into a row-major index at an arbitrary edge.
+///
+/// Production code uses [`CHUNK_BITS`]; the explicit parameter lets the
+/// round-trip test cover both the 64³ baseline and the pre-registered 128³
+/// target from one build.
+#[inline]
+const fn local_index_at(chunk_bits: u32, x: u32, y: u32, z: u32) -> u32 {
+    x | (y << chunk_bits) | (z << (2 * chunk_bits))
+}
+
+/// Inverse of [`local_index_at`]: extracts the three `chunk_bits`-wide axes.
+#[inline]
+const fn local_xyz_at(chunk_bits: u32, i: u32) -> (u32, u32, u32) {
+    let mask = (1u32 << chunk_bits) - 1;
+    (i & mask, (i >> chunk_bits) & mask, i >> (2 * chunk_bits))
+}
+
+/// Packs chunk-local coordinates into a row-major index at [`CHUNK_BITS`].
 #[inline]
 pub fn local_index(x: u32, y: u32, z: u32) -> u32 {
-    x | (y << CHUNK_BITS) | (z << (2 * CHUNK_BITS))
+    local_index_at(CHUNK_BITS, x, y, z)
 }
+
+/// Extracts `(x, y, z)` from a [`local_index`] at [`CHUNK_BITS`].
 #[inline]
 pub fn local_xyz(i: u32) -> (u32, u32, u32) {
-    let mask = CHUNK_DIM as u32 - 1;
-    (i & mask, (i >> CHUNK_BITS) & mask, i >> (2 * CHUNK_BITS))
+    local_xyz_at(CHUNK_BITS, i)
 }
 
 /// World voxel coords -> (chunk, local index). Arithmetic shifts handle negatives.
@@ -82,4 +101,43 @@ pub fn split_voxel(x: i32, y: i32, z: i32) -> (ChunkPos, u32) {
         ChunkPos::new(x >> CHUNK_BITS, y >> CHUNK_BITS, z >> CHUNK_BITS),
         local_index((x & mask) as u32, (y & mask) as u32, (z & mask) as u32),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The baseline and pre-registered target edges. Both are checked from one
+    /// build so a formula error cannot hide behind the `chunk128` feature flag.
+    const EDGE_BITS: [u32; 2] = [6, 7];
+
+    #[test]
+    fn index_roundtrip_covers_both_chunk_edges() {
+        for bits in EDGE_BITS {
+            let dim = 1u32 << bits;
+            let volume = dim * dim * dim;
+            for i in 0..volume {
+                let (x, y, z) = local_xyz_at(bits, i);
+                assert!(
+                    x < dim && y < dim && z < dim,
+                    "axis out of range at {bits} bits"
+                );
+                assert_eq!(local_index_at(bits, x, y, z), i);
+                // The layout is dense row-major: x fastest, then y, then z.
+                assert_eq!(i, x + y * dim + z * dim * dim);
+            }
+        }
+    }
+
+    #[test]
+    fn local_index_uses_the_compiled_edge() {
+        let dim = CHUNK_DIM as u32;
+        for i in 0..CHUNK_VOLUME as u32 {
+            let (x, y, z) = local_xyz(i);
+            assert_eq!(local_index(x, y, z), i);
+            assert_eq!(i, x + y * dim + z * dim * dim);
+            assert_eq!((x, y, z), local_xyz_at(CHUNK_BITS, i));
+            assert_eq!(local_index(x, y, z), local_index_at(CHUNK_BITS, x, y, z));
+        }
+    }
 }

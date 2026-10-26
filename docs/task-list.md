@@ -155,7 +155,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| M1-19 | Derive `local_index`/`local_xyz` from `CHUNK_BITS` | M0-04 | Round-trip on all indices of both edges; no shift literals | `cargo test -p voxel-storage index_roundtrip` | 0.25 d | [ ] |
+| M1-19 | Derive `local_index`/`local_xyz` from `CHUNK_BITS` | M0-04 | Round-trip on all indices of both edges; no shift literals | `cargo test -p voxel-storage index_roundtrip` | 0.25 d | [x] |
 | M1-20 | Derive `morton` from `CHUNK_BITS` | M1-19 | Morton round-trip and locality test at both edges | `cargo test -p voxel-storage morton` | 0.5 d | [ ] |
 | M1-21 | Derive GPU block indexing and `BLOCKS_PER_CHUNK`; keep overlay words per block fixed | M1-19 | Overlay slot math agrees with CPU at both edges | `cargo test -p voxel-storage block_index` | 0.5 d | [ ] |
 | M1-22 | Chunk table: slot words, position shifts, hash; capacity growth independent of edge | M1-21 | 1024-chunk insert/lookup/remove at both edges; no tombstone leak | `cargo test -p voxel-storage chunk_table` | 0.5 d | [ ] |
