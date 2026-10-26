@@ -20,6 +20,7 @@ binding number is made in the spec and the pre-registration, never only in a tas
 | ADR | Decision | Status |
 |---|---|---|
 | [`ADR-001`](adr/ADR-001-render-path-raster.md) | Render path: raster | Accepted |
+| [`ADR-002`](adr/ADR-002-chunk-edge.md) | Chunk edge: 64³ baseline, 128³ pre-registered | Accepted |
 
 ## Reference (historical, non-normative)
 
