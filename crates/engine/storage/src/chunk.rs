@@ -177,6 +177,29 @@ impl ChunkDag {
         }
     }
 
+    /// Writes the chunk's voxels into a dense buffer, index
+    /// `x + y*CHUNK_DIM + z*CHUNK_DIM^2`.
+    ///
+    /// `out` is cleared first, so an all-air chunk leaves it all [`AIR`] and an
+    /// absent octant reads as air. The walk visits only present children, in
+    /// ascending child order, so expanding a sparse chunk costs its stored
+    /// nodes rather than the full [`CHUNK_VOLUME`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `out.len() != CHUNK_VOLUME`.
+    pub fn expand(&self, out: &mut [u16]) {
+        assert_eq!(
+            out.len(),
+            CHUNK_VOLUME,
+            "a dense chunk must hold CHUNK_VOLUME voxels"
+        );
+        out.fill(AIR);
+        if let Some(root) = self.root {
+            expand_node(&self.bands, root, 0, 0, 0, out);
+        }
+    }
+
     /// The chunk root, or `None` for an all-air chunk.
     pub fn root(&self) -> Option<NodeRef> {
         self.root
@@ -238,6 +261,34 @@ fn child_index(level: u32, index: usize, c: u32) -> usize {
 fn octant(x: u32, y: u32, z: u32, level: u32) -> u32 {
     let bit = level - 1;
     ((x >> bit) & 1) | (((y >> bit) & 1) << 1) | (((z >> bit) & 1) << 2)
+}
+
+/// Writes the voxels covered by `node_ref` into `out`, at origin `(ox, oy, oz)`.
+///
+/// Only present children are visited, so absent octants keep the air the
+/// caller wrote. The node's level and the reference's band are cross-checked in
+/// debug builds: the two must agree for the address to be meaningful.
+fn expand_node(bands: &Bands, node_ref: NodeRef, ox: usize, oy: usize, oz: usize, out: &mut [u16]) {
+    let node = bands.get(node_ref).expect("a live reference names a node");
+    let level = node.level();
+    debug_assert_eq!(level, node_ref.level(), "a reference must name its band");
+    let half = 1usize << (level - 1);
+
+    for c in 0..8u32 {
+        if node.mask() & (1 << c) == 0 {
+            continue;
+        }
+        let x = ox + (c as usize & 1) * half;
+        let y = oy + ((c as usize >> 1) & 1) * half;
+        let z = oz + ((c as usize >> 2) & 1) * half;
+
+        if level == 1 {
+            out[local_index(x as u32, y as u32, z as u32) as usize] = fetch_leaf(bands, node, c);
+        } else {
+            let index = node.child_index(c).expect("a present child has a slot");
+            expand_node(bands, NodeRef::new(level - 1, index), x, y, z, out);
+        }
+    }
 }
 
 /// Occupancy mask of every possible node at levels 1..=ROOT_LEVEL.
@@ -330,7 +381,6 @@ fn level_one_words(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::leaf::fetch_leaf;
 
     /// Deterministic xorshift64, so a failure is reproducible.
     fn rng(state: &mut u64) -> u64 {
@@ -410,46 +460,6 @@ mod tests {
         dense
     }
 
-    /// Rebuilds the dense buffer by walking bands from the root. M1-09 turns
-    /// this into the public `expand`; the build test only needs equality.
-    fn expand(dag: &ChunkDag, out: &mut [u16]) {
-        out.fill(0);
-        if let Some(root) = dag.root() {
-            expand_node(dag.bands(), root, 0, 0, 0, out);
-        }
-    }
-
-    fn expand_node(
-        bands: &Bands,
-        node_ref: NodeRef,
-        ox: usize,
-        oy: usize,
-        oz: usize,
-        out: &mut [u16],
-    ) {
-        let node = bands.get(node_ref).expect("a live reference names a node");
-        let level = node.level();
-        assert_eq!(level, node_ref.level(), "a reference must name its band");
-        let half = 1usize << (level - 1);
-
-        for c in 0..8u32 {
-            if node.mask() & (1 << c) == 0 {
-                continue;
-            }
-            let x = ox + (c as usize & 1) * half;
-            let y = oy + ((c as usize >> 1) & 1) * half;
-            let z = oz + ((c as usize >> 2) & 1) * half;
-
-            if level == 1 {
-                out[local_index(x as u32, y as u32, z as u32) as usize] =
-                    fetch_leaf(bands, node, c);
-            } else {
-                let index = node.child_index(c).expect("a present child has a slot");
-                expand_node(bands, NodeRef::new(level - 1, index), x, y, z, out);
-            }
-        }
-    }
-
     /// M1-07 acceptance: on all five fixtures every band holds only nodes of
     /// its own level, the root is the sole node in the top band, level 0 stays
     /// unused, and expanding reproduces the source dense buffer exactly.
@@ -485,7 +495,7 @@ mod tests {
             }
 
             let mut rebuilt = vec![0u16; CHUNK_VOLUME];
-            expand(&dag, &mut rebuilt);
+            dag.expand(&mut rebuilt);
             assert_eq!(rebuilt, dense, "{name}: dense rebuild differs");
         }
     }
@@ -588,6 +598,25 @@ mod tests {
             let expected = dense[local_index(x, y, z) as usize];
             assert_eq!(dag.get(x, y, z), expected, "noise at ({x}, {y}, {z})");
         }
+    }
+
+    /// M1-09 acceptance: expanding each of the five fixtures reproduces the
+    /// source dense chunk byte for byte. The destination starts dirty, so
+    /// absent octants must be cleared rather than left untouched.
+    #[test]
+    fn expand_matches_dense_on_five_fixtures() {
+        for (name, dense) in fixtures() {
+            let dag = ChunkDag::from_dense(&dense);
+            let mut rebuilt = vec![u16::MAX; CHUNK_VOLUME];
+            dag.expand(&mut rebuilt);
+            assert_eq!(rebuilt, dense, "{name}: expanded buffer differs");
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "CHUNK_VOLUME")]
+    fn expand_rejects_a_dense_length_mismatch() {
+        ChunkDag::empty().expand(&mut [0; CHUNK_VOLUME - 1]);
     }
 
     #[test]
