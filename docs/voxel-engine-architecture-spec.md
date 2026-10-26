@@ -1,8 +1,20 @@
 # Voxel Engine Architecture Spec
 
-**Status:** v2.2 — four gates closed; chunk edge parameterized and pre-registered
-**Date:** 2026-10-25
-**Companion:** [`voxel-engine-roadmap.md`](voxel-engine-roadmap.md)
+**Status:** v2.3 — world scale, worldgen, far field and water locked
+**Date:** 2026-10-26
+**Companion:** [`voxel-engine-roadmap.md`](voxel-engine-roadmap.md), [`worldgen-design.md`](worldgen-design.md)
+
+**Changes in v2.3**
+
+- **World scale:** flat finite **1,048,576 m square**, **12,000 m vertical**, sea level
+  **6,600 m**, peak **12,000 m**, 35% ocean, Endless Sea rim (§13).
+- **View:** near voxels to 512 m, **macro heightfield far field to 16–32 km** (§14).
+- **Streaming:** surface-relative shell plus cave cache, not full columns (§13.5).
+- **Worldgen:** 128 m tiled macro map plus **vector rivers**; 18 biomes; 300–500 m
+  gradients; canonical sub-block transitions; generator frozen per save (§13).
+- **Water:** transparent oceans, rivers and lakes with a visual current (§14.2).
+- Determinism is **bit-exact across platforms**; integer-hash noise only (§13.4).
+- **Changes in v2.2** (below) remain in force.
 
 **Changes in v2.2**
 
@@ -298,6 +310,10 @@ a face-textured block registers its variants as separate materials.
 | Node layout | Level bands, 8 B nodes, 8-sibling 64 B runs |
 | Traversal | Workgroup-per-chunk, frontier-synchronous, groupshared |
 | State ownership | GPU per-frame visibility, CPU event-driven lifecycle, no readback |
+| World scale | 1,048,576 m square, 12,000 m vertical, sea 6,600 m, peak 12,000 m; 35% ocean |
+| Worldgen | 128 m tiled macro map + vector rivers; 18 biomes; 300–500 m gradients; frozen per save |
+| Far field | Macro heightfield mesh to 16–32 km; near/far seam at 512 m |
+| Water | Transparent oceans/rivers/lakes; static bodies + visual current |
 
 ### 9.1 Chunk-edge pre-registration
 
@@ -405,3 +421,89 @@ The gate lives in the roadmap's M0 and is written **before** M1 measures. Summar
   splits the two axes. Chunks in `PENDING_CONSOLIDATION` remain traversable on their
   previous root; only `EDITING`, `UPLOADING` and `EVICTING` are excluded, via the
   CPU-uploaded lifecycle table.
+
+## 13. World Generation and Scale
+
+### 13.1 The world
+
+| Property | Value |
+|---|---|
+| Shape | Flat finite square, 1,048,576 m per side (2^20 m) |
+| Edge | Last 20–50 km deep ocean, storm band and outward current; no invisible wall in normal play |
+| Ocean | 35% of the surface |
+| Floor / sea / peak | y = 0 / 6,600 m / 12,000 m |
+| Chunk | 128³ voxels (8 m) at the target edge; 64³ (4 m) baseline |
+| View | Near voxels to 512 m; macro heightfield to 16–32 km |
+
+Climate zones are compressed: 1,024 km stands in for a planet's pole-to-equator
+distance. This is deliberate and is part of the world's identity, not an error.
+
+### 13.2 Pipeline
+
+1. **Creation, once per seed, minutes, resumable:** 128 m macro grid (height,
+   temperature, humidity, erosion, flags); priority-flood depression fill; D8 flow
+   and accumulation; vector rivers with width/depth/order; lakes with spill levels;
+   coasts; landmark anchors every 20–50 km; structure anchors on a 1–4 km grid.
+2. **Chunk generation, worker thread, p95 ≤ 2 ms:** sample the 3×3 macro tiles at
+   1 m; compute biome weights; blend shape parameters before evaluating height; add
+   local detail noise; carve rivers and lake beds; fill 512 blocks with surface
+   rules; carve caves; place ores; place flora and structures from anchors.
+3. **Detail pass, LOD0 only:** canonical sub-block patterns (grass tufts, pebbles,
+   leaves, ripples, moss, snow drift) and two-material + debris transition blocks.
+4. **Far field:** the macro heightfield is drawn as a distant mesh; near/far seam
+   at 512 m with a 64–128 m blend band and a skirt.
+
+Generation returns a **block grid plus a feature list**, never a dense voxel array.
+
+### 13.3 Biomes and blending
+
+18 biomes: 11 land, 3 ocean depth zones, 3 underground, 1 rare (geothermal).
+Biome size 8–32 km; transition 300–500 m. Blending is four-layered:
+
+1. **Shape:** blend continentalness/erosion before the height spline.
+2. **Climate weights:** softmax over biome centres; no argmax curves.
+3. **Surface:** material chosen by weight plus a per-block hash dither.
+4. **Sub-block:** canonical transition blocks chosen by hash; debris breaks the
+   pattern.
+
+No transition biomes, no texture blending, no per-instance random voxels. Templates
+reuse the parent materials, so they cost zero atlas slots and preserve DAG sharing.
+
+### 13.4 Determinism and versioning
+
+- Integer-hash noise with 16.16 fixed-point interpolation; no `libm` in generation.
+- Features come from `hash(seed, cell)`, never sequential RNG.
+- Bit-exact across platforms and thread counts; golden chunk hashes in CI.
+- The save header pins seed, generator, macro and content versions.
+- **Generator frozen per save:** old generator modules remain callable; a world
+  always regenerates with the version it was created with.
+
+### 13.5 Streaming
+
+Surface-relative shell: a band around the surface, not a full 12 km column. Near
+radius 128 m, ±32 m vertically (~2 048 chunks). LOD1 at 256 m, LOD2 at 512 m, then
+the heightfield. A cave cache follows the player below the surface and is evicted
+on ascent. The near shell must fit the 40% VRAM budget together with the far field.
+
+## 14. Far Field, Water and Map
+
+### 14.1 Far field
+
+- The 128 m macro height is the far-field mesh: 32 km → 256 × 256 cells.
+- LOD rings at 128/256/512 m; colour from biome weights and river/lake masks.
+- Near/far seam at 512 m: 64–128 m blend band plus skirt; near chunks fade.
+- Fog matches the near renderer so the horizon reads as one world.
+
+### 14.2 Water
+
+- Transparent at launch: depth sorting, alpha, depth-based colour, underwater fog.
+- Oceans, rivers and lakes are static bodies; rivers show a visual current driven by
+  the macro flow direction. No fluid simulation at launch.
+- Water surfaces are separate from the voxel terrain mesh and stream with the same
+  rings.
+
+### 14.3 Map and orbit view
+
+- A craftable Map-Atlases-style atlas item records explored chunks, zoom levels,
+  biome colours and landmarks. Data is a discovered-chunk bitset, not a second world.
+- The menu orbit view is pre-rendered or 2.5D; there is no gameplay space renderer.

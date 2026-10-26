@@ -7,6 +7,7 @@
 | [`voxel-engine-architecture-spec.md`](voxel-engine-architecture-spec.md) | What the engine is: units, tiers, protocols, layout, traversal, state |
 | [`voxel-engine-roadmap.md`](voxel-engine-roadmap.md) | Why the work is ordered this way; milestone gates |
 | [`task-list.md`](task-list.md) | Executable breakdown: every task, its dependency, done condition and verification |
+| [`worldgen-design.md`](worldgen-design.md) | World scale, macro map, biomes, blending, caves, rivers, far field, water |
 | `pre-registration.md` | **Created by M0-02.** The frozen M1 gate table, dated and signed off before measurement |
 
 When these disagree, the spec wins, then the roadmap, then the task list. Any change to a

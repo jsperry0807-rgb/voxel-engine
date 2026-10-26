@@ -1,6 +1,6 @@
 # Roadmap Task List
 
-**Status:** v1.1 — derived from spec v2.2 and roadmap v3
+**Status:** v1.3 — derived from spec v2.3 and roadmap v3.1
 **Date:** 2026-10-26
 **Owner:** engine
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
@@ -70,6 +70,8 @@ Two weeks per sprint, one engineer. The gate sprint (S4) is the only one that ca
 **Gate date.** Bottom-up, M1 is 33.5 raw days (6.7 weeks), not the roadmap's 5-week estimate, because the reference implementations (M1-27…M1-34) and the gate harness are real work. The gate therefore lands at the end of **S4 (week 8)**, not week 5. The gate content is unchanged; only its date moves. This is the one place the task list overrides the roadmap's schedule, and it is deliberate: a gate measured with borrowed oracles is not a gate.
 
 **With a second engineer:** Track A takes M1 layout then M4 while Track B builds the M1 references and M1.5; they meet at M5. Critical path drops to ~22 sprints. The gate stays at S4 regardless — it needs both tracks' inputs.
+
+**Worldgen track (added v2.3).** M2.5 is 45 raw days and M3.5 is 18. With one engineer they insert after M2 and M3, taking the plan to **~27 sprints (~54 weeks)**; with two, M2.5 runs beside M2–M3 and the critical path grows by ~6 sprints. The gate at S4 is unchanged.
 
 ---
 
@@ -419,7 +421,89 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 ---
 
-## 12. Cross-cutting checklists
+## 12. M2.5 — Worldgen
+
+**Goal:** a deterministic 1024 km world with biomes, rivers, caves, landmarks and detail.
+**Exit:** M2.5-29. **Budget:** 45.25 d raw, plus 40% contingency. **Depends:** M1-24, M2-12.
+**Runs in parallel with M2–M3** with a second engineer; otherwise insert after M2.
+**Design:** [`worldgen-design.md`](worldgen-design.md).
+
+### 12.1 Foundation and macro geography
+
+| ID | Task | Depends | Done when | Verify | Est | Done |
+|---|---|---|---|---|---|---|
+| M2.5-01 | Create `crates/engine/worldgen` (`voxel-worldgen`); deterministic integer-hash 2D/3D gradient noise with 16.16 fixed-point interpolation | M1-24 | Same bytes for 1/2/8 threads and on two machines; golden vectors committed | `cargo test -p voxel-worldgen noise` | 2 d | [ ] |
+| M2.5-02 | Macro grid data model and 16 km tile format: height u16, temp/humidity/erosion/flags u8, header with seed + versions + CRC | M0-04 | Tile round-trips; 128² × 6 B = 98 KB; corrupt tile rejected | `cargo test -p voxel-worldgen tile` | 1 d | [ ] |
+| M2.5-03 | Continentalness/erosion/height spline tables for 0–12,000 m; sea level 6,600 | M2.5-01 | Splines monotonic where required; height clamped; unit table tests | `cargo test -p voxel-worldgen splines` | 1.5 d | [ ] |
+| M2.5-04 | Climate fields: compressed latitude (cold edges, warm equator), humidity from ocean distance, altitude lapse rate | M2.5-03 | Poles cold, coasts humid, peaks cold; 2D map test | `cargo test -p voxel-worldgen climate` | 1 d | [ ] |
+| M2.5-05 | Macro tile generator at 128 m, seeded and content-hashed | M2.5-02…04 | 4,096 tiles generate in minutes; hash stable across runs | `cargo run -p voxel-worldgen -- macro --seed 1` | 2 d | [ ] |
+| M2.5-06 | Hydrology: priority-flood depression fill, D8 flow, accumulation | M2.5-05 | Lakes at spill level; flow graph acyclic; hand-checked fixture | `cargo test -p voxel-worldgen hydro` | 2 d | [ ] |
+| M2.5-07 | River extraction: vector polylines with width/depth/order from catchment; deltas | M2.5-06 | Every river reaches sea or a lake; width 10–200 m; no uphill segments | `cargo test -p voxel-worldgen rivers` | 2 d | [ ] |
+| M2.5-08 | Lake extraction, spill levels, shoreline and underwater terrain | M2.5-06 | No leaking basins; shoreline continuous; tests | `cargo test -p voxel-worldgen lakes` | 1 d | [ ] |
+| M2.5-09 | Macro tile store: tiled streaming, LRU, 3×3 border for interpolation | M2.5-02 | 32 km view holds ≤ 9 tiles; no seams at tile borders | `cargo test -p voxel-worldgen tile_store` | 1.5 d | [ ] |
+
+### 12.2 Biomes, surface and transitions
+
+| ID | Task | Depends | Done when | Verify | Est | Done |
+|---|---|---|---|---|---|---|
+| M2.5-10 | Biome weight function: softmax over 18 centres in climate/erosion/continentalness; shape parameters blended before evaluation | M2.5-04, M2.5-05 | Weights sum to 1; transition width 300–500 m; no argmax curve in a map dump | `cargo test -p voxel-worldgen weights` | 2 d | [ ] |
+| M2.5-11 | RON biome schema and the 18 definitions (11 land, 3 ocean, 3 underground, geothermal) | M2.5-10 | All definitions validate; every climate cell resolves; content is data-only | `cargo test -p voxel-worldgen biome_ron` | 2 d | [ ] |
+| M2.5-12 | Surface rules: 3–6 block soil default, biome/altitude override, slope and underwater rules | M2.5-11 | Cliffs expose stone; beaches ring water; tests | `cargo test -p voxel-worldgen surface` | 2 d | [ ] |
+| M2.5-13 | 1 m material dither and canonical two-material + debris transition blocks | M2.5-12 | Seam is mixed, not a line; ≤ 4 variants per pair; zero new atlas slots | `cargo test -p voxel-worldgen transitions` | 2 d | [ ] |
+
+### 12.3 Caves, ores, landmarks and structures
+
+| ID | Task | Depends | Done when | Verify | Est | Done |
+|---|---|---|---|---|---|---|
+| M2.5-14 | 3D cave carve: spaghetti, cheese, vertical shafts, galleries, water/lava caves | M2.5-12 | All five types present; balanced density; no caves in the first 2 m under water | `cargo test -p voxel-worldgen caves` | 3 d | [ ] |
+| M2.5-15 | Cave depth relative to the local surface (down to −2,000 m) and underground biome assignment | M2.5-14 | Caves follow terrain; aquifer/fungal/cavern assigned by depth and water | `cargo test -p voxel-worldgen cave_depth` | 1 d | [ ] |
+| M2.5-16 | Occasional overhangs and arches from 3D density; no disconnected floating rock | M2.5-14 | Arch fixture passes; no unsupported islands at the surface | `cargo test -p voxel-worldgen overhangs` | 1 d | [ ] |
+| M2.5-17 | Ore placement by depth tier and vein | M2.5-14 | Metals + gems; no surface gems; vein continuity test | `cargo test -p voxel-worldgen ores` | 1 d | [ ] |
+| M2.5-18 | Landmark anchors every 20–50 km: massif, canyon/falls, volcano, giant grove, monolith/arch | M2.5-05 | One landmark per cell; type fits terrain; map dump shows distribution | `cargo run -p voxel-worldgen -- map --landmarks` | 2 d | [ ] |
+| M2.5-19 | Structure anchors on a 1–4 km jittered grid; prefab stamps for ruins, towers, dungeons, bridges/roads | M2.5-18 | Stamps fit terrain; no floating foundations; most cells empty | `cargo test -p voxel-worldgen structures` | 2.5 d | [ ] |
+| M2.5-20 | Cross-chunk feature determinism: a tree, structure or river crossing a border is identical from both sides | M2.5-19 | Byte-equal overlap from two adjacent chunks; 1,000 sampled features | `cargo test -p voxel-worldgen cross_chunk` | 1.5 d | [ ] |
+| M2.5-21 | Flora placement: species, moderate density, biome-dependent, ecotones, rare giants | M2.5-20 | Birch/scrub only at seams; giants 1 per 20–50 km; density tests | `cargo test -p voxel-worldgen flora` | 1.5 d | [ ] |
+| M2.5-22 | Surface detail pass: grass tufts, pebbles, leaves, ripples, moss, snow drift; canonical templates | M2.5-13 | Six types; templates dedup; detail only in LOD0 | `cargo test -p voxel-worldgen detail` | 2 d | [ ] |
+
+### 12.4 Pipeline, determinism and exit
+
+| ID | Task | Depends | Done when | Verify | Est | Done |
+|---|---|---|---|---|---|---|
+| M2.5-23 | Chunk generation pipeline: block grid + feature list, no dense voxel array; p95 ≤ 2 ms | M2.5-21, M2.5-22 | 512 blocks/chunk; p95 ≤ 2 ms on the reference machine | `cargo bench -p voxel-worldgen chunk` | 2 d | [ ] |
+| M2.5-24 | Worker pool, cancellation and prefetch integration; never generate on the edit path | M2.5-23 | Editing a distant voxel never blocks on generation; stale jobs cancel | `cargo test -p voxel-worldgen workers` | 1.5 d | [ ] |
+| M2.5-25 | Generator versioning: save header pins seed, generator, macro and content versions; old versions remain callable | M2.5-23 | A v1 save regenerates v1 terrain after v2 lands | `cargo test -p voxel-worldgen versioning` | 1 d | [ ] |
+| M2.5-26 | Determinism harness: golden chunk hashes across seeds, thread counts and two machines | M2.5-23 | 1/2/8 workers equal; 10 seeds; hashes committed | `cargo test -p voxel-worldgen --release determinism` | 1 d | [ ] |
+| M2.5-27 | World creation CLI: progress, resume, macro map dump, 4k × 4k PNG preview | M2.5-05…09 | Full world in ≤ 10 min; resume after kill; preview renders | `cargo run -p voxel-worldgen -- create --seed 1` | 1 d | [ ] |
+| M2.5-28 | Golden world fixtures: 4 × 4 km map render and a 1 km walkthrough strip | M2.5-23 | Screenshots in `docs/images/`; hashes stable | review | 1 d | [ ] |
+| M2.5-29 | M2.5 exit: world tour video, budget numbers recorded, tag `m2.5` | M2.5-28 | Tag; design doc updated with measured numbers | `git tag -n m2.5` | 0.25 d | [ ] |
+
+---
+
+## 13. M3.5 — Far field, water and map
+
+**Goal:** 16–32 km view with a seamless near/far join, transparent water, and the atlas item.
+**Exit:** M3.5-14. **Budget:** 17.75 d raw, plus 50% contingency. **Depends:** M2.5-09, M2.5-23, M3-13.
+
+| ID | Task | Depends | Done when | Verify | Est | Done |
+|---|---|---|---|---|---|---|
+| M3.5-01 | Macro heightfield mesh builder with LOD rings (128/256/512 m) | M2.5-09, M3-13 | 32 km view ≤ 65 k vertices; rings stitch without cracks | `cargo test -p voxel-viewer farfield` | 2 d | [ ] |
+| M3.5-02 | Biome colour and river/lake masks on the far mesh | M3.5-01 | Far colours match the near biome palette at the seam | visual | 1.5 d | [ ] |
+| M3.5-03 | Near/far seam: 64–128 m blend band plus skirt; near chunks fade | M3.5-01 | No visible crack or pop over a 2 km flight | `cargo test -p voxel-viewer seam` | 2 d | [ ] |
+| M3.5-04 | Far-field fog and lighting matched to the near renderer | M3.5-03 | Horizon reads as one world; screenshots | visual | 1 d | [ ] |
+| M3.5-05 | 32 km view performance: frame time and draw budget | M3.5-03 | ≥ 60 Hz at 1080p at the target view | `cargo bench -p voxel-bench --bench render` | 1 d | [ ] |
+| M3.5-06 | Transparent water: depth sorting, alpha, depth-based colour | M3.5-03 | Two overlapping water planes sort correctly; no z-fighting | `cargo test -p voxel-viewer water` | 2 d | [ ] |
+| M3.5-07 | Underwater fog, caustics and surface view from below | M3.5-06 | Underwater reads as underwater; screenshots | visual | 1 d | [ ] |
+| M3.5-08 | River current: flow direction drives UV scroll and foam lines | M3.5-06 | Rivers visibly flow; direction matches the macro network | visual | 1 d | [ ] |
+| M3.5-09 | Map atlas data: explored-chunk bitset, zoom levels, biome colours, landmarks | M2.5-23 | Atlas data round-trips; exploration fills it in | `cargo test -p voxel-worldgen atlas` | 1.5 d | [ ] |
+| M3.5-10 | Map atlas item and UI: craftable, zoom, player marker | M3.5-09 | Usable in the viewer; screenshots | run | 1.5 d | [ ] |
+| M3.5-11 | Menu orbit view of the square slab and ocean rim | M2.5-27 | Pre-rendered/2.5D view in the menu; no gameplay renderer | run | 1 d | [ ] |
+| M3.5-12 | Visual regression set: seam, water, far field, night | M3.5-08 | Four screenshots with a documented diff threshold | review | 1 d | [ ] |
+| M3.5-13 | Streaming hitch test over a 2 km flight with water and far field | M3.5-03 | p99 ≤ 4 ms; no frame > 16.6 ms | `cargo run -p voxel-bench -- hitch` | 1 d | [ ] |
+| M3.5-14 | M3.5 exit: tag `m3.5`, budgets recorded | M3.5-13 | Tag; docs updated | `git tag -n m3.5` | 0.25 d | [ ] |
+
+---
+
+## 14. Cross-cutting checklists
 
 Use these in review when a task touches the relevant area.
 
@@ -454,7 +538,7 @@ Use these in review when a task touches the relevant area.
 
 ---
 
-## 13. Traceability
+## 15. Traceability
 
 | Spec section | Tasks |
 |---|---|
@@ -473,7 +557,7 @@ Use these in review when a task touches the relevant area.
 
 ---
 
-## 14. Backlog (not scheduled)
+## 16. Backlog (not scheduled)
 
 - Far-field raymarching or impostors for silhouette detail.
 - GPU-side remeshing from the append buffer.
@@ -485,7 +569,7 @@ Use these in review when a task touches the relevant area.
 
 ---
 
-## 15. Budget summary
+## 17. Budget summary
 
 Raw days are the sum of the task estimates. Contingency is milestone-specific: it is low where the work is mechanical and high where it is research or GPU-dependent.
 
@@ -495,13 +579,15 @@ Raw days are the sum of the task estimates. Contingency is milestone-specific: i
 | M1 | 33.5 | 25% | 41.9 | 4 | 64³/128³ decided |
 | M1.5 | 10.5 | 20% | 12.6 | 1.5 | first pixel |
 | M2 | 26.75 | 25% | 33.4 | 3 | content pipeline |
+| M2.5 | 45.25 | 40% | 63.4 | 3 | 1024 km world with biomes, rivers, caves |
 | M3 | 9 | 40% | 12.6 | 1.5 | 256 chunks at 60 Hz |
+| M3.5 | 17.75 | 50% | 26.6 | 1.5 | 16–32 km view, water, atlas |
 | M4 | 17.25 | 30% | 22.4 | 2 | sync soak clean |
 | M5 | 18.25 | 50% | 27.4 | 3 | ≥ 3× draw reduction |
 | M6 | 22.25 | 50% | 33.4 | 3 | 512 m within budget |
 | M7 | 12 | 30% | 15.6 | 2 | enforced budgets |
-| **Total** | **157** | — | **207** | **20** | |
+| **Total** | **220** | — | **297** | **27** | |
 
-157 raw days is ~31 weeks; 207 planning days is ~41 weeks (~9.5 months), which is the roadmap's envelope. The gap is contingency, not scope. The 202 tasks are the complete delivery set; S20 is unallocated buffer and must not be filled with new scope.
+220 raw days is ~44 weeks; 297 planning days is ~59 weeks (~14 months), which is the honest cost of a 1024 km world with 12 km relief and a 16–32 km view. The gap is contingency, not scope. The **245 tasks** are the complete delivery set; the last sprint is unallocated buffer and must not be filled with new scope.
 
 The gate is at S4 because it must not inherit the later milestones' contingency. If it slips, the correct response is to cut reference scope (M1-30, M1-31 can be stubs for the first pass), not to weaken the gate.

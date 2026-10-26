@@ -1,9 +1,9 @@
 # Voxel Engine Roadmap
 
-**Status:** v3 — four gates closed; chunk edge pre-registered
-**Companion to:** [`voxel-engine-architecture-spec.md`](voxel-engine-architecture-spec.md)
-**Date:** 2026-10-25
-**Scope:** storage, content pipeline, renderer, GPU sync, culling, LOD, streaming
+**Status:** v3.1 — worldgen, far field and water added
+**Companion to:** [`voxel-engine-architecture-spec.md`](voxel-engine-architecture-spec.md), [`worldgen-design.md`](worldgen-design.md)
+**Date:** 2026-10-26
+**Scope:** storage, content pipeline, worldgen, renderer, far field, water, GPU sync, culling, LOD, streaming
 **Not in scope:** gameplay, editor, networking, audio, physics, damage rendering, content authoring
 
 The spec's four gates are now closed: raster, block-level flood-fill occlusion,
@@ -223,6 +223,34 @@ no upload hitch over 4 ms.
 
 ---
 
+### M2.5 — Worldgen (9 weeks)
+
+Runs in parallel with M2–M3 with a second engineer; otherwise insert after M2.
+Full design and numbers: [`worldgen-design.md`](worldgen-design.md).
+
+- 128 m tiled macro map: continentalness, erosion, climate, height.
+- Hydrology: depression fill, D8 flow, accumulation, vector rivers, lakes.
+- 18 biomes in RON; softmax weights; 300–500 m gradients; canonical transitions.
+- Caves (five types), ores, landmarks, structures, flora, surface detail.
+- Block-first chunk pipeline at 2 ms; workers, cancellation, prefetch.
+- Bit-exact determinism; generator frozen per save.
+
+**Exit:** a 4 × 4 km map and a 1 km walkthrough that look like the intended world;
+p95 chunk generation ≤ 2 ms; identical bytes across 1/2/8 workers; full creation
+≤ 10 min.
+
+### M3.5 — Far field, water and map (4 weeks)
+
+- Macro heightfield mesh with LOD rings; 32 km view.
+- Near/far seam at 512 m (blend band plus skirt).
+- Transparent water, depth sorting, underwater fog, river current.
+- Map atlas data and item; menu orbit view.
+
+**Exit:** 60 Hz at 1080p at 16–32 km view; no visible seam over a 2 km flight;
+p99 hitch ≤ 4 ms.
+
+---
+
 ### M4 — Versioned GPU resources and COW sync (4 weeks)
 
 - Chunk table slot gains `rootA`, `rootB`, `versionIndex`. Root pair over the shared
@@ -338,18 +366,20 @@ fixes the actual count.
 ## 7. Dependency graph and staffing
 
 ```
-M0 ── M1 ──┬── M1.5 ── M2 ── M3 ──┐
-            │                     ├── M5 ── M6 ── M7
-            └── M4 ───────────────┘
+M0 ── M1 ──┬── M1.5 ── M2 ── M2.5 ── M3 ── M3.5 ──┐
+            │                                      ├── M5 ── M6 ── M7
+            └── M4 ────────────────────────────────┘
 ```
 
-Critical path (one engineer): M0 → M1 → M2 → M3 → M4 → M5 → M6 = **32 weeks**; with
-M7 and 20% contingency, **~9.5 months**. M1.5 and M4 can run in parallel once M1
-lands; two engineers reach **~6 months**. The bottom-up task list puts the M1 gate
-at the end of week 8; see `docs/task-list.md` §2 for the sprint map.
+Critical path (one engineer): M0 → M1 → M2 → M3 → M4 → M5 → M6 = **32 weeks** before
+worldgen. M2.5 and M3.5 add 63 and 27 planning days, taking the one-engineer plan to
+**~59 weeks (~14 months)**. With two engineers M2.5 runs beside M2–M3 and the effort
+drops to **~9–10 months**. The bottom-up task list puts the M1 gate at the end of
+week 8; see `docs/task-list.md` §2 for the sprint map.
 
 - **A — Storage and sync:** M1 layout, M4, M6 persistence.
 - **B — Content and renderer:** M1 references, M1.5, M2, M3, M5.
+- **C — Worldgen:** M2.5, then M3.5 with B.
 - **Both:** M0, the M1 gate, M5 parity, M6 LOD, M7 budgets.
 
 ---
