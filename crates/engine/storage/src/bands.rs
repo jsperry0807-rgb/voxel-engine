@@ -13,9 +13,10 @@
 //! this when it hands out aligned runs.
 //!
 //! Leaves are not internal nodes. They live in a separate arena of `u16`
-//! material IDs (air is `0`); M1-06 groups those slots into eight-material leaf
-//! runs. Keeping leaves out of the node bands means an internal band never
-//! mixes 8 B words with 2 B payloads.
+//! material IDs (air is `0`); [`crate::leaf`] groups the present slots of one
+//! level-1 parent into a packed leaf run of at most eight materials. Keeping
+//! leaves out of the node bands means an internal band never mixes 8 B words
+//! with 2 B payloads.
 //!
 //! [`Bands::level_start`] returns `levelStart[ROOT_LEVEL + 1]`: the offset of
 //! each band in the flattened node pool obtained by concatenating bands in
@@ -359,8 +360,9 @@ impl Bands {
 
     /// Appends one `u16` material ID to the leaf arena and returns its slot.
     ///
-    /// Slot zero is the first material, not a run index; M1-06 groups these
-    /// slots into eight-material leaf runs. Material `0` means air.
+    /// Slot zero is the first material, not a run index; [`crate::leaf`] groups
+    /// up to eight present slots into one shared leaf run. Material `0` means
+    /// air and is normally absent from the arena.
     pub fn append_leaf(&mut self, material: u16) -> u64 {
         let index = self.leaves.len() as u64;
         self.leaves.push(material);

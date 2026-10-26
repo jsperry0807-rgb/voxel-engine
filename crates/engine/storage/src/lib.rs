@@ -8,12 +8,17 @@ pub mod dag;
 pub mod disk;
 pub mod gpu;
 pub mod hash;
+pub mod leaf;
 pub mod node_word;
 pub mod overlay;
 pub mod run;
 pub mod world;
 
 pub use bands::Bands;
+pub use leaf::{
+    AIR, LEAF_MATERIAL_BYTES, LEAF_RUN_BYTES, LEAF_RUN_MATERIALS, LeafInterner, fetch_leaf,
+    leaf_index, leaf_slot,
+};
 pub use node_word::{Node, NodeRef};
 pub use run::{
     CHILD_SLOTS, RunAllocation, RunAllocator, RunInterner, child_index, child_slot, fetch_child,

@@ -45,6 +45,10 @@
 //! key can be interned again; the append-only band keeps the bytes until
 //! compaction (M1-12) and the dead bytes stay queryable.
 //!
+//! The same interner owns the leaf arena. [`RunInterner::intern_leaf`] interns
+//! a level-1 parent's present material IDs as one packed leaf run (M1-06); the
+//! leaf-specific types and read helpers live in [`crate::leaf`].
+//!
 //! # Example
 //!
 //! ```
@@ -82,6 +86,7 @@ use voxel_core::constants::ROOT_LEVEL;
 
 use crate::bands::{BAND_COUNT, Bands};
 use crate::hash::{Fx, FxMap};
+use crate::leaf::{LEAF_RUN_MATERIALS, LeafInterner};
 use crate::node_word::{NODE_INDEX_MAX, Node, NodeRef};
 
 /// Size of one internal node slot in bytes.
@@ -477,6 +482,8 @@ fn content_hash(level: u32, mask: u8, children: &[Node]) -> u64 {
 #[derive(Clone, Debug)]
 pub struct RunInterner {
     bands: Bands,
+    /// Intern index over the leaf arena: level-1 parents share material runs.
+    leaves: LeafInterner,
     allocators: [RunAllocator; BAND_COUNT],
     /// Content hash -> candidate bases in insertion order. A bucket can hold
     /// more than one base when distinct keys share a hash.
@@ -495,6 +502,7 @@ impl RunInterner {
     pub fn new() -> Self {
         Self {
             bands: Bands::new(),
+            leaves: LeafInterner::new(),
             allocators: core::array::from_fn(|_| RunAllocator::new()),
             index: core::array::from_fn(|_| FxMap::default()),
             runs: core::array::from_fn(|_| FxMap::default()),
@@ -571,6 +579,79 @@ impl RunInterner {
         self.index[slot].entry(hash).or_default().push(base);
         self.misses += 1;
         base
+    }
+
+    /// Interns one leaf run for a level-1 parent and returns its first leaf
+    /// arena slot (M1-06).
+    ///
+    /// `materials` holds the present children in ascending child order, with
+    /// air already removed. At most [`LEAF_RUN_MATERIALS`] IDs are accepted;
+    /// identical ordered materials share one run. An empty slice returns the
+    /// sentinel base `0` and allocates nothing.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `materials` holds more than [`LEAF_RUN_MATERIALS`] IDs or any
+    /// air (`0`) ID. See [`crate::leaf::LeafInterner::intern`].
+    pub fn intern_leaf(&mut self, materials: &[u16]) -> u64 {
+        self.leaves.intern(&mut self.bands, materials)
+    }
+
+    /// Interns a dense eight-child buffer, dropping air, and returns
+    /// `(parent mask, leaf base)` (M1-06).
+    ///
+    /// This is the convenient form for a level-1 parent: air is absent, so it
+    /// clears the corresponding mask bit instead of being stored.
+    pub fn intern_leaf_dense(&mut self, children: &[u16; LEAF_RUN_MATERIALS]) -> (u8, u64) {
+        self.leaves.intern_dense(&mut self.bands, children)
+    }
+
+    /// Retires the leaf run starting at `base`.
+    ///
+    /// The slots stay in the append-only leaf arena until offline compaction
+    /// (M1-12). Returns `false` when `base` is not a live leaf run.
+    ///
+    /// # Caller contract
+    ///
+    /// As with [`Self::deallocate`], retire a leaf run only when no live root or
+    /// in-flight frame can still reach it.
+    pub fn deallocate_leaf(&mut self, base: u64) -> bool {
+        self.leaves.deallocate(base)
+    }
+
+    /// The leaf intern index and its counters.
+    pub const fn leaf_interner(&self) -> &LeafInterner {
+        &self.leaves
+    }
+
+    /// Number of live interned leaf runs.
+    pub fn live_leaf_runs(&self) -> usize {
+        self.leaves.live_runs()
+    }
+
+    /// Number of leaf runs ever appended, including retired ones.
+    pub const fn allocated_leaf_runs(&self) -> u64 {
+        self.leaves.allocated_runs()
+    }
+
+    /// Number of leaf intern calls that reused an existing run.
+    pub const fn leaf_hit_count(&self) -> u64 {
+        self.leaves.hit_count()
+    }
+
+    /// Number of leaf intern calls that appended a new run.
+    pub const fn leaf_miss_count(&self) -> u64 {
+        self.leaves.miss_count()
+    }
+
+    /// Bytes owned by retired leaf runs.
+    pub const fn dead_leaf_bytes(&self) -> u64 {
+        self.leaves.dead_bytes()
+    }
+
+    /// Number of leaf material slots held by live runs.
+    pub fn live_leaf_materials(&self) -> u64 {
+        self.leaves.live_materials()
     }
 
     /// True when `base` names a live run at `level` with exactly this mask and
@@ -704,6 +785,7 @@ impl Default for RunInterner {
 mod tests {
     use super::*;
     use crate::bands::BAND_ALIGN_BYTES;
+    use crate::leaf::LEAF_MATERIAL_BYTES;
 
     /// Deterministic xorshift64, so a failure is reproducible.
     fn rng(state: &mut u64) -> u64 {
@@ -1298,6 +1380,42 @@ mod tests {
         let real = pool.intern(1, 0b0000_0001, &children(1, 1));
         assert_eq!(real, 0);
         assert_eq!(pool.bands().len(1), 1);
+    }
+
+    #[test]
+    fn leaf_runs_share_across_the_chunk_run_pool() {
+        let mut pool = RunInterner::new();
+
+        // Two level-1 parents with the same present materials share a leaf run.
+        let (mask_a, leaf_a) = pool.intern_leaf_dense(&[2, 0, 3, 0, 0, 0, 0, 0]);
+        let (mask_b, leaf_b) = pool.intern_leaf_dense(&[0, 2, 0, 3, 0, 0, 0, 0]);
+        assert_ne!(mask_a, mask_b);
+        assert_eq!(leaf_a, leaf_b);
+        assert_eq!(pool.bands().leaves(), &[2, 3]);
+        assert_eq!(pool.live_leaf_runs(), 1);
+        assert_eq!(pool.allocated_leaf_runs(), 1);
+        assert_eq!(pool.leaf_hit_count(), 1);
+        assert_eq!(pool.leaf_miss_count(), 1);
+        assert_eq!(pool.live_leaf_materials(), 2);
+
+        // Leaf bases are independent of the internal bands.
+        let kids = children(2, 2);
+        let internal = pool.intern(2, 0b0000_0011, &kids);
+        assert_eq!(internal, 0);
+        assert_eq!(pool.bands().len(2), 2);
+        assert_eq!(pool.bands().leaf_len(), 2);
+
+        assert!(pool.deallocate_leaf(leaf_a));
+        assert_eq!(pool.live_leaf_runs(), 0);
+        assert_eq!(pool.dead_leaf_bytes(), 2 * LEAF_MATERIAL_BYTES);
+        assert!(!pool.deallocate_leaf(leaf_a));
+    }
+
+    #[test]
+    #[should_panic(expected = "air (0) is absent")]
+    fn leaf_runs_interner_rejects_stored_air() {
+        let mut pool = RunInterner::new();
+        pool.intern_leaf(&[1, 0, 2]);
     }
 
     #[test]
