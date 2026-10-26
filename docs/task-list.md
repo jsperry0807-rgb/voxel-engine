@@ -109,7 +109,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M0-16 | ADR-008 lifecycle: visibility × lifecycle, no readback | M0-02 | Lists what the CPU may and may not learn; maps old states to new | review | 0.2 d | [ ] |
 | M0-17 | ADR-009 render distance and LOD policy | M0-03 | Fixes 128 m LOD0 / 512 m LOD2 / 64 m height; names what M6 measures | review | 0.2 d | [ ] |
 | M0-18 | ADR-010 mesh granularity and vertex format | M0-04 | 16³ + apron; 16 B vertex; no UV attribute; 76 B indexed quad | review | 0.2 d | [ ] |
-| M0-19 | ADR-011 node layout: bands, 8 B nodes, run dedup, compaction | M0-05 | States run-granular sharing and its COW cost (≤ 64 B per level) | review | 0.2 d | [ ] |
+| M0-19 | ADR-011 node layout: bands, 8 B nodes, run dedup, compaction | M0-05 | States run-granular sharing and its COW cost (≤ 64 B per level) | review | 0.2 d | [x] |
 | M0-20 | ADR-012 traversal: workgroup-per-chunk, frontier-synchronous, warp-per-node | M0-02 | Names frontier capacity, overflow policy, four-dispatch order | review | 0.2 d | [ ] |
 | M0-21 | ADR-013 state ownership: GPU per-frame, event-driven CPU | M0-16 | Lists the event set that wakes the ECS; forbids per-frame readback | review | 0.2 d | [ ] |
 
