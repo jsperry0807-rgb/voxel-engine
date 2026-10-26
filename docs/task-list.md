@@ -102,12 +102,12 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M0-09 | ADR-001 render path: raster | M0-02 | States the four specced components the mesher feeds; records raymarch as deferred | review | 0.2 d | [x] |
 | M0-10 | ADR-002 chunk edge: 64³ baseline, 128³ pre-registered | M0-03 | Cites the gate, the fallback trigger and the "do not build 128³ in M1" rule | review | 0.2 d | [x] |
 | M0-11 | ADR-003 atlas: 256², 16×16 tiles, UV derivation, mip cap | M0-06 | States the 256-slot cap, the per-face variant model and the 6.25 cm texel consequence | review | 0.2 d | [x] |
-| M0-12 | ADR-004 light: per-block cells + vertex AO | M0-07 | Rejects per-voxel (4 MiB/chunk) and per-4³-cluster with numbers | review | 0.2 d | [ ] |
-| M0-13 | ADR-005 probes: per-block near, half-res mid, none far | M0-07 | Defines invalid-in-solid fallback and LOD transition as a content event | review | 0.2 d | [ ] |
+| M0-12 | ADR-004 light: per-block cells + vertex AO | M0-07 | Rejects per-voxel (4 MiB/chunk) and per-4³-cluster with numbers | review | 0.2 d | [x] |
+| M0-13 | ADR-005 probes: per-block near, half-res mid, none far | M0-07 | Defines invalid-in-solid fallback and LOD transition as a content event | review | 0.2 d | [x] |
 | M0-14 | ADR-006 occlusion: block flood-fill primary, ray-test M2 | M0-07 | Explicitly says connectivity, not line-of-sight; names the granularity escalation and the kill criterion | review | 0.2 d | [x] |
 | M0-15 | ADR-007 A/B roots over the shared pool | M0-04 | Shows root-pair overhead is duplicated path, not 2× chunk; states the recycle rule | review | 0.2 d | [x] |
 | M0-16 | ADR-008 lifecycle: visibility × lifecycle, no readback | M0-02 | Lists what the CPU may and may not learn; maps old states to new | review | 0.2 d | [x] |
-| M0-17 | ADR-009 render distance and LOD policy | M0-03 | Fixes 128 m LOD0 / 512 m LOD2 / 64 m height; names what M6 measures | review | 0.2 d | [ ] |
+| M0-17 | ADR-009 render distance and LOD policy | M0-03 | Fixes 128 m LOD0 / 512 m LOD2 / 32 m gated surface shell; retires the 64 m world height; names what M6 measures | review | 0.2 d | [x] |
 | M0-18 | ADR-010 mesh granularity and vertex format | M0-04 | 16³ + apron; 16 B vertex; no UV attribute; 76 B indexed quad | review | 0.2 d | [ ] |
 | M0-19 | ADR-011 node layout: bands, 8 B nodes, run dedup, compaction | M0-05 | States run-granular sharing and its COW cost (≤ 64 B per level) | review | 0.2 d | [x] |
 | M0-20 | ADR-012 traversal: workgroup-per-chunk, frontier-synchronous, warp-per-node | M0-02 | Names frontier capacity, overflow policy, four-dispatch order | review | 0.2 d | [x] |

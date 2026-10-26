@@ -23,9 +23,12 @@ binding number is made in the spec and the pre-registration, never only in a tas
 | [`ADR-002`](adr/ADR-002-chunk-edge.md) | Chunk edge: 64³ baseline, 128³ pre-registered | Accepted |
 | [`ADR-003`](adr/ADR-003-material-atlas.md) | Material atlas: 256², 16×16 tiles, capped mips | Accepted |
 | [`ADR-012`](adr/ADR-012-traversal.md) | Traversal: workgroup-per-chunk, frontier-synchronous, warp-per-node | Accepted |
+| [`ADR-004`](adr/ADR-004-light.md) | Light: per-block cells + vertex AO | Accepted |
+| [`ADR-005`](adr/ADR-005-probes.md) | Probes: per-block near, half-res mid, none far | Accepted |
 | [`ADR-006`](adr/ADR-006-occlusion.md) | Occlusion: block flood-fill primary, ray-test M2 flag | Accepted |
 | [`ADR-007`](adr/ADR-007-ab-roots.md) | A/B roots over the shared node pool | Accepted |
 | [`ADR-008`](adr/ADR-008-visibility-lifecycle.md) | Visibility × lifecycle: two axes, no readback | Accepted |
+| [`ADR-009`](adr/ADR-009-render-distance-lod.md) | Render distance and LOD: 128 m LOD0, 512 m LOD2, surface shell | Accepted |
 | [`ADR-011`](adr/ADR-011-node-layout.md) | Node layout: level bands, 8 B nodes, run dedup, compaction | Accepted |
 | [`ADR-013`](adr/ADR-013-state-ownership.md) | State ownership: GPU per-frame, event-driven CPU | Accepted |
 
