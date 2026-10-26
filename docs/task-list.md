@@ -157,7 +157,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | --- | --- | --- | --- | --- | --- | --- |
 | M1-19 | Derive `local_index`/`local_xyz` from `CHUNK_BITS` | M0-04 | Round-trip on all indices of both edges; no shift literals | `cargo test -p voxel-storage index_roundtrip` | 0.25 d | [x] |
 | M1-20 | Derive `morton` from `CHUNK_BITS` | M1-19 | Morton round-trip and locality test at both edges | `cargo test -p voxel-storage morton` | 0.5 d | [x] |
-| M1-21 | Derive GPU block indexing and `BLOCKS_PER_CHUNK`; keep overlay words per block fixed | M1-19 | Overlay slot math agrees with CPU at both edges | `cargo test -p voxel-storage block_index` | 0.5 d | [ ] |
+| M1-21 | Derive GPU block indexing and `BLOCKS_PER_CHUNK`; keep overlay words per block fixed | M1-19 | Overlay slot math agrees with CPU at both edges | `cargo test -p voxel-storage block_index` | 0.5 d | [x] |
 | M1-22 | Chunk table: slot words, position shifts, hash; capacity growth independent of edge | M1-21 | 1024-chunk insert/lookup/remove at both edges; no tombstone leak | `cargo test -p voxel-storage chunk_table` | 0.5 d | [ ] |
 | M1-23 | WGSL mirror: generate or assert `ROOT_LEVEL`, `BLOCKS_PER_CHUNK`, overlay constants from Rust; a test fails on divergence | M1-22 | Changing a Rust const without the WGSL update fails the test | `cargo test -p voxel-render shader_constants` | 1 d | [ ] |
 | M1-24 | Remove the `chunk128` guard; make the 7-bit build compile and pass the full suite | M1-19…M1-23 | `cargo test --workspace --features chunk128` green; CI job flipped to required | CI run | 1.5 d | [ ] |

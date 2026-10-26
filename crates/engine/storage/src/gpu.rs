@@ -9,11 +9,12 @@
 //!   Power-of-two capacity, linear probe, load <= 0.5 (tombstones included),
 //!   grows/rehashes -> full re-upload.
 //! * overlay  : per edited 16^3 block, a 4 096-entry override buffer. A chunk's block table
-//!   has 64 words, one per block, each pointing at an 8 KiB overlay slot (2 048 words of
-//!   packed `u16` material ids followed by 128 words of presence bits). The bit, not the
-//!   value, means "edited": a carved voxel stores material 0 and must shadow the DAG with
-//!   air. Block tables and overlay slots are allocated lazily, uploaded as coalesced dirty
-//!   ranges, and retired by epoch like nodes.
+//!   has [`BLOCKS_PER_CHUNK`] words (64 at 64³, 512 at 128³), one per block, each pointing
+//!   at an 8 KiB overlay slot (2 048 words of packed `u16` material ids followed by 128
+//!   words of presence bits). The slot is sized by the fixed block edge, never by the chunk
+//!   edge. The bit, not the value, means "edited": a carved voxel stores material 0 and
+//!   must shadow the DAG with air. Block tables and overlay slots are allocated lazily,
+//!   uploaded as coalesced dirty ranges, and retired by epoch like nodes.
 //! * COW      : `consolidate` imports each new chunk DAG into fresh/free slots (never in place),
 //!   repoints the table root, and defers decref of the old root until `reclaim(epoch)`
 //!   so in-flight frames never see freed nodes.
@@ -32,9 +33,12 @@ use crate::ChunkPos;
 use crate::dag::{NONE, ROOT_LEVEL, Svdag, dag_get, hdr_level, hdr_mask, header, morton};
 use crate::hash::{FxMap, hash_words};
 use crate::{BLOCK_BITS, BLOCK_DIM, CHUNK_BITS, CHUNK_VOLUME};
-use crate::{local_index, local_xyz};
+use crate::{local_index, local_xyz_at};
 
 /// 16^3-voxel blocks per chunk, one block table word each.
+///
+/// Derived in `voxel-core` from the chunk and block edges: 64 at 64³ and 512
+/// at the pre-registered 128³ target.
 pub use crate::BLOCKS_PER_CHUNK;
 
 pub const EMPTY: u32 = u32::MAX;
@@ -54,20 +58,69 @@ pub const OVERLAY_BITS: usize = BLOCK_VOLUME / 32;
 /// Words per block-overlay slot: values first, then the presence bitmap.
 pub const OVERLAY_WORDS: usize = OVERLAY_VALUES + OVERLAY_BITS;
 
-/// Block index (0..`BLOCKS_PER_CHUNK`) inside a chunk for a chunk-local voxel index.
+// Block-table sizing follows the chunk edge; overlay sizing follows only the
+// fixed block edge. A 128³ chunk therefore gets four times as many blocks,
+// never larger per-block overlay slots.
+const _: () = {
+    assert!(BLOCKS_PER_CHUNK == 1usize << (3 * (CHUNK_BITS - BLOCK_BITS)));
+    assert!(BLOCKS_PER_CHUNK * BLOCK_VOLUME == CHUNK_VOLUME);
+    assert!(OVERLAY_VALUES * 2 == BLOCK_VOLUME);
+    assert!(OVERLAY_BITS * 32 == BLOCK_VOLUME);
+};
+
+/// Block index (0..`BLOCKS_PER_CHUNK`) inside a chunk at an arbitrary edge.
+///
+/// Blocks are ordered row-major over the block grid (`bx` fastest, then `by`,
+/// then `bz`), so the block table stays one contiguous word per 16³ block.
+#[inline]
+const fn chunk_block_at(chunk_bits: u32, idx: u32) -> u32 {
+    let (x, y, z) = local_xyz_at(chunk_bits, idx);
+    let stride = chunk_bits - BLOCK_BITS;
+    (x >> BLOCK_BITS) | ((y >> BLOCK_BITS) << stride) | ((z >> BLOCK_BITS) << (2 * stride))
+}
+
+/// Block index (0..[`BLOCKS_PER_CHUNK`]) for a chunk-local voxel index.
 #[inline]
 pub fn chunk_block(idx: u32) -> u32 {
-    let (x, y, z) = local_xyz(idx);
-    let stride = CHUNK_BITS - BLOCK_BITS;
-    (x >> BLOCK_BITS) | ((y >> BLOCK_BITS) << stride) | ((z >> BLOCK_BITS) << (2 * stride))
+    chunk_block_at(CHUNK_BITS, idx)
+}
+
+/// Voxel index (0..`BLOCK_VOLUME`) inside its block at an arbitrary edge.
+#[inline]
+const fn block_index_at(chunk_bits: u32, idx: u32) -> u32 {
+    let (x, y, z) = local_xyz_at(chunk_bits, idx);
+    let mask = BLOCK_DIM as u32 - 1;
+    (x & mask) | ((y & mask) << BLOCK_BITS) | ((z & mask) << (2 * BLOCK_BITS))
 }
 
 /// Voxel index (0..`BLOCK_VOLUME`) inside its block for a chunk-local voxel index.
 #[inline]
 pub fn block_index(idx: u32) -> u32 {
-    let (x, y, z) = local_xyz(idx);
-    let mask = BLOCK_DIM as u32 - 1;
-    (x & mask) | ((y & mask) << BLOCK_BITS) | ((z & mask) << (2 * BLOCK_BITS))
+    block_index_at(CHUNK_BITS, idx)
+}
+
+/// Word holding the packed `u16` value for `within`, relative to its overlay slot.
+#[inline]
+const fn overlay_value_word(within: u32) -> usize {
+    (within >> 1) as usize
+}
+
+/// Bit offset of `within` inside its packed value word.
+#[inline]
+const fn overlay_value_shift(within: u32) -> u32 {
+    (within & 1) * 16
+}
+
+/// Presence-bitmap word for `within`, relative to its overlay slot.
+#[inline]
+const fn overlay_bit_word(within: u32) -> usize {
+    OVERLAY_VALUES + (within >> 5) as usize
+}
+
+/// Presence bit for `within` inside [`overlay_bit_word`].
+#[inline]
+const fn overlay_bit_mask(within: u32) -> u32 {
+    1 << (within & 31)
 }
 
 /// Implemented by voxel-render over wgpu buffers. `resize_*` may reallocate and discard
@@ -378,8 +431,8 @@ impl GpuStore {
 
     fn overlay_set(&mut self, slot: u32, idx: u32, v: u16) {
         let base = slot as usize * OVERLAY_WORDS;
-        let word = base + (idx >> 1) as usize;
-        let shift = (idx & 1) * 16;
+        let word = base + overlay_value_word(idx);
+        let shift = overlay_value_shift(idx);
         let old = self.overlays[word];
         let new = (old & !(0xffff << shift)) | ((v as u32) << shift);
         if new != old {
@@ -387,8 +440,8 @@ impl GpuStore {
             self.overlay_dirty.push((word, 1));
         }
 
-        let bit_word = base + OVERLAY_VALUES + (idx >> 5) as usize;
-        let bit = 1u32 << (idx & 31);
+        let bit_word = base + overlay_bit_word(idx);
+        let bit = overlay_bit_mask(idx);
         if self.overlays[bit_word] & bit == 0 {
             self.overlays[bit_word] |= bit;
             self.overlay_dirty.push((bit_word, 1));
@@ -399,8 +452,8 @@ impl GpuStore {
     /// Returns true when that was the last presence bit in the block slot.
     fn overlay_clear(&mut self, slot: u32, idx: u32) -> bool {
         let base = slot as usize * OVERLAY_WORDS;
-        let bit_word = base + OVERLAY_VALUES + (idx >> 5) as usize;
-        let bit = 1u32 << (idx & 31);
+        let bit_word = base + overlay_bit_word(idx);
+        let bit = overlay_bit_mask(idx);
         if self.overlays[bit_word] & bit != 0 {
             self.overlays[bit_word] &= !bit;
             self.overlay_dirty.push((bit_word, 1));
@@ -837,11 +890,12 @@ impl GpuStore {
                     let slot = self.block_tables[bt];
                     if slot != NO_OVERLAY {
                         let within = block_index(idx);
-                        let bit_word =
-                            slot as usize * OVERLAY_WORDS + OVERLAY_VALUES + (within >> 5) as usize;
-                        if self.overlays[bit_word] & (1u32 << (within & 31)) != 0 {
-                            let word = slot as usize * OVERLAY_WORDS + (within >> 1) as usize;
-                            return (self.overlays[word] >> ((within & 1) * 16)) as u16;
+                        let base = slot as usize * OVERLAY_WORDS;
+                        if self.overlays[base + overlay_bit_word(within)] & overlay_bit_mask(within)
+                            != 0
+                        {
+                            let word = base + overlay_value_word(within);
+                            return (self.overlays[word] >> overlay_value_shift(within)) as u16;
                         }
                     }
                 }
@@ -897,5 +951,158 @@ impl GpuStore {
             let root = self.table[i * SLOT_WORDS + 3];
             if root == EMPTY { NONE } else { root }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::local_index_at;
+
+    /// The 64³ baseline and the pre-registered 128³ target, both checked from
+    /// one build so an edge-dependent bug cannot hide behind `chunk128`.
+    const EDGE_BITS: [u32; 2] = [6, 7];
+
+    const fn blocks_per_chunk_at(chunk_bits: u32) -> usize {
+        1usize << (3 * (chunk_bits - BLOCK_BITS))
+    }
+
+    #[test]
+    fn block_index_matches_cpu_at_both_chunk_edges() {
+        assert_eq!(BLOCKS_PER_CHUNK, blocks_per_chunk_at(CHUNK_BITS));
+
+        for bits in EDGE_BITS {
+            let dim = 1u32 << bits;
+            let stride = bits - BLOCK_BITS;
+            let block_mask = (1u32 << stride) - 1;
+            let voxel_mask = BLOCK_DIM as u32 - 1;
+            let blocks = blocks_per_chunk_at(bits) as u32;
+            assert_eq!(blocks, 1u32 << (3 * stride));
+
+            for i in 0..dim * dim * dim {
+                let (x, y, z) = crate::local_xyz_at(bits, i);
+                let block = chunk_block_at(bits, i);
+                let within = block_index_at(bits, i);
+
+                assert!(block < blocks, "block out of range at {bits} bits");
+                assert!((within as usize) < BLOCK_VOLUME);
+
+                let bx = block & block_mask;
+                let by = (block >> stride) & block_mask;
+                let bz = block >> (2 * stride);
+                let wx = within & voxel_mask;
+                let wy = (within >> BLOCK_BITS) & voxel_mask;
+                let wz = within >> (2 * BLOCK_BITS);
+
+                // The GPU's (block, within) pair is exactly the CPU local
+                // index split into block coordinates and a block-local voxel.
+                assert_eq!(
+                    (bx, by, bz),
+                    (x >> BLOCK_BITS, y >> BLOCK_BITS, z >> BLOCK_BITS)
+                );
+                assert_eq!(
+                    (wx, wy, wz),
+                    (x & voxel_mask, y & voxel_mask, z & voxel_mask)
+                );
+                assert_eq!(
+                    local_index_at(
+                        bits,
+                        (bx << BLOCK_BITS) | wx,
+                        (by << BLOCK_BITS) | wy,
+                        (bz << BLOCK_BITS) | wz
+                    ),
+                    i
+                );
+
+                // The overlay slot holds one fixed 16³ block, so both word
+                // ranges stay inside it at either edge.
+                let base = block as usize * OVERLAY_WORDS;
+                let value_word = base + overlay_value_word(within);
+                let bit_word = base + overlay_bit_word(within);
+                assert!((base..base + OVERLAY_WORDS).contains(&value_word));
+                assert!((base..base + OVERLAY_WORDS).contains(&bit_word));
+                assert!(value_word < base + OVERLAY_VALUES);
+                assert!(bit_word >= base + OVERLAY_VALUES);
+            }
+        }
+    }
+
+    #[test]
+    fn block_index_overlay_words_stay_fixed_per_block() {
+        // 16³ = 4096 voxels: 2048 packed u16 words + 128 presence words.
+        assert_eq!(BLOCK_VOLUME, 4096);
+        assert_eq!(OVERLAY_VALUES, 2048);
+        assert_eq!(OVERLAY_BITS, 128);
+        assert_eq!(OVERLAY_WORDS, 2176);
+
+        let mut value_slots = vec![false; BLOCK_VOLUME];
+        let mut bit_slots = vec![false; BLOCK_VOLUME];
+        for within in 0..BLOCK_VOLUME as u32 {
+            let value =
+                overlay_value_word(within) * 2 + (overlay_value_shift(within) / 16) as usize;
+            assert!(value < BLOCK_VOLUME);
+            assert!(!value_slots[value], "value slot reused at {within}");
+            value_slots[value] = true;
+
+            let bit_word = overlay_bit_word(within);
+            assert!((OVERLAY_VALUES..OVERLAY_WORDS).contains(&bit_word));
+            let bit = (bit_word - OVERLAY_VALUES) * 32
+                + overlay_bit_mask(within).trailing_zeros() as usize;
+            assert!(bit < BLOCK_VOLUME);
+            assert!(!bit_slots[bit], "presence bit reused at {within}");
+            bit_slots[bit] = true;
+        }
+
+        assert!(value_slots.into_iter().all(|used| used));
+        assert!(bit_slots.into_iter().all(|used| used));
+        assert_eq!(
+            overlay_value_word(BLOCK_VOLUME as u32 - 1),
+            OVERLAY_VALUES - 1
+        );
+        assert_eq!(overlay_bit_word(0), OVERLAY_VALUES);
+        assert_eq!(overlay_bit_word(BLOCK_VOLUME as u32 - 1), OVERLAY_WORDS - 1);
+    }
+
+    #[test]
+    fn block_index_uses_the_compiled_edge() {
+        for i in 0..CHUNK_VOLUME as u32 {
+            assert_eq!(chunk_block(i), chunk_block_at(CHUNK_BITS, i));
+            assert_eq!(block_index(i), block_index_at(CHUNK_BITS, i));
+        }
+        let last = CHUNK_VOLUME as u32 - 1;
+        assert_eq!(chunk_block(last) as usize, BLOCKS_PER_CHUNK - 1);
+        assert_eq!(block_index(last) as usize, BLOCK_VOLUME - 1);
+    }
+
+    #[test]
+    fn block_index_overlay_store_roundtrip() {
+        let p = ChunkPos::new(-2, 3, 1);
+        let mut g = GpuStore::new();
+        let mut values = Vec::new();
+        for z in 0..BLOCK_DIM as u32 {
+            for y in 0..BLOCK_DIM as u32 {
+                for x in 0..BLOCK_DIM as u32 {
+                    let idx = crate::local_index(x, y, z);
+                    let within = block_index(idx);
+                    let value = within as u16 + 1;
+                    g.set_overlay(p, idx, value);
+                    values.push((x, y, z, within, value));
+                }
+            }
+        }
+
+        // All edits belong to block 0, so exactly one overlay slot is live.
+        assert!(g.block_table_slot(p).is_some());
+        assert_eq!(g.overlays().len(), OVERLAY_WORDS);
+        for (x, y, z, within, value) in values {
+            let idx = crate::local_index(x, y, z);
+            assert_eq!(block_index(idx), within);
+            assert_eq!(g.block_overlay_slot(p, idx), Some(0));
+            assert_eq!(g.lookup(p, x, y, z), value);
+        }
+
+        g.clear_chunk_overlay(p);
+        assert!(g.block_table_slot(p).is_none());
+        assert_eq!(g.lookup(p, 0, 0, 0), 0);
     }
 }
