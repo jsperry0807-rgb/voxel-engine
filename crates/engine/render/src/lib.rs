@@ -39,6 +39,12 @@
 //! [`SVDAG_WGSL`] returns a raw [`voxel_block::MaterialId`] value, which the
 //! caller hands to the material accessors.
 //!
+//! WGSL has no include mechanism, so `svdag.wgsl` repeats the CPU layout
+//! constants ([`voxel_storage::dag::ROOT_LEVEL`], [`WgpuSink::table`] slot
+//! width, blocks per chunk and the overlay words). The `shader_constants_*`
+//! tests parse those declarations and fail on any divergence from
+//! `voxel_storage`, including a shader constant that has no Rust owner.
+//!
 //! # Binding lifetime
 //!
 //! [`WgpuSink`] reallocates its buffers when the storage tier grows a table. A

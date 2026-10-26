@@ -23,6 +23,9 @@
 // Chunk position x/y/z are stored as u32 two's-complement bit patterns, so
 // bitcast<u32>(p.x) is the same value the CPU wrote for a negative coordinate.
 
+// Layout constants mirrored from Rust. They are asserted value for value by
+// crates/engine/render/tests/shaders.rs, which also fails if a constant here
+// has no Rust owner; change the Rust table and this block together.
 const NONE: u32 = 0xFFFFFFFFu;
 const EMPTY: u32 = 0xFFFFFFFFu;
 const TOMB: u32 = 0xFFFFFFFEu;
@@ -32,10 +35,8 @@ const ROOT_LEVEL: u32 = 6u;
 const SLOT_WORDS: u32 = 5u;
 const BLOCKS_PER_CHUNK: u32 = 64u;
 const OVERLAY_VALUES: u32 = 2048u;
-const OVERLAY_BITS: u32 = 128u;
 const OVERLAY_WORDS: u32 = 2176u;
 const MASK_BITS: u32 = 0xFFu;
-const LEVEL_SHIFT: u32 = 8u;
 
 @group(0) @binding(0) var<storage, read> nodes: array<u32>;
 @group(0) @binding(1) var<storage, read> chunk_table: array<u32>;
