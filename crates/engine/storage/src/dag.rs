@@ -11,7 +11,13 @@ use crate::CHUNK_VOLUME;
 use crate::hash::{FxMap, hash_words};
 
 pub const NONE: u32 = u32::MAX;
-pub const ROOT_LEVEL: u32 = 6;
+/// Level of the chunk root in this pool's numbering, where a node at level `l`
+/// covers `2^l` voxels and level 1 holds material ids.
+///
+/// This counts up from the leaf, the opposite of
+/// [`voxel_core::constants::LEVEL_SIZE`] (which counts depth down from the
+/// root). The two are complements: `ROOT_LEVEL - depth`.
+pub const ROOT_LEVEL: u32 = crate::CHUNK_BITS;
 
 #[inline]
 pub fn header(mask: u32, level: u32) -> u32 {

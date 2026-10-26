@@ -6,6 +6,7 @@ publish.workspace = true
 
 [dependencies]
 voxel-block = { path = "../block" }
+voxel-core = { path = "../../core" }
 
 [dev-dependencies]
 criterion = "0.5"

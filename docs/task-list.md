@@ -28,7 +28,7 @@
 
 ### Task template (for additions)
 
-```
+```txt
 ID | Task | Depends | Done when | Verify | Est | Done
 ```
 
@@ -45,7 +45,7 @@ The machine that produced `benchmarks/HISTORY.md` (AMD Ryzen 5 7600; GPU model t
 Two weeks per sprint, one engineer. The gate sprint (S4) is the only one that cannot move.
 
 | Sprint | Weeks | Focus | Tasks | Exit |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | S1 | 1–2 | M0 + layout start | M0-01…M0-24, M1-01…M1-02 | M0 exit: table frozen |
 | S2 | 3–4 | Layout | M1-03…M1-12 | bands, run dedup, COW |
 | S3 | 5–6 | Layout + parameterize | M1-13…M1-28 | both edges compile |
@@ -83,11 +83,11 @@ Two weeks per sprint, one engineer. The gate sprint (S4) is the only one that ca
 ### 3.1 Documentation
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M0-01 | Consolidate docs into `docs/` with `docs/README.md` index; move external ADR, material spec and cost model to `docs/reference/`; commit them | — | `docs/` contains spec, roadmap, task list, README, reference; nothing doc-like remains outside the repo; `git log` shows the docs commit | `git status --short` clean for `docs/`; links resolve | 0.25 d | [x] |
 | M0-02 | Freeze the pre-registration into `docs/pre-registration.md`: profiles, budgets, residency model, fallback rules, amendment rule, reference machine | M0-01 | Frozen and dated; reference machine named; fallback rules separate memory from latency; amendment rule stated | `git log -1 -- docs/pre-registration.md`; doc review | 0.5 d | [x] |
 | M0-03 | Residency model `N(edge, R, V)`, equal-volume rule, and the per-edge/per-profile table | M0-02 | Formula and table in the pre-registration; 64³ vs 128³ chunk counts shown; labelled as prediction, not result | arithmetic checked in the doc | 0.25 d | [x] |
-| M0-04 | Create `voxel-core::constants` with `VOXEL_SIZE`, `BLOCK_DIM/BITS`, `CHUNK_BITS`, `ROOT_LEVEL`, `BLOCK_LEVEL`, `CHUNK_DIM`, `CHUNK_VOLUME`, `BLOCKS_PER_CHUNK`, `LEVEL_SIZE`, `aabb_extent(level)`; add `voxel-core` to `voxel-storage` deps; use it in at least one call site | M0-03 | Consts compile in a `const` context; `const` assertions cover every relationship; storage imports them | `cargo test -p voxel-core constants`; `cargo check -p voxel-storage` | 1 d | [ ] |
+| M0-04 | Create `voxel-core::constants` with `VOXEL_SIZE`, `BLOCK_DIM/BITS`, `CHUNK_BITS`, `ROOT_LEVEL`, `BLOCK_LEVEL`, `CHUNK_DIM`, `CHUNK_VOLUME`, `BLOCKS_PER_CHUNK`, `LEVEL_SIZE`, `aabb_extent(level)`; add `voxel-core` to `voxel-storage` deps; use it in at least one call site | M0-03 | Consts compile in a `const` context; `const` assertions cover every relationship; storage imports them | `cargo test -p voxel-core constants`; `cargo check -p voxel-storage` | 1 d | [x] |
 | M0-05 | Node-word layout constants and helpers: `NODE_MASK_SHIFT/BITS`, `NODE_LEVEL_SHIFT/BITS`, `NODE_BASE_SHIFT/BITS`, `encode_node`, `decode_node`; bit-field tests | M0-04 | Round-trips all masks 0–255, levels 0–7, bases 0, 1, 2^48−1; reserved bits stay zero | `cargo test -p voxel-core node_word` | 0.5 d | [ ] |
 | M0-06 | Atlas constants and helpers: `ATLAS_SIZE=256`, `TILE_SIZE=16`, `TILES_PER_EDGE=16`, `MAX_MATERIALS=256`, `MAX_MIP=4`, `tile_origin(id)`, `uv(tile, face_pos)` | M0-04 | Origin stays in bounds for 0–255; UV lands inside the tile and in `[0,1)`; mip cap asserted; tests | `cargo test -p voxel-core atlas` | 0.5 d | [ ] |
 | M0-07 | Light, probe and occlusion constants: `LIGHT_CELL_VOXELS=16`, `LIGHT_BYTES_PER_CELL=16`, `PROBE_BYTES=12`, probe ring radii, `OCCLUSION_HORIZON_M=128`, `BLOCK_OCCLUSION_BYTES` | M0-04 | Constants agree with spec §4.2/§7; derived sizes asserted (1 KiB/8 KiB light, 768 B/6 KiB probes); tests | `cargo test -p voxel-core content_constants` | 0.5 d | [ ] |
@@ -98,7 +98,7 @@ Two weeks per sprint, one engineer. The gate sprint (S4) is the only one that ca
 Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-linked to the spec section, with no open questions. One page maximum.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M0-09 | ADR-001 render path: raster | M0-02 | States the four specced components the mesher feeds; records raymarch as deferred | review | 0.2 d | [ ] |
 | M0-10 | ADR-002 chunk edge: 64³ baseline, 128³ pre-registered | M0-03 | Cites the gate, the fallback trigger and the "do not build 128³ in M1" rule | review | 0.2 d | [ ] |
 | M0-11 | ADR-003 atlas: 256², 16×16 tiles, UV derivation, mip cap | M0-06 | States the 256-slot cap, the per-face variant model and the 6.25 cm texel consequence | review | 0.2 d | [ ] |
@@ -116,7 +116,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ### 3.3 Repo and CI
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M0-22 | Add `.github/workflows/ci.yml`: fmt, clippy `-D warnings`, `cargo test --workspace`, naga shader tests; add a `chunk128` job marked `continue-on-error` with a TODO to flip at M1-24 | M0-08 | Workflow runs on push; default job green; chunk128 job visible and expected-failing | `act` or first CI run | 0.5 d | [ ] |
 | M0-23 | Add `scripts/check-constants.sh` grep guard for 6-bit literals outside `constants` (`>> 6`, `& 63`, `ROOT_LEVEL = 6`, `BLOCKS_PER_CHUNK = 64`); warn-only in M0 | M0-04 | Script lists current offenders and exits 0 in warn mode; allow-list documented | `scripts/check-constants.sh` | 0.25 d | [ ] |
 | M0-24 | M0 exit: tag `m0`, run the checklist (table frozen, ADRs merged, constants used, CI green), record the tag in the roadmap | M0-01…M0-23 | Checklist signed in the PR; tag exists | `git tag -n m0` | 0.25 d | [ ] |
@@ -131,7 +131,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ### 4.1 Layout — node word and bands
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M1-01 | Implement `Node` encode/decode over the M0 bit fields plus a `NodeRef` newtype (level + index) | M0-05 | All fields round-trip; `NodeRef` never crosses bands; tests | `cargo test -p voxel-storage node_word` | 0.5 d | [ ] |
 | M1-02 | `Bands` arena: one append-only arena per level, `levelStart[ROOT_LEVEL+1]`, leaf arena; `append`, `range`, `len`, `iter_level` | M1-01 | Ranges stay contiguous after 10k appends; level bounds assert on every access | `cargo test -p voxel-storage bands` | 1 d | [ ] |
 | M1-03 | Run allocator: allocate a run of `popcount(mask)` nodes; 64 B align full runs; record padding bytes per run | M1-02 | Every mask `0xFF` run starts 64 B aligned; padding is queryable; tests over 1k random masks | `cargo test -p voxel-storage run_align` | 0.5 d | [ ] |
@@ -154,7 +154,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ### 4.2 Parameterization — no literal chunk size
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M1-19 | Derive `local_index`/`local_xyz` from `CHUNK_BITS` | M0-04 | Round-trip on all indices of both edges; no shift literals | `cargo test -p voxel-storage index_roundtrip` | 0.25 d | [ ] |
 | M1-20 | Derive `morton` from `CHUNK_BITS` | M1-19 | Morton round-trip and locality test at both edges | `cargo test -p voxel-storage morton` | 0.5 d | [ ] |
 | M1-21 | Derive GPU block indexing and `BLOCKS_PER_CHUNK`; keep overlay words per block fixed | M1-19 | Overlay slot math agrees with CPU at both edges | `cargo test -p voxel-storage block_index` | 0.5 d | [ ] |
@@ -167,7 +167,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ### 4.3 Reference implementations (slow, correct, reused as oracles)
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M1-27 | Save-scan tool: walk a save directory, report per-chunk node bytes, voxel counts, material histogram, p50/p95/max | M1-13 | Runs on a generated fixture and on an empty dir without panic; emits JSON | `cargo run -p voxel-bench -- save-scan --path <dir>` | 1 d | [ ] |
 | M1-28 | Freeze a representative fixture world (terrain, caves, overhangs, structures, mixed materials) with a manifest stating provenance and the "provisional until first real save" limitation | M1-27 | Fixture is reproducible from the manifest; hash recorded; `benchmarks/fixtures/` documented | `cargo run -p voxel-bench -- fixture verify` | 1 d | [ ] |
 | M1-29 | Block-light flood-fill reference: full pass over block cells with 1-block apron, two channels, deterministic order | M0-07 | Reproduces a hand-computed 3-case fixture (open sky, cave, torch); no flake | `cargo test -p voxel-storage --test reference_light` | 1 d | [ ] |
@@ -180,7 +180,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ### 4.4 Gate harness and decision
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M1-35 | Per-chunk memory distribution over the fixture: DAG, overlay, light, probes, mesh estimate, p50/p95/max | M1-28, M1-31 | Report includes each component and a total; no synthetic-only input | `cargo run -p voxel-bench -- gate memory` | 1 d | [ ] |
 | M1-36 | Measure `N` (loaded chunk count) for the configured view/band at 64³ and compute the 128³ equivalent at equal volume | M0-03, M1-35 | `N64 = 8 × N128` asserted; both counts printed with the config | `cargo run -p voxel-bench -- gate residency` | 0.5 d | [ ] |
 | M1-37 | Edit-latency harness split into fixed (upload/fence/flip) and dirty-region (COW, light) terms, p50/p95/max | M1-10, M1-29 | Both terms reported per edit; 1k edits on the fixture; no synthetic padding | `cargo run -p voxel-bench -- gate edits` | 1 d | [ ] |
@@ -198,7 +198,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 **Goal:** one textured chunk in a window. **Exit:** M1.5-16. **Budget:** 10.5 d. **Depends:** M1-15 (layout API), M0-06 (atlas math).
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M1.5-01 | Create `crates/engine/viewer` (`voxel-viewer`), add to workspace, `main.rs`, error type | M1-24 | `cargo run -p voxel-viewer` opens an empty window | run | 0.5 d | [ ] |
 | M1.5-02 | wgpu init: instance, adapter, device, queue, surface, config, resize handling | M1.5-01 | Window survives 20 resizes without validation errors | run | 0.5 d | [ ] |
 | M1.5-03 | Event loop, close/escape, frame timing, log adapter info | M1.5-02 | Quit cleanly; adapter string printed at startup | run | 0.5 d | [ ] |
@@ -226,7 +226,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ### 6.1 Apron and mesher
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M2-01 | Apron API: six 1-voxel face planes (128² u16 each) from the world, including cross-chunk neighbours | M1-15 | 6 planes equal a direct dense read of the 130³ padded volume on 3 fixtures | `cargo test -p voxel-storage apron` | 1 d | [ ] |
 | M2-02 | Apron cost benchmark vs a dense 130³ copy; record the winner | M2-01 | Face-plane path ≤ 25% of the dense path's bytes and time | `cargo bench -p voxel-storage apron` | 0.5 d | [ ] |
 | M2-03 | Block-granular driver: iterate 16³ blocks, build a bounded scratch per block (18³), no chunk-wide densify | M2-01 | Peak scratch ≤ 64 KiB/worker on the noise fixture | `cargo test -p voxel-mesh scratch_budget` | 1 d | [ ] |
@@ -243,7 +243,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ### 6.2 Block light
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M2-13 | Production full-pass block-light flood fill over 16³ cells with 2 channels | M1-29 | Equals the M1-29 reference on 5 fixtures | `cargo test -p voxel-mesh light_full` | 1.5 d | [ ] |
 | M2-14 | Cross-chunk seeding from 1-block aprons; light does not leak through opaque blocks | M2-13 | Border fixture matches a single-chunk reference on both sides | `cargo test -p voxel-mesh light_apron` | 1 d | [ ] |
 | M2-15 | Incremental light: dirty cells only, seeded from the edit, with a removal pass | M2-14 | Equals full recompute on 1 000 random edit sets, removals included | `cargo test -p voxel-mesh light_incremental` | 2 d | [ ] |
@@ -253,7 +253,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ### 6.3 Probes
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M2-18 | Production SH4 bake at block centres, deterministic, budgeted across frames | M1-30 | Byte-equal to the reference on 3 fixtures | `cargo test -p voxel-mesh probe_bake` | 1.5 d | [ ] |
 | M2-19 | Invalid-in-solid flag and 3×3×3 nearest-valid fallback | M2-18 | Sampling inside a wall returns the nearest valid probe; no NaNs | `cargo test -p voxel-mesh probe_fallback` | 0.5 d | [ ] |
 | M2-20 | Probe LOD: near per block, mid half-res, far none; transition is a content event | M2-19 | Ring transition rebuilds once; counts match 512/64/0 per chunk | `cargo test -p voxel-mesh probe_lod` | 1.5 d | [ ] |
@@ -262,7 +262,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ### 6.4 Integration, ray-test, and exit
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M2-22 | Dirty bitset: per-block dirty flags derived from the COW diff (added/removed/changed) | M1-10 | Editing one voxel dirties exactly the block plus the AO/light apron | `cargo test -p voxel-mesh dirty_bitset` | 0.5 d | [ ] |
 | M2-23 | Budgeted remesh scheduler: dirty blocks → mesh batches under a per-frame budget | M2-22 | Backlog drains; no frame exceeds the budget in the test | `cargo test -p voxel-mesh scheduler` | 1 d | [ ] |
 | M2-24 | Scrub latency: single-block edit → remesh + light + probe ≤ 4 ms p95 | M2-23 | Measured; recorded | `cargo run -p voxel-bench -- gate edits` | 0.5 d | [ ] |
@@ -280,7 +280,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 **Goal:** a real world at real distance without GPU culling. **Exit:** M3-13. **Budget:** 9 d raw. **Depends:** M2.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M3-01 | Streaming shell in the viewer: load ring, evict ring, budgeted per frame | M2-27 | 256 chunks load without a hitch > 4 ms | run + log | 1.5 d | [ ] |
 | M3-02 | Mesh buffer pool: one arena with suballocation, or per-chunk buffers; document the choice | M3-01 | No per-frame allocation after warm-up; fragmentation reported | `cargo test -p voxel-viewer pool` | 1.5 d | [ ] |
 | M3-03 | Upload queue with a per-frame byte budget | M3-02 | A 10 MB backlog drains without exceeding the budget | `cargo test -p voxel-viewer upload_budget` | 0.5 d | [ ] |
@@ -302,7 +302,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 **Goal:** the frozen fence/flip protocol, once, for roots and meshes. **Exit:** M4-18. **Budget:** 17.25 d raw. **Depends:** M1-13, M3-02.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M4-01 | Chunk-table slot v2: `rootA`, `rootB`, `versionIndex`, `block_table`; migrate readers | M1-22 | All lookups go through the version index; old slots rejected | `cargo test -p voxel-storage slot_v2` | 1 d | [ ] |
 | M4-02 | Root pair over the shared pool: write inactive root, retire the old through the epoch list | M4-01 | Two roots coexist; `get` follows the index; refcounts balanced | `cargo test -p voxel-storage root_pair` | 1.5 d | [ ] |
 | M4-03 | `VersionedResource` abstraction `{active, inactive, inFlight[2], fence}` shared by roots and meshes | M4-02 | One type, two users; state transitions asserted | `cargo test -p voxel-storage versioned` | 1 d | [ ] |
@@ -331,7 +331,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ### 9.1 Occlusion and broad phase
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M5-01 | Port the block flood-fill to a compute pass; camera seed, horizon, 6-connected | M1-33 | Bit output equals the CPU reference on 100 poses | `cargo test -p voxel-render occlusion_parity` | 2 d | [ ] |
 | M5-02 | Block-bit buffer layout (1 bit/block), clear and read helpers | M5-01 | Size matches `blocks/chunk × chunks`; no out-of-range writes | `cargo test -p voxel-render block_bits` | 0.5 d | [ ] |
 | M5-03 | Horizon and seed policy: camera block, frustum entry cells, beyond-horizon = visible | M5-01 | Objects beyond 128 m are frustum-culled only; asserted | `cargo test -p voxel-render horizon` | 0.5 d | [ ] |
@@ -342,7 +342,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ### 9.2 Traversal kernel
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M5-07 | Traversal kernel scaffold: 4 warps, one chunk per workgroup, version read once | M5-06, M4-11 | Runs on one chunk; no validation error; empty chunk exits | `cargo test -p voxel-render traversal_smoke` | 1 d | [ ] |
 | M5-08 | Double-buffered groupshared frontier, 1 024 nodes, barrier per level | M5-07 | Level-by-level BFS matches a CPU BFS node list on 3 fixtures | `cargo test -p voxel-render frontier` | 1 d | [ ] |
 | M5-09 | Warp-per-node, lanes 0–7 child mapping, lane 0 broadcast | M5-08 | Child set equals the mask expansion for all masks | `cargo test -p voxel-render warp_map` | 1 d | [ ] |
@@ -358,7 +358,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ### 9.3 Parity, tooling, and exit
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M5-18 | CPU parity harness: 500 poses × 3 fixtures, block-set equality | M5-17 | Zero mismatches; failure prints the first differing block | `cargo run -p voxel-bench -- cull-parity` | 1 d | [ ] |
 | M5-19 | False-negative debug mode: draw everything and compare pixel coverage | M5-18 | No block visible in "draw all" is missing in culled mode | `cargo test -p voxel-render false_negative` | 1 d | [ ] |
 | M5-20 | Visualisers: frontier occupancy, overflow, culled blocks, candidate list | M5-17 | Toggleable overlay; screenshot in docs | run | 1 d | [ ] |
@@ -374,7 +374,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 **Goal:** scale and survive a restart. **Exit:** M6-20. **Budget:** 22.25 d raw, plus 50% streaming contingency. **Depends:** M5, M3.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M6-01 | LOD policy experiment: depth-limited traversal vs explicit LOD meshes; measure both on 3 seeds | M5-24 | Table of VRAM, frame time, pop-in for both | report | 2 d | [ ] |
 | M6-02 | Write ADR-009 amendment with the measured LOD decision | M6-01 | One page, numbers inline | review | 0.5 d | [ ] |
 | M6-03 | Implement the chosen LOD path in traversal and streaming | M6-02 | LOD0/1/2 rings render at the target distances | run | 2 d | [ ] |
@@ -403,7 +403,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 **Goal:** the budgets are enforced, not aspirational. **Exit:** M7-14. **Budget:** 12 d raw, plus 30% contingency. **Depends:** M6.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M7-01 | CI matrix: fmt, clippy, both-edge builds, workspace tests, docs | M1-24 | All jobs required and green | CI | 1 d | [ ] |
 | M7-02 | naga validation for every shader on every PR | M7-01 | A broken shader fails CI | CI | 0.5 d | [ ] |
 | M7-03 | GPU test runner (self-hosted) with graceful skip; parity job on demand | M7-01 | GPU jobs run nightly; skip path tested | CI | 1 d | [ ] |
@@ -431,7 +431,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ### 12.1 Foundation and macro geography
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M2.5-01 | Create `crates/engine/worldgen` (`voxel-worldgen`); deterministic integer-hash 2D/3D gradient noise with 16.16 fixed-point interpolation | M1-24 | Same bytes for 1/2/8 threads and on two machines; golden vectors committed | `cargo test -p voxel-worldgen noise` | 2 d | [ ] |
 | M2.5-02 | Macro grid data model and 16 km tile format: height u16, temp/humidity/erosion/flags u8, header with seed + versions + CRC | M0-04 | Tile round-trips; 125² × 6 B = 93.75 KB; corrupt tile rejected | `cargo test -p voxel-worldgen tile` | 1 d | [ ] |
 | M2.5-03 | Continentalness/erosion/height spline tables for 0–12,000 m; sea level 6,600 | M2.5-01 | Splines monotonic where required; height clamped; unit table tests | `cargo test -p voxel-worldgen splines` | 1.5 d | [ ] |
@@ -445,7 +445,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ### 12.2 Biomes, surface and transitions
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M2.5-10 | Biome weight function: softmax over 18 centres in climate/erosion/continentalness; shape parameters blended before evaluation | M2.5-04, M2.5-05 | Weights sum to 1; transition width 300–500 m; no argmax curve in a map dump | `cargo test -p voxel-worldgen weights` | 2 d | [ ] |
 | M2.5-11 | RON biome schema and the 18 definitions (11 land, 3 ocean, 3 underground, geothermal) | M2.5-10 | All definitions validate; every climate cell resolves; content is data-only | `cargo test -p voxel-worldgen biome_ron` | 2 d | [ ] |
 | M2.5-12 | Surface rules: 3–6 block soil default, biome/altitude override, slope and underwater rules | M2.5-11 | Cliffs expose stone; beaches ring water; tests | `cargo test -p voxel-worldgen surface` | 2 d | [ ] |
@@ -454,7 +454,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ### 12.3 Caves, ores, landmarks and structures
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M2.5-14 | 3D cave carve: spaghetti, cheese, vertical shafts, galleries, water/lava caves | M2.5-12 | All five types present; balanced density; no caves in the first 2 m under water | `cargo test -p voxel-worldgen caves` | 3 d | [ ] |
 | M2.5-15 | Cave depth relative to the local surface (down to −2,000 m) and underground biome assignment | M2.5-14 | Caves follow terrain; aquifer/fungal/cavern assigned by depth and water | `cargo test -p voxel-worldgen cave_depth` | 1 d | [ ] |
 | M2.5-16 | Occasional overhangs and arches from 3D density; no disconnected floating rock | M2.5-14 | Arch fixture passes; no unsupported islands at the surface | `cargo test -p voxel-worldgen overhangs` | 1 d | [ ] |
@@ -468,7 +468,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ### 12.4 Pipeline, determinism and exit
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M2.5-23 | Chunk generation pipeline: block grid + feature list, no dense voxel array; p95 ≤ 2 ms | M2.5-21, M2.5-22 | 512 blocks/chunk; p95 ≤ 2 ms on the reference machine | `cargo bench -p voxel-worldgen chunk` | 2 d | [ ] |
 | M2.5-24 | Worker pool, cancellation and prefetch integration; never generate on the edit path | M2.5-23 | Editing a distant voxel never blocks on generation; stale jobs cancel | `cargo test -p voxel-worldgen workers` | 1.5 d | [ ] |
 | M2.5-25 | Generator versioning: save header pins seed, generator, macro and content versions; old versions remain callable | M2.5-23 | A v1 save regenerates v1 terrain after v2 lands | `cargo test -p voxel-worldgen versioning` | 1 d | [ ] |
@@ -485,7 +485,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 **Exit:** M3.5-14. **Budget:** 17.75 d raw, plus 50% contingency. **Depends:** M2.5-09, M2.5-23, M3-13.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | M3.5-01 | Macro heightfield mesh builder with LOD rings (128/256/512 m) | M2.5-09, M3-13 | 32 km view ≤ 65 k vertices; rings stitch without cracks | `cargo test -p voxel-viewer farfield` | 2 d | [ ] |
 | M3.5-02 | Biome colour and river/lake masks on the far mesh | M3.5-01 | Far colours match the near biome palette at the seam | visual | 1.5 d | [ ] |
 | M3.5-03 | Near/far seam: 64–128 m blend band plus skirt; near chunks fade | M3.5-01 | No visible crack or pop over a 2 km flight | `cargo test -p voxel-viewer seam` | 2 d | [ ] |
@@ -541,7 +541,7 @@ Use these in review when a task touches the relevant area.
 ## 15. Traceability
 
 | Spec section | Tasks |
-|---|---|
+| --- | --- |
 | §1 units / edge | M0-04, M1-19…M1-26 |
 | §2 tiers | M4-01…M4-10, M6-08…M6-13 |
 | §3 COW protocol | M1-10, M4-01…M4-08, M4-12 |
@@ -574,7 +574,7 @@ Use these in review when a task touches the relevant area.
 Raw days are the sum of the task estimates. Contingency is milestone-specific: it is low where the work is mechanical and high where it is research or GPU-dependent.
 
 | Milestone | Raw days | Contingency | Planning days | Sprints | Exit |
-|---|---:|---:|---:|---:|---|
+| --- | ---: | ---: | ---: | ---: | --- |
 | M0 | 7.5 | 0% | 7.5 | 1 | gate frozen |
 | M1 | 33.5 | 25% | 41.9 | 4 | 64³/128³ decided |
 | M1.5 | 10.5 | 20% | 12.6 | 1.5 | first pixel |

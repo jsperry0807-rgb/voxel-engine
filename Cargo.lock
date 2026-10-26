@@ -1290,6 +1290,7 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "voxel-block",
+ "voxel-core",
 ]
 
 [[package]]

@@ -16,9 +16,9 @@ pub mod world;
 /// tree node pointers, while this `u16` is the voxel payload.
 pub use voxel_block::MaterialId;
 
-pub const CHUNK_BITS: u32 = 6;
-pub const CHUNK_DIM: usize = 1 << CHUNK_BITS; // 64
-pub const CHUNK_VOLUME: usize = CHUNK_DIM * CHUNK_DIM * CHUNK_DIM;
+pub use voxel_core::constants::{
+    BLOCK_BITS, BLOCK_DIM, BLOCKS_PER_CHUNK, CHUNK_BITS, CHUNK_DIM, CHUNK_VOLUME,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct ChunkPos {
@@ -43,18 +43,20 @@ impl ChunkPos {
 
 #[inline]
 pub fn local_index(x: u32, y: u32, z: u32) -> u32 {
-    x | (y << 6) | (z << 12)
+    x | (y << CHUNK_BITS) | (z << (2 * CHUNK_BITS))
 }
 #[inline]
 pub fn local_xyz(i: u32) -> (u32, u32, u32) {
-    (i & 63, (i >> 6) & 63, i >> 12)
+    let mask = CHUNK_DIM as u32 - 1;
+    (i & mask, (i >> CHUNK_BITS) & mask, i >> (2 * CHUNK_BITS))
 }
 
 /// World voxel coords -> (chunk, local index). Arithmetic shifts handle negatives.
 #[inline]
 pub fn split_voxel(x: i32, y: i32, z: i32) -> (ChunkPos, u32) {
+    let mask = CHUNK_DIM as i32 - 1;
     (
-        ChunkPos::new(x >> 6, y >> 6, z >> 6),
-        local_index((x & 63) as u32, (y & 63) as u32, (z & 63) as u32),
+        ChunkPos::new(x >> CHUNK_BITS, y >> CHUNK_BITS, z >> CHUNK_BITS),
+        local_index((x & mask) as u32, (y & mask) as u32, (z & mask) as u32),
     )
 }

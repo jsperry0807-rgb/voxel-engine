@@ -28,11 +28,14 @@
 //! // i = slot_hash(p) & (cap-1); loop { s = table[i*5..]; if s.root==EMPTY && s.blocks==NONE {miss}
 //! //   if s.root!=TOMB && s.xyz==p {hit}; i=(i+1)&(cap-1); }
 //! ```
-use crate::CHUNK_VOLUME;
 use crate::ChunkPos;
 use crate::dag::{NONE, ROOT_LEVEL, Svdag, dag_get, hdr_level, hdr_mask, header, morton};
 use crate::hash::{FxMap, hash_words};
-use crate::local_index;
+use crate::{BLOCK_BITS, BLOCK_DIM, CHUNK_BITS, CHUNK_VOLUME};
+use crate::{local_index, local_xyz};
+
+/// 16^3-voxel blocks per chunk, one block table word each.
+pub use crate::BLOCKS_PER_CHUNK;
 
 pub const EMPTY: u32 = u32::MAX;
 pub const TOMB: u32 = u32::MAX - 1;
@@ -42,27 +45,29 @@ pub const NO_OVERLAY: u32 = u32::MAX;
 pub const NO_TABLE: u32 = u32::MAX;
 /// Words per chunk-table slot: `[x, y, z, root, block_table]`.
 pub const SLOT_WORDS: usize = 5;
-/// 16^3-voxel blocks per 64^3 chunk, one block table word each.
-pub const BLOCKS_PER_CHUNK: usize = 64;
+/// Voxels in one block.
+const BLOCK_VOLUME: usize = BLOCK_DIM * BLOCK_DIM * BLOCK_DIM;
 /// Packed `u16` overlay values for one block, two voxels per word.
-pub const OVERLAY_VALUES: usize = 4096 / 2;
+pub const OVERLAY_VALUES: usize = BLOCK_VOLUME / 2;
 /// Overlay presence bits for one block, one per voxel.
-pub const OVERLAY_BITS: usize = 4096 / 32;
+pub const OVERLAY_BITS: usize = BLOCK_VOLUME / 32;
 /// Words per block-overlay slot: values first, then the presence bitmap.
 pub const OVERLAY_WORDS: usize = OVERLAY_VALUES + OVERLAY_BITS;
 
-/// Block index (0..64) inside a chunk for a chunk-local voxel index.
+/// Block index (0..`BLOCKS_PER_CHUNK`) inside a chunk for a chunk-local voxel index.
 #[inline]
 pub fn chunk_block(idx: u32) -> u32 {
-    let (x, y, z) = (idx & 63, (idx >> 6) & 63, idx >> 12);
-    (x >> 4) | ((y >> 4) << 2) | ((z >> 4) << 4)
+    let (x, y, z) = local_xyz(idx);
+    let stride = CHUNK_BITS - BLOCK_BITS;
+    (x >> BLOCK_BITS) | ((y >> BLOCK_BITS) << stride) | ((z >> BLOCK_BITS) << (2 * stride))
 }
 
-/// Voxel index (0..4096) inside its 16^3 block for a chunk-local voxel index.
+/// Voxel index (0..`BLOCK_VOLUME`) inside its block for a chunk-local voxel index.
 #[inline]
 pub fn block_index(idx: u32) -> u32 {
-    let (x, y, z) = (idx & 63, (idx >> 6) & 63, idx >> 12);
-    (x & 15) | ((y & 15) << 4) | ((z & 15) << 8)
+    let (x, y, z) = local_xyz(idx);
+    let mask = BLOCK_DIM as u32 - 1;
+    (x & mask) | ((y & mask) << BLOCK_BITS) | ((z & mask) << (2 * BLOCK_BITS))
 }
 
 /// Implemented by voxel-render over wgpu buffers. `resize_*` may reallocate and discard
