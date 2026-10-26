@@ -194,10 +194,7 @@ impl ChunkDag {
             CHUNK_VOLUME,
             "a dense chunk must hold CHUNK_VOLUME voxels"
         );
-        out.fill(AIR);
-        if let Some(root) = self.root {
-            expand_node(&self.bands, root, 0, 0, 0, out);
-        }
+        expand_from(&self.bands, self.root, out);
     }
 
     /// The chunk root, or `None` for an all-air chunk.
@@ -208,6 +205,18 @@ impl ChunkDag {
     /// The chunk's level bands and leaf arena.
     pub fn bands(&self) -> &Bands {
         &self.bands
+    }
+
+    /// Mutable access for the COW editor (M1-10).
+    ///
+    /// The editor only appends, so every existing node index stays valid.
+    pub(crate) fn bands_mut(&mut self) -> &mut Bands {
+        &mut self.bands
+    }
+
+    /// Publishes the root produced by a COW edit (M1-10).
+    pub(crate) fn set_root(&mut self, root: Option<NodeRef>) {
+        self.root = root;
     }
 
     /// Number of 8 B internal node words across every band.
@@ -261,6 +270,19 @@ fn child_index(level: u32, index: usize, c: u32) -> usize {
 fn octant(x: u32, y: u32, z: u32, level: u32) -> u32 {
     let bit = level - 1;
     ((x >> bit) & 1) | (((y >> bit) & 1) << 1) | (((z >> bit) & 1) << 2)
+}
+
+/// Expands `root` (or air) into `out`, clearing it first.
+///
+/// This is the shared implementation behind [`ChunkDag::expand`] and the COW
+/// tests, which expand a retained old root against the bands a later edit
+/// appended to.
+pub(crate) fn expand_from(bands: &Bands, root: Option<NodeRef>, out: &mut [u16]) {
+    debug_assert_eq!(out.len(), CHUNK_VOLUME);
+    out.fill(AIR);
+    if let Some(root) = root {
+        expand_node(bands, root, 0, 0, 0, out);
+    }
 }
 
 /// Writes the voxels covered by `node_ref` into `out`, at origin `(ox, oy, oz)`.

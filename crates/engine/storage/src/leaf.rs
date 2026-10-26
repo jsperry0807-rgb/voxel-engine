@@ -293,8 +293,9 @@ impl LeafInterner {
     /// # Caller contract
     ///
     /// Retire a run only when no live root or in-flight frame can still reach
-    /// it. Reference counting and the epoch list arrive with COW (M1-10) and the
-    /// invariant checker (M1-14); this method cannot prove that condition.
+    /// it. Reference counting and the epoch list arrive with the versioned GPU
+    /// pool (M4-01…M4-08); the invariant checker (M1-14) verifies reachability,
+    /// but this method cannot prove that condition.
     pub fn deallocate(&mut self, base: u64) -> bool {
         let Some(meta) = self.runs.remove(&base) else {
             return false;

@@ -7,6 +7,7 @@ pub mod bands;
 pub mod chunk;
 pub mod dag;
 pub mod disk;
+pub mod edit;
 pub mod gpu;
 pub mod hash;
 pub mod leaf;
@@ -17,6 +18,7 @@ pub mod world;
 
 pub use bands::Bands;
 pub use chunk::ChunkDag;
+pub use edit::EditStats;
 pub use leaf::{
     AIR, LEAF_MATERIAL_BYTES, LEAF_RUN_BYTES, LEAF_RUN_MATERIALS, LeafInterner, fetch_leaf,
     leaf_index, leaf_slot,
