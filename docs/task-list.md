@@ -117,9 +117,9 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| M0-22 | Add `.github/workflows/ci.yml`: fmt, clippy `-D warnings`, `cargo test --workspace`, naga shader tests; add a `chunk128` job marked `continue-on-error` with a TODO to flip at M1-24 | M0-08 | Workflow runs on push; default job green; chunk128 job visible and expected-failing | `act` or first CI run | 0.5 d | [ ] |
+| M0-22 | Add `.github/workflows/ci.yml`: fmt, clippy `-D warnings`, `cargo test --workspace`, naga shader tests; add a `chunk128` job marked `continue-on-error` with a TODO to flip at M1-24 | M0-08 | Workflow runs on push; default job green; chunk128 job visible and expected-failing | `act` or first CI run | 0.5 d | [x] |
 | M0-23 | Add `scripts/check-constants.sh` grep guard for 6-bit literals outside `constants` (`>> 6`, `& 63`, `ROOT_LEVEL = 6`, `BLOCKS_PER_CHUNK = 64`); warn-only in M0 | M0-04 | Script lists current offenders and exits 0 in warn mode; allow-list documented | `scripts/check-constants.sh` | 0.25 d | [x] |
-| M0-24 | M0 exit: tag `m0`, run the checklist (table frozen, ADRs merged, constants used, CI green), record the tag in the roadmap | M0-01…M0-23 | Checklist signed in the PR; tag exists | `git tag -n m0` | 0.25 d | [ ] |
+| M0-24 | M0 exit: tag `m0`, run the checklist (table frozen, ADRs merged, constants used, CI green), record the tag in the roadmap | M0-01…M0-23 | Checklist signed in the PR; tag exists | `git tag -n m0` | 0.25 d | [x] |
 
 ---
 

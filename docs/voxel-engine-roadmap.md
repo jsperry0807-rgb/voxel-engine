@@ -78,6 +78,9 @@ is done only when its gate passes on the reference machine.
 
 ### M0 — Pre-registration, constants, ADRs (1 week)
 
+**Status:** Complete — tagged `m0` on 2026-10-26. Exit checklist:
+[`m0-exit.md`](m0-exit.md).
+
 Write the gate before anything is measured.
 
 **4.1 Pre-registration table** (binding; estimates to be replaced by M1 numbers):
@@ -115,8 +118,9 @@ tile math, probe rings, occlusion horizon. CI builds both edges.
 (007), lifecycle (008), render distance (009), mesh/vertex format (010), node layout
 (011), traversal (012), state ownership (013).
 
-**Exit:** table committed; every buffer size derivable from constants; the 128³
-variant compiles; ADR-006 states the escalation path if flood-fill under-culls.
+**Exit:** table committed; every new content buffer size derives from constants;
+the 7-bit variant is selectable and fails loudly behind the M0-08 guard until
+M1-24; ADR-006 states the escalation path if flood-fill under-culls.
 
 ---
 

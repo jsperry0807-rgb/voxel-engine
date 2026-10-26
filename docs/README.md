@@ -46,6 +46,7 @@ where they conflict with the spec.
 
 ## Measurement
 
+- [`m0-exit.md`](m0-exit.md) — M0 exit checklist, command evidence and tag `m0`
 - [`../benchmarks/README.md`](../benchmarks/README.md) — run archive, lenses, caveats
 - [`../benchmarks/HISTORY.md`](../benchmarks/HISTORY.md) — every recorded run with deltas
 - [`../crates/bench/README.md`](../crates/bench/README.md) — harness internals
