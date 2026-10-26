@@ -12,7 +12,7 @@ per-chunk LOD-tree position in
 [`../performance-targets.md`](../performance-targets.md) §2–4;
 [`../reference-machine.md`](../reference-machine.md) §3;
 [`../worldgen-design.md`](../worldgen-design.md) §3.2; ADR-001, ADR-002, ADR-005,
-ADR-006, ADR-010, ADR-012
+ADR-006, ADR-008, ADR-010, ADR-012, ADR-013
 
 ## Context
 
@@ -65,14 +65,15 @@ under this ADR.**
    chunks within ±16 m of the surface (32 m total); High holds ±32 m (64 m total). A
    128 m cave cache follows the player below the surface and is evicted on ascent. The
    12,000 m world is never resident as full columns: one 8 m column alone is 1,500
-   chunks. The “64 m height” in M0-17 was the old world height; the only 64 m vertical
-   figure now is High’s total shell, and it is not gated.
+   chunks. The “64 m height” once in M0-17 was the old world height; the only 64 m
+   vertical figure now is High’s total shell, and it is not gated.
 4. **Ring behavior is explicit.** The worldgen detail pass is LOD0-only; LOD1/2 drop
    sub-block detail content and collapse dedicated detail templates to the dominant
-   material. Probes follow the same rings: per-block near, half-res mid, none far; a
-   probe-LOD change is a content event, not a frame event (spec §7). The 128 m occlusion
-   flood-fill horizon is a culling bound, not a render distance: beyond it the far
-   rings are frustum-culled only (spec §4.2).
+   material. Probes are fixed at per-block ≤ 128 m, half-res 128–256 m and none beyond
+   256 m (ADR-005); they are not retuned per profile, and a probe-LOD change is a
+   content event, not a frame event. The 128 m occlusion flood-fill horizon is a
+   culling bound, not a render distance: beyond it the far rings are frustum-culled
+   only (spec §4.2).
 5. **The far field is not a voxel LOD.** At the outer LOD2 radius the near renderer
    hands off to the macro heightfield: 128 m macro cells, 250 × 250 cells at 32 km,
    its own LOD rings, a 64–128 m blend band plus skirt, and fog matched to the near
@@ -97,8 +98,9 @@ under this ADR.**
 
 - **Positive:** detail is bounded to a disc whose area is fixed in M0, and the
   16–32 km horizon comes from a heightfield costing under 50 MB rather than voxel
-  chunks. LOD selection is one compare in the existing traversal; probes, streaming
-  and eviction share the same ring events.
+  chunks. LOD selection is one compare in the existing traversal; streaming and
+  eviction share the same ring events, and probe LOD changes reuse the content-event
+  path (ADR-005).
 - **Negative:** Default LOD0 is already the memory-risk profile: 3,216 chunks ×
   1.2–3.2 MiB = 3.8–9.8 GiB against a 3,275 MiB target and a 4,913 MiB fail line.
   Extending LOD0 to 512 m would be 16× the area (about 61–157 GiB), so LOD1/2 must
