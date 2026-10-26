@@ -12,8 +12,9 @@
 //!   level band.
 //!
 //! A [`NodeRef`]'s index addresses one node slot in the shared pool. The `u48`
-//! base field bounds the addressable slots at [`NODE_INDEX_MAX`]; child
-//! addressing (`base + popcount(...)`) is M1-05, not this module.
+//! base field bounds the addressable slots at [`NODE_INDEX_MAX`]. The popcount
+//! child addressing built on `base` lives in [`crate::run`] ([`crate::run::child_slot`],
+//! [`Node::child_index`] and [`crate::run::fetch_child`]).
 //!
 //! # Example
 //!

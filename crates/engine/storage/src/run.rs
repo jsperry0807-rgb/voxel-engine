@@ -19,6 +19,16 @@
 //! also materializes the padding slots and the child words in the band. Use
 //! one or the other for a given allocation, never both.
 //!
+//! # Child addressing
+//!
+//! Children are compacted in ascending child-index order, so child `c` lives
+//! in slot `popcount(mask & ((1 << c) - 1))` of its parent's run. [`child_slot`]
+//! returns that relative slot; [`child_index`], [`Node::child_index`] and
+//! [`RunAllocation::child_index`] turn it into an absolute band slot;
+//! [`fetch_child`] reads the child node back out of a [`Bands`] arena. Each
+//! answers `None` for an absent child, so a caller never has to test the mask
+//! separately.
+//!
 //! # Interning
 //!
 //! [`RunInterner`] owns a [`Bands`] arena and one allocator per level. Its
@@ -72,7 +82,7 @@ use voxel_core::constants::ROOT_LEVEL;
 
 use crate::bands::{BAND_COUNT, Bands};
 use crate::hash::{Fx, FxMap};
-use crate::node_word::{NODE_INDEX_MAX, Node};
+use crate::node_word::{NODE_INDEX_MAX, Node, NodeRef};
 
 /// Size of one internal node slot in bytes.
 pub const NODE_BYTES: u64 = 8;
@@ -89,13 +99,93 @@ pub const MAX_RUN_PADDING_BYTES: u64 = (FULL_RUN_NODES - 1) * NODE_BYTES;
 /// The child-presence mask of a full run.
 pub const FULL_MASK: u8 = 0xFF;
 
+/// Number of children a node can have: one per mask bit.
+pub const CHILD_SLOTS: u32 = FULL_MASK.count_ones();
+
 // The layout constants are a contract with `Node` and the band arena.
 const _: () = {
     assert!(NODE_BYTES == core::mem::size_of::<Node>() as u64);
     assert!(FULL_RUN_NODES * NODE_BYTES == FULL_RUN_ALIGN_BYTES);
     assert!(MAX_RUN_PADDING_BYTES == FULL_RUN_ALIGN_BYTES - NODE_BYTES);
     assert!(FULL_RUN_ALIGN_BYTES.is_multiple_of(NODE_BYTES));
+    assert!(FULL_RUN_NODES == CHILD_SLOTS as u64);
 };
+
+/// Compact slot of child `c` within its parent's run.
+///
+/// Present children are stored in ascending child-index order, so the slot is
+/// the number of present children below `c`:
+/// `popcount(mask & ((1 << c) - 1))`. It is relative to the parent's `base`;
+/// child `c` lives at `base + child_slot(mask, c)`.
+///
+/// Returns `None` when bit `c` is clear (the child is absent) and when `c` is
+/// not a valid child index (`c >= 8`). An absent child costs no slot, so there
+/// is no meaningful address to return.
+#[inline]
+pub const fn child_slot(mask: u8, c: u32) -> Option<u32> {
+    if c >= CHILD_SLOTS {
+        return None;
+    }
+    let bit = 1u8 << c;
+    if mask & bit == 0 {
+        return None;
+    }
+    Some((mask & (bit - 1)).count_ones())
+}
+
+/// Absolute band slot of child `c`: `base + child_slot(mask, c)`.
+///
+/// Returns `None` for an absent or out-of-range child, and when the computed
+/// slot would leave the `u48` node address space. The `base` must be the
+/// parent's first-child base in the child's level band.
+#[inline]
+pub const fn child_index(base: u64, mask: u8, c: u32) -> Option<u64> {
+    match child_slot(mask, c) {
+        Some(slot) => match base.checked_add(slot as u64) {
+            Some(index) if index <= NODE_INDEX_MAX => Some(index),
+            _ => None,
+        },
+        None => None,
+    }
+}
+
+impl Node {
+    /// Compact slot of child `c` in this node's run.
+    ///
+    /// Shorthand for [`child_slot`] with this node's mask.
+    #[inline]
+    pub const fn child_slot(self, c: u32) -> Option<u32> {
+        child_slot(self.mask(), c)
+    }
+
+    /// Absolute band slot of child `c` in the next level band.
+    ///
+    /// Shorthand for [`child_index`] with this node's base and mask.
+    #[inline]
+    pub const fn child_index(self, c: u32) -> Option<u64> {
+        child_index(self.base(), self.mask(), c)
+    }
+}
+
+/// Reads child `c` of an internal `parent` out of `bands`.
+///
+/// This is the fetch side of popcount addressing: it resolves the child's
+/// absolute slot with [`Node::child_index`] and reads that node from the band
+/// below the parent. It returns `None` when the child is absent, when the
+/// parent is outside the chunk's internal levels, or when the computed slot is
+/// past the child band's tail.
+///
+/// Level 1's children are leaf materials in the separate leaf arena (M1-06),
+/// not internal nodes, so a level-1 parent has no internal child here.
+#[inline]
+pub fn fetch_child(bands: &Bands, parent: Node, c: u32) -> Option<Node> {
+    let level = parent.level();
+    if level <= 1 || level > ROOT_LEVEL {
+        return None;
+    }
+    let index = parent.child_index(c)?;
+    bands.get(NodeRef::new(level - 1, index))
+}
 
 /// One allocated run: where it starts, which mask it belongs to, and what it
 /// cost in padding.
@@ -158,6 +248,21 @@ impl RunAllocation {
     /// so this is a property of `base` alone. Full runs always satisfy it.
     pub const fn is_cache_line_aligned(self) -> bool {
         self.byte_offset().is_multiple_of(FULL_RUN_ALIGN_BYTES)
+    }
+
+    /// Compact slot of child `c` in this run, or `None` when it is absent.
+    ///
+    /// The slot is relative to [`Self::base`], as stored in a parent node.
+    #[inline]
+    pub const fn child_slot(self, c: u32) -> Option<u32> {
+        child_slot(self.mask, c)
+    }
+
+    /// Absolute band slot of child `c` in this run, or `None` when it is
+    /// absent.
+    #[inline]
+    pub const fn child_index(self, c: u32) -> Option<u64> {
+        child_index(self.base, self.mask, c)
     }
 }
 
@@ -616,6 +721,105 @@ mod tests {
 
     fn address_of(bands: &Bands, level: u32, run: RunAllocation) -> usize {
         bands.band(level).as_ptr() as usize + run.byte_offset() as usize
+    }
+
+    /// Naive reference: walk the present children in ascending order and
+    /// return the position of `c`, or `None` when it is absent.
+    fn naive_child_slot(mask: u8, c: u32) -> Option<u32> {
+        let mut slot = 0u32;
+        for child in 0..CHILD_SLOTS {
+            if mask & (1u8 << child) == 0 {
+                continue;
+            }
+            if child == c {
+                return Some(slot);
+            }
+            slot += 1;
+        }
+        None
+    }
+
+    /// The M1-05 acceptance test: every one of the 256 masks × 8 children
+    /// agrees with a naive present-child enumeration, including absence and
+    /// out-of-range child indices.
+    #[test]
+    fn popcount_slots_match_naive_enumeration() {
+        for mask in 0..=u8::MAX {
+            for c in 0..CHILD_SLOTS {
+                assert_eq!(
+                    child_slot(mask, c),
+                    naive_child_slot(mask, c),
+                    "mask {mask:#010b}, child {c}"
+                );
+            }
+            assert_eq!(child_slot(mask, CHILD_SLOTS), None, "mask {mask:#010b}");
+            assert_eq!(child_slot(mask, u32::MAX), None, "mask {mask:#010b}");
+        }
+    }
+
+    /// Allocate every mask's run contiguously, then locate and fetch each child
+    /// through the node, allocation and band helpers.
+    #[test]
+    fn popcount_slots_allocate_and_fetch_every_child() {
+        const CHILD_LEVEL: u32 = 2;
+        const PARENT_LEVEL: u32 = CHILD_LEVEL + 1;
+
+        let mut bands = Bands::new();
+        let mut alloc = RunAllocator::new();
+
+        for mask in 0..=u8::MAX {
+            let children: Vec<Node> = (0..mask.count_ones())
+                .map(|slot| Node::new(1, CHILD_LEVEL, u64::from(mask) * 8 + u64::from(slot) + 1))
+                .collect();
+            let run = alloc.allocate_into(&mut bands, CHILD_LEVEL, mask, &children);
+            let parent = Node::new(mask, PARENT_LEVEL, run.base());
+
+            let mut present = 0u32;
+            for c in 0..CHILD_SLOTS {
+                let expected = naive_child_slot(mask, c);
+                assert_eq!(
+                    child_slot(mask, c),
+                    expected,
+                    "mask {mask:#010b}, child {c}"
+                );
+                assert_eq!(run.child_slot(c), expected);
+                assert_eq!(parent.child_slot(c), expected);
+
+                if let Some(slot) = expected {
+                    let index = run.base() + u64::from(slot);
+                    let child = children[slot as usize];
+                    assert_eq!(run.child_index(c), Some(index));
+                    assert_eq!(parent.child_index(c), Some(index));
+                    assert_eq!(bands.get(NodeRef::new(CHILD_LEVEL, index)), Some(child));
+                    assert_eq!(fetch_child(&bands, parent, c), Some(child));
+                    present += 1;
+                } else {
+                    assert_eq!(run.child_index(c), None);
+                    assert_eq!(parent.child_index(c), None);
+                    assert_eq!(fetch_child(&bands, parent, c), None);
+                }
+            }
+            assert_eq!(present, mask.count_ones());
+        }
+
+        // A level-1 parent's children are materials in the leaf arena, not
+        // internal nodes, so the band fetch helper has nothing to return.
+        assert_eq!(fetch_child(&bands, Node::new(FULL_MASK, 1, 0), 0), None);
+        assert_eq!(fetch_child(&bands, Node::new(FULL_MASK, 0, 0), 0), None);
+    }
+
+    #[test]
+    fn popcount_slots_stay_inside_the_node_address_space() {
+        assert_eq!(child_index(NODE_INDEX_MAX, 0b1, 0), Some(NODE_INDEX_MAX));
+        assert_eq!(
+            child_index(NODE_INDEX_MAX, FULL_MASK, 0),
+            Some(NODE_INDEX_MAX)
+        );
+        assert_eq!(child_index(NODE_INDEX_MAX, 0b11, 1), None);
+        assert_eq!(child_index(NODE_INDEX_MAX, FULL_MASK, 7), None);
+        assert_eq!(child_index(u64::MAX, 0b1, 0), None);
+        // An absent child never produces an address, whatever the base.
+        assert_eq!(child_index(NODE_INDEX_MAX, 0b10, 0), None);
     }
 
     #[test]
