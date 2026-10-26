@@ -41,7 +41,10 @@ use crate::{local_index, local_xyz_at};
 /// at the pre-registered 128³ target.
 pub use crate::BLOCKS_PER_CHUNK;
 
+/// No DAG attached to a chunk-table slot.
 pub const EMPTY: u32 = u32::MAX;
+/// A vacated chunk-table slot, distinguishable from an untouched [`EMPTY`] one
+/// while probing past it.
 pub const TOMB: u32 = u32::MAX - 1;
 /// No overlay attached to a block-table entry.
 pub const NO_OVERLAY: u32 = u32::MAX;
@@ -49,6 +52,57 @@ pub const NO_OVERLAY: u32 = u32::MAX;
 pub const NO_TABLE: u32 = u32::MAX;
 /// Words per chunk-table slot: `[x, y, z, root, block_table]`.
 pub const SLOT_WORDS: usize = 5;
+/// Word offset of a slot's x coordinate.
+pub const SLOT_X: usize = 0;
+/// Word offset of a slot's y coordinate.
+pub const SLOT_Y: usize = 1;
+/// Word offset of a slot's z coordinate.
+pub const SLOT_Z: usize = 2;
+/// Word offset of a slot's DAG root.
+pub const SLOT_ROOT: usize = 3;
+/// Word offset of a slot's block-table slot.
+pub const SLOT_TABLE: usize = 4;
+/// Slots in a freshly allocated chunk table.
+///
+/// One slot holds one chunk at any chunk edge, so table capacity follows the
+/// number of resident chunks, never [`CHUNK_VOLUME`] or [`BLOCKS_PER_CHUNK`].
+pub const INITIAL_SLOTS: usize = 1024;
+
+// The slot layout is a shader contract: positions first, then the DAG root and
+// block-table words. Capacity is a power of two so probing can mask the hash,
+// and the initial 1024 slots are independent of the compiled chunk edge.
+const _: () = {
+    assert!(SLOT_X == 0);
+    assert!(SLOT_Y == SLOT_X + 1);
+    assert!(SLOT_Z == SLOT_Y + 1);
+    assert!(SLOT_ROOT == SLOT_Z + 1);
+    assert!(SLOT_TABLE == SLOT_ROOT + 1);
+    assert!(SLOT_WORDS == SLOT_TABLE + 1);
+    assert!(INITIAL_SLOTS.is_power_of_two());
+};
+
+/// Base word of chunk-table slot `slot`.
+#[inline]
+const fn slot_base(slot: usize) -> usize {
+    slot * SLOT_WORDS
+}
+
+/// Encodes one chunk coordinate axis into its slot word.
+///
+/// This is a two's-complement bit cast, matching the shader's
+/// `bitcast<u32>(p.x)`: negative coordinates keep the same bits the GPU reads,
+/// with no bias or sign extension.
+#[inline]
+const fn slot_coord(v: i32) -> u32 {
+    v as u32
+}
+
+/// Decodes a chunk coordinate axis written by [`slot_coord`].
+#[inline]
+const fn coord_from_slot(word: u32) -> i32 {
+    word as i32
+}
+
 /// Voxels in one block.
 const BLOCK_VOLUME: usize = BLOCK_DIM * BLOCK_DIM * BLOCK_DIM;
 /// Packed `u16` overlay values for one block, two voxels per word.
@@ -177,10 +231,14 @@ impl GpuSink for MemSink {
     }
 }
 
+/// Hash of a chunk position, mixed per axis and avalanched.
+///
+/// The shader mirrors this bit for bit; both sides read the coordinate words
+/// written by `slot_coord`.
 pub fn slot_hash(p: ChunkPos) -> u32 {
-    let mut h = (p.x as u32).wrapping_mul(73856093)
-        ^ (p.y as u32).wrapping_mul(19349663)
-        ^ (p.z as u32).wrapping_mul(83492791);
+    let mut h = slot_coord(p.x).wrapping_mul(73856093)
+        ^ slot_coord(p.y).wrapping_mul(19349663)
+        ^ slot_coord(p.z).wrapping_mul(83492791);
     h ^= h >> 16;
     h = h.wrapping_mul(0x7feb352d);
     h ^= h >> 15;
@@ -242,7 +300,7 @@ impl GpuStore {
             rc: Vec::new(),
             free: Default::default(),
             dedup: FxMap::default(),
-            table: vec![EMPTY; 1024 * SLOT_WORDS],
+            table: vec![EMPTY; INITIAL_SLOTS * SLOT_WORDS],
             overlays: Vec::new(),
             overlay_counts: Vec::new(),
             overlay_free: Vec::new(),
@@ -252,7 +310,7 @@ impl GpuStore {
             live: 0,
             tombs: 0,
             node_dirty: Vec::new(),
-            table_dirty: vec![(0, 1024 * SLOT_WORDS)],
+            table_dirty: vec![(0, INITIAL_SLOTS * SLOT_WORDS)],
             overlay_dirty: Vec::new(),
             block_table_dirty: Vec::new(),
             gpu_node_cap: 0,
@@ -269,21 +327,25 @@ impl GpuStore {
 
     // ---------- chunk table ----------
 
+    fn table_slots(&self) -> usize {
+        self.table.len() / SLOT_WORDS
+    }
+
     fn probe(&self, p: ChunkPos) -> Result<usize, usize> {
-        let mask = self.table.len() / SLOT_WORDS - 1;
+        let mask = self.table_slots() - 1;
         let mut i = slot_hash(p) as usize & mask;
         let mut tomb = None;
         loop {
-            let b = i * SLOT_WORDS;
-            let root = self.table[b + 3];
-            let blocks = self.table[b + 4];
+            let b = slot_base(i);
+            let root = self.table[b + SLOT_ROOT];
+            let blocks = self.table[b + SLOT_TABLE];
             if root == TOMB {
                 tomb.get_or_insert(i);
             } else if root == EMPTY && blocks == NO_TABLE {
                 return Err(tomb.unwrap_or(i));
-            } else if self.table[b] == p.x as u32
-                && self.table[b + 1] == p.y as u32
-                && self.table[b + 2] == p.z as u32
+            } else if self.table[b + SLOT_X] == slot_coord(p.x)
+                && self.table[b + SLOT_Y] == slot_coord(p.y)
+                && self.table[b + SLOT_Z] == slot_coord(p.z)
             {
                 return Ok(i);
             }
@@ -291,19 +353,29 @@ impl GpuStore {
         }
     }
 
+    /// Grows or compacts the table.
+    ///
+    /// The capacity policy is a function of the number of occupied slots only,
+    /// so the table grows identically at every chunk edge. If live occupancy is
+    /// at most a quarter, the slot count is kept and tombstones are dropped;
+    /// otherwise the table doubles.
     fn rehash(&mut self) {
-        let cap = self.table.len() / SLOT_WORDS;
+        let cap = self.table_slots();
         let new_cap = if self.live * 4 > cap { cap * 2 } else { cap };
         let old = std::mem::replace(&mut self.table, vec![EMPTY; new_cap * SLOT_WORDS]);
         self.live = 0;
         self.tombs = 0;
         for s in old.as_chunks::<SLOT_WORDS>().0 {
-            let root = s[3];
-            let occupied = root != TOMB && (root != EMPTY || s[4] != NO_TABLE);
+            let root = s[SLOT_ROOT];
+            let occupied = root != TOMB && (root != EMPTY || s[SLOT_TABLE] != NO_TABLE);
             if occupied {
-                let p = ChunkPos::new(s[0] as i32, s[1] as i32, s[2] as i32);
+                let p = ChunkPos::new(
+                    coord_from_slot(s[SLOT_X]),
+                    coord_from_slot(s[SLOT_Y]),
+                    coord_from_slot(s[SLOT_Z]),
+                );
                 let i = self.probe(p).unwrap_err();
-                let b = i * SLOT_WORDS;
+                let b = slot_base(i);
                 self.table[b..b + SLOT_WORDS].copy_from_slice(s);
                 self.live += 1;
             }
@@ -314,30 +386,35 @@ impl GpuStore {
 
     /// Room check plus probe, so callers can tell `Ok(existing)` from `Err(insert_at)`.
     fn ensure_slot(&mut self, p: ChunkPos) -> Result<usize, usize> {
-        if (self.live + self.tombs + 1) * 2 > self.table.len() / SLOT_WORDS {
+        if (self.live + self.tombs + 1) * 2 > self.table_slots() {
             self.rehash();
         }
         self.probe(p)
     }
 
     fn insert_slot_at(&mut self, i: usize, p: ChunkPos, root: u32, blocks: u32) {
-        let b = i * SLOT_WORDS;
-        if self.table[b + 3] == TOMB {
+        let b = slot_base(i);
+        if self.table[b + SLOT_ROOT] == TOMB {
             self.tombs -= 1;
         }
-        self.table[b..b + SLOT_WORDS]
-            .copy_from_slice(&[p.x as u32, p.y as u32, p.z as u32, root, blocks]);
+        self.table[b..b + SLOT_WORDS].copy_from_slice(&[
+            slot_coord(p.x),
+            slot_coord(p.y),
+            slot_coord(p.z),
+            root,
+            blocks,
+        ]);
         self.live += 1;
         self.table_dirty.push((b, SLOT_WORDS));
     }
 
     fn tombstone_at(&mut self, i: usize) {
-        let b = i * SLOT_WORDS;
-        self.table[b + 3] = TOMB;
-        self.table[b + 4] = NO_TABLE;
+        let b = slot_base(i);
+        self.table[b + SLOT_ROOT] = TOMB;
+        self.table[b + SLOT_TABLE] = NO_TABLE;
         self.live -= 1;
         self.tombs += 1;
-        self.table_dirty.push((b + 3, 2));
+        self.table_dirty.push((b + SLOT_ROOT, 2));
     }
 
     fn retire_root(&mut self, old: u32) {
@@ -351,11 +428,11 @@ impl GpuStore {
     fn table_set_root(&mut self, p: ChunkPos, root: u32) -> Option<u32> {
         match self.ensure_slot(p) {
             Ok(i) => {
-                let b = i * SLOT_WORDS;
-                let old = self.table[b + 3];
-                self.table[b + 3] = root;
-                self.table_dirty.push((b + 3, 1));
-                if root == EMPTY && self.table[b + 4] == NO_TABLE {
+                let b = slot_base(i);
+                let old = self.table[b + SLOT_ROOT];
+                self.table[b + SLOT_ROOT] = root;
+                self.table_dirty.push((b + SLOT_ROOT, 1));
+                if root == EMPTY && self.table[b + SLOT_TABLE] == NO_TABLE {
                     self.tombstone_at(i);
                 }
                 Some(old)
@@ -413,13 +490,13 @@ impl GpuStore {
     fn ensure_block_table(&mut self, p: ChunkPos) -> (usize, u32) {
         match self.ensure_slot(p) {
             Ok(i) => {
-                let b = i * SLOT_WORDS;
-                if self.table[b + 4] == NO_TABLE {
+                let b = slot_base(i);
+                if self.table[b + SLOT_TABLE] == NO_TABLE {
                     let slot = self.alloc_table();
-                    self.table[b + 4] = slot;
-                    self.table_dirty.push((b + 4, 1));
+                    self.table[b + SLOT_TABLE] = slot;
+                    self.table_dirty.push((b + SLOT_TABLE, 1));
                 }
-                (i, self.table[b + 4])
+                (i, self.table[b + SLOT_TABLE])
             }
             Err(i) => {
                 let slot = self.alloc_table();
@@ -514,18 +591,18 @@ impl GpuStore {
 
     fn drop_table(&mut self, i: usize, table_slot: u32) {
         self.drop_table_slots(table_slot);
-        let b = i * SLOT_WORDS;
-        if self.table[b + 3] == EMPTY {
+        let b = slot_base(i);
+        if self.table[b + SLOT_ROOT] == EMPTY {
             self.tombstone_at(i);
         } else {
-            self.table[b + 4] = NO_TABLE;
-            self.table_dirty.push((b + 4, 1));
+            self.table[b + SLOT_TABLE] = NO_TABLE;
+            self.table_dirty.push((b + SLOT_TABLE, 1));
         }
     }
 
     fn drop_chunk_overlay(&mut self, i: usize) {
-        let b = i * SLOT_WORDS;
-        let table_slot = self.table[b + 4];
+        let b = slot_base(i);
+        let table_slot = self.table[b + SLOT_TABLE];
         if table_slot == NO_TABLE {
             return;
         }
@@ -659,7 +736,7 @@ impl GpuStore {
         let Ok(i) = self.probe(p) else {
             return;
         };
-        let table_slot = self.table[i * SLOT_WORDS + 4];
+        let table_slot = self.table[slot_base(i) + SLOT_TABLE];
         if table_slot == NO_TABLE {
             return;
         }
@@ -697,9 +774,9 @@ impl GpuStore {
         let Ok(i) = self.probe(p) else {
             return;
         };
-        let b = i * SLOT_WORDS;
-        self.retire_root(self.table[b + 3]);
-        let table_slot = self.table[b + 4];
+        let b = slot_base(i);
+        self.retire_root(self.table[b + SLOT_ROOT]);
+        let table_slot = self.table[b + SLOT_TABLE];
         if table_slot != NO_TABLE {
             self.drop_table_slots(table_slot);
         }
@@ -719,7 +796,7 @@ impl GpuStore {
         let old = self
             .probe(p)
             .ok()
-            .map(|i| self.table[i * SLOT_WORDS + 3])
+            .map(|i| self.table[slot_base(i) + SLOT_ROOT])
             .filter(|&root| root != EMPTY);
         match self.gedit(old, ROOT_LEVEL, &e) {
             Some(g) => {
@@ -882,8 +959,8 @@ impl GpuStore {
     pub fn lookup(&self, p: ChunkPos, x: u32, y: u32, z: u32) -> u16 {
         match self.probe(p) {
             Ok(i) => {
-                let b = i * SLOT_WORDS;
-                let table_slot = self.table[b + 4];
+                let b = slot_base(i);
+                let table_slot = self.table[b + SLOT_TABLE];
                 if table_slot != NO_TABLE {
                     let idx = local_index(x, y, z);
                     let bt = table_slot as usize * BLOCKS_PER_CHUNK + chunk_block(idx) as usize;
@@ -899,7 +976,7 @@ impl GpuStore {
                         }
                     }
                 }
-                dag_get(&self.pool, self.table[b + 3], x, y, z)
+                dag_get(&self.pool, self.table[b + SLOT_ROOT], x, y, z)
             }
             Err(_) => 0,
         }
@@ -933,7 +1010,7 @@ impl GpuStore {
     pub fn block_table_slot(&self, p: ChunkPos) -> Option<u32> {
         match self.probe(p) {
             Ok(i) => {
-                let slot = self.table[i * SLOT_WORDS + 4];
+                let slot = self.table[slot_base(i) + SLOT_TABLE];
                 (slot != NO_TABLE).then_some(slot)
             }
             Err(_) => None,
@@ -948,7 +1025,7 @@ impl GpuStore {
     }
     pub fn root_of(&self, p: ChunkPos) -> u32 {
         self.probe(p).map_or(NONE, |i| {
-            let root = self.table[i * SLOT_WORDS + 3];
+            let root = self.table[slot_base(i) + SLOT_ROOT];
             if root == EMPTY { NONE } else { root }
         })
     }
@@ -1104,5 +1181,159 @@ mod tests {
         g.clear_chunk_overlay(p);
         assert!(g.block_table_slot(p).is_none());
         assert_eq!(g.lookup(p, 0, 0, 0), 0);
+    }
+
+    /// The slot layout is a five-word contract independent of the chunk edge:
+    /// positions use the shader's two's-complement bit pattern, and the initial
+    /// capacity is 1024 slots whether a chunk is 64³ or 128³.
+    #[test]
+    fn chunk_table_slot_words_and_positions_are_edge_independent() {
+        assert_eq!(SLOT_WORDS, 5);
+        assert_eq!(
+            (SLOT_X, SLOT_Y, SLOT_Z, SLOT_ROOT, SLOT_TABLE),
+            (0, 1, 2, 3, 4)
+        );
+        assert_eq!(INITIAL_SLOTS, 1024);
+
+        // Position words are exactly `bitcast<u32>(p.axis)`: every i32 survives,
+        // including the extremes and both signs.
+        for &(x, y, z) in &[
+            (0, 0, 0),
+            (-1, 1, -1),
+            (i32::MIN, i32::MAX, i32::MIN),
+            (i32::MAX, i32::MIN, i32::MAX),
+        ] {
+            let p = ChunkPos::new(x, y, z);
+            let mut g = GpuStore::new();
+            let solid = Svdag::from_dense(&vec![1u16; CHUNK_VOLUME]);
+            g.set_chunk(p, &solid);
+
+            let i = g.probe(p).expect("an inserted chunk has a slot");
+            let b = slot_base(i);
+            assert_eq!(g.table[b + SLOT_X], slot_coord(x));
+            assert_eq!(g.table[b + SLOT_Y], slot_coord(y));
+            assert_eq!(g.table[b + SLOT_Z], slot_coord(z));
+            assert_eq!(coord_from_slot(g.table[b + SLOT_X]), x);
+            assert_eq!(coord_from_slot(g.table[b + SLOT_Y]), y);
+            assert_eq!(coord_from_slot(g.table[b + SLOT_Z]), z);
+            assert!(g.contains(p));
+        }
+
+        // The hash reads all three axes and distinguishes the sign bit.
+        assert_ne!(
+            slot_hash(ChunkPos::new(-1, 0, 0)),
+            slot_hash(ChunkPos::new(1, 0, 0))
+        );
+        assert_ne!(
+            slot_hash(ChunkPos::new(1, 0, 0)),
+            slot_hash(ChunkPos::new(0, 1, 0))
+        );
+        assert_ne!(
+            slot_hash(ChunkPos::new(0, 1, 0)),
+            slot_hash(ChunkPos::new(0, 0, 1))
+        );
+
+        // The 128³ edge has 8x the voxels; the chunk-table slot count is fixed.
+        let volume_64 = 1usize << (3 * 6);
+        let volume_128 = 1usize << (3 * 7);
+        assert_eq!(volume_128, volume_64 * 8);
+        assert_eq!(INITIAL_SLOTS * SLOT_WORDS, 5120);
+    }
+
+    /// 1024 distinct chunk positions, scaled by the chunk edge. The bit split
+    /// makes the mapping a bijection, so no chunk repeats at either edge.
+    fn chunk_table_positions(chunk_bits: u32) -> Vec<ChunkPos> {
+        let scale = 1i32 << (chunk_bits - 6);
+        let mut positions = Vec::with_capacity(1024);
+        for i in 0..1024i32 {
+            let x = ((i & 15) - 8) * scale;
+            let y = (((i >> 4) & 7) - 4) * scale;
+            let z = ((i >> 7) - 4) * scale;
+            positions.push(ChunkPos::new(x, y, z));
+        }
+        positions
+    }
+
+    /// M1-22 acceptance: 1024 chunks insert, lookup and remove at both chunk
+    /// edges, and refilling after a full vacate reuses the same capacity
+    /// instead of accumulating tombstones.
+    #[test]
+    fn chunk_table_1024_chunk_insert_lookup_remove_at_both_chunk_edges() {
+        for bits in EDGE_BITS {
+            let positions = chunk_table_positions(bits);
+            assert_eq!(positions.len(), 1024);
+            let unique: std::collections::HashSet<_> = positions.iter().copied().collect();
+            assert_eq!(unique.len(), 1024, "edge {bits}: workload repeats a chunk");
+
+            let solid = Svdag::from_dense(&vec![1u16; CHUNK_VOLUME]);
+            let mut g = GpuStore::new();
+            assert_eq!(g.table_slots(), INITIAL_SLOTS, "edge {bits}");
+
+            for p in &positions {
+                g.set_chunk(*p, &solid);
+            }
+            assert_eq!(g.chunk_count(), 1024, "edge {bits}");
+            assert_eq!(g.tombs, 0, "edge {bits}");
+            assert_eq!(
+                g.table_slots(),
+                INITIAL_SLOTS * 2,
+                "edge {bits}: 1024 chunks must size the table by count, not volume"
+            );
+
+            for p in &positions {
+                assert!(g.contains(*p), "edge {bits} {p:?}");
+                assert_eq!(g.lookup(*p, 1, 2, 3), 1, "edge {bits} {p:?}");
+                assert_ne!(g.root_of(*p), NONE, "edge {bits} {p:?}");
+            }
+
+            // Vacate all 1024 slots, then refill three times. The first refill
+            // rehashes in place because live is zero, dropping every tombstone;
+            // capacity and tombstone count must return to the same values.
+            for cycle in 0..3 {
+                for p in &positions {
+                    g.remove_chunk(*p);
+                }
+                assert_eq!(g.chunk_count(), 0, "edge {bits} cycle {cycle}");
+                assert_eq!(g.tombs, 1024, "edge {bits} cycle {cycle}");
+                for p in &positions {
+                    assert!(!g.contains(*p), "edge {bits} cycle {cycle} {p:?}");
+                }
+
+                let tag = g.end_batch();
+                g.reclaim(tag);
+
+                for p in &positions {
+                    g.set_chunk(*p, &solid);
+                }
+                assert_eq!(g.chunk_count(), 1024, "edge {bits} cycle {cycle}");
+                assert_eq!(g.tombs, 0, "edge {bits} cycle {cycle}: tombstone leak");
+                assert_eq!(
+                    g.table_slots(),
+                    INITIAL_SLOTS * 2,
+                    "edge {bits} cycle {cycle}: tombstone-only growth"
+                );
+            }
+        }
+    }
+
+    /// A single chunk inserted and removed repeatedly must keep reusing its one
+    /// vacated slot. Otherwise every edit churn would grow the GPU table.
+    #[test]
+    fn chunk_table_churn_reuses_one_tombstone_without_growing() {
+        let solid = Svdag::from_dense(&vec![1u16; CHUNK_VOLUME]);
+        let p = ChunkPos::new(3, -7, 11);
+        let mut g = GpuStore::new();
+        let capacity = g.table_slots();
+
+        for _ in 0..10_000 {
+            g.set_chunk(p, &solid);
+            assert!(g.contains(p));
+            g.remove_chunk(p);
+            assert!(!g.contains(p));
+        }
+
+        assert_eq!(g.table_slots(), capacity);
+        assert_eq!(g.tombs, 1, "the single vacated slot was reused");
+        assert_eq!(g.chunk_count(), 0);
     }
 }
