@@ -132,7 +132,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| M1-01 | Implement `Node` encode/decode over the M0 bit fields plus a `NodeRef` newtype (level + index) | M0-05 | All fields round-trip; `NodeRef` never crosses bands; tests | `cargo test -p voxel-storage node_word` | 0.5 d | [ ] |
+| M1-01 | Implement `Node` encode/decode over the M0 bit fields plus a `NodeRef` newtype (level + index) | M0-05 | All fields round-trip; `NodeRef` never crosses bands; tests | `cargo test -p voxel-storage node_word` | 0.5 d | [x] |
 | M1-02 | `Bands` arena: one append-only arena per level, `levelStart[ROOT_LEVEL+1]`, leaf arena; `append`, `range`, `len`, `iter_level` | M1-01 | Ranges stay contiguous after 10k appends; level bounds assert on every access | `cargo test -p voxel-storage bands` | 1 d | [ ] |
 | M1-03 | Run allocator: allocate a run of `popcount(mask)` nodes; 64 B align full runs; record padding bytes per run | M1-02 | Every mask `0xFF` run starts 64 B aligned; padding is queryable; tests over 1k random masks | `cargo test -p voxel-storage run_align` | 0.5 d | [ ] |
 | M1-04 | Run interning: `intern(level, mask, children) -> base`, content-hash keyed; idempotent; collision-safe equality check | M1-03 | Same key twice returns the same base; different masks do not collide over 10k runs; deallocation path exists | `cargo test -p voxel-storage run_intern` | 1 d | [ ] |

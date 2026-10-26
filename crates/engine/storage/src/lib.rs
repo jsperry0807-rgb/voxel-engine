@@ -7,8 +7,11 @@ pub mod dag;
 pub mod disk;
 pub mod gpu;
 pub mod hash;
+pub mod node_word;
 pub mod overlay;
 pub mod world;
+
+pub use node_word::{Node, NodeRef};
 
 /// Runtime material id stored in every voxel. Air is id `0`.
 ///
