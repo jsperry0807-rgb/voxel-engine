@@ -15,6 +15,7 @@ pub mod leaf;
 pub mod node_word;
 pub mod overlay;
 pub mod run;
+pub mod serialize;
 pub mod world;
 
 pub use bands::Bands;
