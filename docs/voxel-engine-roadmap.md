@@ -1,0 +1,441 @@
+# Voxel Engine Roadmap
+
+**Status:** v3 — four gates closed; chunk edge pre-registered
+**Companion to:** [`voxel-engine-architecture-spec.md`](voxel-engine-architecture-spec.md)
+**Date:** 2026-10-25
+**Scope:** storage, content pipeline, renderer, GPU sync, culling, LOD, streaming
+**Not in scope:** gameplay, editor, networking, audio, physics, damage rendering, content authoring
+
+The spec's four gates are now closed: raster, block-level flood-fill occlusion,
+per-block light, and a chunk edge that is **64³ in M1 with 128³ pre-registered**.
+This roadmap turns those into an ordered plan whose first milestone is a
+pass/fail measurement, not a build-out.
+
+Two consequences shape the schedule:
+
+1. **The gate needs oracles.** Edit latency, probe update and culling granularity
+   cannot be measured without a reference light fill, a reference probe bake and a
+   reference cull. M1 builds them slow and correct; M2 and M5 productionise them.
+2. **M1 does not build 128³.** The code is parameterized, the 128³ variant must
+   compile in CI, but only 64³ is benchmarked. The upgrade is decided
+   analytically plus measurement, then applied as a `CHUNK_BITS` flip in M2.
+
+---
+
+## 1. Where the code is today
+
+| Crate | What exists | State |
+|---|---|---|
+| `voxel-core` | Canonical `Face` orientation, neighbour offsets, face planes | Complete |
+| `voxel-block` | Registry, materials, 256² texture slices, texture sets, palettes, tags, RON | Complete; atlas migration pending |
+| `voxel-storage` | **64³**/6-level hash-consed SVDAG (variable `u32` nodes), COW `apply_edits`, overlays, region log, global deduped GPU pool with refcounts and epoch retirement, consolidation policy | **Chunk size already matches the M1 baseline**; node layout does not |
+| `voxel-render` | `WgpuSink`, `MaterialBuffers`, `GpuWorld`, `svdag.wgsl` | Upload only; draws nothing |
+| `voxel-bench` | Memory/CPU/latency/counter suites, archived history, `iai` counters | Complete; the gate depends on it |
+
+The good news from the gate decision: the store is already 64³, so M1 is **only**
+the node-layout rewrite, parameterization and measurement — not a coordinate
+migration. That removes the riskiest part of the previous plan.
+
+Missing entirely: mesher, AO, lighting, probes, sparse-set ECS, culling, LOD,
+streaming, a window/camera app, CI.
+
+---
+
+## 2. Gates and their consequences
+
+| Gate | Answer | What it changes in this plan |
+|---|---|---|
+| Chunk edge | 64³ in M1; 128³ pre-registered upgrade | M1 measures at 64³; M2 onward runs at the gated edge |
+| Render path | Raster | M1.5 draws meshes; the node pool serves culling/lighting/picking |
+| Occlusion | Block-level flood-fill (M1); ray-test deferred (M2) | Extra dispatch before broad phase; ray-test is an M2 flag |
+| Light resolution | Per-block (16³) + vertex AO | Light volume is 1 KiB at 64³, 8 KiB at 128³; no per-voxel BFS |
+
+No architectural decision remains open. The only thing that can reopen the
+architecture is the M1 gate.
+
+---
+
+## 3. Sequencing rules
+
+1. **Measure before building out.** M1's gate runs before M2's production pipeline.
+2. **Pre-registration is binding.** The M1 table is written in M0 and not
+   renegotiated during M1.
+3. **Reference before optimised.** M1's slow implementations become M2/M5's test
+   oracles.
+4. **The layout is an invariant.** If a later milestone wants a node outside its
+   band, the design is wrong.
+5. **No per-frame GPU→CPU readback.** Visibility never leaves the GPU.
+6. **Every milestone ends with numbers** recorded through `scripts/bench.sh`.
+7. **One source of truth for constants.** `CHUNK_BITS` is the only place the edge
+   is named; CI compiles both 6 and 7.
+
+---
+
+## 4. Milestones
+
+Effort is one experienced graphics engineer including tests and review. A milestone
+is done only when its gate passes on the reference machine.
+
+### M0 — Pre-registration, constants, ADRs (1 week)
+
+Write the gate before anything is measured.
+
+**4.1 Pre-registration table** (binding; estimates to be replaced by M1 numbers):
+
+| Parameter | Pre-registered value | Basis | Implied / check |
+|---|---|---|---|
+| VRAM budget for voxel data | **40% of total VRAM** (fraction, not absolute) | Survives hardware changes; leaves room for framebuffer, mesh, atlas, streaming | 8 GB → 3.2 GB target; gate at 4.8 GB |
+| Target loaded chunk count @ max view distance | Computed **per chunk edge**; 64³ loads **8×** the chunks of 128³ at the same view distance | One chunk count for both edges makes the report meaningless | M0 fixes the ring config; M1 measures the count on the save |
+| SVDAG node budget/chunk | 64³ ≤ **200k**; 128³ ≤ **1.5M** unique nodes (sharing-adjusted) | 8 B/node × 2 roots = 16 B/node | 3.2 MB/chunk at 64³, 24 MB/chunk at 128³: **hard caps, not p95** |
+| Light volume/chunk | 64³: **64 cells**; 128³: **512 cells**; ~**16 B/cell** | Per-block, RGB+intensity or SH2 | 1 KiB / 8 KiB |
+| Probe grid/chunk | 64³: **64**; 128³: **512** near-residency, multi-res LOD | Per-block near, half-res mid, none far | 768 B / 6 KiB |
+| Mesh buffer/chunk (raster) | 64³: **150–600 KB**; 128³: **600 KB–2.4 MB** | Surface-area scaling; exposed faces from gameplay content | 76 B/indexed quad |
+| Edit latency | p95 ≤ **8 ms** (consolidate + upload + fence + flip + dirty-region light) | Responsiveness target | Measured on the real save |
+| Probe-update budget | p95 ≤ **4 ms** per edited chunk | Keeps probe work off the critical path | Measured on the real save |
+| Culling granularity | ≤ **15%** traversed-but-invisible volume at chunk boundaries @ max view distance | 64³ passes easily; 128³ is the question | Reference traversal at block resolution |
+| Safety factor | **1.5×** headroom on the memory budget | Absorbs chunky content, fragmentation, driver reserve | Gate is budget × 1.5 |
+| Measurement dataset | **Real populated save from actual gameplay**; report median, p95, max per chunk | Synthetic dense chunks lie; empty ones lie worse | Provisional fixture until the first gameplay save exists |
+| Fallback trigger | Memory `p95 × N > budget × 1.5`, **or** edit p95 > 8 ms, **or** probe p95 > 4 ms → **stay at 64³** | Pre-registered; no renegotiation in M1 | Applies to the 128³ projection too |
+
+**4.2 Residency model.** Define `N(edge, view, band)` = the chunk count the streaming
+policy holds for the configured view distance and surface band, so the two edges are
+compared at equal loaded *volume*, not equal chunk count. N is measured on the save
+in M1.
+
+**4.3 Constants and contracts.** `CHUNK_BITS`, `ROOT_LEVEL = CHUNK_BITS`,
+`BLOCK_LEVEL = CHUNK_BITS − 4`, `AABB(level)`, node bit fields, band count, atlas
+tile math, probe rings, occlusion horizon. CI builds both edges.
+
+**4.4 ADRs:** raster (001), chunk edge + gate (002), atlas (003), per-block light
+(004), probes multi-res (005), flood-fill occlusion + M2 ray-test (006), A/B roots
+(007), lifecycle (008), render distance (009), mesh/vertex format (010), node layout
+(011), traversal (012), state ownership (013).
+
+**Exit:** table committed; every buffer size derivable from constants; the 128³
+variant compiles; ADR-006 states the escalation path if flood-fill under-culls.
+
+---
+
+### M1 — Layout at 64³ + measurement gate (7 weeks)
+
+**Goal:** the layout is the spec's, and the pre-registered table has real numbers.
+
+Work:
+
+1. **Layout rewrite** at 64³: 8 B nodes, compacted children, popcount addressing,
+   append-only bands (7), leaf band, run-level hash-consing, COW run append,
+   64 B alignment for full runs, compaction behind a guarded precondition.
+2. **Parameterize**, do not migrate: replace every 64/6 literal with `CHUNK_BITS`
+   and `ROOT_LEVEL`; add the 128³ compile-only CI job.
+3. **Invariant checker** and property tests: refcounts, dedup bijection, band
+   bounds, alignment, compaction equals rebuild, 10 000 random edit batches equal a
+   dense reference, byte round-trip fuzz.
+4. **Real-save fixture.** Freeze a representative world (terrain, caves, overhangs,
+   structures, mixed materials) under `benchmarks/fixtures/`, with a documented
+   limitation: it is provisional until the first real gameplay save exists.
+5. **Reference implementations** (slow, correct, reused as M2/M5 oracles):
+   - block-level light flood fill and a probe bake;
+   - count-only greedy mesh (quads and bytes without vertices);
+   - CPU hierarchical frustum + block-occlusion traversal with granularity
+     instrumentation.
+6. **Gate harness:** per-chunk p50/p95/max memory, edit latency broken into fixed
+   (upload/fence/flip) and dirty-region terms, probe update, granularity.
+7. **Analytic scale-up** to 128³ using fixed-overhead correction and N/8, not a
+   naive ×8.
+
+**Exit — pass/fail, no renegotiation:**
+
+- **Layout:** average ≤ 9 B/internal node including padding; one 64 B line per full
+  sibling run (`iai` cache-miss check); dedup within 10% of the old encoding;
+  COW ≤ 512 B per edited path.
+- **Memory:** `p95 per-chunk × N ≤ 40% VRAM × 1.5`.
+- **Edit latency:** p95 ≤ 8 ms.
+- **Probe update:** p95 ≤ 4 ms.
+- **Culling granularity:** ≤ 15% traversed-but-invisible at chunk boundaries at
+  max view distance.
+- **128³ projection:** memory clears the same budget at N/8 with the measured
+  per-chunk growth; edit latency projected from fixed + dirty terms ≤ 8 ms; probe
+  update projected ≤ 4 ms. If any misses, **stay at 64³** and record it.
+
+**Risk:** the gate's weakest input is the provisional save. Label the first result
+provisional and re-run the gate when a real save exists. Do not upgrade on a
+provisional pass without the re-run.
+
+---
+
+### M1.5 — Vertical slice: one chunk on screen (2 weeks)
+
+At 64³, so the slice is cheap.
+
+- `crates/engine/viewer`: `winit` + `wgpu`, camera, depth pass, present.
+- **Atlas builder:** one 256×256 texture, mips capped at 4; first pass downsamples
+  existing 256² faces into 16×16 tiles.
+- **Registry cap:** freeze asserts `len() <= 256`; per-face blocks become material
+  variants; `TextureSetId` collapses.
+- Naive per-face mesher with the M0 vertex format (no greedy, no AO), UVs derived
+  in the fragment shader.
+- Draw one generated chunk; move the camera.
+
+**Exit:** screenshot in the repo; zero validation errors; 60 Hz at 1080p with one
+chunk; vertex format and UV derivation frozen. **Known regression:** texel density
+drops to 6.25 cm per voxel face; before/after screenshots required.
+
+---
+
+### M2 — Production content pipeline (6 weeks)
+
+Runs at the **gated edge** (64³ or 128³).
+
+- **Apron API:** six 1-voxel face planes, block-granular access; no dense chunk
+  expands.
+- **Greedy mesher** (`crates/engine/mesh`): 16³ + apron, bitmask merge, key
+  `(material, orientation, 4×AO)`, backface cull, 16 B vertex, no UV attribute.
+- **AO:** 3-neighbour corners before merge; rendered and tested against the M1
+  reference.
+- **Block light:** flood fill over block cells, 1-block apron, incremental dirty
+  region with escalation to full-chunk relight at the boundary.
+- **Probes:** multi-resolution — per-block near, half-res mid, none far; SH4 RGB8;
+  invalid-in-solid fallback; LOD transition as a content event.
+- **Ray-test occlusion behind a flag** (`occlusion.raytest`), evaluated against the
+  flood-fill result on the M1 fixtures; not enabled by default.
+- **Dirty tracking:** per-block bitset from the COW diff.
+
+**Exit:**
+- Golden mesh hashes across 5 fixtures equal to the M1 reference; AO seam test
+  passes; light incremental == full on 1 000 edit sets; probe determinism across
+  runs and thread counts.
+- ≥ 20 terrain chunks/s single-threaded; scrub ≤ 4 ms; scratch ≤ 64 KiB/worker.
+- Ray-test flag produces a documented delta (accuracy and cost) versus flood-fill,
+  without changing default behaviour.
+
+---
+
+### M3 — Raster scale-up (3 weeks)
+
+- Viewer lifecycle: stream in, mesh, upload, draw.
+- CPU frustum cull of chunk AABBs — the stopgap and the M5 production cull's
+  correctness reference (the M1 reference traversal is the granularity oracle).
+- Mesh buffer pool; the chosen scheme becomes M4's versioned resource.
+- Instrumentation: CPU submit, GPU pass, visible chunks/blocks, quads, bytes.
+
+**Exit:** 256 chunks at 60 Hz at 1080p at the gated edge; frame breakdown recorded;
+no upload hitch over 4 ms.
+
+---
+
+### M4 — Versioned GPU resources and COW sync (4 weeks)
+
+- Chunk table slot gains `rootA`, `rootB`, `versionIndex`. Root pair over the shared
+  pool; retirement through the existing epoch mechanism.
+- **Versioned resource** `{ active, inactive, inFlightFrame[2], fence }`, reused for
+  roots and mesh buffers.
+- **Level-band uploads:** dirty run ranges per band; one staging pass, one fence,
+  flip at the boundary.
+- **Compaction hazard:** compaction is forbidden while any GPU root or in-flight
+  frame references the chunk; the precondition is asserted and fuzz-tested.
+- Soak: 1 000 edits/s for 10 000 frames, per-frame readback hash versus CPU.
+
+**Exit:** zero torn frames, zero invariant failures, flat RSS/VRAM; commit ≤ 0.1 ms
+CPU/frame; ≤ 1 fence wait/frame; root-pair overhead ≤ 5% of chunk DAG.
+
+---
+
+### M5 — GPU-driven culling (5 weeks)
+
+- **Dispatch 0 — occlusion fill:** port the M1 block-level flood fill to compute;
+  camera-seeded, bounded horizon, one bit per block.
+- **Dispatch 1 — broad phase:** one workgroup per resident chunk, chunk-root AABB
+  vs 6 planes, compact survivors.
+- **Dispatch 2 — traversal:** indirect, one workgroup (4 warps) per candidate chunk;
+  orbit-ordered frontier; warp-per-node, lanes 0–7; 64 B run fetch; popcount child
+  addressing; block bit test at `BLOCK_LEVEL`; `lodMaxDepth` cutoff; append blocks.
+- **Dispatch 3 — draw:** indirect over the append buffer.
+- **Overflow:** ≥ 1 024-node frontier spills as conservative visible blocks.
+- **Debug:** CPU reference parity, "draw everything" false-negative detector,
+  frontier/overflow visualiser.
+
+**Exit:** block-set equality with the CPU reference for 500 camera poses across 3
+fixtures; zero false negatives; fill + traversal ≤ 1.5 ms at 4 096 chunks; ≥ 3×
+draw-work reduction; overflow < 0.1%. **Kill criterion:** if the reduction is < 1.5×
+after the timebox, keep the CPU cull and record why in ADR-006.
+
+---
+
+### M6 — LOD, streaming, persistence (6 weeks)
+
+- LOD policy at the gated edge; measure the cost of holding full-res chunks against
+  explicit LOD meshes; decide with data.
+- Streaming: prefetch by camera velocity, eviction by distance, per-frame budget.
+- Disk: header version + `CHUNK_BITS`, node bands, leaf band, overlay diff, light
+  cells, probes, dirty-region journal; reopen without full relight.
+- Chunk and LOD seam policy (stitch or skirt).
+
+**Exit:** the D9 rings fit the 40% budget at the gated edge; 60 Hz at 1080p;
+streaming hitch p99 ≤ 4 ms; reopen ≤ 50 ms/chunk; journal light == recomputed;
+no cracks on the seam fixture.
+
+---
+
+### M7 — Hardening and budgets (4 weeks, then continuous)
+
+- All new benches in `benchmarks/HISTORY.md`; gate cases become permanent.
+- CI: fmt, clippy, tests, `naga` validation, both-edge compile, GPU tests on a
+  self-hosted runner; wall-clock benches advisory until stable.
+- Regression policy: > 10% on a stable metric fails review; over-budget memory
+  fails build.
+- Tools: chunk inspector, band/layout viewer, cull visualiser, light debug view.
+
+**Exit:** §6 budgets enforced; overnight soak passes; the viewer runs from a clean
+checkout.
+
+---
+
+## 6. Budgets
+
+Assumptions: block 16³, 16 B vertex, 76 B indexed quad, per-block light at 16 B/cell,
+per-block probes at 12 B, gated chunk edge.
+
+### Per chunk
+
+| Item | 64³ | 128³ | Notes |
+|---|---:|---:|---|
+| SVDAG (8 B nodes + bands) | 60–90 KiB | 0.5–0.7 MiB | Hard caps: 3.2 MB / 24 MB |
+| A/B root overhead | ~2 KiB | ~4 KiB | Duplicated path runs |
+| Overlay | 32 KiB | 32–64 KiB | Requires shrinking the 8 704 B block slot |
+| Light (64 / 512 cells × 16 B) | 1 KiB | 8 KiB | Per-block |
+| Probes (64 / 512 × 12 B) | 768 B | 6 KiB | Near LOD |
+| Mesh | 150–600 KB | 600 KB–2.4 MB | Pre-registered range |
+| **Typical total** | **0.2–0.7 MiB** | **1.2–3.2 MiB** | Surface-dominated |
+
+### Global
+
+| Item | Size |
+|---|---:|
+| Material atlas (256², BC7 + mips) | ~85 KiB, always resident |
+| Block occlusion bits (horizon 128 m) | 2 MB at 1 bit/block |
+| Candidate + append + indirect buffers | ≤ 1 MiB |
+| **VRAM budget for voxel data** | **40% of device** (gate at 60%) |
+
+### Frame (16.6 ms at 60 Hz)
+
+| Stage | Budget |
+|---|---:|
+| Occlusion fill (128 m horizon) | 0.5 ms |
+| Broad phase + traversal | 1.0 ms |
+| Content (amortised, budgeted) | 2.0 ms CPU |
+| Upload / flip | 0.5 ms |
+| Draw + present | 12.0 ms |
+
+**Illustrative only, not the gate:** at 8 GB, a 128 m view with a 32 m surface band
+gives roughly 25k chunks at 64³ and 3.2k at 128³. At 0.25 MiB and 1.2 MiB per chunk
+that is ~6.4 GB (fails the 4.8 GB gate) versus ~3.9 GB (passes). The lesson is that
+surface-dominated worlds favour larger chunks because mesh and overlay scale with
+area, not volume — but M1's measured numbers decide, and the residency model in M0
+fixes the actual count.
+
+---
+
+## 7. Dependency graph and staffing
+
+```
+M0 ── M1 ──┬── M1.5 ── M2 ── M3 ──┐
+            │                     ├── M5 ── M6 ── M7
+            └── M4 ───────────────┘
+```
+
+Critical path (one engineer): M0 → M1 → M2 → M3 → M4 → M5 → M6 = **32 weeks**; with
+M7 and 20% contingency, **~9.5 months**. M1.5 and M4 can run in parallel once M1
+lands; two engineers reach **~6 months**. The bottom-up task list puts the M1 gate
+at the end of week 8; see `docs/task-list.md` §2 for the sprint map.
+
+- **A — Storage and sync:** M1 layout, M4, M6 persistence.
+- **B — Content and renderer:** M1 references, M1.5, M2, M3, M5.
+- **Both:** M0, the M1 gate, M5 parity, M6 LOD, M7 budgets.
+
+---
+
+## 8. Risk register
+
+| # | Risk | Trigger | Mitigation |
+|---|---|---|---|
+| R1 | Per-chunk tail latency (8× at 128³) | Edit p95 > 8 ms | Pre-registered fallback to 64³; block-granular dirty work |
+| R2 | Occlusion stalls | M5 > 3 weeks without a win | Ship frustum-only (still ≥ 3×); ray-test flag exists |
+| R3 | Mesh memory exceeds DAG | M3 over pre-registered range | LOD meshes, block meshes, quantise harder |
+| R4 | Incremental light wrong at borders | M2 equality fails | Expand radius; escalate to full relight |
+| R5 | Readback sneaks in | Profiler stalls | Visibility GPU-only; lifecycle events only |
+| R6 | Root starvation | Same chunk skipped 3+ frames | Coalesce edits; third root |
+| R7 | Buffer resize invalidates bind groups | Validation error | Binding-lifetime rule + regression test |
+| R8 | Bench flakiness | Deltas > 20% | Machine-tagged runs; advisory CI; counters |
+| R9 | Scope creep | New feature mid-milestone | Out of scope by §0 |
+| R10 | Band compaction invalidates GPU pointers | Torn geometry | Precondition + assert; never compact resident chunks |
+| R11 | 256 material slots too few | Content hits the cap | Reserve ~64 slots for face variants; error at freeze |
+| R12 | Atlas bleed / quality regression | Seams or blur | Half-texel inset; mips capped at 4; pad to 20×20 if needed |
+| R13 | Run-granular dedup loses sharing | Dedup > 10% worse | Measured in M1; revisit the 8-sibling constraint before M2 if it regresses |
+| R14 | Workgroup-per-chunk imbalance | Few chunks dominate the fill/traversal | Early retirement; per-launch frontier cap |
+| R15 | **Flood-fill occlusion is connectivity, not line-of-sight** | Granularity gate fails outdoors (open terrain stays reachable) | Expected; escalation is the M2 ray-test, not a chunk-size change. Do not tune the chunk edge to compensate |
+| R16 | **The gate lacks a real save** | Only synthetic fixtures exist | Freeze a representative world, label the result provisional, re-run on the first gameplay save before committing the upgrade |
+| R17 | **128³ projection is optimistic** | Fixed-overhead correction mis-modelled | Model fixed and dirty terms separately; project pessimistic (dirty region spans the chunk) and optimistic; gate on the pessimistic |
+
+---
+
+## 9. Measurement plan
+
+Add to `voxel-bench`; record every milestone through `scripts/bench.sh`.
+
+| Case | Metric |
+|---|---|
+| `dag/bfs_build/{fixture}` | ms/chunk, nodes, runs, padding ratio |
+| `dag/cow_path/{edits}` | bytes/edit, runs created |
+| `dag/run_dedup/{fixture}` | dedup ratio vs old encoding |
+| `dag/compaction/{fixture}` | ms, pointer-invalidation assertion |
+| `dag/traversal/{fixture}` | steps/block, **iai D-cache misses per sibling run** |
+| `gate/memory_p95` | per-chunk p50/p95/max, × N, versus budget |
+| `gate/edit_p95` | fixed vs dirty-region terms |
+| `gate/probe_p95` | per edited chunk |
+| `gate/cull_granularity` | traversed-but-invisible % at boundaries |
+| `mesh/build/{fixture}` | ms/chunk, quads, merge ratio, bytes |
+| `mesh/remesh_block` | µs per edited block |
+| `light/full/{fixture}`, `light/incremental` | ms/chunk, µs, equality vs full |
+| `probe/bake/{fixture}` | µs/probe, SH determinism |
+| `cull/cpu_ref` | µs for the resident set |
+| `cull/gpu` | µs, visible/total, false positives, overflow |
+| `upload/commit_batch` | µs, bytes/frame, fence waits |
+| `stream/load`, `stream/reopen` | ms/chunk, hitches |
+| `world/{chunks}_budget` | VRAM + host bytes at the gated edge |
+
+---
+
+## 10. Decision records (M0)
+
+- ADR-001 Render path: raster (closed)
+- ADR-002 Chunk edge: 64³ baseline, 128³ pre-registered upgrade + gate
+- ADR-003 Atlas: single 256², 16×16 tiles, UV derivation, mip cap
+- ADR-004 Light: per-block 16³ cells + vertex AO
+- ADR-005 Probes: per-block near, half-res mid, none far
+- ADR-006 Occlusion: block flood-fill primary; ray-test M2, flagged
+- ADR-007 A/B roots over the shared pool
+- ADR-008 Lifecycle: visibility × lifecycle, no readback
+- ADR-009 Render distance and LOD policy
+- ADR-010 Mesh granularity and vertex format
+- ADR-011 Node layout: bands, 8 B nodes, run dedup, compaction
+- ADR-012 Traversal: workgroup-per-chunk, frontier-synchronous, warp-per-node
+- ADR-013 State ownership: GPU per-frame state, event-driven CPU ECS
+
+---
+
+## 11. Deferred
+
+Far-field raymarching, GPU-side remeshing, bindless materials, damage crack
+rendering, editor, networking, audio, physics, content authoring, console/mobile
+targets.
+
+---
+
+## 12. Definition of done
+
+The roadmap is complete when: the M1 gate has passed or fallen back with a written
+record; the layout invariants hold (≤ 9 B/node, one line per sibling run, dedup
+within 10%); a world at the gated edge runs at 60 Hz within the 40% VRAM budget;
+GPU culling beats the CPU reference by ≥ 3× with zero false negatives and < 0.1%
+frontier overflow; an overnight edit soak is artifact-free and leak-free; and
+`benchmarks/HISTORY.md` shows every §6 budget met on the reference machine.

@@ -1,0 +1,38 @@
+# Documentation
+
+## Normative (read in this order)
+
+| Document | Purpose |
+|---|---|
+| [`voxel-engine-architecture-spec.md`](voxel-engine-architecture-spec.md) | What the engine is: units, tiers, protocols, layout, traversal, state |
+| [`voxel-engine-roadmap.md`](voxel-engine-roadmap.md) | Why the work is ordered this way; milestone gates |
+| [`task-list.md`](task-list.md) | Executable breakdown: every task, its dependency, done condition and verification |
+| `pre-registration.md` | **Created by M0-02.** The frozen M1 gate table, dated and signed off before measurement |
+
+When these disagree, the spec wins, then the roadmap, then the task list. Any change to a
+binding number is made in the spec and the pre-registration, never only in a task.
+
+## Reference (historical, non-normative)
+
+| Document | Still valid | Superseded by |
+|---|---|---|
+| [`reference/adr-three-tier-store-v2.md`](reference/adr-three-tier-store-v2.md) | Three-tier split, edit overlay, batched consolidation, hash-consed dedup, per-chunk interners | 4 m chunks, GPU raymarch as the primary path, explicit LOD trees, per-voxel light |
+| [`reference/material-spec-v1.md`](reference/material-spec-v1.md) | 6.25 cm voxels, 1 m blocks, 16³ blocks, material registry, templates | 64³ as the final chunk edge, 256²-per-material texture arrays, per-voxel light, the damage model as storage |
+| [`reference/template-cost-model.md`](reference/template-cost-model.md) | Block tier cost reasoning, template rarity argument | Nothing yet; still reference |
+
+Reference documents are kept for the reasoning that led here. Do not implement from them
+where they conflict with the spec.
+
+## Measurement
+
+- [`../benchmarks/README.md`](../benchmarks/README.md) — run archive, lenses, caveats
+- [`../benchmarks/HISTORY.md`](../benchmarks/HISTORY.md) — every recorded run with deltas
+- [`../crates/bench/README.md`](../crates/bench/README.md) — harness internals
+
+## Conventions
+
+- Task IDs (`M1-07`) are stable. Use them in commit messages.
+- A task is done when its **Done when** column is satisfied *and* its **Verify** command
+  passes on the reference machine.
+- Benchmarks that gate a milestone are recorded through `scripts/bench.sh`, never quoted
+  from an ad-hoc run.
