@@ -99,7 +99,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| M0-09 | ADR-001 render path: raster | M0-02 | States the four specced components the mesher feeds; records raymarch as deferred | review | 0.2 d | [ ] |
+| M0-09 | ADR-001 render path: raster | M0-02 | States the four specced components the mesher feeds; records raymarch as deferred | review | 0.2 d | [x] |
 | M0-10 | ADR-002 chunk edge: 64³ baseline, 128³ pre-registered | M0-03 | Cites the gate, the fallback trigger and the "do not build 128³ in M1" rule | review | 0.2 d | [ ] |
 | M0-11 | ADR-003 atlas: 256², 16×16 tiles, UV derivation, mip cap | M0-06 | States the 256-slot cap, the per-face variant model and the 6.25 cm texel consequence | review | 0.2 d | [ ] |
 | M0-12 | ADR-004 light: per-block cells + vertex AO | M0-07 | Rejects per-voxel (4 MiB/chunk) and per-4³-cluster with numbers | review | 0.2 d | [ ] |

@@ -15,6 +15,12 @@
 When these disagree, the spec wins, then the roadmap, then the task list. Any change to a
 binding number is made in the spec and the pre-registration, never only in a task.
 
+## Decision records
+
+| ADR | Decision | Status |
+|---|---|---|
+| [`ADR-001`](adr/ADR-001-render-path-raster.md) | Render path: raster | Accepted |
+
 ## Reference (historical, non-normative)
 
 | Document | Still valid | Superseded by |
