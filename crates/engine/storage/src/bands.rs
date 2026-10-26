@@ -1,11 +1,16 @@
 //! Append-only per-level node bands and the leaf arena (M1-02).
 //!
 //! A chunk's internal nodes live in [`BAND_COUNT`] append-only bands, one per
-//! level `0..=ROOT_LEVEL`. Each band owns a contiguous `Vec<Node>`, so a node
-//! index is stable for the lifetime of the arena: appending only grows the tail
-//! and never renumbers or relocates an existing node. A [`NodeRef`] identifies
-//! one slot as `(level, index)`, and every access checks the level against the
-//! chunk's bands before touching memory.
+//! level `0..=ROOT_LEVEL`. Each band owns a contiguous arena of 8 B nodes, so a
+//! node index is stable for the lifetime of the arena: appending only grows the
+//! tail and never renumbers or relocates an existing node. A [`NodeRef`]
+//! identifies one slot as `(level, index)`, and every access checks the level
+//! against the chunk's bands before touching memory.
+//!
+//! Every band's slot zero is **64 B aligned** (see [`BAND_ALIGN_BYTES`]), so a
+//! full sibling run of eight nodes at a slot index that is a multiple of eight
+//! occupies exactly one cache line. [`crate::run::RunAllocator`] relies on
+//! this when it hands out aligned runs.
 //!
 //! Leaves are not internal nodes. They live in a separate arena of `u16`
 //! material IDs (air is `0`); M1-06 groups those slots into eight-material leaf
@@ -39,11 +44,156 @@
 //! assert_eq!(bands.leaves(), &[7]);
 //! ```
 
+use core::fmt;
 use core::ops::Range;
 
 use voxel_core::constants::ROOT_LEVEL;
 
 use crate::node_word::{Node, NodeRef};
+
+/// Byte alignment of slot zero in every band, and of one full sibling run.
+///
+/// Eight 8 B nodes are exactly one cache line. Aligning slot zero makes every
+/// full run — a run at a slot index that is a multiple of eight — start on a
+/// line, so one fetch covers the whole sibling group (ADR-011).
+pub const BAND_ALIGN_BYTES: usize = 64;
+
+/// Size of one node slot in bytes.
+const NODE_SLOT_BYTES: usize = core::mem::size_of::<Node>();
+
+/// Worst-case number of leading slots needed to reach a 64 B boundary.
+const MAX_SLACK_SLOTS: usize = BAND_ALIGN_BYTES / NODE_SLOT_BYTES;
+
+/// Placeholder word for slots that are never read: mask 0, level 0, base 0.
+const PADDING_NODE: Node = Node::decode(0);
+
+/// Append-only storage for one level band whose slot zero is 64 B aligned.
+///
+/// A `Vec<Node>` only guarantees 8 B alignment, which is not enough for a full
+/// run to occupy exactly one cache line. This wrapper over-allocates by the
+/// worst-case slack and keeps up to seven leading slots so that the first
+/// published node starts on a 64 B boundary. Growth may move the backing
+/// allocation, so it slides the live slots back onto a boundary; published
+/// slot indices are unaffected.
+struct AlignedBand {
+    // Invariant: `slack + len() == cells.len()`, and
+    // `(cells.as_ptr() as usize + slack * NODE_SLOT_BYTES) % BAND_ALIGN_BYTES == 0`
+    // once the band has storage.
+    cells: Vec<Node>,
+    slack: usize,
+}
+
+impl AlignedBand {
+    fn new() -> Self {
+        Self {
+            cells: Vec::new(),
+            slack: 0,
+        }
+    }
+
+    fn with_capacity(nodes: usize) -> Self {
+        let mut band = Self {
+            cells: Vec::with_capacity(nodes + MAX_SLACK_SLOTS),
+            slack: 0,
+        };
+        band.realign();
+        band
+    }
+
+    fn len(&self) -> usize {
+        self.cells.len() - self.slack
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    fn as_slice(&self) -> &[Node] {
+        &self.cells[self.slack..]
+    }
+
+    fn iter(&self) -> impl ExactSizeIterator<Item = Node> + '_ {
+        self.as_slice().iter().copied()
+    }
+
+    fn push(&mut self, node: Node) {
+        // Reserve the new slot plus the worst-case slack in one go. `reserve`
+        // may move the buffer, so alignment is re-established afterwards.
+        if self.cells.len() + MAX_SLACK_SLOTS + 1 > self.cells.capacity() {
+            let extra = self.len().max(4) + 2 * MAX_SLACK_SLOTS;
+            self.cells.reserve(extra);
+        }
+        self.realign();
+        self.cells.push(node);
+    }
+
+    /// Slides the live slots so that slot zero is 64 B aligned.
+    fn realign(&mut self) {
+        loop {
+            let target = Self::slack_slots(self.cells.as_ptr());
+            let len = self.len();
+            let needed = target + len;
+            if needed <= self.cells.capacity() {
+                if self.cells.len() < needed {
+                    self.cells.resize(needed, PADDING_NODE);
+                }
+                if target != self.slack {
+                    if len != 0 {
+                        self.cells.copy_within(self.slack..self.slack + len, target);
+                    }
+                    self.cells.truncate(needed);
+                    self.slack = target;
+                }
+                debug_assert_eq!(
+                    (self.cells.as_ptr() as usize + self.slack * NODE_SLOT_BYTES)
+                        % BAND_ALIGN_BYTES,
+                    0,
+                    "band slot zero must be cache-line aligned"
+                );
+                return;
+            }
+            // The move would not fit; grow and recompute against the new
+            // allocation instead of trusting the old pointer.
+            self.cells.reserve(needed - self.cells.len());
+        }
+    }
+
+    fn slack_slots(ptr: *const Node) -> usize {
+        let misalign = (ptr as usize) % BAND_ALIGN_BYTES;
+        if misalign == 0 {
+            0
+        } else {
+            (BAND_ALIGN_BYTES - misalign) / NODE_SLOT_BYTES
+        }
+    }
+}
+
+impl Clone for AlignedBand {
+    fn clone(&self) -> Self {
+        // A clone gets its own allocation, so it must re-establish alignment
+        // rather than copy the source's slack offset.
+        let mut band = Self::with_capacity(self.len());
+        for &node in self.as_slice() {
+            band.push(node);
+        }
+        band
+    }
+}
+
+impl fmt::Debug for AlignedBand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.as_slice()).finish()
+    }
+}
+
+impl PartialEq for AlignedBand {
+    fn eq(&self, other: &Self) -> bool {
+        // Slack is an allocation detail, not band contents.
+        self.as_slice() == other.as_slice()
+    }
+}
+
+impl Eq for AlignedBand {}
 
 /// Number of internal level bands: one for each level `0..=ROOT_LEVEL`.
 pub const BAND_COUNT: usize = ROOT_LEVEL as usize + 1;
@@ -76,7 +226,7 @@ fn band_index(level: u32) -> usize {
 /// with the band it is appended to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Bands {
-    levels: [Vec<Node>; BAND_COUNT],
+    levels: [AlignedBand; BAND_COUNT],
     leaves: Vec<u16>,
 }
 
@@ -84,7 +234,7 @@ impl Bands {
     /// Creates an empty set of bands and an empty leaf arena.
     pub fn new() -> Self {
         Self {
-            levels: core::array::from_fn(|_| Vec::new()),
+            levels: core::array::from_fn(|_| AlignedBand::new()),
             leaves: Vec::new(),
         }
     }
@@ -95,7 +245,7 @@ impl Bands {
     /// Capacity is a hint, not a limit: appends grow the owning band normally.
     pub fn with_capacity(nodes_per_band: usize, leaves: usize) -> Self {
         Self {
-            levels: core::array::from_fn(|_| Vec::with_capacity(nodes_per_band)),
+            levels: core::array::from_fn(|_| AlignedBand::with_capacity(nodes_per_band)),
             leaves: Vec::with_capacity(leaves),
         }
     }
@@ -156,7 +306,6 @@ impl Bands {
         let band = band_index(level);
         self.levels[band]
             .iter()
-            .copied()
             .enumerate()
             .map(move |(index, node)| (NodeRef::new(band as u32, index as u64), node))
     }
@@ -167,7 +316,7 @@ impl Bands {
     ///
     /// Panics if `level > ROOT_LEVEL`.
     pub fn band(&self, level: u32) -> &[Node] {
-        &self.levels[band_index(level)]
+        self.levels[band_index(level)].as_slice()
     }
 
     /// Reads the node named by `node_ref`.
@@ -179,7 +328,7 @@ impl Bands {
     pub fn get(&self, node_ref: NodeRef) -> Option<Node> {
         let band = band_index(node_ref.level());
         let index = usize::try_from(node_ref.index()).ok()?;
-        self.levels[band].get(index).copied()
+        self.levels[band].as_slice().get(index).copied()
     }
 
     /// Returns `levelStart[ROOT_LEVEL + 1]` for the current band lengths.
@@ -205,7 +354,7 @@ impl Bands {
 
     /// True when every band and the leaf arena are empty.
     pub fn is_empty(&self) -> bool {
-        self.levels.iter().all(Vec::is_empty) && self.leaves.is_empty()
+        self.levels.iter().all(AlignedBand::is_empty) && self.leaves.is_empty()
     }
 
     /// Appends one `u16` material ID to the leaf arena and returns its slot.
@@ -421,6 +570,53 @@ mod tests {
         assert_eq!(bands.get(first), Some(node(3, 9)));
         assert_eq!(bands.get(NodeRef::new(3, 1)), None);
         assert_eq!(bands.get(NodeRef::new(4, 0)), None);
+    }
+
+    /// Slot zero of every band starts on a cache line, before and after the
+    /// backing allocation moves. M1-03's full-run alignment depends on it.
+    #[test]
+    fn bands_slot_zero_is_cache_line_aligned() {
+        for nodes in [0usize, 1, 7, 8, 9, 64, 1000] {
+            let mut bands = Bands::with_capacity(nodes, 0);
+            for level in 0..=ROOT_LEVEL {
+                assert_eq!(
+                    bands.band(level).as_ptr() as usize % BAND_ALIGN_BYTES,
+                    0,
+                    "{nodes} reserved nodes, level {level}"
+                );
+            }
+
+            for i in 0..nodes {
+                let level = (i % BAND_COUNT) as u32;
+                bands.append(level, node(level, i as u64 + 1));
+            }
+
+            for level in 0..=ROOT_LEVEL {
+                assert_eq!(
+                    bands.band(level).as_ptr() as usize % BAND_ALIGN_BYTES,
+                    0,
+                    "{nodes} appended nodes, level {level}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn bands_clone_reestablish_alignment_and_compare_contents() {
+        let mut bands = Bands::new();
+        for i in 0..200 {
+            let level = (i % BAND_COUNT) as u32;
+            bands.append(level, node(level, i as u64 + 1));
+        }
+
+        let clone = bands.clone();
+        // A clone has its own allocation and therefore its own slack; the
+        // comparison must be over live slots, not the allocation detail.
+        assert_eq!(clone, bands);
+        for level in 0..=ROOT_LEVEL {
+            assert_eq!(clone.band(level).as_ptr() as usize % BAND_ALIGN_BYTES, 0);
+            assert_eq!(clone.band(level), bands.band(level));
+        }
     }
 
     #[test]
