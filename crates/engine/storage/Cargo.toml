@@ -17,6 +17,12 @@ chunk128 = ["voxel-core/chunk128"]
 [dev-dependencies]
 criterion = "0.5"
 
+# The 128³ smoke (M1-26) is a test, not a benchmark: it compiles and runs only
+# when the pre-registered edge is selected.
+[[test]]
+name = "smoke128"
+required-features = ["chunk128"]
+
 [[bench]]
 name = "store"
 harness = false

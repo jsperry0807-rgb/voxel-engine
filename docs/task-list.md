@@ -162,7 +162,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M1-23 | WGSL mirror: generate or assert `ROOT_LEVEL`, `BLOCKS_PER_CHUNK`, overlay constants from Rust; a test fails on divergence | M1-22 | Changing a Rust const without the WGSL update fails the test | `cargo test -p voxel-render shader_constants` | 1 d | [x] |
 | M1-24 | Remove the `chunk128` guard; make the 7-bit build compile and pass the full suite | M1-19…M1-23 | `cargo test --workspace --features chunk128` green; CI job flipped to required | CI run | 1.5 d | [x] |
 | M1-25 | Turn `scripts/check-constants.sh` from warn to error and clear the allow-list | M1-24 | Script exits non-zero on a reintroduced literal; CI runs it | `scripts/check-constants.sh` | 0.25 d | [x] |
-| M1-26 | 128³ smoke test (compile-only + one build/get/serialize), excluded from benchmarks | M1-24 | Passes at `--features chunk128`; default build unaffected | `cargo test -p voxel-storage --features chunk128 smoke128` | 0.5 d | [ ] |
+| M1-26 | 128³ smoke test (compile-only + one build/get/serialize), excluded from benchmarks | M1-24 | Passes at `--features chunk128`; default build unaffected | `cargo test -p voxel-storage --features chunk128 smoke128` | 0.5 d | [x] |
 
 ### 4.3 Reference implementations (slow, correct, reused as oracles)
 
