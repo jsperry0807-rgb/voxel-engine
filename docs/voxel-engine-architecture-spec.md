@@ -6,7 +6,7 @@
 
 **Changes in v2.3**
 
-- **World scale:** flat finite **1,048,576 m square**, **12,000 m vertical**, sea level
+- **World scale:** flat finite **1,024,000 m square**, **12,000 m vertical**, sea level
   **6,600 m**, peak **12,000 m**, 35% ocean, Endless Sea rim (§13).
 - **View:** near voxels to 512 m, **macro heightfield far field to 16–32 km** (§14).
 - **Streaming:** surface-relative shell plus cave cache, not full columns (§13.5).
@@ -310,7 +310,7 @@ a face-textured block registers its variants as separate materials.
 | Node layout | Level bands, 8 B nodes, 8-sibling 64 B runs |
 | Traversal | Workgroup-per-chunk, frontier-synchronous, groupshared |
 | State ownership | GPU per-frame visibility, CPU event-driven lifecycle, no readback |
-| World scale | 1,048,576 m square, 12,000 m vertical, sea 6,600 m, peak 12,000 m; 35% ocean |
+| World scale | 1,024,000 m square, 12,000 m vertical, sea 6,600 m, peak 12,000 m; 35% ocean |
 | Worldgen | 128 m tiled macro map + vector rivers; 18 biomes; 300–500 m gradients; frozen per save |
 | Far field | Macro heightfield mesh to 16–32 km; near/far seam at 512 m |
 | Water | Transparent oceans/rivers/lakes; static bodies + visual current |
@@ -428,7 +428,7 @@ The gate lives in the roadmap's M0 and is written **before** M1 measures. Summar
 
 | Property | Value |
 |---|---|
-| Shape | Flat finite square, 1,048,576 m per side (2^20 m) |
+| Shape | Flat finite square, 1,024,000 m per side |
 | Edge | Last 20–50 km deep ocean, storm band and outward current; no invisible wall in normal play |
 | Ocean | 35% of the surface |
 | Floor / sea / peak | y = 0 / 6,600 m / 12,000 m |
@@ -489,7 +489,7 @@ on ascent. The near shell must fit the 40% VRAM budget together with the far fie
 
 ### 14.1 Far field
 
-- The 128 m macro height is the far-field mesh: 32 km → 256 × 256 cells.
+- The 128 m macro height is the far-field mesh: 32 km → 250 × 250 cells.
 - LOD rings at 128/256/512 m; colour from biome weights and river/lake masks.
 - Near/far seam at 512 m: 64–128 m blend band plus skirt; near chunks fade.
 - Fog matches the near renderer so the horizon reads as one world.

@@ -11,7 +11,7 @@
 
 | Property | Value |
 |---|---|
-| Shape | Flat finite square, **1,048,576 m per side** (2^20 m, "1024 km") |
+| Shape | Flat finite square, **1,024,000 m per side** ("1024 km") |
 | Edge | Last 20–50 km deep ocean; a circumnavigating storm band and outward current turn boats back; no invisible wall in normal play |
 | Ocean | **35%** of the surface |
 | Land | Seed-driven, **1–7 continents** with inland seas and island chains |
@@ -72,11 +72,11 @@ Climate zones are **compressed**: 1,024 km stands in for a planet's 10,000 km po
 
 ### 3.1 Macro map
 
-- 1,048,576 m / 128 m = **8,192 cells per axis**.
-- 8,192² = **67,108,864 cells**.
+- 1,024,000 m / 128 m = **8,000 cells per axis**.
+- 8,000² = **64,000,000 cells**.
 - Channels: height `u16` (0.25 m units), temperature `u8`, humidity `u8`, erosion `u8`, flags `u8` = **6 B/cell**.
-- Raw size: **403 MB**. Compressed expectation: 120–220 MB.
-- Tile: 16 km = 128 cells → **128 × 128 cells**, 98 KB raw; **4,096 tiles**.
+- Raw size: **384 MB**. Compressed expectation: 120–220 MB.
+- Tile: 16 km = 125 cells → **125 × 125 cells**, 93.75 KB raw; **4,096 tiles**.
 - A 32 km view touches at most 3 × 3 tiles (one border tile of slack), under 1 MB resident.
 - Rivers are **vector** data, not a raster: polylines with width, depth, order, and a 1–4 km spatial index.
 
@@ -93,7 +93,7 @@ Climate zones are **compressed**: 1,024 km stands in for a planet's 10,000 km po
 - 128³ chunk = **512 block samples**, not 2.1 M voxels.
 - 2 ms/chunk on a worker → ~500 chunks/s/core.
 - Detail pass is LOD0-only and block-granular.
-- World creation: minutes (target ≤ 10 min for a full 8,192² hydrology pass).
+- World creation: minutes (target ≤ 10 min for a full 8,000² hydrology pass).
 
 ---
 
@@ -135,7 +135,7 @@ The macro map is the canonical geography. Chunk generation never invents macro f
 
 ### 4.4 Far field
 
-- The macro heightfield at 128 m is drawn as a distant mesh: 32 km → 256 × 256 cells.
+- The macro heightfield at 128 m is drawn as a distant mesh: 32 km → 250 × 250 cells.
 - Colour comes from biome weights plus river/lake masks; fog hides the lack of detail.
 - Near/far seam at 512 m: a 64–128 m blend band plus a skirt; near chunks fade into the heightfield.
 - This is also the map's source for unexplored terrain.
