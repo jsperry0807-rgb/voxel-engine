@@ -21,6 +21,7 @@ enum Mode {
     Memory,
     Cpu,
     Latency,
+    Layout,
 }
 
 fn main() {
@@ -45,6 +46,7 @@ fn main() {
             "memory" => mode = Mode::Memory,
             "cpu" => mode = Mode::Cpu,
             "latency" => mode = Mode::Latency,
+            "layout" => mode = Mode::Layout,
             "--out" => {
                 out_dir = args
                     .next()
@@ -54,10 +56,11 @@ fn main() {
             "--print" => print = true,
             "-h" | "--help" => {
                 println!(
-                    "usage: voxel-bench [all|memory|cpu|latency] [--out DIR] [--print]\n\
+                    "usage: voxel-bench [all|memory|cpu|latency|layout] [--out DIR] [--print]\n\
                      \n\
-                     all      run the memory, CPU and latency lenses (default)\n\
+                     all      run the memory, layout, CPU and latency lenses (default)\n\
                      memory   heap bytes, allocation churn and peak heap\n\
+                     layout   bytes/node, runs, dedup and COW cost per fixture\n\
                      cpu      process CPU time, ns/op, Mops/s and allocations/op\n\
                      latency  p50/p95/p99/max for the interactive paths\n\
                      --out    report directory (default: target/bench)\n\
@@ -86,6 +89,9 @@ fn main() {
     let memory = matches!(mode, Mode::All | Mode::Memory)
         .then(suite::memory)
         .unwrap_or_default();
+    let layout = matches!(mode, Mode::All | Mode::Layout)
+        .then(suite::layout)
+        .unwrap_or_default();
     let cpu = matches!(mode, Mode::All | Mode::Cpu)
         .then(suite::cpu)
         .unwrap_or_default();
@@ -113,6 +119,7 @@ fn main() {
         memory,
         cpu,
         latency,
+        layout,
     };
 
     if let Err(error) = result.write(&out_dir) {
@@ -121,10 +128,11 @@ fn main() {
     }
 
     println!(
-        "wrote {} and {} ({} memory, {} CPU, {} latency cases) in {}",
+        "wrote {} and {} ({} memory, {} layout, {} CPU, {} latency cases) in {}",
         out_dir.join("report.md").display(),
         out_dir.join("report.json").display(),
         result.memory.len(),
+        result.layout.len(),
         result.cpu.len(),
         result.latency.len(),
         human_ns(wall_ns),

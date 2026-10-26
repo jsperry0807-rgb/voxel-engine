@@ -58,6 +58,12 @@ Cases:
 - `gpu_overlay/{1,64}` — GPU block-overlay slots (8.5 KiB per edited 16³ block).
 - `disk/64_chunks` — region-file bytes per chunk.
 
+**Layout cost** (`layout/...`, M1-18) reports the banded layout against the
+superseded v1 `u32` pool: internal bytes per node including full-run padding,
+internal/leaf run counts, dedup ratios, old/new serialized size, and COW bytes
+per edited path for 1- and 100-edit batches. It runs as part of `all` and can
+be run alone with `cargo run --release -p voxel-bench -- layout --print`.
+
 **CPU** runs each operation for a calibrated ~20 ms, three rounds, and keeps
 the fastest wall time. It reports process user+system CPU time (so CPU
 utilization below 100% means the thread was waiting), allocations per

@@ -81,6 +81,12 @@ Re-recording the same label is allowed and gets a numeric suffix.
 | DAG build/get, GPU lookup, GPU overlay lookup, 100-edit COW, overlay set/flush | CPU |
 | hot lookup, DAG get, GPU edit, GPU overlay set, `World::set` p99 | latency |
 | world tick idle, world consolidate p99 | latency |
+| layout bytes/node, run counts, dedup and COW bytes/path | layout |
+
+The layout table is repeated below the main history table for every run that
+recorded it: banded internal bytes include 8 B node words plus full-run padding,
+dedup is expanded nodes / unique nodes for the banded (`new`) and v1 per-node
+(`old`) encodings, and COW is bytes per edited path for 1- and 100-edit batches.
 
 Peak RSS and CPU time are whole-run totals: adding a case raises them without
 any code regression. Each run stores a suite fingerprint, and `HISTORY.md`

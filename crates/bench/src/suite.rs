@@ -21,7 +21,14 @@ use crate::fixtures;
 use crate::mem;
 use crate::patterns;
 use crate::proc;
-use crate::report::{CpuRecord, LatencyRecord, MemoryRecord, bytes};
+use crate::report::{CpuRecord, LatencyRecord, LayoutRecord, MemoryRecord, bytes};
+
+// ------------------------------------------------------------------ layout ---
+
+/// The M1-18 layout cost records, one per fixture.
+pub fn layout() -> Vec<LayoutRecord> {
+    crate::layout::records()
+}
 
 // ------------------------------------------------------------------ memory ---
 

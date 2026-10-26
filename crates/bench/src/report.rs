@@ -51,6 +51,70 @@ pub struct LatencyRecord {
     pub note: String,
 }
 
+/// One COW batch measured on a fixture (M1-18).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CowRecord {
+    /// Distinct edited voxel paths in the batch.
+    pub paths: u64,
+    /// Internal sibling runs appended.
+    pub runs: u64,
+    /// Leaf runs appended.
+    pub leaf_runs: u64,
+    /// Internal node bytes appended, including full-run alignment padding.
+    pub node_bytes: u64,
+    /// Leaf material bytes appended.
+    pub leaf_bytes: u64,
+    /// Total bytes appended, internal plus leaf.
+    pub total_bytes: u64,
+    /// Internal bytes per edited path.
+    pub node_bytes_per_path: f64,
+    /// Total bytes per edited path, including leaf materials.
+    pub bytes_per_path: f64,
+}
+
+/// Storage cost and dedup measurements for one fixture (M1-18).
+///
+/// Sizes include the banded chunk's 8 B internal words and full-run padding.
+/// `old_*` describe the superseded v1 `u32` pool, which dedups individual
+/// nodes; the banded layout dedups whole sibling runs.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct LayoutRecord {
+    /// Fixture name, shared with the memory chunks.
+    pub fixture: String,
+    /// Internal arena bytes, including full-run alignment padding.
+    pub internal_bytes: u64,
+    /// Reachable internal nodes (deduplicated).
+    pub nodes: u64,
+    /// Alignment padding in the internal arena.
+    pub padding_bytes: u64,
+    /// Internal bytes per reachable node, padding included.
+    pub bytes_per_node: f64,
+    /// Padding as a fraction of `internal_bytes`.
+    pub padding_ratio: f64,
+    /// Distinct live internal sibling runs.
+    pub internal_runs: u64,
+    /// Distinct live leaf runs.
+    pub leaf_runs: u64,
+    /// Live runs referenced by more than one parent.
+    pub shared_runs: u64,
+    /// Internal nodes if every sibling position were stored separately.
+    pub expanded_nodes: u64,
+    /// `expanded_nodes / nodes`: dedup achieved by run sharing.
+    pub dedup_new: f64,
+    /// `expanded_nodes / old_nodes`: dedup achieved by per-node sharing.
+    pub dedup_old: f64,
+    /// Unique internal nodes in the old `u32` pool.
+    pub old_nodes: u64,
+    /// Serialized old-encoding bytes (8 B header + 4 B words).
+    pub old_bytes: u64,
+    /// Serialized banded bytes (header + internal arena + leaf arena).
+    pub new_bytes: u64,
+    /// `old_bytes / new_bytes`; above 1 means the banded layout is smaller.
+    pub size_ratio: f64,
+    /// COW costs for the measured edit batches.
+    pub cow: Vec<CowRecord>,
+}
+
 /// Process-level memory and CPU readings for the whole run.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ProcessReport {
@@ -81,6 +145,10 @@ pub struct Report {
     pub memory: Vec<MemoryRecord>,
     pub cpu: Vec<CpuRecord>,
     pub latency: Vec<LatencyRecord>,
+    /// Layout cost report (M1-18). Defaulted so archived reports written before
+    /// the section existed still deserialize.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub layout: Vec<LayoutRecord>,
 }
 
 impl Report {
@@ -152,6 +220,66 @@ impl Report {
                     m.allocs,
                     m.note,
                 );
+            }
+            out.push('\n');
+        }
+
+        if !self.layout.is_empty() {
+            out.push_str("## Layout cost (M1-18)\n\n");
+            out.push_str(
+                "Internal bytes are the banded arena's 8 B words plus the padding that aligns \
+                 full runs to 64 B. Dedup is the expanded node count divided by the unique \
+                 node count; `old` is the superseded per-node `u32` pool and `new` is the \
+                 banded run layout. `Old/new` above 1 means the banded serialization is \
+                 smaller. `B/node` and every byte figure include padding.\n\n",
+            );
+            out.push_str(
+                "| Fixture | Internal bytes | B/node incl. pad | Padding | Internal runs | Leaf runs | Shared runs | Dedup new | Dedup old | Old bytes | New bytes | Old/new |\n\
+                 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n",
+            );
+            for l in &self.layout {
+                let _ = writeln!(
+                    out,
+                    "| `{}` | {} | {:.1} | {} ({:.1}%) | {} | {} | {} | {:.1}x | {:.1}x | {} | {} | {:.2}x |",
+                    l.fixture,
+                    bytes(l.internal_bytes),
+                    l.bytes_per_node,
+                    bytes(l.padding_bytes),
+                    l.padding_ratio * 100.0,
+                    l.internal_runs,
+                    l.leaf_runs,
+                    l.shared_runs,
+                    l.dedup_new,
+                    l.dedup_old,
+                    bytes(l.old_bytes),
+                    bytes(l.new_bytes),
+                    l.size_ratio,
+                );
+            }
+            out.push('\n');
+            out.push_str(
+                "### COW cost\n\n\
+                 A batch appends one internal run per touched level and one leaf run per \
+                 touched level-1 parent. `Internal B/path` includes full-run padding; \
+                 `Total B/path` also counts leaf materials.\n\n",
+            );
+            out.push_str(
+                "| Fixture | Paths | Runs | Leaf runs | Internal B/path | Total B/path |\n\
+                 |---|---:|---:|---:|---:|---:|\n",
+            );
+            for l in &self.layout {
+                for cow in &l.cow {
+                    let _ = writeln!(
+                        out,
+                        "| `{}` | {} | {} | {} | {:.1} | {:.1} |",
+                        l.fixture,
+                        cow.paths,
+                        cow.runs,
+                        cow.leaf_runs,
+                        cow.node_bytes_per_path,
+                        cow.bytes_per_path,
+                    );
+                }
             }
             out.push('\n');
         }

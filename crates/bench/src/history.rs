@@ -17,7 +17,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
-use crate::report::{self, Report};
+use crate::report::{self, LayoutRecord, Report};
 
 /// One archived run, as summarised in `history.json`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -43,6 +43,9 @@ pub struct RunSummary {
     pub suite: Option<String>,
     /// Stable metric keys, extracted from the report.
     pub metrics: BTreeMap<String, f64>,
+    /// Layout cost records (M1-18), when the run included that lens.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub layout: Vec<LayoutRecord>,
 }
 
 /// The machine-readable index.
@@ -121,6 +124,7 @@ pub fn record(
         note: note.map(str::to_owned),
         suite: Some(suite_fingerprint(&report)),
         metrics: summarize(&report),
+        layout: report.layout.clone(),
     };
 
     fs::write(
@@ -200,7 +204,8 @@ fn suite_fingerprint(report: &Report) -> String {
         .iter()
         .map(|record| record.case.as_str())
         .chain(report.cpu.iter().map(|record| record.case.as_str()))
-        .chain(report.latency.iter().map(|record| record.case.as_str()));
+        .chain(report.latency.iter().map(|record| record.case.as_str()))
+        .chain(report.layout.iter().map(|record| record.fixture.as_str()));
     suite_key(
         cases,
         report.memory.len(),
@@ -351,6 +356,51 @@ fn render(history: &History) -> String {
         "\nPeak RSS and CPU time cover the whole run, not one case; the comparison \
          below omits them when the suite fingerprint changes.\n",
     );
+
+    let layout_runs: Vec<&RunSummary> = runs
+        .iter()
+        .rev()
+        .filter(|run| !run.layout.is_empty())
+        .collect();
+    if !layout_runs.is_empty() {
+        out.push_str(
+            "\n## Layout cost\n\n\
+             Banded internal bytes include the 8 B node words and the padding that aligns \
+             full runs to 64 B. Dedup is expanded nodes / unique nodes; `new` is whole-run \
+             sharing, `old` is the superseded per-node `u32` pool. `Old/new` above 1 means \
+             the banded serialization is smaller. COW is bytes per edited path for a 1-edit \
+             and a 100-edit batch.\n\n",
+        );
+        out.push_str(
+            "| Run | Fixture | B/node incl. pad | Internal runs | Dedup new | Dedup old | Old/new bytes | COW B/path (1 / 100) |\n\
+             |---|---|---:|---:|---:|---:|---:|---:|\n",
+        );
+        for run in layout_runs {
+            for layout in &run.layout {
+                let cow = |paths: u64| {
+                    layout
+                        .cow
+                        .iter()
+                        .find(|cow| cow.paths == paths)
+                        .map(|cow| format_unit(cow.bytes_per_path, "bytes"))
+                        .unwrap_or_else(|| "n/a".into())
+                };
+                out.push_str(&format!(
+                    "| [{}]({}) | `{}` | {:.1} | {} | {:.1}x | {:.1}x | {:.2}x | {} / {} |\n",
+                    run.label,
+                    run.path,
+                    layout.fixture,
+                    layout.bytes_per_node,
+                    layout.internal_runs,
+                    layout.dedup_new,
+                    layout.dedup_old,
+                    layout.size_ratio,
+                    cow(1),
+                    cow(100),
+                ));
+            }
+        }
+    }
 
     if runs.len() >= 2 {
         let latest = runs.last().expect("at least two runs");
@@ -642,7 +692,22 @@ mod tests {
             note: None,
             suite: Some(suite.into()),
             metrics,
+            layout: Vec::new(),
         }
+    }
+
+    #[test]
+    fn layout_cost_is_rendered_when_a_run_recorded_it() {
+        let mut latest = run("m1-layout", 2, "m2-c1-l0-bbbb");
+        latest.layout = crate::layout::records();
+        let history = History {
+            runs: vec![run("old", 1, "m1-c1-l0-aaaa"), latest],
+        };
+        let text = render(&history);
+        let section = text.split("## Layout cost").nth(1).expect("layout section");
+        assert!(section.contains("| Run | Fixture | B/node incl. pad |"));
+        assert!(section.contains("| `solid` |"));
+        assert!(section.contains("COW B/path"));
     }
 
     #[test]
