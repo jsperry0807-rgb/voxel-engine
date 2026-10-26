@@ -42,6 +42,9 @@
 //! assert!(!dag.is_empty());
 //! ```
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
+
 use voxel_core::constants::ROOT_LEVEL;
 
 use crate::bands::Bands;
@@ -50,15 +53,85 @@ use crate::node_word::{Node, NodeRef};
 use crate::run::{RunInterner, fetch_child};
 use crate::{CHUNK_DIM, CHUNK_VOLUME, local_index};
 
+/// Counters for references that fence offline compaction (M1-12).
+///
+/// A live root or an in-flight frame can still read the old band numbering, so
+/// compaction asserts both counters are zero before renumbering. The guards
+/// that increment them live in [`crate::compact`].
+#[derive(Debug, Default)]
+pub(crate) struct AccessCounters {
+    live_roots: AtomicU32,
+    in_flight_frames: AtomicU32,
+}
+
+impl AccessCounters {
+    pub(crate) fn live_roots(&self) -> u32 {
+        self.live_roots.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn in_flight_frames(&self) -> u32 {
+        self.in_flight_frames.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn retain_root(&self) {
+        self.live_roots.fetch_add(1, Ordering::SeqCst);
+    }
+
+    pub(crate) fn release_root(&self) {
+        let previous = self.live_roots.fetch_sub(1, Ordering::SeqCst);
+        debug_assert!(previous > 0, "live-root guard released more than once");
+    }
+
+    pub(crate) fn retain_frame(&self) {
+        self.in_flight_frames.fetch_add(1, Ordering::SeqCst);
+    }
+
+    pub(crate) fn release_frame(&self) {
+        let previous = self.in_flight_frames.fetch_sub(1, Ordering::SeqCst);
+        debug_assert!(previous > 0, "frame guard released more than once");
+    }
+}
+
 /// One chunk in the banded SVDAG layout.
 ///
 /// The bands are append-only and level-correct: every node in band `l` carries
 /// `level == l`, and the root (when present) is the only node in band
 /// `ROOT_LEVEL`. A chunk with no voxels has no bands and no root.
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChunkDag {
     bands: Bands,
     root: Option<NodeRef>,
+    /// Shared with the live-root and in-flight-frame guards; a clone is an
+    /// independent chunk, so it starts with fresh counters.
+    access: Arc<AccessCounters>,
+}
+
+impl Clone for ChunkDag {
+    fn clone(&self) -> Self {
+        Self {
+            bands: self.bands.clone(),
+            root: self.root,
+            access: Arc::new(AccessCounters::default()),
+        }
+    }
+}
+
+impl PartialEq for ChunkDag {
+    fn eq(&self, other: &Self) -> bool {
+        self.bands == other.bands && self.root == other.root
+    }
+}
+
+impl Eq for ChunkDag {}
+
+impl core::fmt::Debug for ChunkDag {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("ChunkDag")
+            .field("bands", &self.bands)
+            .field("root", &self.root)
+            .field("live_roots", &self.access.live_roots())
+            .field("in_flight_frames", &self.access.in_flight_frames())
+            .finish()
+    }
 }
 
 impl ChunkDag {
@@ -67,6 +140,7 @@ impl ChunkDag {
         Self {
             bands: Bands::new(),
             root: None,
+            access: Arc::new(AccessCounters::default()),
         }
     }
 
@@ -139,6 +213,7 @@ impl ChunkDag {
         Self {
             bands,
             root: Some(root),
+            access: Arc::new(AccessCounters::default()),
         }
     }
 
@@ -214,6 +289,11 @@ impl ChunkDag {
     /// The editor only appends, so every existing node index stays valid.
     pub(crate) fn bands_mut(&mut self) -> &mut Bands {
         &mut self.bands
+    }
+
+    /// Shared access counters used by the compaction guards (M1-12).
+    pub(crate) fn access(&self) -> &Arc<AccessCounters> {
+        &self.access
     }
 
     /// Publishes the root produced by a COW edit (M1-10).

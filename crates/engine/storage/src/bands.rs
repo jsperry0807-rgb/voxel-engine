@@ -128,6 +128,10 @@ impl AlignedBand {
         self.cells.push(node);
     }
 
+    fn get_mut(&mut self, index: usize) -> Option<&mut Node> {
+        self.cells.get_mut(self.slack + index)
+    }
+
     /// Slides the live slots so that slot zero is 64 B aligned.
     fn realign(&mut self) {
         loop {
@@ -330,6 +334,65 @@ impl Bands {
         let band = band_index(node_ref.level());
         let index = usize::try_from(node_ref.index()).ok()?;
         self.levels[band].as_slice().get(index).copied()
+    }
+
+    /// Replaces `level`'s band with `nodes`, re-establishing slot-zero alignment.
+    ///
+    /// This is the one operation that is not append-only: it is reserved for
+    /// offline compaction (M1-12), which may run only when no live root or
+    /// in-flight frame can still read the old numbering. Every [`NodeRef`] into
+    /// the old band becomes invalid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `level > ROOT_LEVEL`, or if a node's level does not name the
+    /// band it is being written to.
+    pub(crate) fn replace_band(&mut self, level: u32, nodes: impl IntoIterator<Item = Node>) {
+        let band = band_index(level);
+        let nodes: Vec<Node> = nodes.into_iter().collect();
+        let mut replacement = AlignedBand::with_capacity(nodes.len());
+        for node in nodes {
+            assert_eq!(
+                node.level(),
+                level,
+                "node level does not match its band level {level}"
+            );
+            replacement.push(node);
+        }
+        self.levels[band] = replacement;
+    }
+
+    /// Overwrites one published node word in place.
+    ///
+    /// Like [`Self::replace_band`], this is reserved for compaction's parent
+    /// remap (M1-12): the word keeps its level and mask, and only its `base`
+    /// changes to the renumbered child run.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `node_ref` is past the band tail or `node.level()` does not
+    /// name the referenced band.
+    pub(crate) fn set_node(&mut self, node_ref: NodeRef, node: Node) {
+        let band = band_index(node_ref.level());
+        assert_eq!(
+            node.level(),
+            node_ref.level(),
+            "node level does not match its band level {}",
+            node_ref.level()
+        );
+        let index = usize::try_from(node_ref.index()).expect("node index does not fit usize");
+        let slot = self.levels[band]
+            .get_mut(index)
+            .unwrap_or_else(|| panic!("node reference {node_ref:?} is past the band tail"));
+        *slot = node;
+    }
+
+    /// Replaces the leaf arena with `leaves`.
+    ///
+    /// Compaction-only (M1-12): every leaf base held by a level-1 parent must be
+    /// remapped before the old arena becomes unreachable.
+    pub(crate) fn replace_leaves(&mut self, leaves: impl IntoIterator<Item = u16>) {
+        self.leaves = leaves.into_iter().collect();
     }
 
     /// Returns `levelStart[ROOT_LEVEL + 1]` for the current band lengths.

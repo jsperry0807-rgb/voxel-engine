@@ -5,6 +5,7 @@
 //! T3 `gpu`     global deduped node pool + dynamic chunk hash table + per-chunk edit overlay
 pub mod bands;
 pub mod chunk;
+pub mod compact;
 pub mod dag;
 pub mod disk;
 pub mod edit;
@@ -18,6 +19,7 @@ pub mod world;
 
 pub use bands::Bands;
 pub use chunk::ChunkDag;
+pub use compact::{BandWaste, CompactBand, CompactionStats, FrameGuard, RootGuard};
 pub use edit::EditStats;
 pub use leaf::{
     AIR, LEAF_MATERIAL_BYTES, LEAF_RUN_BYTES, LEAF_RUN_MATERIALS, LeafInterner, fetch_leaf,
