@@ -32,14 +32,17 @@
 //! # Example
 //!
 //! ```
+//! use voxel_core::constants::BLOCKS_PER_CHUNK;
 //! use voxel_core::content_constants::{
-//!     BLOCK_OCCLUSION_BYTES, LIGHT_BYTES_PER_CHUNK, PROBE_BYTES_PER_CHUNK,
+//!     BLOCK_OCCLUSION_BYTES, LIGHT_BYTES_PER_CELL, LIGHT_BYTES_PER_CHUNK, PROBE_BYTES,
+//!     PROBE_BYTES_PER_CHUNK,
 //! };
 //!
-//! // The 64³ baseline: 64 cells × 16 B, 64 probes × 12 B, 64 bits.
-//! assert_eq!(LIGHT_BYTES_PER_CHUNK, 1 << 10);
-//! assert_eq!(PROBE_BYTES_PER_CHUNK, 768);
-//! assert_eq!(BLOCK_OCCLUSION_BYTES, 8);
+//! // One cell per block: 1 KiB light, 768 B probes and 8 B occlusion at 64³
+//! // (8 KiB, 6 KiB and 64 B at the pre-registered 128³ edge).
+//! assert_eq!(LIGHT_BYTES_PER_CHUNK, BLOCKS_PER_CHUNK * LIGHT_BYTES_PER_CELL);
+//! assert_eq!(PROBE_BYTES_PER_CHUNK, BLOCKS_PER_CHUNK * PROBE_BYTES);
+//! assert_eq!(BLOCK_OCCLUSION_BYTES, BLOCKS_PER_CHUNK.div_ceil(8));
 //! ```
 
 use crate::constants::{BLOCK_DIM, BLOCK_LEVEL, BLOCKS_PER_CHUNK, CHUNK_DIM, aabb_extent};
@@ -191,7 +194,7 @@ mod tests {
         assert_eq!(PROBE_RING_RADII_M, [128, 256]);
         assert_eq!(OCCLUSION_HORIZON_M, 128);
         assert_eq!(OCCLUSION_HORIZON_BLOCKS, 128);
-        assert_eq!(BLOCK_OCCLUSION_BYTES, 8);
+        assert_eq!(BLOCK_OCCLUSION_BYTES, occlusion_bytes_at(CHUNK_BITS));
     }
 
     /// Light is one cell per block, so the chunk counts follow the block grid.

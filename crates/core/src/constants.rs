@@ -21,12 +21,15 @@
 //! # Example
 //!
 //! ```
-//! use voxel_core::constants::{aabb_extent, BLOCK_LEVEL, CHUNK_DIM, ROOT_LEVEL, VOXEL_SIZE};
+//! use voxel_core::constants::{
+//!     aabb_extent, BLOCK_LEVEL, CHUNK_BITS, CHUNK_DIM, ROOT_LEVEL, VOXEL_SIZE,
+//! };
 //!
-//! assert_eq!(aabb_extent(0), 4.0); // the 64³ chunk is 4 m on a side
+//! // The chunk edge follows `CHUNK_BITS`: 4 m at 64³, 8 m at 128³.
+//! assert_eq!(aabb_extent(0), CHUNK_DIM as f32 * VOXEL_SIZE);
 //! assert_eq!(aabb_extent(BLOCK_LEVEL), 1.0); // a 16³ block is 1 m³
 //! assert_eq!(aabb_extent(ROOT_LEVEL), VOXEL_SIZE); // a leaf is one voxel
-//! assert_eq!(CHUNK_DIM, 64);
+//! assert_eq!(CHUNK_DIM, 1 << CHUNK_BITS);
 //! ```
 
 /// Edge length of one voxel in world units (metres).
@@ -40,18 +43,6 @@ pub const BLOCK_DIM: usize = 16;
 /// `log2(BLOCK_DIM)`: split levels between the chunk edge and the block edge.
 pub const BLOCK_BITS: u32 = 4;
 
-// Temporary guard (M0-08): code outside this module still assumes a 6-bit edge
-// in places that M1-19..M1-23 will parameterize (index packing, Morton codes,
-// serialization headers, shader constants). Until then a 7-bit build must fail
-// loudly here instead of compiling against those 6-bit assumptions and
-// producing silently wrong data. Remove this guard in M1-24.
-#[cfg(feature = "chunk128")]
-compile_error!(
-    "feature `chunk128` (CHUNK_BITS = 7) is not supported yet: code outside \
-     `voxel_core::constants` still assumes the 64³ edge. This guard is removed \
-     in M1-24."
-);
-
 /// `log2` of the chunk edge in voxels.
 ///
 /// This is the single parameter of the chunk layout: 6 gives the 64³ baseline,
@@ -62,8 +53,7 @@ pub const CHUNK_BITS: u32 = 6;
 
 /// `log2` of the chunk edge in voxels, at the pre-registered 128³ edge.
 ///
-/// Selected by the `chunk128` feature; guarded until M1-24. Everything below is
-/// derived from it.
+/// Selected by the `chunk128` feature. Everything below is derived from it.
 #[cfg(feature = "chunk128")]
 pub const CHUNK_BITS: u32 = 7;
 
@@ -157,7 +147,7 @@ mod tests {
     use super::*;
 
     /// The default build is the 64³ M1 baseline. The 128³ edge is opt-in via
-    /// the `chunk128` feature and is guarded until M1-24.
+    /// the `chunk128` feature.
     #[cfg(not(feature = "chunk128"))]
     #[test]
     fn default_build_uses_the_64_edge() {
@@ -165,6 +155,16 @@ mod tests {
         assert_eq!(CHUNK_DIM, 64);
         assert_eq!(ROOT_LEVEL, 6);
         assert_eq!(BLOCK_LEVEL, 2);
+    }
+
+    /// The opt-in build moves every derived value to the 128³ edge.
+    #[cfg(feature = "chunk128")]
+    #[test]
+    fn chunk128_build_uses_the_128_edge() {
+        assert_eq!(CHUNK_BITS, 7);
+        assert_eq!(CHUNK_DIM, 128);
+        assert_eq!(ROOT_LEVEL, 7);
+        assert_eq!(BLOCK_LEVEL, 3);
     }
 
     /// Compile-time assertions can only check what the compiler folds; this

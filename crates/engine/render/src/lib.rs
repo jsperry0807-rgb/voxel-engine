@@ -28,7 +28,7 @@
 //! | 0 | 0 | node pool (`array<u32>`) | [`WgpuSink::nodes`] |
 //! | 0 | 1 | chunk table, 5 words per slot | [`WgpuSink::table`] |
 //! | 0 | 2 | block overlays, 2 176 words per slot | [`WgpuSink::overlays`] |
-//! | 0 | 3 | block tables, 64 words per chunk | [`WgpuSink::block_tables`] |
+//! | 0 | 3 | block tables, [`voxel_storage::BLOCKS_PER_CHUNK`] words per chunk | [`WgpuSink::block_tables`] |
 //! | 1 | 0 | hot records, 2 words per block | [`MaterialBuffers::hot`] |
 //! | 1 | 1 | texture sets, 3 words per set | [`MaterialBuffers::texture_sets`] |
 //!
@@ -39,11 +39,13 @@
 //! [`SVDAG_WGSL`] returns a raw [`voxel_block::MaterialId`] value, which the
 //! caller hands to the material accessors.
 //!
-//! WGSL has no include mechanism, so `svdag.wgsl` repeats the CPU layout
-//! constants ([`voxel_storage::dag::ROOT_LEVEL`], [`WgpuSink::table`] slot
-//! width, blocks per chunk and the overlay words). The `shader_constants_*`
-//! tests parse those declarations and fail on any divergence from
-//! `voxel_storage`, including a shader constant that has no Rust owner.
+//! WGSL has no include mechanism, so the shader source repeats the CPU layout
+//! constants ([`voxel_storage::dag::ROOT_LEVEL`], [`voxel_storage::BLOCK_LEVEL`],
+//! [`WgpuSink::table`] slot width, blocks per chunk and the overlay words).
+//! The edge-dependent constants are selected by the `chunk128` feature, and the
+//! `shader_constants_*` tests parse the assembled [`SVDAG_WGSL`] and fail on any
+//! divergence from `voxel_storage`, including a shader constant that has no Rust
+//! owner.
 //!
 //! # Binding lifetime
 //!
@@ -79,8 +81,23 @@ pub use materials::{
 pub use sink::{SVDAG_BIND_GROUP, WgpuSink};
 pub use world::GpuWorld;
 
-/// WGSL accessors for the SVDAG node pool and chunk table (binding group 0).
-pub const SVDAG_WGSL: &str = include_str!("shaders/svdag.wgsl");
+/// WGSL accessors for the SVDAG node pool and chunk table (binding group 0),
+/// at the 64³ baseline edge.
+#[cfg(not(feature = "chunk128"))]
+pub const SVDAG_WGSL: &str = concat!(
+    include_str!("shaders/svdag_constants.wgsl"),
+    include_str!("shaders/svdag_edge_64.wgsl"),
+    include_str!("shaders/svdag.wgsl"),
+);
+
+/// WGSL accessors for the SVDAG node pool and chunk table (binding group 0),
+/// at the pre-registered 128³ edge.
+#[cfg(feature = "chunk128")]
+pub const SVDAG_WGSL: &str = concat!(
+    include_str!("shaders/svdag_constants.wgsl"),
+    include_str!("shaders/svdag_edge_128.wgsl"),
+    include_str!("shaders/svdag.wgsl"),
+);
 
 /// WGSL accessors for the hot record table and texture sets (binding group 1).
 pub const MATERIAL_WGSL: &str = include_str!("shaders/material.wgsl");

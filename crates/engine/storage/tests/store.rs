@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use voxel_block::{BlockRegistryBuilder, MaterialId};
-use voxel_storage::dag::Svdag;
+use voxel_storage::dag::{ROOT_LEVEL, Svdag};
 use voxel_storage::gpu::{BLOCKS_PER_CHUNK, GpuStore, MemSink, OVERLAY_VALUES, OVERLAY_WORDS};
 use voxel_storage::world::{ConsolidationPolicy, World};
-use voxel_storage::{CHUNK_VOLUME, ChunkPos};
+use voxel_storage::{CHUNK_DIM, CHUNK_VOLUME, ChunkPos, local_index, local_xyz};
 
 fn id(raw: u16) -> MaterialId {
     MaterialId::from_raw(raw)
@@ -23,10 +23,10 @@ type FillFn = Box<dyn FnMut(ChunkPos, &mut [u16]) + Send>;
 fn flat() -> FillFn {
     Box::new(|p, d| {
         if p.y == 0 {
-            for z in 0..64 {
-                for y in 0..32 {
-                    for x in 0..64 {
-                        d[x + y * 64 + z * 4096] = 1;
+            for z in 0..CHUNK_DIM {
+                for y in 0..CHUNK_DIM / 2 {
+                    for x in 0..CHUNK_DIM {
+                        d[local_index(x as u32, y as u32, z as u32) as usize] = 1;
                     }
                 }
             }
@@ -53,15 +53,13 @@ fn dag_roundtrip() {
     dag.expand(&mut out);
     assert_eq!(d, out);
     for i in (0..CHUNK_VOLUME).step_by(97) {
-        assert_eq!(
-            dag.get((i & 63) as u32, ((i >> 6) & 63) as u32, (i >> 12) as u32),
-            d[i]
-        );
+        let (x, y, z) = local_xyz(i as u32);
+        assert_eq!(dag.get(x, y, z), d[i]);
     }
     assert_eq!(Svdag::from_bytes(&dag.to_bytes()).unwrap(), dag);
-    // solid chunk collapses to 6 nodes
+    // A solid chunk collapses to one node per internal level.
     let solid = Svdag::from_dense(&vec![3u16; CHUNK_VOLUME]);
-    assert!(solid.pool.len() <= 6 * 9);
+    assert!(solid.pool.len() <= ROOT_LEVEL as usize * 9);
 }
 
 #[test]
@@ -81,12 +79,13 @@ fn overlay_then_batched_consolidation() {
     assert_eq!(w.get(5, 40, 5), Some(id(2)));
     assert_eq!(w.get(-1, 0, -1), Some(id(3)));
     // The GPU overlay shadows the DAG immediately, before the batch.
+    let last = CHUNK_DIM as u32 - 1;
     assert_eq!(w.gpu().lookup(c0, 5, 10, 5), 0);
     assert_eq!(w.gpu().lookup(c0, 5, 40, 5), 2);
-    assert_eq!(w.gpu().lookup(ChunkPos::new(-1, 0, -1), 63, 0, 63), 3);
+    assert_eq!(w.gpu().lookup(ChunkPos::new(-1, 0, -1), last, 0, last), 3);
     assert_eq!(w.dirty_chunks(), 2);
     // A carved voxel is represented by the presence bit, not by a zero value.
-    let idx = 5 | (10 << 6) | (5 << 12);
+    let idx = local_index(5, 10, 5);
     let within = voxel_storage::gpu::block_index(idx);
     let slot = w
         .gpu()
@@ -109,7 +108,7 @@ fn overlay_then_batched_consolidation() {
     assert_eq!(w.dirty_chunks(), 0);
     assert_eq!(w.gpu().lookup(c0, 5, 10, 5), 0);
     assert_eq!(w.gpu().lookup(c0, 5, 40, 5), 2);
-    assert_eq!(w.gpu().lookup(ChunkPos::new(-1, 0, -1), 63, 0, 63), 3);
+    assert_eq!(w.gpu().lookup(ChunkPos::new(-1, 0, -1), last, 0, last), 3);
     // Folding clears the overlay; the DAG now carries the edit.
     assert!(w.gpu().block_table_slot(c0).is_none());
     // sink mirrors CPU copy
@@ -268,7 +267,7 @@ fn gpu_refcount_dedup_and_table_growth() {
         g.set_chunk(ChunkPos::new(i, -i, i * 7), &solid);
     }
     assert_eq!(g.chunk_count(), 3000);
-    assert_eq!(g.unique_nodes(), 6); // all chunks share one DAG
+    assert_eq!(g.unique_nodes(), ROOT_LEVEL as usize); // all chunks share one DAG
     for i in 0..3000 {
         assert_eq!(g.lookup(ChunkPos::new(i, -i, i * 7), 1, 2, 3), 1);
     }
@@ -288,10 +287,10 @@ fn gpu_refcount_dedup_and_table_growth() {
 fn apply_edits_matches_dense_rebuild() {
     // blocky base: solid lower half, a few mixed blocks, lots of air
     let mut d = vec![0u16; CHUNK_VOLUME];
-    for z in 0..64 {
-        for y in 0..64 {
-            for x in 0..64 {
-                d[x + y * 64 + z * 4096] = if y < 20 {
+    for z in 0..CHUNK_DIM {
+        for y in 0..CHUNK_DIM {
+            for x in 0..CHUNK_DIM {
+                d[local_index(x as u32, y as u32, z as u32) as usize] = if y < 20 {
                     1
                 } else if (x / 8 + z / 8) % 3 == 0 && y < 30 {
                     2
@@ -340,14 +339,15 @@ fn apply_edits_matches_dense_rebuild() {
 #[test]
 fn gpu_apply_edits_matches_cpu_and_leaks_nothing() {
     let mut d = vec![0u16; CHUNK_VOLUME];
-    for z in 0..64 {
-        for y in 0..64 {
-            for x in 0..64 {
-                d[x + y * 64 + z * 4096] = if y < 24 + ((x * 7 + z * 3) % 5) {
-                    1 + ((x / 16) % 3) as u16
-                } else {
-                    0
-                };
+    for z in 0..CHUNK_DIM {
+        for y in 0..CHUNK_DIM {
+            for x in 0..CHUNK_DIM {
+                d[local_index(x as u32, y as u32, z as u32) as usize] =
+                    if y < 24 + ((x * 7 + z * 3) % 5) {
+                        1 + ((x / 16) % 3) as u16
+                    } else {
+                        0
+                    };
             }
         }
     }
@@ -372,7 +372,7 @@ fn gpu_apply_edits_matches_cpu_and_leaks_nothing() {
         let tag = g.end_batch();
         g.reclaim(tag);
         for i in (0..CHUNK_VOLUME).step_by(61) {
-            let (x, y, z) = ((i & 63) as u32, ((i >> 6) & 63) as u32, (i >> 12) as u32);
+            let (x, y, z) = local_xyz(i as u32);
             assert_eq!(g.lookup(p, x, y, z), d[i], "round {round} voxel {i}");
         }
         // no leaks / canonical: node set equals a fresh import of the same content
@@ -383,8 +383,9 @@ fn gpu_apply_edits_matches_cpu_and_leaks_nothing() {
     // edit an absent chunk, then erase everything
     let q = ChunkPos::new(-5, 1, 9);
     g.apply_edits(q, [(0u32, 7u16), (CHUNK_VOLUME as u32 - 1, 7)]);
+    let last = CHUNK_DIM as u32 - 1;
     assert_eq!(g.lookup(q, 0, 0, 0), 7);
-    assert_eq!(g.lookup(q, 63, 63, 63), 7);
+    assert_eq!(g.lookup(q, last, last, last), 7);
     g.apply_edits(q, [(0u32, 0u16), (CHUNK_VOLUME as u32 - 1, 0)]);
     assert!(!g.contains(q));
     g.apply_edits(p, (0..CHUNK_VOLUME as u32).map(|i| (i, 0u16)));
@@ -413,10 +414,10 @@ fn registry_ids_drive_chunk_storage() {
     let mut w = World::new(
         &dir,
         Box::new(move |_, d| {
-            for z in 0..64 {
-                for x in 0..64 {
+            for z in 0..CHUNK_DIM {
+                for x in 0..CHUNK_DIM {
                     for y in 0..32 {
-                        d[x + y * 64 + z * 4096] = stone.as_raw();
+                        d[local_index(x as u32, y as u32, z as u32) as usize] = stone.as_raw();
                     }
                 }
             }
@@ -505,7 +506,7 @@ fn consolidation_policy_budget_stops_between_chunks() {
     w.set_policy(policy(1, 3_600, Duration::ZERO, 8));
 
     w.set(1, 1, 1, id(0)).unwrap();
-    w.set(65, 1, 1, id(0)).unwrap(); // chunk (1, 0, 0), local x = 1
+    w.set(CHUNK_DIM as i32 + 1, 1, 1, id(0)).unwrap(); // chunk (1, 0, 0), local x = 1
     assert_eq!(w.pending_chunks(), 2);
 
     let first = w.tick(Instant::now()).unwrap().expect("size trigger");

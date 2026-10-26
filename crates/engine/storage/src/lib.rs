@@ -40,7 +40,7 @@ pub use run::{
 pub use voxel_block::MaterialId;
 
 pub use voxel_core::constants::{
-    BLOCK_BITS, BLOCK_DIM, BLOCKS_PER_CHUNK, CHUNK_BITS, CHUNK_DIM, CHUNK_VOLUME,
+    BLOCK_BITS, BLOCK_DIM, BLOCK_LEVEL, BLOCKS_PER_CHUNK, CHUNK_BITS, CHUNK_DIM, CHUNK_VOLUME,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]

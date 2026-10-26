@@ -19,6 +19,9 @@ pollster = "1"
 iai-callgrind = "0.16"
 
 [features]
+# Forward the pre-registered 128³ chunk edge to the crates this benchmark
+# drives.
+chunk128 = ["voxel-storage/chunk128", "voxel-render/chunk128"]
 # Gates the iai-callgrind bench target; the dependency itself is a dev-dep.
 iai = []
 

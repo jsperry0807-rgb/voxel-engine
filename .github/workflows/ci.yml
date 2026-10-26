@@ -65,13 +65,9 @@ jobs:
       - run: cargo test -p voxel-render --test shaders
 
   chunk128:
-    name: chunk128 (expected failure until M1-24)
+    name: chunk128 (128³ edge)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # TODO(M1-24): remove `continue-on-error` once the CHUNK_BITS guard in
-    # crates/core/src/constants.rs is removed and the 7-bit build is green;
-    # this job then becomes required.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

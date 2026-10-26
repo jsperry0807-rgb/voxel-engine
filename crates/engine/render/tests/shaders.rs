@@ -1,8 +1,8 @@
 //! The WGSL contract must stay parseable, valid and numerically in step with
 //! the CPU tables, without a GPU.
 //!
-//! WGSL has no include mechanism, so `svdag.wgsl` spells out the layout
-//! constants the Rust tables own. [`shader_constants_match_the_cpu_tables`]
+//! WGSL has no include mechanism, so the assembled `SVDAG_WGSL` spells out the
+//! layout constants the Rust tables own. [`shader_constants_match_the_cpu_tables`]
 //! parses those declarations back out and compares them value for value;
 //! [`shader_constants_cover_every_declaration`] keeps the mirror total, so a
 //! shader constant with no Rust owner, or one that is declared but never used,
@@ -11,6 +11,7 @@
 use std::collections::BTreeMap;
 
 use voxel_render::{MATERIAL_WGSL, SVDAG_WGSL};
+use voxel_storage::BLOCK_LEVEL;
 use voxel_storage::dag::{NONE, ROOT_LEVEL, hdr_mask};
 use voxel_storage::gpu::{
     BLOCKS_PER_CHUNK, EMPTY, NO_OVERLAY, NO_TABLE, OVERLAY_VALUES, OVERLAY_WORDS, SLOT_WORDS, TOMB,
@@ -61,7 +62,7 @@ struct Mirrored {
 /// [`shader_constants_cover_every_declaration`] requires the two sets to match
 /// exactly, so adding a shader constant means adding a row here and thereby
 /// naming the Rust value it must follow.
-fn mirrored_constants() -> [Mirrored; 11] {
+fn mirrored_constants() -> [Mirrored; 12] {
     [
         Mirrored {
             name: "NONE",
@@ -92,6 +93,11 @@ fn mirrored_constants() -> [Mirrored; 11] {
             name: "ROOT_LEVEL",
             value: u64::from(ROOT_LEVEL),
             owner: "voxel_storage::dag::ROOT_LEVEL",
+        },
+        Mirrored {
+            name: "BLOCK_LEVEL",
+            value: u64::from(BLOCK_LEVEL),
+            owner: "voxel_storage::BLOCK_LEVEL",
         },
         Mirrored {
             name: "SLOT_WORDS",

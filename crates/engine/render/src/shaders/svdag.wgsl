@@ -4,7 +4,8 @@
 //   @binding(0) nodes        global node pool, u32 words
 //   @binding(1) chunk_table  5 u32 per slot: [x, y, z, root, block_table]
 //   @binding(2) overlays     per-block edit overrides, OVERLAY_WORDS per slot
-//   @binding(3) block_tables 64 u32 per chunk, one overlay slot per 16^3 block
+//   @binding(3) block_tables BLOCKS_PER_CHUNK u32 per chunk, one overlay slot
+//                             per 16^3 block
 //
 // Node layout, matching the CPU pool exactly:
 //   [header, child_0 .. child_{k-1}]
@@ -23,20 +24,10 @@
 // Chunk position x/y/z are stored as u32 two's-complement bit patterns, so
 // bitcast<u32>(p.x) is the same value the CPU wrote for a negative coordinate.
 
-// Layout constants mirrored from Rust. They are asserted value for value by
-// crates/engine/render/tests/shaders.rs, which also fails if a constant here
-// has no Rust owner; change the Rust table and this block together.
-const NONE: u32 = 0xFFFFFFFFu;
-const EMPTY: u32 = 0xFFFFFFFFu;
-const TOMB: u32 = 0xFFFFFFFEu;
-const NO_OVERLAY: u32 = 0xFFFFFFFFu;
-const NO_TABLE: u32 = 0xFFFFFFFFu;
-const ROOT_LEVEL: u32 = 6u;
-const SLOT_WORDS: u32 = 5u;
-const BLOCKS_PER_CHUNK: u32 = 64u;
-const OVERLAY_VALUES: u32 = 2048u;
-const OVERLAY_WORDS: u32 = 2176u;
-const MASK_BITS: u32 = 0xFFu;
+// Layout constants are prepended by `voxel_render::SVDAG_WGSL`: the shared
+// block in `svdag_constants.wgsl`, the edge block in `svdag_edge_64.wgsl` or
+// `svdag_edge_128.wgsl`, then this body. They are mirrored from Rust and
+// asserted by crates/engine/render/tests/shaders.rs.
 
 @group(0) @binding(0) var<storage, read> nodes: array<u32>;
 @group(0) @binding(1) var<storage, read> chunk_table: array<u32>;
@@ -95,7 +86,7 @@ fn chunk_root(p: vec3<i32>) -> u32 {
     return root;
 }
 
-// DDA-free octree descent to one voxel; `pos` is chunk-local 0..64.
+// DDA-free octree descent to one voxel; `pos` is chunk-local `0..CHUNK_DIM`.
 // Mirrors `dag_get` in voxel_storage::dag.
 fn dag_get(root: u32, pos: vec3<u32>) -> u32 {
     var node = root;
@@ -140,8 +131,12 @@ fn sample_chunk(p: vec3<i32>, local: vec3<u32>) -> u32 {
 
     let table_slot = chunk_table[base + 4u];
     if table_slot != NO_TABLE {
-        // block = bx | by << 2 | bz << 4, with 16-voxel blocks.
-        let block = (local.x >> 4u) | ((local.y >> 4u) << 2u) | ((local.z >> 4u) << 4u);
+        // block = bx | by << BLOCK_LEVEL | bz << (2 * BLOCK_LEVEL), with
+        // 16-voxel blocks. BLOCK_LEVEL follows the chunk edge (2 at 64³,
+        // 3 at 128³).
+        let block = (local.x >> 4u)
+            | ((local.y >> 4u) << BLOCK_LEVEL)
+            | ((local.z >> 4u) << (2u * BLOCK_LEVEL));
         let overlay = block_tables[table_slot * BLOCKS_PER_CHUNK + block];
         if overlay != NO_OVERLAY {
             // within = x | y << 4 | z << 8, in 0..4096.

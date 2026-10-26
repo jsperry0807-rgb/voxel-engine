@@ -5,6 +5,6 @@ edition.workspace = true
 publish.workspace = true
 
 [features]
-# Pre-registered 128³ chunk edge (`CHUNK_BITS = 7`). Not buildable until M1-24;
-# see the guard in `src/constants.rs`.
+# Pre-registered 128³ chunk edge (`CHUNK_BITS = 7`). Downstream crates forward
+# this through their own `chunk128` feature.
 chunk128 = []

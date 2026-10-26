@@ -11,10 +11,9 @@ use voxel_block::{
 use voxel_render::{
     GpuWorld, MATERIAL_WGSL, MaterialBuffers, SVDAG_WGSL, WgpuSink, material_bind_group_layout,
 };
-use voxel_storage::CHUNK_VOLUME;
-use voxel_storage::ChunkPos;
 use voxel_storage::dag::Svdag;
 use voxel_storage::gpu::GpuStore;
+use voxel_storage::{CHUNK_VOLUME, ChunkPos, local_index};
 
 struct Gpu {
     // Keep the instance and adapter alive for as long as the device: some
@@ -159,7 +158,7 @@ fn storage_flush_reaches_the_gpu_buffers() {
     for z in 0..8 {
         for y in 0..8 {
             for x in 0..8 {
-                dense[x + y * 64 + z * 4096] = 1;
+                dense[local_index(x, y, z) as usize] = 1;
             }
         }
     }

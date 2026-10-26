@@ -864,12 +864,12 @@ mod tests {
     #[test]
     #[should_panic(expected = "CHUNK_VOLUME")]
     fn expand_rejects_a_dense_length_mismatch() {
-        ChunkDag::empty().expand(&mut [0; CHUNK_VOLUME - 1]);
+        ChunkDag::empty().expand(&mut vec![0; CHUNK_VOLUME - 1]);
     }
 
     #[test]
     #[should_panic(expected = "CHUNK_VOLUME")]
     fn bfs_build_rejects_a_dense_length_mismatch() {
-        let _ = ChunkDag::from_dense(&[0; CHUNK_VOLUME - 1]);
+        let _ = ChunkDag::from_dense(&vec![0; CHUNK_VOLUME - 1]);
     }
 }

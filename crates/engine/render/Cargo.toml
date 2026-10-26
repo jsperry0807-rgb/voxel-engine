@@ -10,6 +10,11 @@ voxel-storage = { path = "../storage" }
 wgpu = "30"
 bytemuck = "1"
 
+[features]
+# Forward the pre-registered 128³ chunk edge to `voxel-storage` (and thus
+# `voxel-core`). The shader's edge-dependent constants are selected here.
+chunk128 = ["voxel-storage/chunk128"]
+
 [dev-dependencies]
 naga = { version = "30", features = ["wgsl-in"] }
 pollster = "1"

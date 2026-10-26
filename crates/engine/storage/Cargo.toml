@@ -8,6 +8,12 @@ publish.workspace = true
 voxel-block = { path = "../block" }
 voxel-core = { path = "../../core" }
 
+[features]
+# Forward the pre-registered 128³ chunk edge (`CHUNK_BITS = 7`) to
+# `voxel-core`. Downstream crates enable this through their own `chunk128`
+# feature; `cargo test --workspace --features chunk128` enables every crate's.
+chunk128 = ["voxel-core/chunk128"]
+
 [dev-dependencies]
 criterion = "0.5"
 

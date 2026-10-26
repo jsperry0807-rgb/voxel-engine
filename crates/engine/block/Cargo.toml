@@ -9,6 +9,10 @@ voxel-core = { path = "../../core" }
 serde = { version = "1", features = ["derive"] }
 ron = "0.8"
 
+[features]
+# Forward the pre-registered 128³ chunk edge to `voxel-core`.
+chunk128 = ["voxel-core/chunk128"]
+
 [dev-dependencies]
 criterion = "0.5"
 

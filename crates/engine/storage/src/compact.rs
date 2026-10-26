@@ -659,6 +659,12 @@ mod tests {
         }
     }
 
+    /// Keeps the edit density of the 64³ baseline (256 edits) at either edge,
+    /// so compaction has the same amount of dead-run churn to reclaim.
+    fn edits_per_fixture() -> usize {
+        256 * (CHUNK_VOLUME / 64usize.pow(3))
+    }
+
     /// Walks every live node and checks child addressing, leaf bounds and the
     /// full-run alignment invariant after a renumber.
     fn verify_live_dag(dag: &ChunkDag) {
@@ -725,7 +731,7 @@ mod tests {
         let mut dense = blocky_base();
         let mut dag = ChunkDag::from_dense(&dense);
         let mut state = 0x5eed_1e55_c0de_1234u64;
-        edit_many(&mut dag, &mut dense, &mut state, 256);
+        edit_many(&mut dag, &mut dense, &mut state, edits_per_fixture());
 
         let words_before = dag.node_words();
         let leaves_before = dag.leaf_words();
@@ -764,7 +770,7 @@ mod tests {
         let mut dense = blocky_base();
         let mut dag = ChunkDag::from_dense(&dense);
         let mut state = 0x0bad_cafe_d00d_1234u64;
-        edit_many(&mut dag, &mut dense, &mut state, 256);
+        edit_many(&mut dag, &mut dense, &mut state, edits_per_fixture());
 
         let level = 1;
         let old_len = dag.bands().len(level);
