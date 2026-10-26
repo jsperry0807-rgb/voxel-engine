@@ -149,7 +149,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M1-15 | Keep the public `Svdag` API stable: `from_dense`, `get`, `expand`, `apply_edits`, `to_bytes`, `from_bytes`, `words`, `empty`, `is_empty` | M1-14 | All 16 existing `tests/store.rs` tests pass unchanged | `cargo test -p voxel-storage --test store` | 0.5 d | [x] |
 | M1-16 | Property test: 10k random edit batches vs dense reference, including carve-to-air and revert | M1-15 | Passes with 1 seed fixed and 1 random per run; shrinks on failure | `cargo test -p voxel-storage --release property_edits` | 0.5 d | [x] |
 | M1-17 | Fuzz `from_bytes`: arbitrary bytes never panic, only `Ok` or `None` | M1-13 | 1M random buffers, no panic; corpus saved | `cargo test -p voxel-storage --release fuzz_bytes` | 0.5 d | [x] |
-| M1-18 | Layout cost report: bytes/internal node including padding, run count, dedup ratio vs the old encoding, COW bytes per edited path | M1-16 | Numbers printed by a bench case and recorded in `benchmarks/HISTORY.md` | `scripts/bench.sh LABEL=m1-layout` | 1 d | [ ] |
+| M1-18 | Layout cost report: bytes/internal node including padding, run count, dedup ratio vs the old encoding, COW bytes per edited path | M1-16 | Numbers printed by a bench case and recorded in `benchmarks/HISTORY.md` | `scripts/bench.sh LABEL=m1-layout` | 1 d | [x] |
 
 ### 4.2 Parameterization — no literal chunk size
 
