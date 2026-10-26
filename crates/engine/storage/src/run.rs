@@ -1,9 +1,9 @@
-//! Sibling-run allocation over a level band (M1-03).
+//! Sibling-run allocation and interning over a level band (M1-03, M1-04).
 //!
 //! A parent's present children form one **run**: `popcount(mask)` contiguous
 //! nodes in ascending child order (ADR-011). This module hands out those runs
-//! inside a [`Bands`] level band and records the alignment padding each one
-//! costs.
+//! inside a [`Bands`] level band, records the alignment padding each one
+//! costs, and hash-conses identical runs.
 //!
 //! - A **full run** (`mask == 0xFF`) is eight nodes, exactly one 64 B cache
 //!   line. Its first node is aligned to a 64 B boundary, so it never straddles
@@ -19,12 +19,28 @@
 //! also materializes the padding slots and the child words in the band. Use
 //! one or the other for a given allocation, never both.
 //!
+//! # Interning
+//!
+//! [`RunInterner`] owns a [`Bands`] arena and one allocator per level. Its
+//! [`RunInterner::intern`] keys a run on `(level, mask, ordered child words)`:
+//! the level names the band that stores the children, the mask says which
+//! child indices are present, and the child words are compared verbatim. The
+//! hash is a lookup accelerator only; a hit is accepted only after the stored
+//! run has been compared field-for-field, so two different runs that share a
+//! hash never merge. A repeated key returns its existing base, while a new key
+//! appends through the allocator and returns the new base.
+//!
+//! Zero-mask runs allocate nothing (M1-11) and intern to the unused sentinel
+//! base `0`. [`RunInterner::deallocate`] retires a run from the index so the
+//! key can be interned again; the append-only band keeps the bytes until
+//! compaction (M1-12) and the dead bytes stay queryable.
+//!
 //! # Example
 //!
 //! ```
 //! use voxel_storage::bands::Bands;
 //! use voxel_storage::node_word::Node;
-//! use voxel_storage::run::{RunAllocator, FULL_MASK};
+//! use voxel_storage::run::{RunAllocator, RunInterner, FULL_MASK};
 //!
 //! let mut bands = Bands::new();
 //! let mut runs = RunAllocator::new();
@@ -40,9 +56,22 @@
 //! assert_eq!(full.padding_bytes(), 40);
 //! assert!(full.is_cache_line_aligned());
 //! assert_eq!(runs.padding_bytes(), 40);
+//!
+//! // The same content interns to one base; a different mask gets a new run.
+//! let mut pool = RunInterner::new();
+//! let children = [Node::new(1, 2, 0), Node::new(1, 2, 1)];
+//! let first = pool.intern(2, 0b0000_0011, &children);
+//! assert_eq!(pool.intern(2, 0b0000_0011, &children), first);
+//! assert_ne!(pool.intern(2, 0b0000_1100, &children), first);
+//! assert_eq!(pool.live_runs(), 2);
 //! ```
 
-use crate::bands::Bands;
+use std::hash::Hasher;
+
+use voxel_core::constants::ROOT_LEVEL;
+
+use crate::bands::{BAND_COUNT, Bands};
+use crate::hash::{Fx, FxMap};
 use crate::node_word::{NODE_INDEX_MAX, Node};
 
 /// Size of one internal node slot in bytes.
@@ -287,6 +316,282 @@ impl RunAllocator {
     /// True when nothing has been allocated.
     pub fn is_empty(&self) -> bool {
         self.runs.is_empty()
+    }
+}
+
+/// The interned content of one run, kept for deallocation and statistics.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct RunMeta {
+    hash: u64,
+    mask: u8,
+    nodes: u64,
+    padding_bytes: u64,
+}
+
+/// Resolves a level to its per-level slot, panicking outside the chunk's bands.
+#[inline]
+fn band_slot(level: u32) -> usize {
+    assert!(
+        level <= ROOT_LEVEL,
+        "intern level {level} is outside 0..={ROOT_LEVEL}"
+    );
+    level as usize
+}
+
+/// Hashes the full run key: the storage level, the presence mask and every
+/// ordered child word.
+///
+/// The hash is not the identity: [`RunInterner`] always confirms a candidate
+/// with [`RunInterner::matches`] before reusing its base.
+#[inline]
+fn content_hash(level: u32, mask: u8, children: &[Node]) -> u64 {
+    let mut hash = Fx::default();
+    hash.write_u64(u64::from(level));
+    hash.write_u64(u64::from(mask));
+    for child in children {
+        hash.write_u64(child.encode());
+    }
+    hash.finish()
+}
+
+/// A hash-consed set of sibling runs over one [`Bands`] arena.
+///
+/// The interner owns the bands and one [`RunAllocator`] per level. A run is
+/// stored in the band named by `level`, exactly like
+/// [`RunAllocator::allocate_into`], so every child word must itself carry
+/// `level`. The key is `(level, mask, ordered child words)`; equality is
+/// checked against the bytes in the band, never against the hash alone.
+///
+/// Interning is idempotent: the same key returns the same base until that run
+/// is deallocated. New content appends a run, so a hash collision costs an
+/// extra run but can never return the wrong base.
+///
+/// A zero mask allocates nothing (M1-11). It returns the unused sentinel base
+/// `0`; a zero-mask parent is never emitted, so the value is never stored in a
+/// node word.
+#[derive(Clone, Debug)]
+pub struct RunInterner {
+    bands: Bands,
+    allocators: [RunAllocator; BAND_COUNT],
+    /// Content hash -> candidate bases in insertion order. A bucket can hold
+    /// more than one base when distinct keys share a hash.
+    index: [FxMap<u64, Vec<u64>>; BAND_COUNT],
+    /// Base -> the content that owns it, used by equality checks and
+    /// deallocation. Only live runs are present.
+    runs: [FxMap<u64, RunMeta>; BAND_COUNT],
+    hits: u64,
+    misses: u64,
+    dead_runs: u64,
+    dead_bytes: u64,
+}
+
+impl RunInterner {
+    /// Creates an empty interner.
+    pub fn new() -> Self {
+        Self {
+            bands: Bands::new(),
+            allocators: core::array::from_fn(|_| RunAllocator::new()),
+            index: core::array::from_fn(|_| FxMap::default()),
+            runs: core::array::from_fn(|_| FxMap::default()),
+            hits: 0,
+            misses: 0,
+            dead_runs: 0,
+            dead_bytes: 0,
+        }
+    }
+
+    /// Interns one sibling run into `level`'s band and returns its base.
+    ///
+    /// `children` must contain exactly `popcount(mask)` node words in ascending
+    /// child order, and each word must carry `level`. The same level, mask and
+    /// ordered children always return the same base while the run is live.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `level > ROOT_LEVEL`, if `children` does not match
+    /// `popcount(mask)`, or if a child's level does not name the band.
+    pub fn intern(&mut self, level: u32, mask: u8, children: &[Node]) -> u64 {
+        let hash = content_hash(level, mask, children);
+        self.intern_with_hash(level, mask, children, hash)
+    }
+
+    /// [`Self::intern`] with an explicit content hash.
+    ///
+    /// Production callers use [`Self::intern`]. Tests use this private form to
+    /// force different keys onto one hash and exercise the collision path.
+    fn intern_with_hash(&mut self, level: u32, mask: u8, children: &[Node], hash: u64) -> u64 {
+        let slot = band_slot(level);
+        assert_eq!(
+            children.len() as u64,
+            u64::from(mask.count_ones()),
+            "run needs popcount(mask) child nodes"
+        );
+        for child in children {
+            assert_eq!(
+                child.level(),
+                level,
+                "interned child level does not match its band level {level}"
+            );
+        }
+
+        // An empty parent is not stored at all (M1-11). The base is a sentinel
+        // because no node word will ever point at it.
+        if mask == 0 {
+            return 0;
+        }
+
+        let found = self.index[slot].get(&hash).and_then(|bases| {
+            bases
+                .iter()
+                .copied()
+                .find(|&base| self.matches(slot, mask, children, base))
+        });
+        if let Some(base) = found {
+            self.hits += 1;
+            return base;
+        }
+
+        let allocation =
+            self.allocators[slot].allocate_into(&mut self.bands, level, mask, children);
+        let base = allocation.base();
+        self.runs[slot].insert(
+            base,
+            RunMeta {
+                hash,
+                mask,
+                nodes: allocation.nodes(),
+                padding_bytes: allocation.padding_bytes(),
+            },
+        );
+        self.index[slot].entry(hash).or_default().push(base);
+        self.misses += 1;
+        base
+    }
+
+    /// True when `base` names a live run at `level` with exactly this mask and
+    /// this ordered child content.
+    ///
+    /// The level is the band slot, so comparing masks and child words is
+    /// sufficient; the stored words already carry the band's level.
+    fn matches(&self, slot: usize, mask: u8, children: &[Node], base: u64) -> bool {
+        let Some(meta) = self.runs[slot].get(&base) else {
+            return false;
+        };
+        if meta.mask != mask {
+            return false;
+        }
+        let Ok(start) = usize::try_from(base) else {
+            return false;
+        };
+        let Some(end) = start.checked_add(children.len()) else {
+            return false;
+        };
+        self.bands.band(slot as u32).get(start..end) == Some(children)
+    }
+
+    /// Retires the live run starting at `base` in `level`'s band.
+    ///
+    /// The run is removed from the intern index, so interning the same content
+    /// again appends a fresh run instead of returning this base. The bytes are
+    /// **not** returned to the arena: bands are append-only, so reclamation is
+    /// the offline compaction step (M1-12). Returns `false` when `base` is not
+    /// a live interned run.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `level > ROOT_LEVEL`.
+    ///
+    /// # Caller contract
+    ///
+    /// Retire a run only when no live root or in-flight frame can still reach
+    /// it. Reference counting and the epoch list arrive with COW (M1-10) and
+    /// the invariant checker (M1-14); this method cannot prove that condition.
+    pub fn deallocate(&mut self, level: u32, base: u64) -> bool {
+        let slot = band_slot(level);
+        let Some(meta) = self.runs[slot].remove(&base) else {
+            return false;
+        };
+
+        if let Some(bucket) = self.index[slot].get_mut(&meta.hash) {
+            if let Some(position) = bucket.iter().position(|&candidate| candidate == base) {
+                bucket.swap_remove(position);
+            }
+            if bucket.is_empty() {
+                self.index[slot].remove(&meta.hash);
+            }
+        }
+
+        self.dead_runs += 1;
+        self.dead_bytes += meta.nodes * NODE_BYTES + meta.padding_bytes;
+        true
+    }
+
+    /// The bands built so far.
+    pub const fn bands(&self) -> &Bands {
+        &self.bands
+    }
+
+    /// Consumes the interner and returns its bands.
+    ///
+    /// The allocators and intern index are dropped; callers that keep building
+    /// a chunk should continue to use the interner.
+    pub fn into_bands(self) -> Bands {
+        self.bands
+    }
+
+    /// Number of live interned runs across all levels.
+    pub fn live_runs(&self) -> usize {
+        self.runs.iter().map(FxMap::len).sum()
+    }
+
+    /// Number of runs ever appended, including retired ones.
+    pub fn allocated_runs(&self) -> usize {
+        self.allocators.iter().map(RunAllocator::run_count).sum()
+    }
+
+    /// Number of intern calls that reused an existing run.
+    pub const fn hit_count(&self) -> u64 {
+        self.hits
+    }
+
+    /// Number of intern calls that appended a new run.
+    pub const fn miss_count(&self) -> u64 {
+        self.misses
+    }
+
+    /// Number of runs retired by [`Self::deallocate`].
+    pub const fn dead_run_count(&self) -> u64 {
+        self.dead_runs
+    }
+
+    /// Bytes owned by retired runs, including their alignment padding.
+    ///
+    /// These bytes are still physically present because bands are append-only;
+    /// they are the input to the compaction trigger (M1-12).
+    pub const fn dead_bytes(&self) -> u64 {
+        self.dead_bytes
+    }
+
+    /// Total alignment padding inserted across all allocated runs.
+    pub fn padding_bytes(&self) -> u64 {
+        self.allocators
+            .iter()
+            .map(RunAllocator::padding_bytes)
+            .sum()
+    }
+
+    /// Total slot bytes handed out across all levels, including padding.
+    pub fn allocated_bytes(&self) -> u64 {
+        self.allocators
+            .iter()
+            .map(RunAllocator::allocated_bytes)
+            .sum()
+    }
+}
+
+impl Default for RunInterner {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -539,5 +844,276 @@ mod tests {
         let mut alloc = RunAllocator::new();
         bands.append(1, Node::new(0, 1, 0));
         alloc.allocate_into(&mut bands, 1, 0b0000_0001, &children(1, 1));
+    }
+
+    #[test]
+    fn run_intern_same_key_twice_returns_the_same_base() {
+        let mut pool = RunInterner::new();
+        let kids = children(3, 2);
+
+        let first = pool.intern(2, 0b0000_0111, &kids);
+        let second = pool.intern(2, 0b0000_0111, &kids.clone());
+
+        assert_eq!(first, second);
+        assert_eq!(first, 0);
+        assert_eq!(pool.bands().band(2), kids.as_slice());
+        assert_eq!(pool.bands().len(2), 3);
+        assert_eq!(pool.live_runs(), 1);
+        assert_eq!(pool.allocated_runs(), 1);
+        assert_eq!(pool.hit_count(), 1);
+        assert_eq!(pool.miss_count(), 1);
+        assert_eq!(pool.padding_bytes(), 0);
+        assert_eq!(pool.allocated_bytes(), 3 * NODE_BYTES);
+    }
+
+    /// The mask is part of the key even when two masks have the same popcount
+    /// and therefore the same ordered child words.
+    #[test]
+    fn run_intern_key_includes_mask_and_level() {
+        let mut pool = RunInterner::new();
+        let level_two = children(2, 2);
+        let level_three = children(2, 3);
+
+        let mask_a = pool.intern(2, 0b0000_0011, &level_two);
+        let mask_b = pool.intern(2, 0b0000_1100, &level_two);
+        let other_level = pool.intern(3, 0b0000_0011, &level_three);
+
+        assert_eq!(mask_a, 0);
+        assert_eq!(mask_b, 2);
+        assert_ne!(mask_a, mask_b);
+        assert_eq!(pool.bands().len(2), 4);
+        assert_eq!(pool.bands().len(3), 2);
+
+        // Re-interning each key returns its own base, including the key whose
+        // base value is reused by a different level band.
+        assert_eq!(pool.intern(2, 0b0000_0011, &level_two), mask_a);
+        assert_eq!(pool.intern(2, 0b0000_1100, &level_two), mask_b);
+        assert_eq!(pool.intern(3, 0b0000_0011, &level_three), other_level);
+        assert_eq!(pool.live_runs(), 3);
+    }
+
+    /// Force three distinct keys onto one hash. The equality check must keep
+    /// their bases separate and keep each key idempotent.
+    #[test]
+    fn run_intern_hash_collision_compares_full_content() {
+        let mut pool = RunInterner::new();
+        let kids = children(2, 2);
+        let other_kids = vec![Node::new(1, 2, 90), Node::new(1, 2, 91)];
+        let forced_hash = 0xfeed_face_cafe_beef;
+
+        let same_mask = pool.intern_with_hash(2, 0b0000_0011, &kids, forced_hash);
+        let other_mask = pool.intern_with_hash(2, 0b0000_1100, &kids, forced_hash);
+        let other_children = pool.intern_with_hash(2, 0b0000_0011, &other_kids, forced_hash);
+
+        assert_eq!((same_mask, other_mask, other_children), (0, 2, 4));
+        let bucket = pool.index[2]
+            .get(&forced_hash)
+            .expect("the forced hash has a bucket");
+        assert_eq!(bucket.as_slice(), &[same_mask, other_mask, other_children]);
+
+        // A collision costs a run, never a wrong base.
+        assert_eq!(
+            pool.intern_with_hash(2, 0b0000_0011, &kids, forced_hash),
+            same_mask
+        );
+        assert_eq!(
+            pool.intern_with_hash(2, 0b0000_1100, &kids, forced_hash),
+            other_mask
+        );
+        assert_eq!(
+            pool.intern_with_hash(2, 0b0000_0011, &other_kids, forced_hash),
+            other_children
+        );
+        assert_eq!(pool.allocated_runs(), 3);
+        assert_eq!(pool.live_runs(), 3);
+    }
+
+    /// M1-04 acceptance: over 10k runs, distinct content gets a distinct base
+    /// (so differing masks cannot silently share a run) and a repeated key
+    /// returns its original base without appending.
+    #[test]
+    fn run_intern_10k_runs_are_content_addressed() {
+        use std::collections::HashMap;
+
+        const CASES: usize = 10_000;
+        type Key = (u32, u8, Vec<u64>);
+
+        let mut pool = RunInterner::new();
+        let mut state = 0x0ddc_0ffe_e15e_beefu64;
+        let mut entries: Vec<(u32, u8, Vec<Node>, u64)> = Vec::new();
+        let mut by_key: HashMap<Key, u64> = HashMap::new();
+        let mut by_address: HashMap<(u32, u64), Key> = HashMap::new();
+        let mut expected_hits = 0u64;
+        let mut expected_misses = 0u64;
+
+        for case in 0..CASES {
+            let reuse = case > 0 && rng(&mut state).is_multiple_of(3);
+            let (level, mask, kids, key) = if reuse {
+                let (level, mask, kids, _) = &entries[(rng(&mut state) as usize) % entries.len()];
+                let key = (
+                    *level,
+                    *mask,
+                    kids.iter().map(|node| node.encode()).collect(),
+                );
+                (*level, *mask, kids.clone(), key)
+            } else {
+                let level = (rng(&mut state) % (ROOT_LEVEL as u64 + 1)) as u32;
+                // Non-zero masks only; the empty case has its own test.
+                let mask = (rng(&mut state) % 255 + 1) as u8;
+                let count = mask.count_ones() as usize;
+                let kids: Vec<Node> = (0..count)
+                    .map(|i| Node::new(1, level, case as u64 * 8 + i as u64 + 1))
+                    .collect();
+                let key = (level, mask, kids.iter().map(|node| node.encode()).collect());
+                (level, mask, kids, key)
+            };
+
+            let before = pool.allocated_runs();
+            let base = pool.intern(level, mask, &kids);
+
+            if let Some(&existing) = by_key.get(&key) {
+                assert_eq!(base, existing, "case {case}: key must be idempotent");
+                assert_eq!(
+                    pool.allocated_runs(),
+                    before,
+                    "case {case}: a hit must not append"
+                );
+                expected_hits += 1;
+            } else {
+                assert_eq!(
+                    pool.allocated_runs(),
+                    before + 1,
+                    "case {case}: a miss appends exactly one run"
+                );
+                assert!(
+                    by_address.insert((level, base), key.clone()).is_none(),
+                    "case {case}: two distinct keys share base {base} in level {level}"
+                );
+                by_key.insert(key.clone(), base);
+                entries.push((level, mask, kids, base));
+                expected_misses += 1;
+            }
+        }
+
+        assert!(expected_hits > 0);
+        assert_eq!(expected_hits + expected_misses, CASES as u64);
+        assert_eq!(pool.hit_count(), expected_hits);
+        assert_eq!(pool.miss_count(), expected_misses);
+        assert_eq!(pool.live_runs(), entries.len());
+        assert_eq!(pool.allocated_runs(), entries.len());
+    }
+
+    /// Different masks with the same ordered children must stay distinct: the
+    /// mask is part of the run key, not just the child count.
+    #[test]
+    fn run_intern_different_masks_never_share_over_10k_runs() {
+        use std::collections::HashMap;
+
+        const CASES: usize = 10_000;
+        const LEVEL: u32 = 2;
+        const MASKS: [u8; 4] = [0b0000_0011, 0b0000_1100, 0b0000_0101, 0b0000_1010];
+
+        let mut pool = RunInterner::new();
+        let mut by_address: HashMap<u64, (usize, u8)> = HashMap::new();
+
+        for case in 0..CASES {
+            let group = case / MASKS.len();
+            let mask = MASKS[case % MASKS.len()];
+            let kids = [
+                Node::new(1, LEVEL, group as u64 * 2 + 1),
+                Node::new(1, LEVEL, group as u64 * 2 + 2),
+            ];
+
+            let base = pool.intern(LEVEL, mask, &kids);
+            assert!(
+                by_address.insert(base, (group, mask)).is_none(),
+                "case {case}: mask {mask:#010b} merged with another run of group {group}"
+            );
+            assert_eq!(pool.live_runs(), case + 1);
+        }
+
+        assert_eq!(pool.allocated_runs(), CASES);
+        assert_eq!(pool.hit_count(), 0);
+    }
+
+    #[test]
+    fn run_intern_deallocate_retires_a_run_and_reintern_appends() {
+        let mut pool = RunInterner::new();
+        let kids = children(3, 4);
+
+        let first = pool.intern(4, 0b0000_0111, &kids);
+        assert_eq!((first, pool.live_runs()), (0, 1));
+
+        assert!(pool.deallocate(4, first));
+        assert_eq!(pool.live_runs(), 0);
+        assert_eq!(pool.dead_run_count(), 1);
+        assert_eq!(pool.dead_bytes(), 3 * NODE_BYTES);
+        assert!(!pool.deallocate(4, first));
+        assert_eq!(pool.dead_run_count(), 1);
+        assert!(!pool.deallocate(4, 99));
+
+        // The retired key is no longer interned: the same content appends a new
+        // run, while the old bytes stay in the append-only band.
+        let second = pool.intern(4, 0b0000_0111, &kids);
+        assert_eq!(second, 3);
+        assert_eq!(pool.bands().len(4), 6);
+        assert_eq!(pool.live_runs(), 1);
+        assert_eq!(pool.allocated_runs(), 2);
+        assert_eq!(pool.miss_count(), 2);
+        assert_eq!(pool.hit_count(), 0);
+    }
+
+    #[test]
+    fn run_intern_deallocate_includes_padding_in_dead_bytes() {
+        let mut pool = RunInterner::new();
+
+        let partial = pool.intern(5, 0b0000_0111, &children(3, 5));
+        let full = pool.intern(5, FULL_MASK, &children(8, 5));
+        assert_eq!(partial, 0);
+        assert_eq!(full, 8);
+        assert_eq!(pool.padding_bytes(), 5 * NODE_BYTES);
+
+        assert!(pool.deallocate(5, full));
+        assert_eq!(pool.dead_bytes(), 8 * NODE_BYTES + 5 * NODE_BYTES);
+        assert_eq!(pool.padding_bytes(), 5 * NODE_BYTES);
+        assert_eq!(pool.bands().len(5), 16);
+    }
+
+    #[test]
+    fn run_intern_empty_mask_allocates_nothing() {
+        let mut pool = RunInterner::new();
+
+        assert_eq!(pool.intern(1, 0, &[]), 0);
+        assert_eq!(pool.intern(1, 0, &[]), 0);
+        assert_eq!(pool.bands().len(1), 0);
+        assert_eq!(pool.allocated_runs(), 0);
+        assert_eq!(pool.live_runs(), 0);
+        assert_eq!(pool.hit_count() + pool.miss_count(), 0);
+
+        // The sentinel is not a stored run; a real run can still use base zero.
+        let real = pool.intern(1, 0b0000_0001, &children(1, 1));
+        assert_eq!(real, 0);
+        assert_eq!(pool.bands().len(1), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "popcount(mask)")]
+    fn run_intern_checks_the_child_count() {
+        let mut pool = RunInterner::new();
+        pool.intern(1, 0b0000_0011, &children(3, 1));
+    }
+
+    #[test]
+    #[should_panic(expected = "does not match its band")]
+    fn run_intern_checks_the_child_levels() {
+        let mut pool = RunInterner::new();
+        pool.intern(2, 0b0000_0001, &children(1, 1));
+    }
+
+    #[test]
+    #[should_panic(expected = "outside 0..=")]
+    fn run_intern_checks_the_level_bound() {
+        let mut pool = RunInterner::new();
+        pool.intern(ROOT_LEVEL + 1, 0b0000_0001, &[Node::new(1, 0, 0)]);
     }
 }

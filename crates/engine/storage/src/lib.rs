@@ -15,7 +15,7 @@ pub mod world;
 
 pub use bands::Bands;
 pub use node_word::{Node, NodeRef};
-pub use run::{RunAllocation, RunAllocator};
+pub use run::{RunAllocation, RunAllocator, RunInterner};
 
 /// Runtime material id stored in every voxel. Air is id `0`.
 ///
