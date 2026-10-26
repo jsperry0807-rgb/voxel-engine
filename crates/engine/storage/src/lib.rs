@@ -11,6 +11,7 @@ pub mod disk;
 pub mod edit;
 pub mod gpu;
 pub mod hash;
+pub mod invariants;
 pub mod leaf;
 pub mod node_word;
 pub mod overlay;
@@ -22,6 +23,7 @@ pub use bands::Bands;
 pub use chunk::ChunkDag;
 pub use compact::{BandWaste, CompactBand, CompactionStats, FrameGuard, RootGuard};
 pub use edit::EditStats;
+pub use invariants::{CheckReport, InvariantError, InvariantKind, check_bands};
 pub use leaf::{
     AIR, LEAF_MATERIAL_BYTES, LEAF_RUN_BYTES, LEAF_RUN_MATERIALS, LeafInterner, fetch_leaf,
     leaf_index, leaf_slot,
