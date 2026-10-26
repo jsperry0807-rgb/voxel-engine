@@ -209,22 +209,8 @@ pub fn dag_get(pool: &[u32], root: u32, x: u32, y: u32, z: u32) -> u16 {
     }
 }
 
-#[inline]
-fn spread(v: u32) -> u32 {
-    let mut r = 0;
-    for b in 0..6 {
-        r |= ((v >> b) & 1) << (3 * b);
-    }
-    r
-}
-
-/// Morton code of a local index; child index at level L is `(m >> 3*(L-1)) & 7`,
-/// matching the node layout.
-#[inline]
-pub fn morton(idx: u32) -> u32 {
-    let (x, y, z) = (idx & 63, (idx >> 6) & 63, idx >> 12);
-    spread(x) | (spread(y) << 1) | (spread(z) << 2)
-}
+/// Re-export of the chunk-local Morton helper from the crate root (M1-20).
+pub use crate::morton;
 
 /// Expands a v1 pool into a dense chunk, rejecting malformed references.
 fn expand_legacy(

@@ -93,6 +93,52 @@ pub fn local_xyz(i: u32) -> (u32, u32, u32) {
     local_xyz_at(CHUNK_BITS, i)
 }
 
+/// Interleaves the coordinate bits of a local index into a Morton key at an
+/// arbitrary edge.
+///
+/// Bit `b` of `x`, `y` and `z` lands at key bits `3b`, `3b+1` and `3b+2`.
+#[inline]
+const fn morton_at(chunk_bits: u32, i: u32) -> u32 {
+    let (x, y, z) = local_xyz_at(chunk_bits, i);
+    let mut key = 0u32;
+    let mut bit = 0;
+    while bit < chunk_bits {
+        key |= ((x >> bit) & 1) << (3 * bit);
+        key |= ((y >> bit) & 1) << (3 * bit + 1);
+        key |= ((z >> bit) & 1) << (3 * bit + 2);
+        bit += 1;
+    }
+    key
+}
+
+/// Inverse of [`morton_at`]: extracts the three axes from a Morton key.
+#[cfg(test)]
+#[inline]
+const fn unmorton_at(chunk_bits: u32, key: u32) -> (u32, u32, u32) {
+    let mut x = 0;
+    let mut y = 0;
+    let mut z = 0;
+    let mut bit = 0;
+    while bit < chunk_bits {
+        x |= ((key >> (3 * bit)) & 1) << bit;
+        y |= ((key >> (3 * bit + 1)) & 1) << bit;
+        z |= ((key >> (3 * bit + 2)) & 1) << bit;
+        bit += 1;
+    }
+    (x, y, z)
+}
+
+/// Interleaves a [`local_index`] into a Morton key at [`CHUNK_BITS`].
+///
+/// The key is the octree path to the voxel: the top `3 * (CHUNK_BITS - depth)`
+/// bits identify the node at `depth`, so all descendants of a node occupy one
+/// contiguous key range. Child `c` at pool level `l` is `(key >> 3 * (l - 1)) & 7`,
+/// matching the node layout in [`dag`](crate::dag).
+#[inline]
+pub fn morton(i: u32) -> u32 {
+    morton_at(CHUNK_BITS, i)
+}
+
 /// World voxel coords -> (chunk, local index). Arithmetic shifts handle negatives.
 #[inline]
 pub fn split_voxel(x: i32, y: i32, z: i32) -> (ChunkPos, u32) {
@@ -138,6 +184,61 @@ mod tests {
             assert_eq!(i, x + y * dim + z * dim * dim);
             assert_eq!((x, y, z), local_xyz_at(CHUNK_BITS, i));
             assert_eq!(local_index(x, y, z), local_index_at(CHUNK_BITS, x, y, z));
+        }
+    }
+
+    #[test]
+    fn morton_roundtrip_covers_both_chunk_edges() {
+        for bits in EDGE_BITS {
+            let dim = 1u32 << bits;
+            let volume = dim * dim * dim;
+            let key_space = 1u32 << (3 * bits);
+            assert_eq!(volume, key_space);
+            for i in 0..volume {
+                let (x, y, z) = local_xyz_at(bits, i);
+                let key = morton_at(bits, i);
+                // Every index maps into the key space and decodes back to the
+                // coordinates it started from.
+                assert!(key < key_space, "key out of range at {bits} bits");
+                assert_eq!(unmorton_at(bits, key), (x, y, z));
+                assert_eq!(local_index_at(bits, x, y, z), i);
+            }
+        }
+    }
+
+    #[test]
+    fn morton_locality_covers_both_chunk_edges() {
+        for bits in EDGE_BITS {
+            let dim = 1u32 << bits;
+            for i in 0..dim * dim * dim {
+                let key = morton_at(bits, i);
+                let (x, y, z) = local_xyz_at(bits, i);
+                for depth in 1..=bits {
+                    let ancestor = local_index_at(bits, x >> depth, y >> depth, z >> depth);
+                    let ancestor_key = morton_at(bits, ancestor);
+                    // Dropping the low `3 * depth` bits leaves the ancestor's
+                    // key, so a node's descendants form one contiguous range.
+                    assert_eq!(key >> (3 * depth), ancestor_key);
+                    assert_eq!(
+                        unmorton_at(bits, key >> (3 * depth)),
+                        (x >> depth, y >> depth, z >> depth)
+                    );
+                    let base = ancestor_key << (3 * depth);
+                    let span = 1u32 << (3 * depth);
+                    assert!(base <= key && key < base + span);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn morton_uses_the_compiled_edge() {
+        // Anchors the interleave order: bit 0 of each axis is the low triplet.
+        assert_eq!(morton(local_index(1, 2, 3)), 53);
+        for i in 0..CHUNK_VOLUME as u32 {
+            let (x, y, z) = local_xyz(i);
+            assert_eq!(morton(i), morton_at(CHUNK_BITS, i));
+            assert_eq!(unmorton_at(CHUNK_BITS, morton(i)), (x, y, z));
         }
     }
 }

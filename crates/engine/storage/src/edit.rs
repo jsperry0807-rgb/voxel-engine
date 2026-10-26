@@ -41,7 +41,7 @@ use crate::chunk::ChunkDag;
 use crate::leaf::{AIR, LEAF_MATERIAL_BYTES, LEAF_RUN_MATERIALS, fetch_leaf};
 use crate::node_word::{Node, NodeRef};
 use crate::run::{FULL_MASK, FULL_RUN_NODES, NODE_BYTES};
-use crate::{CHUNK_BITS, CHUNK_VOLUME, local_xyz};
+use crate::{CHUNK_VOLUME, morton};
 use voxel_core::constants::ROOT_LEVEL;
 
 /// Counts the runs and bytes a COW edit appended.
@@ -303,29 +303,13 @@ fn distinct_paths(edits: &[(u32, u16)]) -> u64 {
     paths
 }
 
-/// Interleaves the local coordinate bits into the Morton key the edit walk
-/// partitions on.
-///
-/// The public Morton helper is M1-20's deliverable; this private copy keeps the
-/// edit path parameterized by [`CHUNK_BITS`] in the meantime.
-fn morton(index: u32) -> u32 {
-    let (x, y, z) = local_xyz(index);
-    let mut key = 0u32;
-    for bit in 0..CHUNK_BITS {
-        key |= ((x >> bit) & 1) << (3 * bit);
-        key |= ((y >> bit) & 1) << (3 * bit + 1);
-        key |= ((z >> bit) & 1) << (3 * bit + 2);
-    }
-    key
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::chunk::expand_from;
     use crate::leaf::LEAF_RUN_BYTES;
     use crate::run::MAX_RUN_PADDING_BYTES;
-    use crate::{CHUNK_DIM, local_index};
+    use crate::{CHUNK_DIM, local_index, local_xyz};
 
     /// Deterministic xorshift64, so a failure is reproducible.
     fn rng(state: &mut u64) -> u64 {
