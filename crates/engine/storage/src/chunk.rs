@@ -43,9 +43,9 @@
 use voxel_core::constants::ROOT_LEVEL;
 
 use crate::bands::Bands;
-use crate::leaf::LEAF_RUN_MATERIALS;
+use crate::leaf::{AIR, LEAF_RUN_MATERIALS, fetch_leaf};
 use crate::node_word::{Node, NodeRef};
-use crate::run::RunInterner;
+use crate::run::{RunInterner, fetch_child};
 use crate::{CHUNK_DIM, CHUNK_VOLUME, local_index};
 
 /// One chunk in the banded SVDAG layout.
@@ -145,6 +145,38 @@ impl ChunkDag {
         self.root.is_none()
     }
 
+    /// Reads the material at local voxel `(x, y, z)`.
+    ///
+    /// The walk descends from the root, taking the octant that contains the
+    /// voxel at each level, and ends at the level-1 parent whose leaf run holds
+    /// the material. An absent octant at any level is air, so an all-air chunk
+    /// and a carved-out region both read [`AIR`] (`0`) without a special case.
+    ///
+    /// Coordinates are local to the chunk (`0..CHUNK_DIM`); the traversal reads
+    /// only the low [`CHUNK_BITS`](crate::CHUNK_BITS) bits, so a value past the
+    /// edge aliases the voxel at the same offset modulo the chunk edge.
+    #[inline]
+    pub fn get(&self, x: u32, y: u32, z: u32) -> u16 {
+        let Some(root) = self.root else {
+            return AIR;
+        };
+        let Some(mut node) = self.bands.get(root) else {
+            return AIR;
+        };
+
+        loop {
+            let level = node.level();
+            let c = octant(x, y, z, level);
+            if level == 1 {
+                return fetch_leaf(&self.bands, node, c);
+            }
+            let Some(child) = fetch_child(&self.bands, node, c) else {
+                return AIR;
+            };
+            node = child;
+        }
+    }
+
     /// The chunk root, or `None` for an all-air chunk.
     pub fn root(&self) -> Option<NodeRef> {
         self.root
@@ -196,6 +228,16 @@ fn child_index(level: u32, index: usize, c: u32) -> usize {
     let y = 2 * ((index / n) % n) + ((c as usize >> 1) & 1);
     let z = 2 * (index / (n * n)) + ((c as usize >> 2) & 1);
     x + y * child_n + z * child_n * child_n
+}
+
+/// Octant of local voxel `(x, y, z)` inside a node at `level`.
+///
+/// A node at `level` covers `2^level` voxels per edge, so the bit that picks
+/// the child is `level - 1`; the child-index order matches [`child_index`].
+#[inline]
+fn octant(x: u32, y: u32, z: u32, level: u32) -> u32 {
+    let bit = level - 1;
+    ((x >> bit) & 1) | (((y >> bit) & 1) << 1) | (((z >> bit) & 1) << 2)
 }
 
 /// Occupancy mask of every possible node at levels 1..=ROOT_LEVEL.
@@ -506,6 +548,46 @@ mod tests {
             leaf_bases, expected_bases,
             "leaf runs must follow the BFS order of their level-1 parents"
         );
+    }
+
+    /// M1-08 acceptance: `get` equals the dense buffer on every coordinate of
+    /// three fixtures, including the empty chunk's absent root.
+    #[test]
+    fn get_matches_dense_on_every_coordinate_of_three_fixtures() {
+        for (name, dense) in fixtures() {
+            if !matches!(name, "air" | "slab" | "noise") {
+                continue;
+            }
+            let dag = ChunkDag::from_dense(&dense);
+            for z in 0..CHUNK_DIM as u32 {
+                for y in 0..CHUNK_DIM as u32 {
+                    for x in 0..CHUNK_DIM as u32 {
+                        let expected = dense[local_index(x, y, z) as usize];
+                        assert_eq!(dag.get(x, y, z), expected, "{name} at ({x}, {y}, {z})");
+                    }
+                }
+            }
+        }
+    }
+
+    /// M1-08 acceptance: one million random coordinates on the noise fixture
+    /// agree with the dense buffer. The seed is fixed, so a failure reproduces.
+    #[test]
+    fn get_matches_dense_on_random_noise_coordinates() {
+        let (_, dense) = fixtures()
+            .into_iter()
+            .find(|(name, _)| *name == "noise")
+            .expect("the noise fixture is part of the set");
+        let dag = ChunkDag::from_dense(&dense);
+
+        let mut state = 0x0bad_cafe_d00d_1234u64;
+        for _ in 0..1_000_000 {
+            let x = (rng(&mut state) % CHUNK_DIM as u64) as u32;
+            let y = (rng(&mut state) % CHUNK_DIM as u64) as u32;
+            let z = (rng(&mut state) % CHUNK_DIM as u64) as u32;
+            let expected = dense[local_index(x, y, z) as usize];
+            assert_eq!(dag.get(x, y, z), expected, "noise at ({x}, {y}, {z})");
+        }
     }
 
     #[test]
