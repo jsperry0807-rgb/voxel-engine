@@ -24,8 +24,10 @@
 //!
 //! Empty regions are absent, not zero-material nodes: a mask bit is clear and
 //! no slot is appended. An all-air chunk therefore allocates no bands and has
-//! no root. The leaf arena follows the internal bands in the chunk's layout,
-//! and is filled in the BFS order of its level-1 parents.
+//! no root. The opposite case collapses too: identical runs hash-cons to one
+//! base, so a uniform chunk stores one run per level and one shared leaf run.
+//! The leaf arena follows the internal bands in the chunk's layout, and is
+//! filled in the BFS order of its level-1 parents.
 //!
 //! # Example
 //!
@@ -403,6 +405,7 @@ fn level_one_words(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::run::{CHILD_SLOTS, FULL_RUN_NODES};
 
     /// Deterministic xorshift64, so a failure is reproducible.
     fn rng(state: &mut u64) -> u64 {
@@ -580,6 +583,149 @@ mod tests {
             leaf_bases, expected_bases,
             "leaf runs must follow the BFS order of their level-1 parents"
         );
+    }
+
+    /// M1-11 acceptance: an all-air build allocates no bands, no leaf slots
+    /// and no root, whether it starts from `empty` or from a dense air buffer.
+    /// Every read is air and expanding clears a dirty destination.
+    #[test]
+    fn uniform_collapse_empty_build_allocates_zero_nodes() {
+        let built = ChunkDag::from_dense(&vec![AIR; CHUNK_VOLUME]);
+
+        for (name, dag) in [("empty", ChunkDag::empty()), ("built", built)] {
+            assert!(dag.is_empty(), "{name}");
+            assert_eq!(dag.root(), None, "{name}: an all-air chunk has no root");
+            assert_eq!(dag.node_words(), 0, "{name}");
+            assert_eq!(dag.leaf_words(), 0, "{name}");
+            assert!(dag.bands().is_empty(), "{name}");
+
+            for level in 0..=ROOT_LEVEL {
+                assert_eq!(dag.bands().len(level), 0, "{name}: level {level}");
+            }
+
+            // Corners and interior are all air: there is no node to walk.
+            for &(x, y, z) in &[
+                (0, 0, 0),
+                (CHUNK_DIM as u32 - 1, 0, 0),
+                (0, CHUNK_DIM as u32 - 1, 0),
+                (0, 0, CHUNK_DIM as u32 - 1),
+                (17, 23, 41),
+            ] {
+                assert_eq!(dag.get(x, y, z), AIR, "{name} at ({x}, {y}, {z})");
+            }
+
+            let mut out = vec![u16::MAX; CHUNK_VOLUME];
+            dag.expand(&mut out);
+            assert!(out.iter().all(|&material| material == AIR), "{name}");
+        }
+    }
+
+    /// M1-11 acceptance: a uniform chunk collapses to exactly one run per
+    /// level. Each level below the root stores one full run of eight identical
+    /// child words, the root is the single node in the top band, and one leaf
+    /// run is shared by all 512 level-1 parents. Reading every voxel and
+    /// expanding reproduce the dense material.
+    #[test]
+    fn uniform_collapse_uniform_build_is_one_run_per_level() {
+        const MATERIAL: u16 = 7;
+        let dense = vec![MATERIAL; CHUNK_VOLUME];
+        let dag = ChunkDag::from_dense(&dense);
+
+        let root = dag.root().expect("a uniform chunk has a root");
+        assert_eq!(root.level(), ROOT_LEVEL);
+        assert_eq!(root.index(), 0, "the top band holds only the root");
+        assert_eq!(dag.bands().len(0), 0, "level 0 is never allocated");
+
+        for level in 1..ROOT_LEVEL {
+            // A full run is eight nodes, but uniform content interns exactly
+            // one such run per level.
+            assert_eq!(
+                dag.bands().len(level),
+                FULL_RUN_NODES,
+                "level {level} did not collapse to one full run"
+            );
+            for node in dag.bands().band(level) {
+                assert_eq!(node.level(), level, "level {level}");
+                assert_eq!(node.mask(), 0xFF, "a uniform chunk fills every octant");
+            }
+        }
+        assert_eq!(
+            dag.bands().len(ROOT_LEVEL),
+            1,
+            "the root is one node, not a run"
+        );
+        assert_eq!(dag.bands().band(ROOT_LEVEL)[0].mask(), 0xFF);
+
+        // Five full internal runs plus the root, and one eight-material leaf
+        // run shared by every level-1 parent.
+        assert_eq!(
+            dag.node_words(),
+            (ROOT_LEVEL as u64 - 1) * FULL_RUN_NODES + 1
+        );
+        assert_eq!(dag.leaf_words(), LEAF_RUN_MATERIALS as u64);
+        assert!(
+            dag.bands()
+                .leaves()
+                .iter()
+                .all(|&material| material == MATERIAL),
+            "the one leaf run must hold only the uniform material"
+        );
+
+        for z in 0..CHUNK_DIM as u32 {
+            for y in 0..CHUNK_DIM as u32 {
+                for x in 0..CHUNK_DIM as u32 {
+                    assert_eq!(dag.get(x, y, z), MATERIAL, "uniform at ({x}, {y}, {z})");
+                }
+            }
+        }
+
+        let mut rebuilt = vec![u16::MAX; CHUNK_VOLUME];
+        dag.expand(&mut rebuilt);
+        assert_eq!(rebuilt, dense);
+    }
+
+    /// M1-11 acceptance: the build never publishes a mask-zero node. Every
+    /// node reachable from the root has a non-empty mask and its own band's
+    /// level. (A band may contain mask-zero words between runs; those are the
+    /// alignment placeholders M1-03 inserts, never referenced by a parent.)
+    #[test]
+    fn uniform_collapse_mask_zero_nodes_are_never_allocated() {
+        for (name, dense) in fixtures() {
+            let dag = ChunkDag::from_dense(&dense);
+
+            assert_eq!(dag.bands().len(0), 0, "{name}: level 0 was allocated");
+
+            let Some(root) = dag.root() else {
+                assert_eq!(dag.node_words(), 0, "{name}: an empty chunk has no nodes");
+                continue;
+            };
+
+            let mut frontier = vec![root];
+            while let Some(node_ref) = frontier.pop() {
+                let node = dag
+                    .bands()
+                    .get(node_ref)
+                    .unwrap_or_else(|| panic!("{name}: dead reference {node_ref:?}"));
+                assert_ne!(
+                    node.mask(),
+                    0,
+                    "{name}: reachable node {node_ref:?} is empty"
+                );
+                assert_eq!(node.level(), node_ref.level(), "{name}: {node_ref:?}");
+
+                if node.level() > 1 {
+                    for c in 0..CHILD_SLOTS {
+                        if node.mask() & (1 << c) == 0 {
+                            continue;
+                        }
+                        let index = node
+                            .child_index(c)
+                            .unwrap_or_else(|| panic!("{name}: missing child {c}"));
+                        frontier.push(NodeRef::new(node.level() - 1, index));
+                    }
+                }
+            }
+        }
     }
 
     /// M1-08 acceptance: `get` equals the dense buffer on every coordinate of
