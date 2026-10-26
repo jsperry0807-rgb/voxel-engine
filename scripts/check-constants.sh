@@ -7,12 +7,11 @@
 # 128^3 edge (CHUNK_BITS = 7, feature `chunk128`) stays a one-place change.
 #
 # Usage:
-#   scripts/check-constants.sh            # warn only (M0 default); exits 0
-#   scripts/check-constants.sh --strict   # exits 1 if anything is found
-#   STRICT=1 scripts/check-constants.sh   # same as --strict
+#   scripts/check-constants.sh            # exits 1 if anything is found
+#   scripts/check-constants.sh --strict   # accepted; strict is the only mode
 #
-# M0-23 lands this guard in warn mode; M1-25 flips the default to strict and
-# clears the allow-list.
+# M0-23 added this guard in warn mode; M1-25 flipped the default to strict and
+# removed the allow-list, so a reintroduced literal fails CI.
 #
 # What is checked (Rust sources under crates/ only):
 #   >> 6, >>6                 hard-coded 6-bit shift
@@ -31,12 +30,8 @@
 #     shifts, masks and the geometry constant names rather than the bare
 #     number for exactly that reason.
 #
-# Allow-list:
-#   ALLOW_FILES below lists temporary source-file exceptions. Add a file only
-#   with a one-line reason and keep it as narrow as possible; every entry is
-#   removed in M1-25. It is empty during M0, so the current offenders are all
-#   reported. The constants module itself is always skipped and is not part of
-#   this list.
+# There is no allow-list: fix the derivation rather than exempting a file. The
+# constants module itself is always skipped and is not part of the scan.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -46,31 +41,23 @@ if [[ ! -d crates ]]; then
   exit 2
 fi
 
-strict="${STRICT:-0}"
 for arg in "$@"; do
   case "$arg" in
-    --strict|--error) strict=1 ;;
-    --warn) strict=0 ;;
+    --strict|--error) ;;
     -h|--help)
-      echo "usage: $0 [--warn|--strict]"
-      echo "see the header of this script for the checked patterns and allow-list"
+      echo "usage: $0 [--strict]"
+      echo "see the header of this script for the checked patterns"
       exit 0
       ;;
     *)
       echo "check-constants: unknown argument: $arg" >&2
-      echo "usage: $0 [--warn|--strict]" >&2
+      echo "usage: $0 [--strict]" >&2
       exit 2
       ;;
   esac
 done
 
 CONSTANTS="crates/core/src/constants.rs"
-
-# Temporary allow-list: space-separated exact paths. Empty during M0; M1-25
-# clears it. If an entry is unavoidable before then, put the reason above it.
-# Example:
-#   ALLOW_FILES="crates/engine/storage/src/lib.rs"  # region cell uses << 6
-ALLOW_FILES=""
 
 # 1. A right shift by 6, but not 60/64/...
 # 2. A mask of 63 (decimal or hex), but not 630 or 0x3f0...
@@ -86,21 +73,11 @@ count=0
 while IFS= read -r line; do
   [[ -z "$line" ]] && continue
   file="${line%%:*}"
-  allowed=0
   if [[ "$file" == "$CONSTANTS" ]]; then
-    allowed=1
-  else
-    for entry in $ALLOW_FILES; do
-      if [[ "$file" == "$entry" ]]; then
-        allowed=1
-        break
-      fi
-    done
+    continue
   fi
-  if (( allowed == 0 )); then
-    matches+="$line"$'\n'
-    count=$((count + 1))
-  fi
+  matches+="$line"$'\n'
+  count=$((count + 1))
 done <<< "$raw"
 
 if (( count == 0 )); then
@@ -111,9 +88,4 @@ fi
 echo "check-constants: found $count offending line(s) outside the constants module:"
 printf '%s' "$matches"
 echo
-if [[ "$strict" == "1" ]]; then
-  echo "check-constants: strict mode - failing (M1-25)." >&2
-  exit 1
-fi
-echo "check-constants: warn-only in M0; this becomes an error in M1-25."
-exit 0
+exit 1

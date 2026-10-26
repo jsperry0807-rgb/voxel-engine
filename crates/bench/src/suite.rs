@@ -14,6 +14,7 @@ use voxel_storage::ChunkPos;
 use voxel_storage::dag::Svdag;
 use voxel_storage::disk::RegionStore;
 use voxel_storage::gpu::{GpuStore, MemSink};
+use voxel_storage::local_xyz;
 use voxel_storage::overlay::Overlay;
 use voxel_storage::world::World;
 
@@ -658,11 +659,9 @@ pub fn latency() -> Vec<LatencyRecord> {
         2_000,
         |_| {
             overlay_writes = overlay_writes.wrapping_add(1);
-            let x = (overlay_writes.wrapping_mul(2_654_435_761) & 63) as i32;
-            let y = ((overlay_writes >> 6) & 63) as i32;
-            let z = ((overlay_writes >> 12) & 63) as i32;
+            let (x, y, z) = local_xyz(overlay_writes.wrapping_mul(2_654_435_761));
             world
-                .set(x, y, z, MaterialId::from_raw(1))
+                .set(x as i32, y as i32, z as i32, MaterialId::from_raw(1))
                 .expect("set voxel");
         },
     ));
@@ -695,11 +694,8 @@ pub fn latency() -> Vec<LatencyRecord> {
     let mut next_voxel = || {
         let index = next;
         next = next.wrapping_add(1);
-        (
-            (index & 63) as i32,
-            ((index >> 6) & 63) as i32,
-            (index >> 12) as i32,
-        )
+        let (x, y, z) = local_xyz(index);
+        (x as i32, y as i32, z as i32)
     };
     for _ in 0..16 {
         let (x, y, z) = next_voxel();
@@ -836,14 +832,7 @@ fn summarize(case: &str, note: &str, mut durations: Vec<f64>) -> LatencyRecord {
 fn random_coords(count: usize, seed: u64) -> Vec<(u32, u32, u32)> {
     let mut state = seed | 1;
     (0..count)
-        .map(|_| {
-            let r = rng(&mut state);
-            (
-                (r & 63) as u32,
-                ((r >> 6) & 63) as u32,
-                ((r >> 12) & 63) as u32,
-            )
-        })
+        .map(|_| local_xyz(rng(&mut state) as u32))
         .collect()
 }
 

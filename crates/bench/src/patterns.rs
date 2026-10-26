@@ -1,10 +1,11 @@
 //! Dense chunk generators shared by the benchmarks.
 //!
-//! Every generator returns a `64³` dense material array (`u16` per voxel), the
-//! input shape `Svdag::from_dense` consumes. Keeping them here means the memory,
-//! CPU, Criterion and Callgrind lenses all measure the same data.
+//! Every generator returns a `CHUNK_DIM³` dense material array (`u16` per
+//! voxel), the input shape `Svdag::from_dense` consumes. Keeping them here
+//! means the memory, CPU, Criterion and Callgrind lenses all measure the same
+//! data.
 
-use voxel_storage::CHUNK_VOLUME;
+use voxel_storage::{CHUNK_DIM, CHUNK_VOLUME, local_index};
 
 /// A chunk filled with one material.
 pub fn solid(material: u16) -> Vec<u16> {
@@ -30,15 +31,16 @@ pub fn terrain(ox: i32, oz: i32) -> Vec<u16> {
 
     let mut d = vec![0u16; CHUNK_VOLUME];
     let mut seed = 0x9E37_79B9_7F4A_7C15u64 ^ ((ox as u64) << 20) ^ (oz as u64);
-    for z in 0..64usize {
-        for x in 0..64usize {
-            let fx = (x as i32 + ox * 64) as f32;
-            let fz = (z as i32 + oz * 64) as f32;
+    let edge = CHUNK_DIM as i32;
+    for z in 0..CHUNK_DIM {
+        for x in 0..CHUNK_DIM {
+            let fx = (x as i32 + ox * edge) as f32;
+            let fz = (z as i32 + oz * edge) as f32;
             let height = 28
                 + ((fx * 0.15).sin() * 6.0
                     + (fz * 0.11).cos() * 5.0
                     + ((fx + fz) * 0.07).sin() * 4.0) as i32;
-            for y in 0..64usize {
+            for y in 0..CHUNK_DIM {
                 let yi = y as i32;
                 let material = if yi < height - 4 {
                     STONE
@@ -50,7 +52,8 @@ pub fn terrain(ox: i32, oz: i32) -> Vec<u16> {
                     0
                 };
                 let cave = material == STONE && rng(&mut seed) % 100 < 3;
-                d[x + y * 64 + z * 4096] = if cave { 0 } else { material };
+                d[local_index(x as u32, y as u32, z as u32) as usize] =
+                    if cave { 0 } else { material };
             }
         }
     }

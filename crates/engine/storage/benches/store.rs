@@ -4,7 +4,7 @@ use voxel_storage::dag::Svdag;
 use voxel_storage::gpu::{GpuStore, MemSink};
 use voxel_storage::overlay::Overlay;
 use voxel_storage::world::World;
-use voxel_storage::{CHUNK_VOLUME, ChunkPos, MaterialId};
+use voxel_storage::{CHUNK_DIM, CHUNK_VOLUME, ChunkPos, MaterialId, local_index, local_xyz};
 
 fn rng(s: &mut u64) -> u64 {
     *s ^= *s << 13;
@@ -16,14 +16,15 @@ fn rng(s: &mut u64) -> u64 {
 fn terrain(ox: i32, oz: i32) -> Vec<u16> {
     let mut d = vec![0u16; CHUNK_VOLUME];
     let mut s = 0x9E3779B97F4A7C15u64 ^ ((ox as u64) << 20) ^ (oz as u64);
-    for z in 0..64usize {
-        for x in 0..64usize {
-            let (fx, fz) = ((x as i32 + ox * 64) as f32, (z as i32 + oz * 64) as f32);
+    let edge = CHUNK_DIM as i32;
+    for z in 0..CHUNK_DIM {
+        for x in 0..CHUNK_DIM {
+            let (fx, fz) = ((x as i32 + ox * edge) as f32, (z as i32 + oz * edge) as f32);
             let h = 28
                 + ((fx * 0.15).sin() * 6.0
                     + (fz * 0.11).cos() * 5.0
                     + ((fx + fz) * 0.07).sin() * 4.0) as i32;
-            for y in 0..64usize {
+            for y in 0..CHUNK_DIM {
                 let yi = y as i32;
                 let m = if yi < h - 4 {
                     1
@@ -35,7 +36,7 @@ fn terrain(ox: i32, oz: i32) -> Vec<u16> {
                     0
                 };
                 let cave = m == 1 && rng(&mut s) % 100 < 3;
-                d[x + y * 64 + z * 4096] = if cave { 0 } else { m };
+                d[local_index(x as u32, y as u32, z as u32) as usize] = if cave { 0 } else { m };
             }
         }
     }
@@ -57,6 +58,13 @@ fn noisy() -> Vec<u16> {
 
 fn tmp(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!("vsb-{name}-{}", std::process::id()))
+}
+
+/// A world-space voxel inside the 4x4 resident chunk square.
+fn world_voxel(r: u64) -> (i32, i32, i32) {
+    let span = 4 * CHUNK_DIM as u64;
+    let (_, y, _) = local_xyz(r as u32);
+    ((r % span) as i32, y as i32, ((r >> 32) % span) as i32)
 }
 
 fn bench_dag(c: &mut Criterion) {
@@ -96,22 +104,14 @@ fn bench_dag(c: &mut Criterion) {
     let mut s = 1u64;
     g.bench_function("get/terrain_random", |b| {
         b.iter(|| {
-            let r = rng(&mut s);
-            black_box(dt.get(
-                (r & 63) as u32,
-                ((r >> 6) & 63) as u32,
-                ((r >> 12) & 63) as u32,
-            ))
+            let (x, y, z) = local_xyz(rng(&mut s) as u32);
+            black_box(dt.get(x, y, z))
         })
     });
     g.bench_function("get/noise_random", |b| {
         b.iter(|| {
-            let r = rng(&mut s);
-            black_box(dn.get(
-                (r & 63) as u32,
-                ((r >> 6) & 63) as u32,
-                ((r >> 12) & 63) as u32,
-            ))
+            let (x, y, z) = local_xyz(rng(&mut s) as u32);
+            black_box(dn.get(x, y, z))
         })
     });
     g.throughput(Throughput::Elements(1));
@@ -160,23 +160,15 @@ fn bench_overlay_world(c: &mut Criterion) {
     g.bench_function("world/set(4x4 chunks resident)", |b| {
         b.iter(|| {
             let r = rng(&mut s);
-            w.set(
-                (r & 255) as i32,
-                ((r >> 8) & 63) as i32,
-                ((r >> 16) & 255) as i32,
-                MaterialId::from_raw(((r >> 32) & 3) as u16),
-            )
-            .unwrap();
+            let (x, y, z) = world_voxel(r);
+            w.set(x, y, z, MaterialId::from_raw(((r >> 32) & 3) as u16))
+                .unwrap();
         })
     });
     g.bench_function("world/get(overlay+dag)", |b| {
         b.iter(|| {
-            let r = rng(&mut s);
-            black_box(w.get(
-                (r & 255) as i32,
-                ((r >> 8) & 63) as i32,
-                ((r >> 16) & 255) as i32,
-            ))
+            let (x, y, z) = world_voxel(rng(&mut s));
+            black_box(w.get(x, y, z))
         })
     });
     g.finish();
@@ -203,10 +195,11 @@ fn bench_consolidate(c: &mut Criterion) {
                         let (cx, cz) = ((i % 8) as i32, (i / 8) as i32);
                         for _ in 0..edits {
                             let r = rng(&mut s);
+                            let (lx, ly, lz) = local_xyz(r as u32);
                             w.set(
-                                cx * 64 + (r & 63) as i32,
-                                ((r >> 8) & 63) as i32,
-                                cz * 64 + ((r >> 16) & 63) as i32,
+                                cx * CHUNK_DIM as i32 + lx as i32,
+                                ly as i32,
+                                cz * CHUNK_DIM as i32 + lz as i32,
                                 MaterialId::from_raw(((r >> 32) % 5) as u16),
                             )
                             .unwrap();
@@ -298,13 +291,8 @@ fn bench_gpu(c: &mut Criterion) {
     gs.set_chunk(ChunkPos::new(3, 0, 3), &a);
     g.bench_function("lookup(table probe + dag walk)", |bn| {
         bn.iter(|| {
-            let r = rng(&mut s);
-            black_box(gs.lookup(
-                ChunkPos::new(3, 0, 3),
-                (r & 63) as u32,
-                ((r >> 6) & 63) as u32,
-                ((r >> 12) & 63) as u32,
-            ))
+            let (x, y, z) = local_xyz(rng(&mut s) as u32);
+            black_box(gs.lookup(ChunkPos::new(3, 0, 3), x, y, z))
         })
     });
     g.bench_function("table_insert_10k_chunks(grow+rehash)", |bn| {

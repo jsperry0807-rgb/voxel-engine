@@ -14,6 +14,7 @@ use voxel_bench::{fixtures, patterns};
 use voxel_storage::ChunkPos;
 use voxel_storage::dag::Svdag;
 use voxel_storage::gpu::GpuStore;
+use voxel_storage::{BLOCK_DIM, local_index, local_xyz};
 
 fn lookup_scene() -> (voxel_block::BlockRegistry, Vec<voxel_block::MaterialId>) {
     let registry = fixtures::registry(1_024);
@@ -29,11 +30,7 @@ fn dag_scene() -> (Svdag, Vec<(u32, u32, u32)>) {
             state ^= state << 13;
             state ^= state >> 7;
             state ^= state << 17;
-            (
-                (state & 63) as u32,
-                ((state >> 6) & 63) as u32,
-                ((state >> 12) & 63) as u32,
-            )
+            local_xyz(state as u32)
         })
         .collect();
     (dag, coords)
@@ -50,12 +47,14 @@ fn gpu_scene() -> (GpuStore, Vec<(u32, u32, u32)>) {
 fn gpu_overlay_scene() -> (GpuStore, Vec<(u32, u32, u32)>) {
     let (mut store, coords) = gpu_scene();
     let pos = ChunkPos::new(0, 0, 0);
-    // One full 16^3 block, so the deterministic run crosses both bitmap states.
-    for within in 0..4096u32 {
-        let x = within & 15;
-        let y = (within >> 4) & 15;
-        let z = (within >> 8) & 15;
-        store.set_overlay(pos, x | (y << 6) | (z << 12), 4);
+    // One full BLOCK_DIM^3 block at the chunk origin, so the deterministic run
+    // crosses both bitmap states.
+    let block_volume = (BLOCK_DIM * BLOCK_DIM * BLOCK_DIM) as u32;
+    for within in 0..block_volume {
+        let x = within % BLOCK_DIM as u32;
+        let y = (within / BLOCK_DIM as u32) % BLOCK_DIM as u32;
+        let z = within / (BLOCK_DIM * BLOCK_DIM) as u32;
+        store.set_overlay(pos, local_index(x, y, z), 4);
     }
     (store, coords)
 }
