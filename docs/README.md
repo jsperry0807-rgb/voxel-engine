@@ -29,6 +29,7 @@ binding number is made in the spec and the pre-registration, never only in a tas
 | [`ADR-007`](adr/ADR-007-ab-roots.md) | A/B roots over the shared node pool | Accepted |
 | [`ADR-008`](adr/ADR-008-visibility-lifecycle.md) | Visibility × lifecycle: two axes, no readback | Accepted |
 | [`ADR-009`](adr/ADR-009-render-distance-lod.md) | Render distance and LOD: 128 m LOD0, 512 m LOD2, surface shell | Accepted |
+| [`ADR-010`](adr/ADR-010-mesh-granularity-vertex-format.md) | Mesh granularity and vertex format: 16³ block meshlets, 16 B vertex, 76 B indexed quad | Accepted |
 | [`ADR-011`](adr/ADR-011-node-layout.md) | Node layout: level bands, 8 B nodes, run dedup, compaction | Accepted |
 | [`ADR-013`](adr/ADR-013-state-ownership.md) | State ownership: GPU per-frame, event-driven CPU | Accepted |
 

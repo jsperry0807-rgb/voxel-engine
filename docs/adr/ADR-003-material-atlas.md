@@ -10,7 +10,7 @@
 ## Context
 
 Rasterisation and the mesh format remove the UV attribute. ADR-001 and ADR-010 fix a
-**16 B vertex with no UV**, and greedy quads merge across block boundaries; an
+**16 B vertex with no UV**, and greedy quads merge within a 16³ block (ADR-010); an
 interpolated per-vertex UV would stretch one tile across a merged quad. Texture
 identity must therefore travel as a material id, and the tile-local UV must be
 recomputed per fragment.
@@ -61,7 +61,8 @@ slots, `tileIndex = materialID`, per-fragment UV and mips capped at level 4.**
    origin** — the same fraction as `fract(worldPosOnFace / 1 m)` without f32's
    precision loss at 1,024 km. The half-texel term puts samples on texel centres and
    keeps a bilinear level-0 sample off the neighbouring tile. Because the derivation
-   is positional, a greedy quad spanning several blocks still tiles once per block.
+   is positional, a greedy quad spanning several voxel faces still samples the
+   block-face tile correctly.
 
 5. **Mip cap.** The atlas has exactly five levels: base plus `MAX_MIP = 4`. At level
    4 the whole atlas is 16×16 and each tile is 1×1. The builder must not generate
