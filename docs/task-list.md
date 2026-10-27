@@ -175,7 +175,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M1-31 | Count-only greedy mesher reference: quads and bytes, no vertex buffer; same-material merge, face orientation | M1-08 | Quad counts match a brute-force per-face counter on 5 fixtures; merge ratio reported | `cargo test -p voxel-storage --test reference_mesh` | 1 d | [x] |
 | M1-32 | CPU hierarchical frustum reference traversal: chunk root → octants → block level, stops at LOD depth | M1-07 | Output set equals a brute-force per-block plane test on 100 poses | `cargo test -p voxel-storage --test reference_cull` | 1 d | [x] |
 | M1-33 | Block-occlusion reference: camera-seeded 6-connected fill through non-opaque blocks, horizon-bounded, per-block bits | M1-29 | Enclosed cave is occluded; open field is not; never marks a visible block occluded in 100 poses | `cargo test -p voxel-storage --test reference_occlusion` | 1 d | [x] |
-| M1-34 | Granularity instrumentation: traversed block volume vs reference-visible volume at chunk boundaries | M1-32, M1-33 | Emits the ratio per pose; unit test on a synthetic 2-chunk case | `cargo test -p voxel-storage granularity` | 0.5 d | [ ] |
+| M1-34 | Granularity instrumentation: traversed block volume vs reference-visible volume at chunk boundaries | M1-32, M1-33 | Emits the ratio per pose; unit test on a synthetic 2-chunk case | `cargo test -p voxel-storage granularity` | 0.5 d | [x] |
 
 ### 4.4 Gate harness and decision
 

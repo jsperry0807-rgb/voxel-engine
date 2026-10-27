@@ -6,12 +6,14 @@
 //! milliseconds.
 //!
 //! - [`cull`] — hierarchical frustum traversal (M1-32).
+//! - [`granularity`] — traversed vs reference-visible volume (M1-34).
 //! - [`light`] — full-pass block-light flood fill (M1-29).
 //! - [`mesh`] — count-only greedy mesher (M1-31).
 //! - [`occlusion`] — camera-seeded block-occlusion flood fill (M1-33).
 //! - [`probe`] — deterministic SH4 probe bake (M1-30).
 
 pub mod cull;
+pub mod granularity;
 pub mod light;
 pub mod mesh;
 pub mod occlusion;

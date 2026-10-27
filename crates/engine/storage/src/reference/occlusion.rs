@@ -183,8 +183,8 @@ impl OcclusionFill {
     ///
     /// This is the seed, even when it is opaque, plus every non-opaque block
     /// reachable through non-opaque neighbours. Opaque boundary blocks are
-    /// visible but are not traversed, so this is the **traversed volume** M1-34
-    /// compares with the visible volume.
+    /// visible but are not traversed, so this counts the fill's own work rather
+    /// than the volume the culling traversal emits.
     pub const fn reached_blocks(&self) -> usize {
         self.reached
     }
