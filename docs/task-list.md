@@ -276,7 +276,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
 | M1.5-01 | Create `crates/engine/viewer` (`voxel-viewer`), add to workspace, `main.rs`, error type | M1-24 | `cargo run -p voxel-viewer` opens an empty window | run | 0.5 d | [x] |
-| M1.5-02 | wgpu init: instance, adapter, device, queue, surface, config, resize handling | M1.5-01 | Window survives 20 resizes without validation errors | run | 0.5 d | [ ] |
+| M1.5-02 | wgpu init: instance, adapter, device, queue, surface, config, resize handling | M1.5-01 | Window survives 20 resizes without validation errors | run | 0.5 d | [x] |
 | M1.5-03 | Event loop, close/escape, frame timing, log adapter info | M1.5-02 | Quit cleanly; adapter string printed at startup | run | 0.5 d | [ ] |
 | M1.5-04 | Camera: position, yaw/pitch, view/proj, uniform buffer; WASD + mouse-look | M1.5-03 | Camera matrices validated against a known look-at case | `cargo test -p voxel-viewer camera` | 1 d | [ ] |
 | M1.5-05 | Depth buffer and depth pass | M1.5-04 | Depth test visible on two overlapping quads | run | 0.5 d | [ ] |
