@@ -490,8 +490,15 @@ mod tests {
 
     #[test]
     fn overlay_memory_charges_one_slot_per_edited_block() {
-        // 16³ = 4 096 voxels. Two indices at y = 0, one at y = 16.
-        let indices = [0, 1, 1_024];
+        // Two voxels in the first 16³ block, one in the next block along y.
+        // Derive the indices from the compiled edge; a hardcoded local index
+        // would silently mean a different coordinate in a 128³ build.
+        let block = voxel_core::constants::BLOCK_DIM as u32;
+        let indices = [
+            voxel_storage::local_index(0, 0, 0),
+            voxel_storage::local_index(1, 0, 0),
+            voxel_storage::local_index(0, block, 0),
+        ];
         let (bytes, entries) = overlay_memory(indices);
         assert_eq!(entries, 3);
         assert_eq!(bytes, OVERLAY_BLOCK_TABLE_BYTES + 2 * OVERLAY_SLOT_BYTES);
