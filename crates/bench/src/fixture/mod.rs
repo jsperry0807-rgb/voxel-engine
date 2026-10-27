@@ -485,8 +485,7 @@ pub fn verify(manifest_path: &Path) -> Result<VerifyOutcome, String> {
         ));
     }
 
-    let root = manifest_path.parent().unwrap_or_else(|| Path::new("."));
-    let save_dir = fixture_path(root, &manifest.save_root)?;
+    let save_dir = save_dir(manifest_path, &manifest)?;
     let files = read_files(&save_dir)?;
     let integrity = integrity(&files);
     if integrity != manifest.integrity {
@@ -654,11 +653,26 @@ fn write_manifest(path: &Path, manifest: &Manifest) -> Result<(), String> {
     fs::write(path, bytes).map_err(|error| format!("failed to write {}: {error}", path.display()))
 }
 
-fn read_manifest(path: &Path) -> Result<Manifest, String> {
+/// Reads a fixture manifest from `path`.
+///
+/// This parses the manifest but does not check its schema, format or hashes;
+/// [`verify`] does that. It is the entry point for readers such as the M1 gate
+/// that need the manifest's metadata and save location without rebuilding the
+/// world.
+pub fn read_manifest(path: &Path) -> Result<Manifest, String> {
     let text = fs::read_to_string(path)
         .map_err(|error| format!("failed to read manifest {}: {error}", path.display()))?;
     serde_json::from_str(&text)
         .map_err(|error| format!("failed to parse manifest {}: {error}", path.display()))
+}
+
+/// Resolves the save directory named by `manifest`, rejecting traversal.
+///
+/// The path is relative to the manifest's directory, matching [`verify`]. A
+/// manifest with an absolute or parent-containing `save_root` is rejected.
+pub fn save_dir(manifest_path: &Path, manifest: &Manifest) -> Result<PathBuf, String> {
+    let root = manifest_path.parent().unwrap_or_else(|| Path::new("."));
+    fixture_path(root, &manifest.save_root)
 }
 
 /// Generates a save from `recipe` into `save_dir` and hashes it.

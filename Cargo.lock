@@ -1304,6 +1304,7 @@ dependencies = [
  "serde",
  "serde_json",
  "voxel-block",
+ "voxel-core",
  "voxel-render",
  "voxel-storage",
  "wgpu",

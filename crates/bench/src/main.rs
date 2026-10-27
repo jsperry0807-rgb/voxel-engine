@@ -46,6 +46,10 @@ fn main() {
         fixture_mode(&args[1..]);
         return;
     }
+    if args.first().is_some_and(|arg| arg == "gate") {
+        gate_mode(&args[1..]);
+        return;
+    }
 
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
@@ -99,7 +103,16 @@ fn main() {
                      fixture build  freeze the M1-28 fixture world and manifest\n\
                      fixture verify check hashes, scan the save and rebuild it\n\
                      --out          output directory (default: benchmarks/fixtures/m1-representative)\n\
-                     --manifest     manifest to verify (default: <out>/manifest.json)"
+                     --manifest     manifest to verify (default: <out>/manifest.json)\n\
+                     \n\
+                     voxel-bench gate memory [--manifest FILE] [--out FILE] [--json]\n\
+                     \n\
+                     gate memory  per-chunk memory distribution over the frozen\n\
+                     \x20          fixture: DAG, overlay, light, probes, mesh\n\
+                     \x20          estimate and total, with p50/p95/max (M1-35)\n\
+                     --manifest   fixture manifest (default: benchmarks/fixtures/m1-representative/manifest.json)\n\
+                     --out        also write the JSON report to FILE\n\
+                     --json       print the JSON report instead of the Markdown table"
                 );
                 return;
             }
@@ -445,6 +458,87 @@ fn fixture_verify(args: &[String]) {
             eprintln!("fixture verify failed: {error}");
             std::process::exit(1);
         }
+    }
+}
+
+fn gate_mode(args: &[String]) {
+    let Some(command) = args.first() else {
+        usage("gate needs `memory`");
+    };
+    match command.as_str() {
+        "memory" => gate_memory(&args[1..]),
+        other => usage(&format!("unknown gate command `{other}`")),
+    }
+}
+
+fn gate_memory(args: &[String]) {
+    let mut manifest = voxel_bench::fixture::default_manifest();
+    let mut out: Option<PathBuf> = None;
+    let mut json = false;
+
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--manifest" => {
+                index += 1;
+                manifest = PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--manifest needs a file")),
+                );
+            }
+            "--out" => {
+                index += 1;
+                out = Some(PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--out needs a file")),
+                ));
+            }
+            "--json" => json = true,
+            other => usage(&format!("unknown gate memory argument `{other}`")),
+        }
+        index += 1;
+    }
+
+    let report = match voxel_bench::gate::memory::report(&manifest) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("failed to measure {}: {error}", manifest.display());
+            std::process::exit(1);
+        }
+    };
+
+    if let Some(out) = out {
+        let serialized = match serde_json::to_string_pretty(&report) {
+            Ok(serialized) => serialized,
+            Err(error) => {
+                eprintln!("failed to serialize gate memory report: {error}");
+                std::process::exit(1);
+            }
+        };
+        if let Some(parent) = out.parent()
+            && !parent.as_os_str().is_empty()
+            && let Err(error) = std::fs::create_dir_all(parent)
+        {
+            eprintln!("failed to create {}: {error}", parent.display());
+            std::process::exit(1);
+        }
+        if let Err(error) = std::fs::write(&out, serialized + "\n") {
+            eprintln!("failed to write {}: {error}", out.display());
+            std::process::exit(1);
+        }
+        println!("wrote {}", out.display());
+    }
+
+    if json {
+        match serde_json::to_string_pretty(&report) {
+            Ok(serialized) => println!("{serialized}"),
+            Err(error) => {
+                eprintln!("failed to serialize gate memory report: {error}");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        print!("{}", report.markdown());
     }
 }
 

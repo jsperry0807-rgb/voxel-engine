@@ -68,6 +68,9 @@ silently reinterpreting the bytes.
 # Verify hashes, scan the checked-in save, and rebuild it from the recipe.
 cargo run -p voxel-bench -- fixture verify
 
+# Measure the per-chunk memory distribution over the frozen save (M1-35).
+cargo run -p voxel-bench -- gate memory
+
 # Freeze a new fixture into an empty directory (refuses to overwrite).
 cargo run -p voxel-bench -- fixture build --out benchmarks/fixtures/m1-representative
 

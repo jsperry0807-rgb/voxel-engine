@@ -6,6 +6,7 @@ publish.workspace = true
 
 [dependencies]
 voxel-block = { path = "../engine/block" }
+voxel-core = { path = "../core" }
 voxel-storage = { path = "../engine/storage" }
 blake3 = "1"
 libc = "0.2"

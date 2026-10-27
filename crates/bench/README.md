@@ -43,6 +43,10 @@ cargo run --release -p voxel-bench -- save-scan --path saves/world --out target/
 
 # Verify the frozen fixture save (hash, scan, rebuild from manifest)
 cargo run -p voxel-bench -- fixture verify
+
+# Per-chunk memory distribution over the fixture (M1-35)
+cargo run -p voxel-bench -- gate memory
+cargo run -p voxel-bench -- gate memory --json
 ```
 
 ## What is measured
@@ -109,6 +113,28 @@ directory; `fixture verify` checks the bytes, re-scans them and rebuilds the
 recipe byte-for-byte. The save is **provisional until the first real save**: its
 numbers are illustrative and must not be quoted as gate results. See
 `benchmarks/fixtures/README.md`.
+
+**Gate memory** (`gate memory`, M1-35) walks that frozen fixture and reports one
+row per component with p50/p95/max over chunks plus the fixture-wide total:
+
+| Component | Counted bytes |
+|---|---|
+| **DAG** | Banded 8 B internal nodes (alignment padding included) + 2 B leaf materials |
+| **Overlay** | Allocated GPU overlay storage: a block table per edited chunk plus 8 704 B per edited 16³ block |
+| **Light** | `LIGHT_BYTES_PER_CHUNK` (1 KiB at 64³, 8 KiB at 128³) |
+| **Probes** | `PROBE_BYTES_PER_CHUNK` near-LOD volume (768 B at 64³, 6 KiB at 128³) |
+| **Mesh estimate** | M1-31 greedy quads × 76 B; count-only, no vertex/index buffer overhead |
+| **Total** | The five components above, per chunk |
+
+The transitional v1 `Svdag` pool is printed as a separate row and excluded from
+the total: it is the pre-banded compatibility view, not the layout the gate is
+deciding. The fixture has no pending overlay entries, so its overlay component
+is zero by measurement, not by assumption. Mesh is an upper bound at chunk
+boundaries because the M1-31 reference has no neighbour apron; A/B root overhead
+is not part of this measurement. The report carries the fixture's provisional
+limitation verbatim and refuses to measure a save whose live chunk, voxel,
+overlay or region counts differ from the manifest. `--json` prints the
+serializable report; `--out FILE` also writes it.
 
 ## Caveats
 
