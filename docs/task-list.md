@@ -389,7 +389,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M1.5-02 | wgpu init: instance, adapter, device, queue, surface, config, resize handling | M1.5-01 | Window survives 20 resizes without validation errors | run | 0.5 d | [x] |
 | M1.5-03 | Event loop, close/escape, frame timing, log adapter info | M1.5-02 | Quit cleanly; adapter string printed at startup | run | 0.5 d | [x] |
 | M1.5-04 | Camera: position, yaw/pitch, view/proj, uniform buffer; WASD + mouse-look | M1.5-03 | Camera matrices validated against a known look-at case | `cargo test -p voxel-viewer camera` | 1 d | [x] |
-| M1.5-05 | Depth buffer and depth pass | M1.5-04 | Depth test visible on two overlapping quads | run | 0.5 d | [ ] |
+| M1.5-05 | Depth buffer and depth pass | M1.5-04 | Depth test visible on two overlapping quads | run | 0.5 d | [x] |
 | M1.5-06 | Atlas builder: 256×256 RGBA8, 16×16 tiles, mips capped at 4, tile-origin helper | M0-06 | All 256 tiles addressable; mip count = 5; no tile crosses a mip boundary in a test | `cargo test -p voxel-viewer atlas` | 1 d | [ ] |
 | M1.5-14 | Author the 23 slice textures: 256² RGBA8 sources, manifest entries, alpha matching each `RenderType`, licence/provenance | M1.5-06 | Every `voxel:block/*` key in `blocks.ron` has a source and manifest entry; dimensions, alpha and key set match; no unmarked placeholder remains | `cargo test -p voxel-block texture_manifest` | 4 d | [ ] |
 | M1.5-07 | Downsample tool: M1.5-14's 256² material faces → 16×16 tiles; deterministic and documented | M1.5-14, M1.5-06 | Every M1.5-14 key bakes; `cargo run -p voxel-viewer -- bake-atlas` writes a reproducible PNG/hash; no tile crosses a mip boundary | run + hash | 1 d | [ ] |

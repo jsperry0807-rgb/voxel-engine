@@ -1,9 +1,10 @@
 //! The voxel viewer binary.
 //!
 //! The viewer opens a window, initializes wgpu for it, keeps the surface
-//! configuration in step with the window, and runs a frame loop that clears
-//! and presents each frame. A fly camera responds to WASD and mouse motion;
-//! later tasks add the chunk renderer on top of this shell.
+//! configuration in step with the window, and runs a frame loop with a depth
+//! buffer. A fly camera responds to WASD and mouse motion. Two overlapping
+//! debug quads make the depth test visible until the chunk renderer replaces
+//! them.
 //!
 //! ```text
 //! cargo run -p voxel-viewer
@@ -14,8 +15,10 @@
 //! run use `RUST_LOG=wgpu_core=warn`.
 
 mod camera;
+mod depth;
 mod error;
 mod gpu;
+mod quads;
 
 use std::error::Error;
 use std::process::ExitCode;

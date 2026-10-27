@@ -1,14 +1,15 @@
 //! wgpu initialization, surface configuration and frame presentation.
 //!
-//! One [`Gpu`] owns the instance's device, queue, window surface and the camera
-//! uniform buffer. The surface is configured once the window exists and
-//! reconfigured whenever the drawable size changes. A zero-sized window
+//! One [`Gpu`] owns the instance's device, queue, window surface, camera
+//! uniform and depth buffer. The surface is configured once the window exists
+//! and reconfigured whenever the drawable size changes. A zero-sized window
 //! (minimized) is left alone: wgpu rejects a zero width or height, and the next
 //! [`WindowEvent::Resized`] brings a usable size back.
 //!
-//! [`Gpu::render`] uploads the camera, acquires the next frame, clears it and
-//! presents it. The present waits on the swap chain's `Fifo` mode, so the event
-//! loop runs at the display's refresh rate rather than spinning.
+//! [`Gpu::render`] uploads the camera, acquires the next frame, clears color
+//! and depth, draws the depth-test quads and presents. The present waits on the
+//! swap chain's `Fifo` mode, so the event loop runs at the display's refresh
+//! rate rather than spinning.
 //!
 //! [`WindowEvent::Resized`]: winit::event::WindowEvent::Resized
 
@@ -16,17 +17,21 @@ use std::sync::Arc;
 
 use pollster::block_on;
 use wgpu::{
-    Buffer, BufferDescriptor, BufferUsages, Color, CommandEncoderDescriptor, CurrentSurfaceTexture,
-    Device, DeviceDescriptor, Instance, InstanceDescriptor, LoadOp, Operations, Queue,
-    RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface,
-    SurfaceConfiguration, TextureViewDescriptor,
+    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
+    BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferDescriptor, BufferUsages,
+    Color, CommandEncoderDescriptor, CurrentSurfaceTexture, Device, DeviceDescriptor, Instance,
+    InstanceDescriptor, LoadOp, Operations, Queue, RenderPassColorAttachment,
+    RenderPassDepthStencilAttachment, RenderPassDescriptor, RequestAdapterOptions, ShaderStages,
+    StoreOp, Surface, SurfaceConfiguration, TextureViewDescriptor,
 };
 use winit::dpi::PhysicalSize;
 use winit::event_loop::OwnedDisplayHandle;
 use winit::window::Window;
 
 use crate::camera::{Camera, CameraUniform};
+use crate::depth::DepthTarget;
 use crate::error::ViewerError;
+use crate::quads::Quads;
 
 /// The graphics handles a frame needs.
 pub struct Gpu {
@@ -40,6 +45,12 @@ pub struct Gpu {
     pub config: SurfaceConfiguration,
     /// The camera uniform, rewritten every frame.
     pub camera_buffer: Buffer,
+    /// Binding for [`Gpu::camera_buffer`].
+    pub camera_bind_group: BindGroup,
+    /// Depth attachment, recreated with the swap chain.
+    pub depth: DepthTarget,
+    /// The two-quad depth-test fixture.
+    pub quads: Quads,
 }
 
 impl Gpu {
@@ -74,6 +85,27 @@ impl Gpu {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let camera_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("camera"),
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+        let camera_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("camera"),
+            layout: &camera_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+        });
 
         let size = window.inner_size();
         let config = surface
@@ -82,12 +114,18 @@ impl Gpu {
         log::debug!("surface: {config:?}");
         surface.configure(&device, &config);
 
+        let depth = DepthTarget::new(&device, config.width, config.height);
+        let quads = Quads::new(&device, &camera_layout, config.format);
+
         Ok(Self {
             device,
             queue,
             surface,
             config,
             camera_buffer,
+            camera_bind_group,
+            depth,
+            quads,
         })
     }
 
@@ -105,10 +143,11 @@ impl Gpu {
         self.config.width = size.width;
         self.config.height = size.height;
         self.surface.configure(&self.device, &self.config);
+        self.depth = DepthTarget::new(&self.device, self.config.width, self.config.height);
     }
 
-    /// Uploads `camera`, acquires the next surface texture, clears it to
-    /// `clear` and presents it.
+    /// Uploads `camera`, acquires the next surface texture, clears color and
+    /// depth, draws the depth-test quads and presents.
     ///
     /// A skipped frame is not an error: occluded windows, timeouts and a swap
     /// chain that had to be reconfigured all return `Ok(())` so the loop can
@@ -141,11 +180,11 @@ impl Gpu {
         let mut encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
-                label: Some("clear frame"),
+                label: Some("main frame"),
             });
         {
-            let _pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: Some("clear frame"),
+            let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("main frame"),
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: &view,
                     depth_slice: None,
@@ -155,8 +194,17 @@ impl Gpu {
                         store: StoreOp::Store,
                     },
                 })],
+                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                    view: &self.depth.view,
+                    depth_ops: Some(Operations {
+                        load: LoadOp::Clear(1.0),
+                        store: StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 ..Default::default()
             });
+            self.quads.draw(&mut pass, &self.camera_bind_group);
         }
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
