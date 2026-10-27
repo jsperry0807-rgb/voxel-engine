@@ -1036,8 +1036,12 @@ mod tests {
         let recipe = Recipe::default();
         recipe.validate().unwrap();
         assert_eq!(recipe.chunk_volume(), 72);
-        assert_eq!(recipe.world_bounds().0, [-192, 0, -192]);
-        assert_eq!(recipe.world_bounds().1, [191, 127, 191]);
+        let edge = CHUNK_DIM as i32;
+        assert_eq!(recipe.world_bounds().0, [-3 * edge, 0, -3 * edge]);
+        assert_eq!(
+            recipe.world_bounds().1,
+            [3 * edge - 1, 2 * edge - 1, 3 * edge - 1]
+        );
         assert_eq!(recipe.features.len(), 5);
     }
 
