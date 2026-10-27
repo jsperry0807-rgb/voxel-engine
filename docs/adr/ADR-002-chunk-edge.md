@@ -1,6 +1,6 @@
 # ADR-002: Chunk Edge — 64³ Baseline, 128³ Pre-Registered
 
-**Status:** Accepted (closed) — 2026-10-26; M1 outcome recorded 2026-10-27 — stay at 64³
+**Status:** Accepted (closed) — 2026-10-26; M1 outcome recorded 2026-10-27 — 128³ Minimum greenlit for M2
 **Decision owner:** engine
 **Supersedes:** the "64³ as the final chunk edge" position in
 [`../reference/material-spec-v1.md`](../reference/material-spec-v1.md)
@@ -52,17 +52,23 @@ must choose.
 
 ## Outcome — 2026-10-27
 
-The M1 gate ran on the reference machine and **failed: 8 pass, 2 fail, 2 not measured**
+The M1 gate ran on the reference machine and **failed at the measured 64³ Default
+profile: 8 pass, 2 fail, 2 not measured**
 ([`../m1-gate-decision.md`](../m1-gate-decision.md);
 [`gate.md`](../../benchmarks/runs/20261027T204626Z-m1-gate/gate.md)). The failures are
 the VRAM budget (24.76 GiB projected against the 4.80 GiB hard-fail line) and the mesh
-buffer (p95 753 KiB against 600 KiB). The 128³ projection also misses memory
-(15.50 GiB optimistic / 24.74 GiB pessimistic) and the pessimistic probe update
-(75.64 ms against 4 ms), so rule 2 did not clear the upgrade.
+buffer (p95 753 KiB against 600 KiB). The 24.76 GiB is the known 64³ Default risk
+profile, not a shipping estimate.
 
-Decision 5 therefore records **stay at 64³** with the measured numbers. 128³ remains
-the CI compile-only variant; it is not greenlit for M2. The rule-3 sacrifice order
-(mesh compression, then near radius, then vertical shell) is the next memory work.
+Decision 5 applies the rule-2 fallback. The 128³ Default projection fails
+(15.50 GiB optimistic / 24.74 GiB pessimistic), but the **128³ Minimum** projection
+is **3.88 GiB optimistic** against the 4.80 GiB hard-fail line (6.19 GiB pessimistic).
+The optimistic memory model is the physically appropriate one: mesh grows with
+surface area, DAG/light/probes with volume. The **128³ Minimum edge is therefore
+greenlit for M2 implementation and measurement**, conditional on mesh compression
+(row 6) and the M2 128³ gate run. Default is not greenlit. If the 128³ measurement
+exceeds 4.80 GiB, the upgrade is rejected and rule 3 applies.
+
 No frozen row and no budget was changed, and this ADR's decision is not amended.
 
 ## Consequences

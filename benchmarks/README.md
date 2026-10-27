@@ -41,10 +41,14 @@ LABEL=m1-gate scripts/bench.sh
 cargo run --release -p voxel-bench -- gate report --out target/gate
 cargo run --release -p voxel-bench -- gate scaleup --out target/gate/scaleup.json \
   > target/gate/scaleup.md
+cargo run --release -p voxel-bench -- gate scaleup --profile minimum \
+  --out target/gate/scaleup-minimum.json > target/gate/scaleup-minimum.md
 ```
 
-Copy `gate.md`, `gate.json`, `scaleup.md` and `scaleup.json` into the recorded run
-directory so the report stays with the numbers it judges. The twelve rows and the
+Copy `gate.md`, `gate.json`, `scaleup.md`, `scaleup.json`, `scaleup-minimum.md` and
+`scaleup-minimum.json` into the recorded run directory so the report stays with the
+numbers it judges. The gate measures Minimum and Default; the scale-up must be read
+per profile, because the per-chunk term is shared but the loaded count is not. The twelve rows and the
 fallback order are frozen in [`../docs/pre-registration.md`](../docs/pre-registration.md);
 the gate report computes every verdict from a measured value and does not type `PASS`.
 The M1 outcome is recorded in [`../docs/m1-gate-decision.md`](../docs/m1-gate-decision.md).

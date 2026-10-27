@@ -15,6 +15,8 @@ wrote benchmarks/runs/20261027T204626Z-m1-gate/scaleup.json
 
 **Target edge:** 128³ (7 bits), 2,097,152 voxels/chunk, 512 light cells, 512 probes, 8 levels
 
+**Profile:** `default` — N128 = 3,217 chunks at the target edge
+
 **Loaded volume:** N64 = 25,736; N128 = 3,217; 25,736 = 8 × N128
 
 ## Measured 64³ input (p95)
@@ -24,15 +26,15 @@ wrote benchmarks/runs/20261027T204626Z-m1-gate/scaleup.json
 | Edit upload | 60 ns |
 | Edit fence | 20 ns |
 | Edit flip | 20 ns |
-| Edit fixed | 91 ns |
-| Edit COW | 691 ns |
-| Edit light | 1.623 µs |
-| Edit dirty | 2.134 µs |
-| Edit total | 2.224 µs |
-| Probe select | 105.931 µs |
-| Probe rebake | 41.760 µs |
-| Probe upload | 50 ns |
-| Probe update | 143.512 µs |
+| Edit fixed | 100 ns |
+| Edit COW | 771 ns |
+| Edit light | 1.984 µs |
+| Edit dirty | 2.605 µs |
+| Edit total | 2.684 µs |
+| Probe select | 107.975 µs |
+| Probe rebake | 44.204 µs |
+| Probe upload | 70 ns |
+| Probe update | 147.630 µs |
 | Memory total/chunk | 1008.9 KiB |
 
 **Measured work:** 360 B/edit uploaded, 304 B/edit COW, 27 light cells/edit, 1 affected probes/edit, 67 rays/edit, 31,095 nodes/chunk
@@ -42,9 +44,9 @@ wrote benchmarks/runs/20261027T204626Z-m1-gate/scaleup.json
 | Term | Optimistic | Pessimistic | Limit |
 |---|---:|---:|---:|
 | Edit fixed | 109 ns | 109 ns | 8.00 ms |
-| Edit dirty | 2.413 µs | 36.305 µs | — |
-| Edit total | 2.522 µs (PASS, 8.00 ms) | 36.414 µs (PASS, 7.96 ms) | 8.00 ms |
-| Probe update | 590.964 µs (PASS, 3.41 ms) | 75.64 ms (MISS, -71.64 ms) | 4.00 ms |
+| Edit dirty | 2.865 µs | 43.791 µs | — |
+| Edit total | 2.974 µs (PASS, 8.00 ms) | 43.900 µs (PASS, 7.96 ms) | 8.00 ms |
+| Probe update | 608.996 µs (PASS, 3.39 ms) | 77.95 ms (MISS, -73.95 ms) | 4.00 ms |
 | Memory projected | 15.50 GiB (MISS) | 24.74 GiB (MISS) | 4.80 GiB |
 | DAG nodes/chunk | 248,760 (PASS) | 248,760 (PASS) | 1,500,000 |
 

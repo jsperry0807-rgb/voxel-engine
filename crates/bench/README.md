@@ -63,6 +63,7 @@ cargo run -p voxel-bench -- gate probes --json
 
 # Analytic 128³ projection from the measured 64³ terms (M1-40)
 cargo run -p voxel-bench -- gate scaleup
+cargo run -p voxel-bench -- gate scaleup --profile minimum
 cargo run -p voxel-bench -- gate scaleup --json
 
 # The twelve pre-registered rows as one gate.md + gate.json (M1-39)
@@ -239,12 +240,15 @@ pre-registered 128³ edge without multiplying every number by eight:
 | **Memory** | Mesh × area (`4×`), other components × volume (`8×`) | Every component × volume (`8×`) |
 
 Memory is multiplied by `N128 = N64 / 8`, the equal-volume chunk count from
-`gate residency`. The report prints both columns, the budget/fail margins, the
-measured work that drove them, and the assumptions. When source and target are
-the same edge the model returns the measured p95 terms unchanged; the unit tests
-assert that identity before testing the 128³ arithmetic. The model is analytic,
-not a 128³ measurement, and the provisional fixture caveat still applies.
-`--json` prints the serializable report; `--out FILE` also writes it.
+`gate residency`. The per-chunk projection is independent of the profile; the
+total is not. Pass `--profile minimum` to evaluate the pre-registered fallback,
+or `--profile default` (the default) for the shipping target. The report prints
+both columns, the budget/fail margins, the measured work that drove them, and the
+assumptions. When source and target are the same edge the model returns the
+measured p95 terms unchanged; the unit tests assert that identity before testing
+the 128³ arithmetic. The model is analytic, not a 128³ measurement, and the
+provisional fixture caveat still applies. `--json` prints the serializable
+report; `--out FILE` also writes it.
 
 **Gate report** (`gate report`, M1-39) runs the four harnesses above and writes
 one `gate.md` plus one `gate.json` (default `target/gate/`). The report contains

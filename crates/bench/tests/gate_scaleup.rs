@@ -10,6 +10,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+use voxel_bench::gate::residency::{Profile, ResidencyConfig};
 use voxel_bench::gate::scaleup::{self, ProjectionMode, SCHEMA_VERSION};
 use voxel_core::constants::{CHUNK_BITS, TARGET_CHUNK_BITS};
 
@@ -33,6 +34,7 @@ fn scaleup_report_projects_both_modes_from_the_measured_64_inputs() {
     assert_eq!(report.source.levels, 7);
     assert_eq!(report.target.levels, 8);
     assert_eq!(report.equal_volume_factor, 8);
+    assert_eq!(report.profile, "default");
     assert_eq!(report.n64, 8 * report.n128);
     assert_eq!(report.n64, 25_736);
     assert_eq!(report.n128, 3_217);
@@ -162,6 +164,57 @@ fn scaleup_report_projects_both_modes_from_the_measured_64_inputs() {
         assert!(
             markdown.contains(needle),
             "the scale-up report must contain `{needle}`:\n{markdown}"
+        );
+    }
+}
+
+#[test]
+fn scaleup_minimum_profile_uses_the_smaller_loaded_count() {
+    let manifest = manifest_path();
+    let report = scaleup::report_for(&manifest, ResidencyConfig::from_profile(Profile::Minimum))
+        .expect("the Minimum profile supports a scale-up report");
+    let default = scaleup::report(&manifest).expect("the Default profile still works");
+
+    assert_eq!(report.profile, "minimum");
+    assert_eq!(report.n64, 6_440);
+    assert_eq!(report.n128, 805);
+    assert_eq!(report.n64, 8 * report.n128);
+    assert_eq!(report.optimistic.memory.loaded_chunks, 805);
+    assert_eq!(report.pessimistic.memory.loaded_chunks, 805);
+    assert_eq!(
+        report.optimistic.memory.total_bytes_per_chunk,
+        default.optimistic.memory.total_bytes_per_chunk,
+        "the per-chunk projection does not depend on the profile"
+    );
+    assert!(
+        report.optimistic.memory.projected_bytes < default.optimistic.memory.projected_bytes,
+        "the Minimum profile loads fewer chunks"
+    );
+    assert!(report.markdown().contains("**Profile:** `minimum`"));
+}
+
+#[test]
+fn scaleup_cli_accepts_the_minimum_profile() {
+    let output = Command::new(env!("CARGO_BIN_EXE_voxel-bench"))
+        .arg("gate")
+        .arg("scaleup")
+        .arg("--manifest")
+        .arg(manifest_path())
+        .arg("--profile")
+        .arg("minimum")
+        .output()
+        .expect("voxel-bench binary runs");
+
+    assert!(
+        output.status.success(),
+        "gate scaleup --profile minimum failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).expect("stdout is UTF-8");
+    for needle in ["**Profile:** `minimum`", "N128 = 805", "Profile"] {
+        assert!(
+            text.contains(needle),
+            "the Minimum scale-up report must contain `{needle}`:\n{text}"
         );
     }
 }

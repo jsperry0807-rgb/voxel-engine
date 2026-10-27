@@ -1,37 +1,59 @@
 # M1 Gate Decision
 
-**Status:** Decided — 2026-10-27
+**Status:** Decided — 2026-10-27; revised 2026-10-27 after the per-profile projection
 **Task:** M1-42, following the recorded gate run M1-41
 **Gate:** [pre-registration.md](pre-registration.md) (frozen 2026-10-26)
 **Machine:** [reference-machine.md](reference-machine.md) — AMD Ryzen 5 7600, 6 cores / 12 threads; NVIDIA GeForce RTX 4060, 8,188 MiB; 32 GiB RAM; Linux
 **Run:** [`benchmarks/runs/20261027T204626Z-m1-gate`](../benchmarks/runs/20261027T204626Z-m1-gate) at commit `f904640a`
 **Raw report:** [`gate.md`](../benchmarks/runs/20261027T204626Z-m1-gate/gate.md) · [`gate.json`](../benchmarks/runs/20261027T204626Z-m1-gate/gate.json)
-**128³ projection:** [`scaleup.md`](../benchmarks/runs/20261027T204626Z-m1-gate/scaleup.md) · [`scaleup.json`](../benchmarks/runs/20261027T204626Z-m1-gate/scaleup.json)
+**128³ projection:** [Default](../benchmarks/runs/20261027T204626Z-m1-gate/scaleup.md) · [Minimum](../benchmarks/runs/20261027T204626Z-m1-gate/scaleup-minimum.md)
 
 ---
 
 ## 1. Decision
 
-**The M1 gate fails. The project stays at 64³.**
+**The 64³ Default gate fails. M2 is greenlit to implement and measure the 128³
+Minimum profile; M1 remains built and measured at 64³.**
 
-- Gate verdict: **FAIL — 8 pass, 2 fail, 2 not measured** (Default profile, 64³ build).
-- The memory failures trigger pre-registration §4 rule 2, not rule 1: edit latency and
-  probe update pass, so 128³ is not ruled out by the latency forces.
-- Rule 2 requires the 128³ projection before deciding. The projection also misses the
-  memory budget in both modes (15.50 GiB optimistic, 24.74 GiB pessimistic, against the
-  4.80 GiB hard-fail line). It therefore does **not** clear, so the failure is not an
-  argument for the upgrade.
-- Per the M1 exit rule in the roadmap and ADR-002, a failing 128³ projection records
-  **stay at 64³**. No threshold is changed, and no frozen row is renegotiated.
-- The 64³ memory failure remains an open engineering problem. The pre-registered
-  sacrifice order for it is recorded in §4; those levers are M2 work, not an M1 gate
-  waiver.
+- Gate verdict at the measured edge: **FAIL — 8 pass, 2 fail, 2 not measured**
+  (Default profile, 64³ build).
+- The memory failures trigger pre-registration §4 rule 2. Rule 2 does not say
+  "stay at 64³"; it says to evaluate the 128³ edge at the same budget.
+- The 128³ **Default** projection fails (15.50 GiB optimistic, 24.74 GiB
+  pessimistic). The 128³ **Minimum** projection is **3.88 GiB optimistic**
+  against the 4.80 GiB hard-fail line, and 6.19 GiB pessimistic.
+- The optimistic memory model is the physically appropriate one: mesh bytes grow
+  with surface area, while DAG, light and probes grow with volume. The
+  pessimistic bound assumes the mesh grows with volume; it is reported, not
+  silently discarded, and the M2 128³ measurement must retire it.
+- The 128³ Minimum projection is therefore the rule-2 upgrade candidate. It is
+  not a final pass: row 6 still needs mesh compression, and the M2 run must
+  measure the real 128³ build before the edge is confirmed.
+- The 24.76 GiB figure is the **64³ Default p95 rehearsal**, not a shipping
+  estimate. It is the known memory-risk profile that selects the edge; the
+  engine is not being designed to allocate 24.76 GiB.
+- No frozen budget, row or threshold was changed.
 
-The dataset row is also not measured. The fixture is the synthetic M1-28 placeholder;
-this report is a rehearsal, not an admissible real-save result. A provisional pass
-would not have been sufficient to upgrade either.
+## 2. Why 24.76 GiB is not the number to optimize
 
-## 2. Every row, with its margin
+| Configuration | Loaded chunks | Per-chunk p95 | Projected | 4.80 GiB hard fail |
+|---|---:|---:|---:|---|
+| 64³ Default | 25,736 | 1008.9 KiB | 24.76 GiB | **FAIL** |
+| 64³ Minimum | 6,440 | 1008.9 KiB | 6.20 GiB | **FAIL** |
+| 128³ Default | 3,217 | 4.93 / 7.88 MiB | 15.50 / 24.74 GiB | **FAIL** both |
+| 128³ Minimum | 805 | 4.93 / 7.88 MiB | 3.88 / 6.19 GiB | PASS optimistic / MISS pessimistic |
+
+The pre-registration already predicts 6.0–17.2 GiB for 64³ Default and calls it
+the memory-risk profile ([`pre-registration.md`](pre-registration.md) §2, §5).
+The 24.76 GiB is that prediction plus the measured fixture's high-end p95. It is
+a verdict on 64³ Default, not a requirement the engine must meet.
+
+The per-chunk projection is profile-independent; only the loaded count changes.
+That is why the profile argument belongs in the scale-up report, not in a
+hand-written multiplier. `voxel-bench gate scaleup --profile minimum` now emits
+the fallback projection directly.
+
+## 3. Every row, with its margin (Default, 64³)
 
 | # | Pre-registered row | Requirement | Measured | Margin | Result |
 |---|---|---|---|---|---|
@@ -52,58 +74,77 @@ The component split behind row 1 is DAG p95 253.2 KiB, light 1.0 KiB, probes 0.8
 overlay 0 KiB and mesh 753.1 KiB. The mesh estimate is the dominant term; the DAG alone
 would still project to 6.21 GiB at 25,736 chunks.
 
-## 3. The 128³ projection
+## 4. The 128³ projections
 
-The M1-40 model projects the measured 64³ p95 terms to 128³ at equal loaded volume
-(N64 = 25,736, N128 = 3,217):
+### Default (3,217 chunks)
 
 | Term | Optimistic | Pessimistic | Limit |
 |---|---:|---:|---:|
-| Edit total | 2.522 µs (PASS) | 36.414 µs (PASS) | 8.00 ms |
-| Probe update | 590.964 µs (PASS) | 75.64 ms (MISS) | 4.00 ms |
+| Edit total | 2.974 µs (PASS) | 43.900 µs (PASS) | 8.00 ms |
+| Probe update | 608.996 µs (PASS) | 77.95 ms (MISS) | 4.00 ms |
 | Memory projected | 15.50 GiB (MISS) | 24.74 GiB (MISS) | 4.80 GiB |
 | DAG nodes/chunk | 248,760 (PASS) | 248,760 (PASS) | 1,500,000 |
 
-- **Edit latency** clears 128³ under both assumptions.
-- **Probe update** clears under the local-edit assumption but misses under the
-  whole-chunk-rebake assumption. That is a second reason not to greenlight 128³ from
-  this run; it requires an M2 measurement, not a projection claim.
-- **Memory** misses in both modes. The optimistic mode already scales the mesh by
-  surface area (×4) and the other components by volume (×8); even that is 3.2× the hard
-  fail line. The 128³ upgrade is not supported by the measured memory.
+### Minimum (805 chunks)
 
-## 4. Fallback and the work it creates
+| Term | Optimistic | Pessimistic | Limit |
+|---|---:|---:|---:|
+| Edit total | 3.226 µs (PASS) | 46.487 µs (PASS) | 8.00 ms |
+| Probe update | 653.640 µs (PASS) | 83.67 ms (MISS) | 4.00 ms |
+| Memory projected | 3.88 GiB (PASS) | 6.19 GiB (MISS) | 4.80 GiB |
+| DAG nodes/chunk | 248,760 (PASS) | 248,760 (PASS) | 1,500,000 |
+
+- **Edit latency** clears 128³ at both profiles under both assumptions.
+- **Probe update** clears under the local-edit assumption but misses under the
+  whole-chunk-rebake assumption. The design only rebakes affected probes, so the
+  optimistic term is the expected one; the pessimistic term is the bound the M2
+  measurement must close.
+- **Memory** at Minimum clears the hard-fail line optimistically, 0.68 GiB above
+  the 3.20 GiB target. At Default it misses in both modes.
+- A 128³ chunk's mesh is 4× the 64³ mesh at the same surface, not 8×. The
+  pessimistic memory model is a volume-scaled bound; the optimistic model is the
+  one that matches the content path.
+- The projection remains analytic and the fixture remains provisional. The M2
+  128³ run is the measurement that confirms or rejects the upgrade.
+
+## 5. Fallback and the work it creates
 
 The pre-registered order is unchanged:
 
 1. Rule 1 — latency, probe update or granularity fails at 64³ → 128³ is dead.
    **Not triggered:** edit and probe pass; granularity is unmeasured, not failed.
-2. Rule 2 — a memory row fails at 64³ → run the 128³ projection. **Triggered by rows
-   1 and 6.** The projection does not clear, so the failure does not argue for 128³.
-3. Rule 3 — memory fails → sacrifice in order: **mesh compression, then near radius,
-   then vertical shell.** Never shrink the far clip below 8 km.
+2. Rule 2 — a memory row fails at 64³ → run the 128³ projection. **Triggered by
+   rows 1 and 6.** 128³ Default does not clear; **128³ Minimum clears the
+   hard-fail line optimistically**, so the failure argues for the upgrade at the
+   fallback profile.
+3. Rule 3 — memory still fails at 128³ → sacrifice in order: **mesh compression,
+   then near radius, then vertical shell.** Never shrink the far clip below 8 km.
 
-Because the 128³ projection also fails, this decision records **stay at 64³** with the
-measured numbers above. The rule-3 levers are the next engineering work if the memory
-budget is to be recovered; they are not applied here and no budget is widened. The
-two unmeasured rows must be closed before any later run can call the gate green:
+The upgrade is conditional on closing the two measured gaps in M2:
 
-- **Row 9:** attach a real culling-granularity run. The M1-34 reference and its
-  100-pose test exist; the gate generator does not yet consume them.
-- **Row 11:** replace the synthetic fixture with a real populated save and re-freeze
-  the fixture. Until then every distribution is illustrative.
+- **Mesh compression (row 6):** the 128³ mesh cap is 2.4 MiB/chunk. The measured
+  64³ p95 of 753 KiB scales to 3.0 MiB, 0.6 MiB over. Bringing the 64³ estimate to
+  the 600 KiB cap also brings the 128³ estimate to 2.4 MiB. This is the first
+  rule-3 lever and the first M2 task.
+- **Real save and granularity (rows 9 and 11):** the M1-34 granularity reference
+  must be wired into the gate report, and a real populated save must replace the
+  synthetic fixture. Until both are closed, the gate report stays provisional.
 
-## 5. M1 exit record
+If the M2 128³ measurement exceeds 4.80 GiB, the upgrade is rejected and the
+project falls back to 64³ Minimum with the rule-3 reductions. No budget is
+widened in either direction.
+
+## 6. M1 exit record
 
 - **Gate run:** `LABEL=m1-gate scripts/bench.sh`, archived in
   [`benchmarks/HISTORY.md`](../benchmarks/HISTORY.md); the report is attached to
   [PR #1](https://github.com/jsperry0807-rgb/voxel-engine/pull/1).
-- **Layout:** 8.0–8.4 B/internal node including padding (limit ≤ 9); COW 258–366 B per
-  edited path for one edit and 93–175 B for a 100-edit batch (limit ≤ 512); run
-  alignment and dedup recorded in the same run.
-- **Edge:** 64³ is the gated edge. 128³ remains compile-only (`--features chunk128`)
-  and is not greenlit for M2 by this decision.
-- **Next milestone:** M1.5. The gate cases remain runnable (`voxel-bench gate report`,
-  `gate scaleup`) and are advisory in CI.
+- **Measured edge:** 64³. The 128³ variant remains compile-only until M2.
+- **M2 target:** 128³ Minimum, conditional on the M2 128³ gate measurement and
+  mesh compression. Default is not greenlit.
+- **Layout:** 8.0–8.4 B/internal node including padding (limit ≤ 9); COW 258–366 B
+  per edited path for one edit and 93–175 B for a 100-edit batch (limit ≤ 512).
+- **Next milestone:** M1.5. Gate cases remain runnable (`voxel-bench gate report`,
+  `gate scaleup --profile minimum`) and are advisory in CI.
 
 **Signed off:** Home <jsperry0807@gmail.com> (M1 owner), 2026-10-27.
