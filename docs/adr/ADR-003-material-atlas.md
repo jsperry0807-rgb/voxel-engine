@@ -89,9 +89,10 @@ slots, `tileIndex = materialID`, per-fragment UV and mips capped at level 4.**
   tile crosses a mip boundary; the atlas is built once and is never per-chunk. The
   literals 256, 16 and 4 live only in `voxel-core::atlas`.
 - **Verification:** `cargo test -p voxel-core atlas` (origins, UV bounds, half-texel
-  inset, mip cap, const context); M1.5-06 (256 tiles, 5 levels); M1.5-07
-  (reproducible downsample); M1.5-08 (257th registration fails); M1.5-12 (one 1 m face
-  shows exactly one 16×16 tile); M1.5-16 (texel-density screenshots).
+  inset, mip cap, const context); M1.5-06 (256 tiles, 5 levels); M1.5-14
+  (23 slice faces); M1.5-07 (reproducible downsample); M1.5-08 (257th registration
+  fails); M1.5-12 (one 1 m face shows exactly one 16×16 tile); M1.5-17
+  (texel-density screenshots).
 
 ## Rejected alternatives
 

@@ -7,7 +7,7 @@
 **Related:** spec §1.1, §1.2, §4.1, §6, §7, §8; [`../pre-registration.md`](../pre-registration.md)
 §3; [`../performance-targets.md`](../performance-targets.md) §1.4; ADR-001 raster;
 ADR-002 chunk edge; ADR-003 atlas; ADR-004 light; ADR-009 LOD; ADR-012 traversal;
-M1.5-10…M1.5-16, M2-01…M2-12, M3-02, M4-10, M5-06, M5-15, M5-17
+M1.5-10…M1.5-17, M2-01…M2-12, M3-02, M4-10, M5-06, M5-15, M5-17
 
 ## Context
 

@@ -181,8 +181,8 @@ provisional pass without the re-run.
 At 64³, so the slice is cheap.
 
 - `crates/engine/viewer`: `winit` + `wgpu`, camera, depth pass, present.
-- **Atlas builder:** one 256×256 texture, mips capped at 4; first pass downsamples
-  existing 256² faces into 16×16 tiles.
+- **Atlas builder:** one 256×256 texture, mips capped at 4; first pass sources the
+  23 slice faces (M1.5-14), then downsamples them into 16×16 tiles.
 - **Registry cap:** freeze asserts `len() <= 256`; per-face blocks become material
   variants; `TextureSetId` collapses.
 - Naive per-face mesher with the M0 vertex format (no greedy, no AO), UVs derived
