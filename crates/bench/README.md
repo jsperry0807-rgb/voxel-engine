@@ -60,6 +60,11 @@ cargo run -p voxel-bench -- gate edits --json
 # Incremental probe-update latency per edited chunk (M1-38)
 cargo run -p voxel-bench -- gate probes
 cargo run -p voxel-bench -- gate probes --json
+
+# The twelve pre-registered rows as one gate.md + gate.json (M1-39)
+cargo run -p voxel-bench -- gate report
+cargo run -p voxel-bench -- gate report --profile minimum
+cargo run -p voxel-bench -- gate report --json
 ```
 
 ## What is measured
@@ -218,6 +223,35 @@ look cheap by selecting nothing: zero-work edits are counted and shown. Upload i
 the CPU-side staging copy of exactly the changed records and validity bytes; the
 headless gate excludes device transfer and the M4 fence/flip. `--json` prints the
 serializable report; `--out FILE` also writes it.
+
+**Gate report** (`gate report`, M1-39) runs the four harnesses above and writes
+one `gate.md` plus one `gate.json` (default `target/gate/`). The report contains
+the twelve frozen rows from `docs/pre-registration.md` §3, in table order:
+
+| # | Row | Source |
+|---:|---|---|
+| 1 | VRAM budget for voxel data | memory × residency |
+| 2 | Target loaded chunk count | residency |
+| 3 | SVDAG node budget/chunk | memory |
+| 4 | Light volume/chunk | memory |
+| 5 | Probe grid/chunk | probes + memory |
+| 6 | Mesh buffer/chunk | memory |
+| 7 | Edit latency | edits |
+| 8 | Probe-update budget | probes |
+| 9 | Culling granularity | M1-34 reference (not consumed by this generator) |
+| 10 | Safety factor | pre-registration invariant |
+| 11 | Measurement dataset | memory fixture |
+| 12 | Fallback trigger | pre-registration §4 |
+
+Every verdict is computed from a measured value and a frozen limit; the report
+does not type `PASS`. Each row carries the measured value, the limit, a signed
+margin and a machine-readable `numbers` block. The header names the reference
+machine from `docs/reference-machine.md` and the actual host CPU/OS/architecture;
+the headless gate does not open a wgpu adapter, so the GPU is named but not
+re-probed. The overall gate is `pass` only when all twelve rows pass, `fail` when
+any row fails, and `incomplete` when no row fails but a required measurement is
+missing. The synthetic fixture and the missing granularity result keep today's
+report from being a green gate; the fallback preview is for M1-42.
 
 ## Caveats
 

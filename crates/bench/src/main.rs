@@ -141,6 +141,18 @@ fn main() {
                      \x20          4 ms per-edited-chunk budget (M1-38)\n\
                      --manifest   fixture manifest (default: benchmarks/fixtures/m1-representative/manifest.json)\n\
                      --out        also write the JSON report to FILE\n\
+                     --json       print the JSON report instead of the Markdown table\n\
+                     \n\
+                     voxel-bench gate report [--manifest FILE] [--profile NAME]\n\
+                     \x20                  [--out DIR] [--json]\n\
+                     \n\
+                     gate report  run the M1 harnesses and write one gate.md plus one\n\
+                     \x20          gate.json with the twelve pre-registered rows, a\n\
+                     \x20          computed verdict and margin for each, and the\n\
+                     \x20          reference machine (M1-39)\n\
+                     --manifest   fixture manifest (default: benchmarks/fixtures/m1-representative/manifest.json)\n\
+                     --profile    minimum | default | high (default: default)\n\
+                     --out        output directory (default: target/gate)\n\
                      --json       print the JSON report instead of the Markdown table"
                 );
                 return;
@@ -492,13 +504,14 @@ fn fixture_verify(args: &[String]) {
 
 fn gate_mode(args: &[String]) {
     let Some(command) = args.first() else {
-        usage("gate needs `memory`, `residency`, `edits` or `probes`");
+        usage("gate needs `memory`, `residency`, `edits`, `probes` or `report`");
     };
     match command.as_str() {
         "memory" => gate_memory(&args[1..]),
         "residency" => gate_residency(&args[1..]),
         "edits" => gate_edits(&args[1..]),
         "probes" => gate_probes(&args[1..]),
+        "report" => gate_report(&args[1..]),
         other => usage(&format!("unknown gate command `{other}`")),
     }
 }
@@ -739,6 +752,90 @@ fn gate_probes(args: &[String]) {
             }
         }
     } else {
+        print!("{}", report.markdown());
+    }
+}
+
+fn gate_report(args: &[String]) {
+    let mut manifest = voxel_bench::fixture::default_manifest();
+    let mut profile = voxel_bench::gate::residency::Profile::default();
+    let mut out = PathBuf::from("target/gate");
+    let mut json = false;
+
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--manifest" => {
+                index += 1;
+                manifest = PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--manifest needs a file")),
+                );
+            }
+            "--profile" => {
+                index += 1;
+                let name = args
+                    .get(index)
+                    .unwrap_or_else(|| usage("--profile needs a name"));
+                profile =
+                    voxel_bench::gate::residency::Profile::from_name(name).unwrap_or_else(|| {
+                        usage(&format!(
+                            "unknown profile `{name}`; expected minimum, default or high"
+                        ))
+                    });
+            }
+            "--out" => {
+                index += 1;
+                out = PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--out needs a directory")),
+                );
+            }
+            "--json" => json = true,
+            other => usage(&format!("unknown gate report argument `{other}`")),
+        }
+        index += 1;
+    }
+
+    let report = match voxel_bench::gate::report::GateReport::generate(&manifest, profile) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!(
+                "failed to build the gate report from {}: {error}",
+                manifest.display()
+            );
+            std::process::exit(1);
+        }
+    };
+
+    let json_text = match serde_json::to_string_pretty(&report) {
+        Ok(json_text) => json_text,
+        Err(error) => {
+            eprintln!("failed to serialize the gate report: {error}");
+            std::process::exit(1);
+        }
+    };
+    if let Err(error) = std::fs::create_dir_all(&out) {
+        eprintln!("failed to create {}: {error}", out.display());
+        std::process::exit(1);
+    }
+    let md_path = out.join("gate.md");
+    let json_path = out.join("gate.json");
+    if let Err(error) = std::fs::write(&md_path, report.markdown()) {
+        eprintln!("failed to write {}: {error}", md_path.display());
+        std::process::exit(1);
+    }
+    if let Err(error) = std::fs::write(&json_path, format!("{json_text}\n")) {
+        eprintln!("failed to write {}: {error}", json_path.display());
+        std::process::exit(1);
+    }
+
+    if json {
+        // Keep stdout parseable when the caller asked for JSON.
+        eprintln!("wrote {} and {}", md_path.display(), json_path.display());
+        println!("{json_text}");
+    } else {
+        println!("wrote {} and {}", md_path.display(), json_path.display());
         print!("{}", report.markdown());
     }
 }

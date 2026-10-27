@@ -9,9 +9,11 @@
 //! - [`residency`] — loaded chunk count for the configured view/band (M1-36).
 //! - [`edits`] — per-edit latency split into fixed and dirty-region terms (M1-37).
 //! - [`probes`] — incremental probe-update latency per edited chunk (M1-38).
+//! - [`report`] — the twelve pre-registered rows, verdicts and fallback (M1-39).
 
 pub mod edits;
 pub mod memory;
 pub mod probes;
+pub mod report;
 pub mod residency;
 mod stat;
