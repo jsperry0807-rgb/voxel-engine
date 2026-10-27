@@ -14,6 +14,7 @@
 //! dependencies and informational messages from the viewer; for a quiet wgpu
 //! run use `RUST_LOG=wgpu_core=warn`.
 
+pub mod atlas;
 mod camera;
 mod depth;
 mod error;
