@@ -1,14 +1,14 @@
 //! wgpu initialization, surface configuration and frame presentation.
 //!
-//! One [`Gpu`] owns the instance's device, queue and window surface. The
-//! surface is configured once the window exists and reconfigured whenever the
-//! drawable size changes. A zero-sized window (minimized) is left alone: wgpu
-//! rejects a zero width or height, and the next [`WindowEvent::Resized`] brings
-//! a usable size back.
+//! One [`Gpu`] owns the instance's device, queue, window surface and the camera
+//! uniform buffer. The surface is configured once the window exists and
+//! reconfigured whenever the drawable size changes. A zero-sized window
+//! (minimized) is left alone: wgpu rejects a zero width or height, and the next
+//! [`WindowEvent::Resized`] brings a usable size back.
 //!
-//! [`Gpu::render`] acquires the next frame, clears it and presents it. The
-//! present waits on the swap chain's `Fifo` mode, so the event loop runs at
-//! the display's refresh rate rather than spinning.
+//! [`Gpu::render`] uploads the camera, acquires the next frame, clears it and
+//! presents it. The present waits on the swap chain's `Fifo` mode, so the event
+//! loop runs at the display's refresh rate rather than spinning.
 //!
 //! [`WindowEvent::Resized`]: winit::event::WindowEvent::Resized
 
@@ -16,14 +16,16 @@ use std::sync::Arc;
 
 use pollster::block_on;
 use wgpu::{
-    Color, CommandEncoderDescriptor, CurrentSurfaceTexture, Device, DeviceDescriptor, Instance,
-    InstanceDescriptor, LoadOp, Operations, Queue, RenderPassColorAttachment, RenderPassDescriptor,
-    RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, TextureViewDescriptor,
+    Buffer, BufferDescriptor, BufferUsages, Color, CommandEncoderDescriptor, CurrentSurfaceTexture,
+    Device, DeviceDescriptor, Instance, InstanceDescriptor, LoadOp, Operations, Queue,
+    RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface,
+    SurfaceConfiguration, TextureViewDescriptor,
 };
 use winit::dpi::PhysicalSize;
 use winit::event_loop::OwnedDisplayHandle;
 use winit::window::Window;
 
+use crate::camera::{Camera, CameraUniform};
 use crate::error::ViewerError;
 
 /// The graphics handles a frame needs.
@@ -36,6 +38,8 @@ pub struct Gpu {
     pub surface: Surface<'static>,
     /// The active surface configuration; rewritten on resize.
     pub config: SurfaceConfiguration,
+    /// The camera uniform, rewritten every frame.
+    pub camera_buffer: Buffer,
 }
 
 impl Gpu {
@@ -64,6 +68,13 @@ impl Gpu {
 
         let (device, queue) = block_on(adapter.request_device(&DeviceDescriptor::default()))?;
 
+        let camera_buffer = device.create_buffer(&BufferDescriptor {
+            label: Some("camera uniform"),
+            size: std::mem::size_of::<CameraUniform>() as u64,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         let size = window.inner_size();
         let config = surface
             .get_default_config(&adapter, size.width.max(1), size.height.max(1))
@@ -76,6 +87,7 @@ impl Gpu {
             queue,
             surface,
             config,
+            camera_buffer,
         })
     }
 
@@ -95,12 +107,19 @@ impl Gpu {
         self.surface.configure(&self.device, &self.config);
     }
 
-    /// Acquires the next surface texture, clears it to `clear` and presents it.
+    /// Uploads `camera`, acquires the next surface texture, clears it to
+    /// `clear` and presents it.
     ///
     /// A skipped frame is not an error: occluded windows, timeouts and a swap
     /// chain that had to be reconfigured all return `Ok(())` so the loop can
     /// try again next frame.
-    pub fn render(&self, clear: Color) -> Result<(), ViewerError> {
+    pub fn render(&self, clear: Color, camera: &Camera) -> Result<(), ViewerError> {
+        self.queue.write_buffer(
+            &self.camera_buffer,
+            0,
+            bytemuck::bytes_of(&camera.uniform()),
+        );
+
         let frame = match self.surface.get_current_texture() {
             CurrentSurfaceTexture::Success(frame) => frame,
             CurrentSurfaceTexture::Suboptimal(frame) => {

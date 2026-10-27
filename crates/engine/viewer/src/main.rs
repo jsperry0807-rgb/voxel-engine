@@ -2,8 +2,8 @@
 //!
 //! The viewer opens a window, initializes wgpu for it, keeps the surface
 //! configuration in step with the window, and runs a frame loop that clears
-//! and presents each frame. Later tasks add the camera and the chunk renderer
-//! on top of this shell.
+//! and presents each frame. A fly camera responds to WASD and mouse motion;
+//! later tasks add the chunk renderer on top of this shell.
 //!
 //! ```text
 //! cargo run -p voxel-viewer
@@ -13,6 +13,7 @@
 //! dependencies and informational messages from the viewer; for a quiet wgpu
 //! run use `RUST_LOG=wgpu_core=warn`.
 
+mod camera;
 mod error;
 mod gpu;
 
@@ -21,14 +22,16 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use glam::{Vec2, Vec3};
 use wgpu::Color;
 use winit::application::ApplicationHandler;
-use winit::dpi::LogicalSize;
-use winit::event::{ElementState, WindowEvent};
+use winit::dpi::{LogicalSize, PhysicalSize};
+use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
-use winit::window::{Window, WindowId};
+use winit::window::{CursorGrabMode, Window, WindowId};
 
+use crate::camera::Camera;
 use crate::error::ViewerError;
 use crate::gpu::Gpu;
 
@@ -43,6 +46,12 @@ const CLEAR_COLOR: Color = Color {
 };
 /// How often the averaged frame time is logged.
 const FRAME_LOG_INTERVAL: Duration = Duration::from_secs(1);
+/// Fly speed in world units per second.
+const MOVE_SPEED: f32 = 8.0;
+/// Radians of rotation per mouse pixel.
+const MOUSE_SENSITIVITY: f32 = 0.0025;
+/// A long stall must not teleport the camera across the world.
+const MAX_FRAME_DELTA: Duration = Duration::from_millis(100);
 
 fn main() -> ExitCode {
     env_logger::Builder::from_env(
@@ -75,11 +84,13 @@ fn run() -> Result<(), ViewerError> {
     }
 }
 
-/// The application state: the window, the graphics handles and frame timing.
+/// The application state: window, graphics handles, camera and input.
 #[derive(Default)]
 struct Viewer {
     window: Option<Arc<Window>>,
     gpu: Option<Gpu>,
+    camera: Camera,
+    controls: Controls,
     timing: FrameTiming,
     /// A failure raised inside an event-loop callback.
     ///
@@ -89,19 +100,61 @@ struct Viewer {
 }
 
 impl Viewer {
+    /// Applies the input gathered since the previous frame.
+    fn apply_input(&mut self, delta: Duration) {
+        let mouse = std::mem::take(&mut self.controls.mouse_delta);
+        if mouse != Vec2::ZERO {
+            self.camera
+                .rotate(mouse.x * MOUSE_SENSITIVITY, -mouse.y * MOUSE_SENSITIVITY);
+        }
+
+        let mut direction = Vec3::ZERO;
+        if self.controls.forward {
+            direction += self.camera.forward();
+        }
+        if self.controls.back {
+            direction -= self.camera.forward();
+        }
+        if self.controls.right {
+            direction += self.camera.right();
+        }
+        if self.controls.left {
+            direction -= self.camera.right();
+        }
+        if direction.length_squared() > 0.0 {
+            let seconds = delta.min(MAX_FRAME_DELTA).as_secs_f32();
+            self.camera
+                .translate(direction.normalize() * MOVE_SPEED * seconds);
+        }
+    }
+
     /// Draws and presents one frame, or stops the loop if that fails.
     fn redraw(&mut self, event_loop: &ActiveEventLoop) {
+        let delta = self.timing.tick();
+        self.apply_input(delta);
         let result = match &self.gpu {
-            Some(gpu) => gpu.render(CLEAR_COLOR),
+            Some(gpu) => gpu.render(CLEAR_COLOR, &self.camera),
             None => return,
         };
         match result {
-            Ok(()) => self.timing.tick(),
+            Ok(()) => {}
             Err(error) => {
                 self.error = Some(error);
                 event_loop.exit();
             }
         }
+    }
+
+    /// Handles a new drawable size for the window and camera.
+    fn resized(&mut self, size: PhysicalSize<u32>) {
+        if size.width == 0 || size.height == 0 {
+            return;
+        }
+        if let Some(gpu) = &mut self.gpu {
+            gpu.resize(size);
+        }
+        self.camera
+            .set_aspect(size.width as f32 / size.height as f32);
     }
 }
 
@@ -122,9 +175,15 @@ impl ApplicationHandler for Viewer {
                 return;
             }
         };
+        let size = window.inner_size();
+        if size.height > 0 {
+            self.camera
+                .set_aspect(size.width as f32 / size.height as f32);
+        }
         match Gpu::new(window.clone(), event_loop.owned_display_handle()) {
             Ok(gpu) => {
-                self.window = Some(window);
+                self.window = Some(window.clone());
+                grab_cursor(&window);
                 self.gpu = Some(gpu);
             }
             Err(error) => {
@@ -142,26 +201,54 @@ impl ApplicationHandler for Viewer {
     ) {
         match event {
             WindowEvent::CloseRequested | WindowEvent::Destroyed => event_loop.exit(),
-            WindowEvent::KeyboardInput { event, .. }
-                if event.state == ElementState::Pressed
-                    && event.physical_key == PhysicalKey::Code(KeyCode::Escape) =>
-            {
-                event_loop.exit();
-            }
-            WindowEvent::Resized(size) => {
-                if let Some(gpu) = &mut self.gpu {
-                    gpu.resize(size);
+            WindowEvent::KeyboardInput { event, .. } => {
+                let pressed = event.state == ElementState::Pressed;
+                match event.physical_key {
+                    PhysicalKey::Code(KeyCode::Escape) if pressed => event_loop.exit(),
+                    PhysicalKey::Code(KeyCode::KeyW) => self.controls.forward = pressed,
+                    PhysicalKey::Code(KeyCode::KeyS) => self.controls.back = pressed,
+                    PhysicalKey::Code(KeyCode::KeyA) => self.controls.left = pressed,
+                    PhysicalKey::Code(KeyCode::KeyD) => self.controls.right = pressed,
+                    _ => {}
                 }
             }
+            WindowEvent::Resized(size) => self.resized(size),
             // A scale-factor change can change the drawable size without a
             // separate `Resized` event on some platforms.
             WindowEvent::ScaleFactorChanged { .. } => {
-                if let (Some(window), Some(gpu)) = (&self.window, &mut self.gpu) {
-                    gpu.resize(window.inner_size());
+                if let Some(size) = self.window.as_ref().map(|window| window.inner_size()) {
+                    self.resized(size);
+                }
+            }
+            WindowEvent::Focused(true) => {
+                if let Some(window) = &self.window {
+                    grab_cursor(window);
+                }
+            }
+            WindowEvent::Focused(false) => {
+                if let Some(window) = &self.window {
+                    let _ = window.set_cursor_grab(CursorGrabMode::None);
+                    window.set_cursor_visible(true);
                 }
             }
             WindowEvent::RedrawRequested => self.redraw(event_loop),
             _ => {}
+        }
+    }
+
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: DeviceId,
+        event: DeviceEvent,
+    ) {
+        if let DeviceEvent::MouseMotion { delta } = event
+            && self
+                .window
+                .as_ref()
+                .is_some_and(|window| window.has_focus())
+        {
+            self.controls.mouse_delta += Vec2::new(delta.0 as f32, delta.1 as f32);
         }
     }
 
@@ -174,6 +261,30 @@ impl ApplicationHandler for Viewer {
     }
 }
 
+/// Keys the camera reads, plus pointer motion accumulated between frames.
+#[derive(Default)]
+struct Controls {
+    forward: bool,
+    back: bool,
+    left: bool,
+    right: bool,
+    mouse_delta: Vec2,
+}
+
+/// Captures the pointer for mouse look, falling back to confinement.
+fn grab_cursor(window: &Window) {
+    for mode in [CursorGrabMode::Locked, CursorGrabMode::Confined] {
+        match window.set_cursor_grab(mode) {
+            Ok(()) => {
+                window.set_cursor_visible(false);
+                return;
+            }
+            Err(error) => log::debug!("cursor grab {mode:?} unavailable: {error}"),
+        }
+    }
+    log::debug!("cursor grab unavailable; mouse look stops at the window edge");
+}
+
 /// Averages frame intervals and logs one line per [`FRAME_LOG_INTERVAL`].
 #[derive(Default)]
 struct FrameTiming {
@@ -183,14 +294,14 @@ struct FrameTiming {
 }
 
 impl FrameTiming {
-    fn tick(&mut self) {
+    /// Returns the time since the previous frame; zero on the first frame.
+    fn tick(&mut self) -> Duration {
         let now = Instant::now();
-        let Some(last) = self.last else {
-            self.last = Some(now);
-            return;
+        let Some(last) = self.last.replace(now) else {
+            return Duration::ZERO;
         };
-        self.last = Some(now);
-        self.elapsed += now.duration_since(last);
+        let delta = now.duration_since(last);
+        self.elapsed += delta;
         self.frames += 1;
         if self.elapsed >= FRAME_LOG_INTERVAL {
             let seconds = self.elapsed.as_secs_f64();
@@ -202,5 +313,6 @@ impl FrameTiming {
             self.frames = 0;
             self.elapsed = Duration::ZERO;
         }
+        delta
     }
 }

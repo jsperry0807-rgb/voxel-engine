@@ -1,7 +1,7 @@
 # Roadmap Task List
 
-**Status:** v1.3 — derived from spec v2.3 and roadmap v3.1
-**Date:** 2026-10-26
+**Status:** v1.5 — derived from spec v2.3 and roadmap v3.1
+**Date:** 2026-10-27
 **Owner:** engine
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
@@ -17,6 +17,7 @@
 - **Gate tasks are binding.** M1-35…M1-43 are frozen before measurement (M0-02); they are not edited during M1.
 - **Update the docs with the code.** If a task changes a number in the spec, M0-02 is amended in a dated section, never silently.
 - **Add tasks, don't widen them.** A task that needs a second sentence of scope is two tasks.
+- **Textures follow §2.1.** A block key without a material-manifest entry fails the manifest test; art work is a milestone task (`M1.5-14`, `M2.5-30/31`, `M3.5-15`), not a side effect of a code PR.
 
 ### Definition of done (applies to every task)
 
@@ -124,7 +125,7 @@ Two weeks per sprint, one engineer. The gate sprint (S4) is the only one that ca
 | S2 | 3–4 | Layout | M1-03…M1-12 | bands, run dedup, COW | — (no perf task) |
 | S3 | 5–6 | Layout + parameterize | M1-13…M1-28 | both edges compile | M1-18 layout cost report |
 | S4 | 7–8 | References + gate | M1-29…M1-43 | **M1 gate decided** | M1-35…M1-43 full gate run |
-| S5 | 9–10 | Vertical slice | M1.5-01…M1.5-16 | one textured chunk on screen | M1.5-13 at 60 Hz/1080p |
+| S5 | 9–10 | Vertical slice | M1.5-01…M1.5-17 | one textured chunk on screen | M1.5-13 at 60 Hz/1080p |
 | S6 | 11–12 | Greedy mesh + AO | M2-01…M2-09 | golden meshes, AO seams | M2-02 apron; M2-08 AO merge ratio |
 | S7 | 13–14 | Block light | M2-10…M2-18 | incremental == full | M2-17 full vs incremental light |
 | S8 | 15–16 | Probes + integration | M2-19…M2-30 | M2 exit | M2-21; M2-24; M2-28; M2-29 |
@@ -143,11 +144,119 @@ Two weeks per sprint, one engineer. The gate sprint (S4) is the only one that ca
 
 If the worldgen track runs, M2.5-23 (generation p95 ≤ 2 ms) is a checkpoint at the M2.5 exit. If the far-field track runs, M3.5-05 (≥ 60 Hz at 32 km) and M3.5-13 (hitch p99 ≤ 4 ms) are checkpoints at the M3.5 exit.
 
+**Art timing.** M1.5-14 (slice textures) sits in S5; M2.5-30 and M2.5-31 sit in the first two sprints of M2.5; M3.5-15 sits inside M3.5; the manifest freezes in M3.5-16. With one engineer, S5 needs **14.5 raw days** (10.5 code + 4 art) rather than 10.5, so the slice exit moves to early S6 unless the slice set is sourced externally. The gate at S4 is unaffected; no art task is allowed into the gate sprint.
+
 **Gate date.** Bottom-up, M1 is 33.5 raw days (6.7 weeks), not the roadmap's 5-week estimate, because the reference implementations (M1-27…M1-34) and the gate harness are real work. The gate therefore lands at the end of **S4 (week 8)**, not week 5. The gate content is unchanged; only its date moves. This is the one place the task list overrides the roadmap's schedule, and it is deliberate: a gate measured with borrowed oracles is not a gate.
 
 **With a second engineer:** Track A takes M1 layout then M4 while Track B builds the M1 references and M1.5; they meet at M5. Critical path drops to ~22 sprints. The gate stays at S4 regardless — it needs both tracks' inputs.
 
-**Worldgen track (added v2.3).** M2.5 is 45 raw days and M3.5 is 18. With one engineer they insert after M2 and M3, taking the plan to **~27 sprints (~54 weeks)**; with two, M2.5 runs beside M2–M3 and the critical path grows by ~6 sprints. The gate at S4 is unchanged.
+**Worldgen track (added v2.3).** M2.5 is 45 raw days of code plus 8 art days (M2.5-30/31), and M3.5 is 17.75 plus 1.5 art days (M3.5-15). With one engineer they insert after M2 and M3, taking the plan to **~27 engineering sprints plus ~1.5 art sprints**; with two, M2.5 runs beside M2–M3 and the critical path grows by ~6 sprints. The gate at S4 is unchanged.
+
+### 2.1 Material and texture schedule
+
+Textures are content, not a side effect of a code task. Two rules are binding:
+
+- **No block key without a texture.** A key that is not in the material manifest fails the manifest test; the registry never falls back to a missing face.
+- **No texture authored inside a code PR.** If a milestone needs a face that is not in the manifest, the matching milestone art task is opened first and the milestone names it as a dependency.
+
+The schedule is by milestone, not by calendar. The *Consumed by* column is a hard dependency: a milestone may not mark a set final before its art task is ticked. The *Slots* column is the new atlas ids the set may add, not a target.
+
+| When | Consumed by | Set | Task | Slots |
+| --- | --- | --- | --- | --- |
+| S5, before M1.5-07 | M1.5-07…M1.5-17 | Vertical-slice faces | M1.5-14 | 23 |
+| M2.5 sprint 1, before M2.5-11 | M2.5-11, M2.5-12, M2.5-13 | Biome surface palettes | M2.5-30 | ≤ 24 new |
+| M2.5 sprint 1–2, before M2.5-15/19/21 | M2.5-15, M2.5-19, M2.5-21, M2.5-28 | Underground, structures, flora | M2.5-31 | ≤ 32 new |
+| M3.5, before M3.5-06 | M3.5-06…M3.5-08, M3.5-12 | Water and current | M3.5-15 | ≤ 3 new |
+| with M3.5-10 | M3.5-10 | Map UI sprites (not atlas tiles) | inside M3.5-10 | 0 |
+| M3.5-16, before the tag | all later milestones | Material freeze | inside M3.5-16 | 0 |
+| M4, M5, M6, M7 | — | No new textures; reuse the frozen set | — | 0 |
+
+#### Per-material deadlines
+
+The deadline is the art task in the last column; its output must be ready before the consuming task (M1.5-07, M2.5-11, M3.5-06). "Before M1.5-07" means the 256² source is in the manifest and bakes to the 16² tile; M1.5-15 is the final art review. A face may be a marked placeholder earlier, but no milestone may call the set final before its row is done.
+
+**Slice set.** All 23 faces are authored in **M1.5-14** and must bake before **M1.5-07**; M1.5-15 reviews the final art.
+
+| Texture | Applies to | Done in task |
+| --- | --- | --- |
+| `stone` | stone | M1.5-14 |
+| `cobblestone` | cobblestone | M1.5-14 |
+| `gravel` | gravel | M1.5-14 |
+| `bedrock` | bedrock | M1.5-14 |
+| `dirt` | dirt; grass block bottom | M1.5-14 |
+| `grass_block_top` | grass block top | M1.5-14 |
+| `grass_block_side` | grass block sides | M1.5-14 |
+| `sand` | sand; beaches | M1.5-14 |
+| `sandstone_top` | sandstone top | M1.5-14 |
+| `sandstone_side` | sandstone sides | M1.5-14 |
+| `sandstone_bottom` | sandstone bottom | M1.5-14 |
+| `water_still` | water | M1.5-14 |
+| `ice` | ice | M1.5-14 |
+| `snow` | snow | M1.5-14 |
+| `oak_log` | oak log sides | M1.5-14 |
+| `oak_log_top` | oak log ends | M1.5-14 |
+| `oak_leaves` | oak leaves | M1.5-14 |
+| `tall_grass` | tall grass | M1.5-14 |
+| `red_flower` | red flower | M1.5-14 |
+| `coal_ore` | coal ore | M1.5-14 |
+| `iron_ore` | iron ore | M1.5-14 |
+| `gold_ore` | gold ore | M1.5-14 |
+| `diamond_ore` | diamond ore | M1.5-14 |
+
+`water_still` is authored here even though transparency lands in M3.5; the slice draws it as a normal face.
+
+**Later sets.** Keys marked `*` are proposed; M2.5-30/M2.5-31 freeze the exact name. The deadline is the art task in the last column.
+
+| Texture / material | Applies to | Done in task |
+| --- | --- | --- |
+| `dry_grass_top`*, `dry_grass_side`* | plains and savanna dry grass | M2.5-30 |
+| `savanna_grass_top`*, `savanna_grass_side`* | savanna | M2.5-30 |
+| `taiga_grass_top`*, `taiga_grass_side`* | taiga | M2.5-30 |
+| `swamp_grass_top`*, `swamp_grass_side`* | swamp surface | M2.5-30 |
+| `swamp_mud`* | swamp filler | M2.5-30 |
+| `red_sand`* | desert | M2.5-30 |
+| `alpine_rock`* | mountains and alpine | M2.5-30 |
+| `tundra_moss`* | tundra | M2.5-30 |
+| `deep_ocean_floor`* | deep and trench | M2.5-30 |
+| `clay`* | shelf and swamp | M2.5-30 |
+| `deep_stone`* | deep caves and trench walls | M2.5-31 |
+| `fungal_cap_top`*, `fungal_cap_side`* | fungal deep cap | M2.5-31 |
+| `fungal_stem`* | fungal deep stem | M2.5-31 |
+| `lava_still`*, `lava_flow`* | water/lava caves and geothermal | M2.5-31 |
+| `geothermal_rock`* | geothermal | M2.5-31 |
+| `obsidian`* | geothermal and lava contact | M2.5-31 |
+| `oak_planks`* | towers, bridges, ruins | M2.5-31 |
+| `stone_bricks`* | ruins, dungeons | M2.5-31 |
+| `cracked_stone_bricks`* | ruins | M2.5-31 |
+| `mossy_cobblestone`* | ruins, dungeons | M2.5-31 |
+| `birch_log`*, `birch_log_top`*, `birch_leaves`* | birch ecotone | M2.5-31 |
+| `spruce_log`*, `spruce_log_top`*, `spruce_leaves`* | taiga and spruce | M2.5-31 |
+| `fern`* | forest and taiga undergrowth | M2.5-31 |
+| `cactus_top`*, `cactus_side`*, `cactus_bottom`* | desert | M2.5-31 |
+| `dead_bush`* | desert and savanna | M2.5-31 |
+| `water_flow`* | rivers and current | M3.5-15 |
+| `foam_strip`* | river foam | M3.5-15 |
+| `caustics`* | underwater light, only if not procedural | M3.5-15 |
+| `map_item_icon`* | map item icon (UI sprite) | M3.5-10 |
+| `player_marker`* | map marker (UI sprite) | M3.5-10 |
+
+**Biome surfaces (≤ 24 new tiles).** Top, filler, stone and beach faces for the 18 biome palettes, plus each biome's `map_color` (data, not a tile). Reuse the slice set first; add only what the palette cannot express. Transition blocks and debris reuse these parents and add zero slots. M2.5-30 freezes the proposed keys in the table.
+
+**Underground, structures and flora (≤ 32 new tiles).** The per-material rows above are the deadline list. Lava and geothermal tiles carry the emissive material flag; that is a property, not a texture rule. Giant-tree detail reuses the oak/spruce keys; transition and detail templates add zero slots.
+
+**Water and current (≤ 3 new tiles).** `water_still` exists from M1.5-14; add `water_flow` and `foam_strip`. The flow axis and UV-scroll rate are documented with the tiles. Caustics are procedural unless M3.5-15 adds a `caustics` tile; the decision is recorded with M3.5-15, and no caustics texture is invented in the shader task.
+
+**Map UI (0 slots).** The atlas item icon and player marker are UI sprites, not material tiles. They are authored inside M3.5-10 and never enter the 256-slot table.
+
+**Slot budget.** The atlas has 256 ids; id 0 is air and never samples, so 255 are drawable. The slice uses 23. M2.5-30 may add at most 24, M2.5-31 at most 32 and M3.5-15 at most 3, for a ceiling of 82 drawable ids and at least 173 free. The reserve exists for face variants and defects, not for new content. The manifest records every id, key, source, hash, alpha mode and slot; `bake-atlas` rejects a gap in the used range or a count over the cap.
+
+**Texture definition of done.** Source at 256² RGBA8, the historical face resolution retained for the 320² padding fallback, downsampled to the 16² tile; alpha is binary for `Cutout` and smooth for `Translucent`; the tile reads at a 1 m face (6.25 cm per texel) and at mip 4; the source, licence and hash are in the manifest; the atlas bake hash and a screenshot are updated in the same PR. A face that only looks right at 256² is not done.
+
+**What is not a texture task.** Damage is geometric (voxel removal), not a damage texture. AO, block light, probe light and face shading are vertex or light data. Transition and detail blocks are voxel templates that reuse parent tiles. The far field and the map use `map_color` from the biome RON, not atlas tiles. UI sprites are UI assets. M4–M7 add no textures; a mid-milestone need reopens M2.5-31 or M3.5-15 rather than slipping a face into a code PR.
+
+**Where the files live.** The manifest is `crates/engine/block/data/textures.ron`; sources are `crates/engine/block/textures/block/<name>.png`. The manifest test compares its key set against the `voxel:block/*` keys in `blocks.ron`, so a block cannot be added without a face.
+
+Art tasks are milestone tasks, not a separate track: **M1.5-14** (slice), **M2.5-30** (biome surfaces), **M2.5-31** (underground, structures, flora), **M3.5-15** (water/current). The manifest freeze is part of **M3.5-16**. That is the complete art set; there is no `MAT-*` namespace.
 
 ---
 
@@ -271,33 +380,36 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 ## 5. M1.5 — Vertical slice
 
-**Goal:** one textured chunk in a window. **Exit:** M1.5-16. **Budget:** 10.5 d. **Depends:** M1-15 (layout API), M0-06 (atlas math).
+**Goal:** one textured chunk in a window. **Exit:** M1.5-17. **Budget:** 10.5 d code + 4 d art (M1.5-14). **Depends:** M1-15 (layout API), M0-06 (atlas math); M1.5-14 before M1.5-07.
+**Art:** M1.5-14 authors the 23 slice faces; M1.5-17 is the exit art checkpoint.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
 | M1.5-01 | Create `crates/engine/viewer` (`voxel-viewer`), add to workspace, `main.rs`, error type | M1-24 | `cargo run -p voxel-viewer` opens an empty window | run | 0.5 d | [x] |
 | M1.5-02 | wgpu init: instance, adapter, device, queue, surface, config, resize handling | M1.5-01 | Window survives 20 resizes without validation errors | run | 0.5 d | [x] |
 | M1.5-03 | Event loop, close/escape, frame timing, log adapter info | M1.5-02 | Quit cleanly; adapter string printed at startup | run | 0.5 d | [x] |
-| M1.5-04 | Camera: position, yaw/pitch, view/proj, uniform buffer; WASD + mouse-look | M1.5-03 | Camera matrices validated against a known look-at case | `cargo test -p voxel-viewer camera` | 1 d | [ ] |
+| M1.5-04 | Camera: position, yaw/pitch, view/proj, uniform buffer; WASD + mouse-look | M1.5-03 | Camera matrices validated against a known look-at case | `cargo test -p voxel-viewer camera` | 1 d | [x] |
 | M1.5-05 | Depth buffer and depth pass | M1.5-04 | Depth test visible on two overlapping quads | run | 0.5 d | [ ] |
 | M1.5-06 | Atlas builder: 256×256 RGBA8, 16×16 tiles, mips capped at 4, tile-origin helper | M0-06 | All 256 tiles addressable; mip count = 5; no tile crosses a mip boundary in a test | `cargo test -p voxel-viewer atlas` | 1 d | [ ] |
-| M1.5-07 | Downsample tool: existing 256² material faces → 16×16 tiles; deterministic and documented | M1.5-06 | `cargo run -p voxel-viewer -- bake-atlas` writes a reproducible PNG/hash | run + hash | 1 d | [ ] |
-| M1.5-08 | Registry cap: freeze errors above 256; per-face texture sets become material variants; migration notes | M1.5-07 | Registering 257 fails with a clear error; existing 64-block fixture still freezes | `cargo test -p voxel-block cap_256` | 1 d | [ ] |
+| M1.5-14 | Author the 23 slice textures: 256² RGBA8 sources, manifest entries, alpha matching each `RenderType`, licence/provenance | M1.5-06 | Every `voxel:block/*` key in `blocks.ron` has a source and manifest entry; dimensions, alpha and key set match; no unmarked placeholder remains | `cargo test -p voxel-block texture_manifest` | 4 d | [ ] |
+| M1.5-07 | Downsample tool: M1.5-14's 256² material faces → 16×16 tiles; deterministic and documented | M1.5-14, M1.5-06 | Every M1.5-14 key bakes; `cargo run -p voxel-viewer -- bake-atlas` writes a reproducible PNG/hash; no tile crosses a mip boundary | run + hash | 1 d | [ ] |
+| M1.5-08 | Registry cap: freeze errors above 256; per-face texture sets become material variants; migration notes | M1.5-07 | Registering 257 fails with a clear error; the 23 slice tiles plus face variants fit under 256 and the slot table is recorded; existing 64-block fixture still freezes | `cargo test -p voxel-block cap_256` | 1 d | [ ] |
 | M1.5-09 | Upload atlas, sampler, bind group; nearest/linear policy documented | M1.5-06 | Texture sampled in a full-screen test draws the expected tile | `cargo test -p voxel-viewer --test gpu` | 0.5 d | [ ] |
 | M1.5-10 | Naive per-face mesher (correct, not greedy) producing the M0 vertex format; quad struct shared with M2 | M1.5-04 | Emits exactly 6 quads for one isolated voxel; 0 for enclosed | `cargo test -p voxel-viewer naive_mesh` | 1 d | [ ] |
 | M1.5-11 | Vertex/index buffer creation and upload for one chunk | M1.5-10 | Buffer sizes match the quad count; no validation error | run | 0.5 d | [ ] |
 | M1.5-12 | Shader: UV from world position and face axes, atlas tile from material, face shading, AO placeholder | M0-06, M1.5-09 | A 1 m block face shows exactly one 16×16 tile; screenshot | visual | 1 d | [ ] |
-| M1.5-13 | Draw one generated chunk end to end | M1.5-11, M1.5-12 | Terrain visible; 60 Hz at 1080p on the reference machine | run | 0.5 d | [ ] |
-| M1.5-14 | Screenshot artifact in `docs/images/` plus run instructions | M1.5-13 | Image committed; README explains how to reproduce | review | 0.25 d | [ ] |
-| M1.5-15 | Zero-validation run and naga shader test in CI | M1.5-13 | CI job passes with `RUST_LOG=wgpu_core=warn` | CI | 0.5 d | [ ] |
-| M1.5-16 | Before/after texel-density screenshots (old 256² face vs 16×16 tile) so the regression is a decision | M1.5-07 | Two images in `docs/images/` with a one-paragraph note | review | 0.25 d | [ ] |
+| M1.5-13 | Draw one generated chunk end to end | M1.5-11, M1.5-12 | Terrain visible; 60 Hz at 1080p on the reference machine; placeholder tiles are allowed here, M1.5-14 supplies the final art before the M1.5-15 screenshot | run | 0.5 d | [ ] |
+| M1.5-15 | Screenshot artifact in `docs/images/` plus run instructions | M1.5-07, M1.5-13, M1.5-14 | Image committed; README explains how to reproduce | review | 0.25 d | [ ] |
+| M1.5-16 | Zero-validation run and naga shader test in CI | M1.5-13 | CI job passes with `RUST_LOG=wgpu_core=warn` | CI | 0.5 d | [ ] |
+| M1.5-17 | Before/after texel-density screenshots (old 256² face vs 16×16 tile) so the regression is a decision | M1.5-14, M1.5-07 | Two images in `docs/images/` with a one-paragraph note; art matches M1.5-14 | review | 0.25 d | [ ] |
 
 ---
 
 ## 6. M2 — Production content pipeline
 
 **Goal:** deterministic mesh + AO + block light + probes, at the gated edge.
-**Exit:** M2-30. **Budget:** 26.75 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format.
+**Exit:** M2-30. **Budget:** 26.75 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
+**Art:** none beyond M1.5-14; M2 reuses the slice atlas.
 
 ### 6.1 Apron and mesher
 
@@ -344,7 +456,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M2-24 | Scrub latency: single-block edit → remesh + light + probe ≤ 4 ms p95 | M2-23 | Measured; recorded | `cargo run -p voxel-bench -- gate edits` | 0.5 d | [ ] |
 | M2-25 | Ray-test occlusion behind `occlusion.raytest` flag, using the SVDAG; default off | M1-33 | Flag on/off produce comparable visible sets; documented delta | `cargo test -p voxel-mesh --features raytest` | 2 d | [ ] |
 | M2-26 | Ray-test vs flood-fill comparison report: accuracy and cost on 100 poses | M2-25 | Table in `docs/` with the decision recommendation (still default flood-fill) | review | 0.5 d | [ ] |
-| M2-27 | Wire M2 into the viewer: replace the naive mesher; light + probes uploaded | M2-12, M2-21 | Visual parity with M1.5 except better merge ratio; 60 Hz | run | 1 d | [ ] |
+| M2-27 | Wire M2 into the viewer: replace the naive mesher; light + probes uploaded | M2-12, M2-21 | Visual parity with M1.5 except better merge ratio; 60 Hz; no new material keys, the M1.5-14 atlas is unchanged | run | 1 d | [ ] |
 | M2-28 | Throughput: ≥ 20 terrain chunks/s single-threaded | M2-27 | Measured over 100 chunks; recorded | `cargo bench -p voxel-mesh build` | 0.5 d | [ ] |
 | M2-29 | Scratch-memory budget test: ≤ 64 KiB per worker, no chunk-wide densify anywhere | M2-03 | Counting allocator test fails if exceeded | `cargo test -p voxel-mesh scratch_budget` | 0.5 d | [ ] |
 | M2-30 | M2 exit: tag `m2`, update roadmap, freeze goldens as CI artifacts | M2-29 | Tag; CI runs the goldens | `git tag -n m2` | 0.25 d | [ ] |
@@ -354,8 +466,9 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ## 7. M2.5 — Worldgen
 
 **Goal:** a deterministic 1024 km world with biomes, rivers, caves, landmarks and detail.
-**Exit:** M2.5-29. **Budget:** 45.25 d raw, plus 40% contingency. **Depends:** M1-24, M2-12.
+**Exit:** M2.5-32. **Budget:** 45.25 d code + 8 d art (M2.5-30/31), plus 40% contingency. **Depends:** M1-24, M2-12.
 **Runs in parallel with M2–M3** with a second engineer; otherwise insert after M2.
+**Art:** M2.5-30 (biome surfaces) and M2.5-31 (flora, structures, underground), scheduled in §2.1.
 **Design:** [`worldgen-design.md`](worldgen-design.md).
 
 ### 7.1 Foundation and macro geography
@@ -377,23 +490,25 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
 | M2.5-10 | Biome weight function: softmax over 18 centres in climate/erosion/continentalness; shape parameters blended before evaluation | M2.5-04, M2.5-05 | Weights sum to 1; transition width 300–500 m; no argmax curve in a map dump | `cargo test -p voxel-worldgen weights` | 2 d | [ ] |
-| M2.5-11 | RON biome schema and the 18 definitions (11 land, 3 ocean, 3 underground, geothermal) | M2.5-10 | All definitions validate; every climate cell resolves; content is data-only | `cargo test -p voxel-worldgen biome_ron` | 2 d | [ ] |
-| M2.5-12 | Surface rules: 3–6 block soil default, biome/altitude override, slope and underwater rules | M2.5-11 | Cliffs expose stone; beaches ring water; tests | `cargo test -p voxel-worldgen surface` | 2 d | [ ] |
-| M2.5-13 | 1 m material dither and canonical two-material + debris transition blocks | M2.5-12 | Seam is mixed, not a line; ≤ 4 variants per pair; zero new atlas slots | `cargo test -p voxel-worldgen transitions` | 2 d | [ ] |
+| M2.5-11 | RON biome schema and the 18 definitions (11 land, 3 ocean, 3 underground, geothermal) | M2.5-30, M2.5-10 | All definitions validate; every climate cell resolves; every material key resolves in the manifest; content is data-only | `cargo test -p voxel-worldgen biome_ron` | 2 d | [ ] |
+| M2.5-12 | Surface rules: 3–6 block soil default, biome/altitude override, slope and underwater rules | M2.5-30 | Cliffs expose stone; beaches ring water; every top/filler/stone/beach key comes from M2.5-30; tests | `cargo test -p voxel-worldgen surface` | 2 d | [ ] |
+| M2.5-13 | 1 m material dither and canonical two-material + debris transition blocks | M2.5-12 | Seam is mixed, not a line; ≤ 4 variants per pair; zero new atlas slots, parents come from M2.5-30 | `cargo test -p voxel-worldgen transitions` | 2 d | [ ] |
+| M2.5-30 | Author biome surface textures: the top/filler/stone/beach faces the 18 palettes need beyond M1.5-14; freeze each biome's `map_color`; record the slot table | M2.5-10 | A palette table names the top/filler/stone/beach key for each biome; every key is in the manifest; ≤ 24 new tiles; transitions add zero | `cargo test -p voxel-block texture_manifest`; `cargo run -p voxel-viewer -- bake-atlas`; review | 4 d | [ ] |
 
 ### 7.3 Caves, ores, landmarks and structures
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
+| M2.5-31 | Author underground, structure and flora textures: deep stone, fungal, lava, geothermal; planks, bricks, mossy cobble; birch, spruce, fern, cactus, giant variants | M2.5-30 | Every new key is in the manifest and referenced by the flora/structure/underground tables; at least one fixture uses each key; ≤ 32 new tiles; lava/geothermal carry the emissive flag | `cargo test -p voxel-block texture_manifest`; `cargo run -p voxel-viewer -- bake-atlas` | 4 d | [ ] |
 | M2.5-14 | 3D cave carve: spaghetti, cheese, vertical shafts, galleries, water/lava caves | M2.5-12 | All five types present; balanced density; no caves in the first 2 m under water | `cargo test -p voxel-worldgen caves` | 3 d | [ ] |
-| M2.5-15 | Cave depth relative to the local surface (down to −2,000 m) and underground biome assignment | M2.5-14 | Caves follow terrain; aquifer/fungal/cavern assigned by depth and water | `cargo test -p voxel-worldgen cave_depth` | 1 d | [ ] |
+| M2.5-15 | Cave depth relative to the local surface (down to −2,000 m) and underground biome assignment | M2.5-31, M2.5-14 | Caves follow terrain; aquifer/fungal/cavern assigned by depth and water; every underground material key resolves | `cargo test -p voxel-worldgen cave_depth` | 1 d | [ ] |
 | M2.5-16 | Occasional overhangs and arches from 3D density; no disconnected floating rock | M2.5-14 | Arch fixture passes; no unsupported islands at the surface | `cargo test -p voxel-worldgen overhangs` | 1 d | [ ] |
 | M2.5-17 | Ore placement by depth tier and vein | M2.5-14 | Metals + gems; no surface gems; vein continuity test | `cargo test -p voxel-worldgen ores` | 1 d | [ ] |
 | M2.5-18 | Landmark anchors every 20–50 km: massif, canyon/falls, volcano, giant grove, monolith/arch | M2.5-05 | One landmark per cell; type fits terrain; map dump shows distribution | `cargo run -p voxel-worldgen -- map --landmarks` | 2 d | [ ] |
-| M2.5-19 | Structure anchors on a 1–4 km jittered grid; prefab stamps for ruins, towers, dungeons, bridges/roads | M2.5-18 | Stamps fit terrain; no floating foundations; most cells empty | `cargo test -p voxel-worldgen structures` | 2.5 d | [ ] |
+| M2.5-19 | Structure anchors on a 1–4 km jittered grid; prefab stamps for ruins, towers, dungeons, bridges/roads | M2.5-31, M2.5-18 | Stamps fit terrain; no floating foundations; most cells empty; every prefab uses M2.5-31 keys | `cargo test -p voxel-worldgen structures` | 2.5 d | [ ] |
 | M2.5-20 | Cross-chunk feature determinism: a tree, structure or river crossing a border is identical from both sides | M2.5-19 | Byte-equal overlap from two adjacent chunks; 1,000 sampled features | `cargo test -p voxel-worldgen cross_chunk` | 1.5 d | [ ] |
-| M2.5-21 | Flora placement: species, moderate density, biome-dependent, ecotones, rare giants | M2.5-20 | Birch/scrub only at seams; giants 1 per 20–50 km; density tests | `cargo test -p voxel-worldgen flora` | 1.5 d | [ ] |
-| M2.5-22 | Surface detail pass: grass tufts, pebbles, leaves, ripples, moss, snow drift; canonical templates | M2.5-13 | Six types; templates dedup; detail only in LOD0 | `cargo test -p voxel-worldgen detail` | 2 d | [ ] |
+| M2.5-21 | Flora placement: species, moderate density, biome-dependent, ecotones, rare giants | M2.5-31, M2.5-20 | Birch/scrub only at seams; giants 1 per 20–50 km; every species key comes from M2.5-31; density tests | `cargo test -p voxel-worldgen flora` | 1.5 d | [ ] |
+| M2.5-22 | Surface detail pass: grass tufts, pebbles, leaves, ripples, moss, snow drift; canonical templates | M2.5-13 | Six types; templates dedup; detail only in LOD0; no new atlas keys, parents come from M2.5-30/31 | `cargo test -p voxel-worldgen detail` | 2 d | [ ] |
 
 ### 7.4 Pipeline, determinism and exit
 
@@ -404,14 +519,15 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M2.5-25 | Generator versioning: save header pins seed, generator, macro and content versions; old versions remain callable | M2.5-23 | A v1 save regenerates v1 terrain after v2 lands | `cargo test -p voxel-worldgen versioning` | 1 d | [ ] |
 | M2.5-26 | Determinism harness: golden chunk hashes across seeds, thread counts and two machines | M2.5-23 | 1/2/8 workers equal; 10 seeds; hashes committed | `cargo test -p voxel-worldgen --release determinism` | 1 d | [ ] |
 | M2.5-27 | World creation CLI: progress, resume, macro map dump, 4k × 4k PNG preview | M2.5-05…09 | Full world in ≤ 10 min; resume after kill; preview renders | `cargo run -p voxel-worldgen -- create --seed 1` | 1 d | [ ] |
-| M2.5-28 | Golden world fixtures: 4 × 4 km map render and a 1 km walkthrough strip | M2.5-23 | Screenshots in `docs/images/`; hashes stable | review | 1 d | [ ] |
-| M2.5-29 | M2.5 exit: world tour video, budget numbers recorded, tag `m2.5` | M2.5-28 | Tag; design doc updated with measured numbers | `git tag -n m2.5` | 0.25 d | [ ] |
+| M2.5-28 | Golden world fixtures: 4 × 4 km map render and a 1 km walkthrough strip | M2.5-30, M2.5-31, M2.5-23 | Screenshots in `docs/images/`; hashes stable; final art, no placeholder | review | 1 d | [ ] |
+| M2.5-32 | M2.5 exit: world tour video, budget numbers recorded, tag `m2.5` | M2.5-28, M2.5-30, M2.5-31 | Tag; design doc updated with measured numbers; art tasks ticked | `git tag -n m2.5` | 0.25 d | [ ] |
 
 ---
 
 ## 8. M3 — Raster scale-up
 
 **Goal:** a real world at real distance without GPU culling. **Exit:** M3-13. **Budget:** 9 d raw. **Depends:** M2.
+**Art:** none; M3 reuses M1.5-14 and, if M2.5 ran, M2.5-31.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -422,7 +538,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M3-05 | Draw loop over visible chunks with per-chunk draws | M3-04 | Correct image; no double-draw | run | 0.5 d | [ ] |
 | M3-06 | Instrumentation: CPU submit, GPU pass, visible chunks/blocks/quads/bytes, upload bytes | M3-05 | Overlay or log line per frame; values match the scene | run | 0.5 d | [ ] |
 | M3-07 | Frame breakdown report: where the 16.6 ms goes | M3-06 | Table in the PR; draw vs cull vs upload vs content | review | 0.5 d | [ ] |
-| M3-08 | 256-chunk stress scene with terrain and canopy variants | M3-01 | Scene reproducible from a seed; screenshot | run | 0.5 d | [ ] |
+| M3-08 | 256-chunk stress scene with terrain and canopy variants | M3-01 | Scene reproducible from a seed; screenshot; uses only M1.5-14 and, if M2.5 ran, M2.5-31 keys | run | 0.5 d | [ ] |
 | M3-09 | Hitch test: upload p99 ≤ 4 ms over 1 000 frames of camera motion | M3-03 | Measured; no single frame > 8 ms | `cargo run -p voxel-bench -- hitch` | 1 d | [ ] |
 | M3-10 | 60 Hz at 1080p at the gated edge on the reference machine | M3-09 | Recorded average and 1% low | run | 0.5 d | [ ] |
 | M3-11 | Memory report: VRAM and host for the 256-chunk scene, rows split by DAG/mesh/overlay/light/probes | M3-10 | Fits the 40% VRAM budget with the 1.5× margin | run | 0.5 d | [ ] |
@@ -434,7 +550,8 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ## 9. M3.5 — Far field, water and map
 
 **Goal:** 16–32 km view with a seamless near/far join, transparent water, and the atlas item.
-**Exit:** M3.5-14. **Budget:** 17.75 d raw, plus 50% contingency. **Depends:** M2.5-09, M2.5-23, M3-13.
+**Exit:** M3.5-16. **Budget:** 17.75 d code + 1.5 d art (M3.5-15), plus 50% contingency. **Depends:** M2.5-09, M2.5-23, M3-13.
+**Art:** M3.5-15 (water/current); M3.5-16 freezes the manifest.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -443,15 +560,16 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M3.5-03 | Near/far seam: 64–128 m blend band plus skirt; near chunks fade | M3.5-01 | No visible crack or pop over a 2 km flight | `cargo test -p voxel-viewer seam` | 2 d | [ ] |
 | M3.5-04 | Far-field fog and lighting matched to the near renderer | M3.5-03 | Horizon reads as one world; screenshots | visual | 1 d | [ ] |
 | M3.5-05 | 32 km view performance: frame time and draw budget | M3.5-03 | ≥ 60 Hz at 1080p at the target view | `cargo bench -p voxel-bench --bench render` | 1 d | [ ] |
-| M3.5-06 | Transparent water: depth sorting, alpha, depth-based colour | M3.5-03 | Two overlapping water planes sort correctly; no z-fighting | `cargo test -p voxel-viewer water` | 2 d | [ ] |
-| M3.5-07 | Underwater fog, caustics and surface view from below | M3.5-06 | Underwater reads as underwater; screenshots | visual | 1 d | [ ] |
-| M3.5-08 | River current: flow direction drives UV scroll and foam lines | M3.5-06 | Rivers visibly flow; direction matches the macro network | visual | 1 d | [ ] |
+| M3.5-06 | Transparent water: depth sorting, alpha, depth-based colour | M3.5-15, M3.5-03 | Two overlapping water planes sort correctly; no z-fighting; uses `water_still`/`water_flow` from M3.5-15 | `cargo test -p voxel-viewer water` | 2 d | [ ] |
+| M3.5-07 | Underwater fog, caustics and surface view from below | M3.5-06 | Underwater reads as underwater; screenshots; caustics are procedural or the M3.5-15 tile | visual | 1 d | [ ] |
+| M3.5-08 | River current: flow direction drives UV scroll and foam lines | M3.5-15, M3.5-06 | Rivers visibly flow; direction matches the macro network; only `water_flow`/`foam_strip` are new tiles | visual | 1 d | [ ] |
 | M3.5-09 | Map atlas data: explored-chunk bitset, zoom levels, biome colours, landmarks | M2.5-23 | Atlas data round-trips; exploration fills it in | `cargo test -p voxel-worldgen atlas` | 1.5 d | [ ] |
-| M3.5-10 | Map atlas item and UI: craftable, zoom, player marker | M3.5-09 | Usable in the viewer; screenshots | run | 1.5 d | [ ] |
+| M3.5-10 | Map atlas item and UI: craftable, zoom, player marker | M3.5-09 | Usable in the viewer; screenshots; item icon and marker are UI sprites, not atlas tiles | run | 1.5 d | [ ] |
 | M3.5-11 | Menu orbit view of the square slab and ocean rim | M2.5-27 | Pre-rendered/2.5D view in the menu; no gameplay renderer | run | 1 d | [ ] |
-| M3.5-12 | Visual regression set: seam, water, far field, night | M3.5-08 | Four screenshots with a documented diff threshold | review | 1 d | [ ] |
+| M3.5-12 | Visual regression set: seam, water, far field, night | M3.5-15, M3.5-08 | Four screenshots with a documented diff threshold; final M3.5-15 water art | review | 1 d | [ ] |
 | M3.5-13 | Streaming hitch test over a 2 km flight with water and far field | M3.5-03 | p99 ≤ 4 ms; no frame > 16.6 ms | `cargo run -p voxel-bench -- hitch` | 1 d | [ ] |
-| M3.5-14 | M3.5 exit: tag `m3.5`, budgets recorded | M3.5-13 | Tag; docs updated | `git tag -n m3.5` | 0.25 d | [ ] |
+| M3.5-15 | Author water and current textures: `water_flow`, `foam_strip`, optional `caustics`; alpha/tint policy; flow axis and UV-scroll rate | M1.5-14 | Keys are in the manifest and atlas; alpha is smooth; flow axis and UV-scroll rate documented; caustics are procedural or a named tile | `cargo test -p voxel-block texture_manifest`; `cargo run -p voxel-viewer -- bake-atlas`; visual | 1.5 d | [ ] |
+| M3.5-16 | M3.5 exit: tag `m3.5`, budgets recorded, material manifest frozen | M3.5-13, M3.5-15 | Tag; docs updated; manifest accounts for ids 0..N−1 with no gap and the unused tail; CI rejects a block key without a texture | `git tag -n m3.5` | 0.25 d | [ ] |
 
 ---
 
@@ -552,7 +670,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M6-17 | VRAM ring budget test at LOD0 128 m + LOD1 256 m + LOD2 512 m | M6-03 | Within 40% of VRAM at the reference machine | `cargo run -p voxel-bench -- gate memory` | 1 d | [ ] |
 | M6-18 | Streaming hitch p99 ≤ 4 ms over a 2 000-frame flight | M6-07 | Measured; no > 16.6 ms frame | `cargo run -p voxel-bench -- hitch` | 1 d | [ ] |
 | M6-19 | Reopen benchmark and recorded history | M6-13 | ≤ 50 ms/chunk p95; recorded | `scripts/bench.sh LABEL=m6-reopen` | 0.5 d | [ ] |
-| M6-20 | M6 exit: tag `m6`, update the roadmap and the rings table | M6-19 | Tag; spec/roadmap updated | `git tag -n m6` | 0.25 d | [ ] |
+| M6-20 | M6 exit: tag `m6`, update the roadmap and the rings table | M6-19 | Tag; spec/roadmap updated; atlas bake hash equals the M3.5-16 freeze | `git tag -n m6` | 0.25 d | [ ] |
 
 ---
 
@@ -574,7 +692,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M7-10 | Overnight soak job: 8 h edit + camera motion, invariant check every minute | M4-13 | Passes; artifacts archived | script | 1 d | [ ] |
 | M7-11 | Operations guide: run, benchmark, inspect, recover a corrupt save | M6-14 | Doc covers each flow with commands | review | 1 d | [ ] |
 | M7-12 | Clean-checkout smoke: clone, build, run viewer, record a bench run | M7-01 | Script passes on a fresh clone | `scripts/smoke.sh` | 1 d | [ ] |
-| M7-13 | M7 exit: tag `v0.1`, update all docs and the definition of done | M7-12 | Tag; README quick start works | `git tag -n v0.1` | 0.5 d | [ ] |
+| M7-13 | M7 exit: tag `v0.1`, update all docs and the definition of done | M7-12 | Tag; README quick start works; material manifest frozen | `git tag -n v0.1` | 0.5 d | [ ] |
 | M7-14 | Post-mortem: what the gate predicted vs what shipped; list of reopened assumptions | M7-13 | One page; feeds the next roadmap | review | 0.5 d | [ ] |
 
 ---
@@ -612,6 +730,15 @@ Use these in review when a task touches the relevant area.
 - [ ] Golden hashes are updated only with a written reason.
 - [ ] Determinism across thread counts is re-run.
 
+### Materials and textures (every task that adds a block key or a tile)
+
+- [ ] The key is in the manifest with a 256² source, hash, alpha mode and slot; no runtime fallback face.
+- [ ] Air is 0; the drawable count is ≤ 256 and the slot table is updated; no gap in the used range.
+- [ ] Alpha matches `RenderType`: binary for `Cutout`, smooth for `Translucent`.
+- [ ] The tile reads at a 1 m face and at mip 4; no new cross-tile bleed.
+- [ ] Transition, detail and damage variants reuse parent tiles; zero new slots.
+- [ ] `bake-atlas` hash and the screenshot are updated in the same PR.
+
 ---
 
 ## 15. Traceability
@@ -623,7 +750,7 @@ Use these in review when a task touches the relevant area.
 | §3 COW protocol | M1-10, M4-01…M4-08, M4-12 |
 | §4 culling | M1-32…M1-34, M5-01…M5-17 |
 | §5 state | M0-16, M4-07, M5-04, M6-05 |
-| §6 mesher + atlas | M0-06, M1.5-06…M1.5-12, M2-01…M2-12 |
+| §6 mesher + atlas | M0-06, M1.5-06…M1.5-14, M2.5-30/31, M3.5-15, M2-01…M2-12 |
 | §7 light + probes | M0-07, M1-29, M1-30, M2-13…M2-21, M6-10…M6-12 |
 | §8 sync | M4-04…M4-11 |
 | §9 gate | M0-02, M1-35…M1-43 |
@@ -653,17 +780,17 @@ Raw days are the sum of the task estimates. Contingency is milestone-specific: i
 | --- | ---: | ---: | ---: | ---: | --- |
 | M0 | 7.5 | 0% | 7.5 | 1 | gate frozen |
 | M1 | 33.5 | 25% | 41.9 | 4 | 64³/128³ decided |
-| M1.5 | 10.5 | 20% | 12.6 | 1.5 | first pixel |
+| M1.5 | 14.5 | 20% | 17.4 | 1.5 | first pixel |
 | M2 | 26.75 | 25% | 33.4 | 3 | content pipeline |
-| M2.5 | 45.25 | 40% | 63.4 | 3 | 1024 km world with biomes, rivers, caves |
+| M2.5 | 53.25 | 40% | 74.55 | 3 | 1024 km world with biomes, rivers, caves |
 | M3 | 9 | 40% | 12.6 | 1.5 | 256 chunks at 60 Hz |
-| M3.5 | 17.75 | 50% | 26.6 | 1.5 | 16–32 km view, water, atlas |
+| M3.5 | 19.25 | 50% | 28.9 | 1.5 | 16–32 km view, water, atlas |
 | M4 | 17.25 | 30% | 22.4 | 2 | sync soak clean |
 | M5 | 18.25 | 50% | 27.4 | 3 | ≥ 3× draw reduction |
 | M6 | 22.25 | 50% | 33.4 | 3 | 512 m within budget |
 | M7 | 12 | 30% | 15.6 | 2 | enforced budgets |
-| **Total** | **220** | — | **297** | **27** | |
+| **Total** | **233.5** | — | **315.1** | **27** | |
 
-220 raw days is ~44 weeks; 297 planning days is ~59 weeks (~14 months), which is the honest cost of a 1024 km world with 12 km relief and a 16–32 km view. The gap is contingency, not scope. The **245 tasks** are the complete delivery set; the last sprint is unallocated buffer and must not be filled with new scope.
+Milestone rows include their art tasks: 4 d in M1.5, 8 d in M2.5 and 1.5 d in M3.5. There is no separate art track. 233.5 raw days is ~47 weeks; 315.1 planning days is ~63 weeks (~15 months). The **249 tasks** (245 previous + 4 art) are the complete delivery set; the last sprint is unallocated buffer and must not be filled with new scope.
 
 The gate is at S4 because it must not inherit the later milestones' contingency. If it slips, the correct response is to cut reference scope (M1-30, M1-31 can be stubs for the first pass), not to weaken the gate.
