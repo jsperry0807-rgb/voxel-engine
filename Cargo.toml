@@ -6,6 +6,7 @@ members = [
     "crates/engine/block",
     "crates/engine/render",
     "crates/engine/storage",
+    "crates/engine/viewer",
 ]
 
 [workspace.package]

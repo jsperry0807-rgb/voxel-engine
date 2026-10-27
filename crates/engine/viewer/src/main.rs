@@ -1,0 +1,92 @@
+//! The voxel viewer binary.
+//!
+//! This milestone only opens an empty window. Later tasks add wgpu, the camera
+//! and the chunk renderer on top of this shell.
+//!
+//! ```text
+//! cargo run -p voxel-viewer
+//! ```
+
+mod error;
+
+use std::error::Error;
+use std::process::ExitCode;
+
+use winit::application::ApplicationHandler;
+use winit::dpi::LogicalSize;
+use winit::event::WindowEvent;
+use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::window::{Window, WindowId};
+
+use crate::error::ViewerError;
+
+/// Default window size, in logical pixels.
+const WINDOW_SIZE: LogicalSize<f64> = LogicalSize::new(1280.0, 720.0);
+
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("voxel-viewer: {error}");
+            let mut source = error.source();
+            while let Some(cause) = source {
+                eprintln!("  caused by: {cause}");
+                source = cause.source();
+            }
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Creates the event loop and runs the viewer until the window closes.
+fn run() -> Result<(), ViewerError> {
+    let event_loop = EventLoop::new()?;
+    let mut viewer = Viewer::default();
+    event_loop.run_app(&mut viewer)?;
+    match viewer.error {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
+}
+
+/// The application state: for now, just the window.
+#[derive(Default)]
+struct Viewer {
+    window: Option<Window>,
+    /// A failure raised inside an event-loop callback.
+    ///
+    /// Callbacks cannot return an error, so the first one is kept here, the
+    /// loop is stopped, and [`run`] reports it after the loop unwinds.
+    error: Option<ViewerError>,
+}
+
+impl ApplicationHandler for Viewer {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        // `resumed` may fire again on platforms that recreate the surface.
+        if self.window.is_some() {
+            return;
+        }
+        let attributes = Window::default_attributes()
+            .with_title("voxel-viewer")
+            .with_inner_size(WINDOW_SIZE);
+        match event_loop.create_window(attributes) {
+            Ok(window) => self.window = Some(window),
+            Err(error) => {
+                self.error = Some(ViewerError::from(error));
+                event_loop.exit();
+            }
+        }
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        match event {
+            WindowEvent::CloseRequested | WindowEvent::Destroyed => event_loop.exit(),
+            _ => {}
+        }
+    }
+}
