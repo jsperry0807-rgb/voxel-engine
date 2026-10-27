@@ -143,13 +143,15 @@ fn main() {
                      --out        also write the JSON report to FILE\n\
                      --json       print the JSON report instead of the Markdown table\n\
                      \n\
-                     voxel-bench gate scaleup [--manifest FILE] [--out FILE] [--json]\n\
+                     voxel-bench gate scaleup [--manifest FILE] [--profile NAME]\n\
+                     \x20                  [--out FILE] [--json]\n\
                      \n\
                      gate scaleup  project the measured 64³ edit, probe and memory\n\
                      \x20          terms to 128³, with optimistic (one dirty cell)\n\
                      \x20          and pessimistic (dirty spans the chunk) columns;\n\
                      \x20          fixed terms are corrected rather than multiplied (M1-40)\n\
                      --manifest   fixture manifest (default: benchmarks/fixtures/m1-representative/manifest.json)\n\
+                     --profile    residency profile: minimum, default or high\n\
                      --out        also write the JSON report to FILE\n\
                      --json       print the JSON report instead of the Markdown table\n\
                      \n\
@@ -769,6 +771,7 @@ fn gate_probes(args: &[String]) {
 
 fn gate_scaleup(args: &[String]) {
     let mut manifest = voxel_bench::fixture::default_manifest();
+    let mut profile = voxel_bench::gate::residency::Profile::default();
     let mut out: Option<PathBuf> = None;
     let mut json = false;
 
@@ -781,6 +784,19 @@ fn gate_scaleup(args: &[String]) {
                     args.get(index)
                         .unwrap_or_else(|| usage("--manifest needs a file")),
                 );
+            }
+            "--profile" => {
+                index += 1;
+                let name = args
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_else(|| usage("--profile needs a name"));
+                profile =
+                    voxel_bench::gate::residency::Profile::from_name(&name).unwrap_or_else(|| {
+                        usage(&format!(
+                            "unknown profile `{name}`; expected minimum, default or high"
+                        ))
+                    });
             }
             "--out" => {
                 index += 1;
@@ -795,7 +811,8 @@ fn gate_scaleup(args: &[String]) {
         index += 1;
     }
 
-    let report = match voxel_bench::gate::scaleup::report(&manifest) {
+    let config = voxel_bench::gate::residency::ResidencyConfig::from_profile(profile);
+    let report = match voxel_bench::gate::scaleup::report_for(&manifest, config) {
         Ok(report) => report,
         Err(error) => {
             eprintln!(

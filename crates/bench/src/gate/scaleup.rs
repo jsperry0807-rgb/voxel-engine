@@ -451,6 +451,8 @@ pub struct ScaleupReport {
     pub source: Edge,
     /// Edge being projected.
     pub target: Edge,
+    /// Residency profile the loaded-chunk counts came from.
+    pub profile: String,
     /// Loaded chunks at the source edge.
     pub n64: u64,
     /// Loaded chunks at the target edge, equal loaded volume.
@@ -516,6 +518,13 @@ impl ScaleupReport {
             grouped(self.target.light_cells),
             grouped(self.target.probes),
             self.target.levels,
+        )
+        .unwrap();
+        writeln!(
+            out,
+            "**Profile:** `{}` — N128 = {} chunks at the target edge\n",
+            self.profile,
+            grouped(self.n128),
         )
         .unwrap();
         writeln!(
@@ -761,10 +770,19 @@ pub fn default_report() -> Result<ScaleupReport, String> {
     report(&crate::fixture::default_manifest())
 }
 
-/// Measures `manifest` and projects the configured default view to the target edge.
+/// Measures `manifest` and projects the default view to the target edge.
 pub fn report(manifest_path: &Path) -> Result<ScaleupReport, String> {
+    report_for(manifest_path, ResidencyConfig::default())
+}
+
+/// Measures `manifest` and projects `config` to the target edge.
+///
+/// The per-chunk projection is independent of the profile; the loaded chunk
+/// count, and therefore the total, is not. Pass `Minimum` to evaluate the
+/// fallback profile before deciding the edge.
+pub fn report_for(manifest_path: &Path, config: ResidencyConfig) -> Result<ScaleupReport, String> {
     let memory = memory::report(manifest_path)?;
-    let residency = residency::report(ResidencyConfig::default())?;
+    let residency = residency::report(config)?;
     let edits = edits::report(manifest_path)?;
     let probes = probes::report(manifest_path)?;
     from_reports(&memory, &residency, &edits, &probes)
@@ -793,6 +811,7 @@ pub fn from_reports(
     let optimistic = project(&measured, source, target, n128, ProjectionMode::Optimistic);
     let pessimistic = project(&measured, source, target, n128, ProjectionMode::Pessimistic);
 
+    let profile = residency.config.profile.name().to_owned();
     let fixture = memory.fixture.clone();
     let limitation = fixture.limitation.clone();
 
@@ -863,6 +882,7 @@ pub fn from_reports(
         fixture,
         source,
         target,
+        profile,
         n64,
         n128,
         equal_volume_factor: factor,
