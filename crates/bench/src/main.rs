@@ -132,6 +132,15 @@ fn main() {
                      \x20          dirty-region (COW/light) terms with p50/p95/max (M1-37)\n\
                      --manifest   fixture manifest (default: benchmarks/fixtures/m1-representative/manifest.json)\n\
                      --out        also write the JSON report to FILE\n\
+                     --json       print the JSON report instead of the Markdown table\n\
+                     \n\
+                     voxel-bench gate probes [--manifest FILE] [--out FILE] [--json]\n\
+                     \n\
+                     gate probes  incremental probe-update latency over 1,000 edits\n\
+                     \x20          on the frozen fixture, with p50/p95/max and the\n\
+                     \x20          4 ms per-edited-chunk budget (M1-38)\n\
+                     --manifest   fixture manifest (default: benchmarks/fixtures/m1-representative/manifest.json)\n\
+                     --out        also write the JSON report to FILE\n\
                      --json       print the JSON report instead of the Markdown table"
                 );
                 return;
@@ -483,12 +492,13 @@ fn fixture_verify(args: &[String]) {
 
 fn gate_mode(args: &[String]) {
     let Some(command) = args.first() else {
-        usage("gate needs `memory`, `residency` or `edits`");
+        usage("gate needs `memory`, `residency`, `edits` or `probes`");
     };
     match command.as_str() {
         "memory" => gate_memory(&args[1..]),
         "residency" => gate_residency(&args[1..]),
         "edits" => gate_edits(&args[1..]),
+        "probes" => gate_probes(&args[1..]),
         other => usage(&format!("unknown gate command `{other}`")),
     }
 }
@@ -672,6 +682,59 @@ fn gate_edits(args: &[String]) {
             Ok(serialized) => println!("{serialized}"),
             Err(error) => {
                 eprintln!("failed to serialize gate edits report: {error}");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        print!("{}", report.markdown());
+    }
+}
+
+fn gate_probes(args: &[String]) {
+    let mut manifest = voxel_bench::fixture::default_manifest();
+    let mut out: Option<PathBuf> = None;
+    let mut json = false;
+
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--manifest" => {
+                index += 1;
+                manifest = PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--manifest needs a file")),
+                );
+            }
+            "--out" => {
+                index += 1;
+                out = Some(PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--out needs a file")),
+                ));
+            }
+            "--json" => json = true,
+            other => usage(&format!("unknown gate probes argument `{other}`")),
+        }
+        index += 1;
+    }
+
+    let report = match voxel_bench::gate::probes::report(&manifest) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("failed to measure {}: {error}", manifest.display());
+            std::process::exit(1);
+        }
+    };
+
+    if let Some(out) = out {
+        write_json_report(&out, &report);
+    }
+
+    if json {
+        match serde_json::to_string_pretty(&report) {
+            Ok(serialized) => println!("{serialized}"),
+            Err(error) => {
+                eprintln!("failed to serialize gate probes report: {error}");
                 std::process::exit(1);
             }
         }

@@ -56,6 +56,10 @@ cargo run -p voxel-bench -- gate residency --json
 # Per-edit latency split into fixed and dirty-region terms (M1-37)
 cargo run -p voxel-bench -- gate edits
 cargo run -p voxel-bench -- gate edits --json
+
+# Incremental probe-update latency per edited chunk (M1-38)
+cargo run -p voxel-bench -- gate probes
+cargo run -p voxel-bench -- gate probes --json
 ```
 
 ## What is measured
@@ -190,6 +194,30 @@ Release-publish, Acquire-poll, then flip. It is a lower bound on a real device
 fence; M4-05/M4-16 replace it. The fixture is still provisional, and the report
 carries that limitation. `--json` prints the serializable report; `--out FILE`
 also writes it.
+
+**Gate probes** (`gate probes`, M1-38) measures the incremental probe update that
+one edited chunk triggers, with the pre-registered p95 ≤ 4 ms budget:
+
+| Term | Components | What the gate charges |
+|---|---|---|
+| **Update** | select, rebake, upload | Find the probes whose rays reach the edited voxel, recast their 64-ray hemisphere, stage the changed 12 B records and validity bytes |
+
+The near grid has one probe per block, so a 64³ chunk has 64 probes and a full
+rebake is 4,096 rays. ADR-005 requires an edit to rebake only the probes whose
+rays reach the dirty region; the harness implements that rule with the M1-30
+reference. Selection uses the **pre-edit** DAG: a ray that stops at a solid voxel
+today will continue after a solid→air edit, and a ray that passes through an air
+voxel today will stop after air→solid. A probe whose centre is the edited voxel
+is selected even though it casts no ray while invalid.
+
+Every candidate is a real fixture voxel that is the first solid on a probe ray,
+so the edit can change at least one ray's radiance; candidates are spread over
+probes and rays and alternate solid→air (mine) and air→solid (place). The report
+prints affected probes and rebaked rays alongside the latency, so a run cannot
+look cheap by selecting nothing: zero-work edits are counted and shown. Upload is
+the CPU-side staging copy of exactly the changed records and validity bytes; the
+headless gate excludes device transfer and the M4 fence/flip. `--json` prints the
+serializable report; `--out FILE` also writes it.
 
 ## Caveats
 

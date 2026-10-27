@@ -24,7 +24,7 @@ use voxel_core::content_constants::PROBE_BYTES;
 use voxel_storage::dag::Svdag;
 use voxel_storage::reference::probe::{
     PROBE_CHANNELS, PROBE_RAYS, ProbeGrid, ProbeLod, SH_COEFFICIENTS, SH_L0, Sh4Probe, bake,
-    bake_svdag, hemisphere_ray, probe_seed,
+    bake_svdag, hemisphere_ray, probe_seed, probes_reaching,
 };
 use voxel_storage::{ChunkPos, local_index};
 
@@ -348,4 +348,171 @@ fn compiled_chunk_bake_matches_the_block_grid_and_flags_the_floor() {
             assert!(volume.is_valid(above), "air probe ({x}, 1, {z})");
         }
     }
+}
+
+fn cell_index(edge: usize, x: u32, y: u32, z: u32) -> usize {
+    x as usize + y as usize * edge + z as usize * edge * edge
+}
+
+/// Walks one of probe 0's own rays for `steps` cells and returns the cell it
+/// lands in. The 64-ray fan is sparse, so a hand-picked voxel is often between
+/// rays; this makes the test target something a probe actually sees.
+fn cell_on_probe_zero_ray(
+    chunk: ChunkPos,
+    grid: ProbeGrid,
+    edge: usize,
+    ray: usize,
+    steps: usize,
+) -> [u32; 3] {
+    let origin = grid.centre(0);
+    let seed = probe_seed(chunk, grid.lod(), 0);
+    let rotation = ((seed >> 11) as f64) * (TAU / (1u64 << 53) as f64);
+    let direction = hemisphere_ray(ray, rotation);
+
+    let mut cell = [
+        origin[0].floor() as i32,
+        origin[1].floor() as i32,
+        origin[2].floor() as i32,
+    ];
+    let mut step = [0i32; 3];
+    let mut t_max = [f64::INFINITY; 3];
+    let mut t_delta = [f64::INFINITY; 3];
+    for axis in 0..3 {
+        if direction[axis] > 0.0 {
+            step[axis] = 1;
+            t_max[axis] = (cell[axis] as f64 + 1.0 - origin[axis]) / direction[axis];
+            t_delta[axis] = 1.0 / direction[axis];
+        } else if direction[axis] < 0.0 {
+            step[axis] = -1;
+            t_max[axis] = (cell[axis] as f64 - origin[axis]) / direction[axis];
+            t_delta[axis] = -1.0 / direction[axis];
+        }
+    }
+    for _ in 0..steps {
+        let axis = if t_max[0] <= t_max[1] && t_max[0] <= t_max[2] {
+            0
+        } else if t_max[1] <= t_max[2] {
+            1
+        } else {
+            2
+        };
+        cell[axis] += step[axis];
+        t_max[axis] += t_delta[axis];
+    }
+    assert!(
+        cell.iter().all(|&axis| axis >= 0 && (axis as usize) < edge),
+        "the test ray left the scene"
+    );
+    [cell[0] as u32, cell[1] as u32, cell[2] as u32]
+}
+
+fn assert_incremental_equals_full(
+    chunk: ChunkPos,
+    grid: ProbeGrid,
+    solid: &[bool],
+    edge: usize,
+    volume: &mut voxel_storage::reference::probe::ProbeVolume,
+    target: [u32; 3],
+) {
+    let mut affected = Vec::new();
+    let reach = probes_reaching(
+        chunk,
+        grid,
+        target,
+        |x, y, z| solid[cell_index(edge, x, y, z)],
+        &mut affected,
+    );
+    assert!(
+        reach.affected > 0,
+        "the dirty voxel must be visible to some probe"
+    );
+    assert!(reach.affected <= grid.len());
+    assert!(reach.rays_reaching <= reach.rays_tested);
+
+    let stats = volume.rebake(chunk, &affected, |x, y, z| solid[cell_index(edge, x, y, z)]);
+    assert_eq!(stats.probes, affected.len());
+    assert_eq!(stats.rays, stats.valid * PROBE_RAYS);
+
+    let full = bake(chunk, grid, |x, y, z| solid[cell_index(edge, x, y, z)]);
+    assert_eq!(
+        volume.sh_bytes(),
+        full.sh_bytes(),
+        "incremental SH bytes must equal a full bake"
+    );
+    assert_eq!(
+        volume.validity_bytes(),
+        full.validity_bytes(),
+        "incremental validity must equal a full bake"
+    );
+}
+
+#[test]
+fn incremental_rebake_matches_a_full_bake_across_a_solid_air_flip() {
+    let edge_blocks = 3;
+    let tile = BLOCK_DIM;
+    let edge = edge_blocks * tile;
+    let chunk = ChunkPos::new(-3, 1, 7);
+    let grid = ProbeGrid::near(edge_blocks);
+    let target = cell_on_probe_zero_ray(chunk, grid, edge, 0, 5);
+    let target_index = cell_index(edge, target[0], target[1], target[2]);
+
+    let mut solid = vec![false; edge * edge * edge];
+    solid[target_index] = true;
+
+    // Solid → air: the ray stops at the block today and continues afterwards.
+    let mut volume = bake(chunk, grid, |x, y, z| solid[cell_index(edge, x, y, z)]);
+    let before = volume.sh_bytes();
+    solid[target_index] = false;
+    assert_incremental_equals_full(chunk, grid, &solid, edge, &mut volume, target);
+
+    let mut changed = 0;
+    let after_full = bake(chunk, grid, |x, y, z| solid[cell_index(edge, x, y, z)]);
+    let after = after_full.sh_bytes();
+    for (before, after) in before.chunks(PROBE_BYTES).zip(after.chunks(PROBE_BYTES)) {
+        if before != after {
+            changed += 1;
+        }
+    }
+    assert!(changed > 0, "removing the roof must change probe bytes");
+
+    // Air → solid: the same probes are affected in the other direction.
+    solid[target_index] = true;
+    assert_incremental_equals_full(chunk, grid, &solid, edge, &mut volume, target);
+}
+
+#[test]
+fn a_probe_whose_centre_is_edited_is_rebaked_even_without_a_ray() {
+    let edge_blocks = 2;
+    let edge = edge_blocks * BLOCK_DIM;
+    let chunk = ChunkPos::new(1, 2, 3);
+    let grid = ProbeGrid::near(edge_blocks);
+    let half = BLOCK_DIM / 2;
+    let target = [half as u32, half as u32, half as u32];
+
+    let mut solid = vec![false; edge * edge * edge];
+    let target_index = cell_index(edge, target[0], target[1], target[2]);
+    solid[target_index] = true;
+
+    let mut volume = bake(chunk, grid, |x, y, z| solid[cell_index(edge, x, y, z)]);
+    assert!(!volume.is_valid(0), "the centre probe starts inside solid");
+
+    let mut affected = Vec::new();
+    let reach = probes_reaching(
+        chunk,
+        grid,
+        target,
+        |x, y, z| solid[cell_index(edge, x, y, z)],
+        &mut affected,
+    );
+    assert!(affected.contains(&0), "the edited-centre probe is selected");
+    assert_eq!(
+        reach.rays_tested,
+        (grid.len() - 1) * PROBE_RAYS,
+        "the invalid centre probe casts no rays; the other seven do"
+    );
+
+    solid[target_index] = false;
+    let stats = volume.rebake(chunk, &affected, |x, y, z| solid[cell_index(edge, x, y, z)]);
+    assert_eq!(stats.valid, 1);
+    assert!(volume.is_valid(0), "the centre probe becomes valid");
 }

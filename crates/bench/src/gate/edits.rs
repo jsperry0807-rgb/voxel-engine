@@ -65,9 +65,10 @@ use voxel_storage::{
 };
 
 use crate::fixture::{self, FixtureStatus, Manifest};
-use crate::save_scan::Distribution;
 
 use super::memory::FixtureInfo;
+pub use super::stat::{BudgetCheck, Term};
+use super::stat::{format_duration, format_signed_duration, grouped, mean, term};
 
 /// Schema version of the edits report itself.
 pub const SCHEMA_VERSION: u32 = 1;
@@ -85,37 +86,6 @@ pub const BUDGET_NS: u64 = 8_000_000;
 
 /// Candidate voxels sampled per fixture chunk.
 const CANDIDATES_PER_CHUNK: usize = 16;
-
-/// Nearest-rank summary of one component or term.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Term {
-    /// Nearest-rank median.
-    pub p50_ns: u64,
-    /// Nearest-rank 95th percentile.
-    pub p95_ns: u64,
-    /// Maximum sample.
-    pub max_ns: u64,
-    /// Integer mean of the samples.
-    pub mean_ns: u64,
-    /// Sum of the samples.
-    pub total_ns: u64,
-}
-
-impl Term {
-    fn from_values(values: &mut [u64]) -> Self {
-        assert!(!values.is_empty(), "a term needs at least one sample");
-        let total_ns = values.iter().sum();
-        let mean_ns = total_ns / values.len() as u64;
-        let distribution = Distribution::from_values(values);
-        Self {
-            p50_ns: distribution.p50.unwrap_or(0),
-            p95_ns: distribution.p95.unwrap_or(0),
-            max_ns: distribution.max.unwrap_or(0),
-            mean_ns,
-            total_ns,
-        }
-    }
-}
 
 /// The four timed components and the two aggregate terms.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -210,19 +180,6 @@ pub struct EditBytes {
     pub cow_bytes_per_edit: u64,
     /// Light cells evaluated per edit; the dirty-region fill size.
     pub light_cells_per_edit: u64,
-}
-
-/// The pre-registered budget comparison, computed from the measured p95.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BudgetCheck {
-    /// Pre-registered p95 budget.
-    pub budget_ns: u64,
-    /// Measured per-edit p95.
-    pub measured_p95_ns: u64,
-    /// `budget_ns - measured_p95_ns`; negative means the budget was missed.
-    pub margin_ns: i64,
-    /// True when the measured p95 is inside the budget.
-    pub within_budget: bool,
 }
 
 /// The complete M1-37 edit report.
@@ -735,14 +692,7 @@ fn measure(
         cow_bytes_per_edit: mean(edits.iter().map(|sample| sample.cow_bytes)),
         light_cells_per_edit: mean(edits.iter().map(|sample| sample.light_cells)),
     };
-    let margin_ns = i64::try_from(BUDGET_NS).unwrap_or(i64::MAX)
-        - i64::try_from(terms.total.p95_ns).unwrap_or(i64::MAX);
-    let budget = BudgetCheck {
-        budget_ns: BUDGET_NS,
-        measured_p95_ns: terms.total.p95_ns,
-        margin_ns,
-        within_budget: margin_ns >= 0,
-    };
+    let budget = BudgetCheck::new(BUDGET_NS, terms.total.p95_ns);
 
     let status = match manifest.status {
         FixtureStatus::Provisional => "provisional".to_owned(),
@@ -987,53 +937,6 @@ fn is_opaque(light: &[BlockLight], material: u16) -> bool {
 
 fn elapsed_ns(start: Instant) -> u64 {
     u64::try_from(start.elapsed().as_nanos()).unwrap_or(u64::MAX)
-}
-
-fn term(edits: &[EditSample], field: impl Fn(&EditSample) -> u64) -> Term {
-    let mut values: Vec<u64> = edits.iter().map(field).collect();
-    Term::from_values(&mut values)
-}
-
-fn mean(values: impl Iterator<Item = u64>) -> u64 {
-    let (sum, count) = values.fold((0u64, 0u64), |(sum, count), value| {
-        (sum.saturating_add(value), count + 1)
-    });
-    if count == 0 {
-        0
-    } else {
-        sum.checked_div(count).unwrap_or(0)
-    }
-}
-
-fn format_duration(ns: u64) -> String {
-    let value = ns as f64;
-    if value >= 1e6 {
-        format!("{:.2} ms", value / 1e6)
-    } else if value >= 1e3 {
-        format!("{:.3} µs", value / 1e3)
-    } else {
-        format!("{ns} ns")
-    }
-}
-
-fn format_signed_duration(ns: i64) -> String {
-    if ns < 0 {
-        format!("-{}", format_duration(ns.unsigned_abs()))
-    } else {
-        format_duration(ns as u64)
-    }
-}
-
-fn grouped(value: u64) -> String {
-    let digits = value.to_string();
-    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
-    for (index, digit) in digits.char_indices() {
-        if index > 0 && (digits.len() - index).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(digit);
-    }
-    out
 }
 
 #[cfg(test)]
