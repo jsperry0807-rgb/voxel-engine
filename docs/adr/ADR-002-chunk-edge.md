@@ -1,6 +1,6 @@
 # ADR-002: Chunk Edge — 64³ Baseline, 128³ Pre-Registered
 
-**Status:** Accepted (closed) — 2026-10-26
+**Status:** Accepted (closed) — 2026-10-26; M1 outcome recorded 2026-10-27 — stay at 64³
 **Decision owner:** engine
 **Supersedes:** the "64³ as the final chunk edge" position in
 [`../reference/material-spec-v1.md`](../reference/material-spec-v1.md)
@@ -49,6 +49,21 @@ must choose.
      vertical shell. Never shrink the far clip below 8 km to fix memory.
 5. **M1-42 records the outcome.** Pass → amend this ADR to greenlight 128³ for M2.
    Fail → record stay-64³ with its measured numbers. M2 onward runs at the gated edge.
+
+## Outcome — 2026-10-27
+
+The M1 gate ran on the reference machine and **failed: 8 pass, 2 fail, 2 not measured**
+([`../m1-gate-decision.md`](../m1-gate-decision.md);
+[`gate.md`](../../benchmarks/runs/20261027T204626Z-m1-gate/gate.md)). The failures are
+the VRAM budget (24.76 GiB projected against the 4.80 GiB hard-fail line) and the mesh
+buffer (p95 753 KiB against 600 KiB). The 128³ projection also misses memory
+(15.50 GiB optimistic / 24.74 GiB pessimistic) and the pessimistic probe update
+(75.64 ms against 4 ms), so rule 2 did not clear the upgrade.
+
+Decision 5 therefore records **stay at 64³** with the measured numbers. 128³ remains
+the CI compile-only variant; it is not greenlit for M2. The rule-3 sacrifice order
+(mesh compression, then near radius, then vertical shell) is the next memory work.
+No frozen row and no budget was changed, and this ADR's decision is not amended.
 
 ## Consequences
 

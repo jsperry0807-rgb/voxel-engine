@@ -82,3 +82,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --features chunk128
+
+  gate:
+    name: M1 gate (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The frozen gate cases stay runnable and reporting, but the gate is a
+    # milestone decision, not a per-PR merge blocker. The report owns the verdict.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo run --release -p voxel-bench -- gate report
+      - run: cargo run --release -p voxel-bench -- gate scaleup

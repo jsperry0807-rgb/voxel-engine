@@ -263,9 +263,9 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M1-38 | Probe-update harness: p50/p95/max per edited chunk | M1-30 | Reported with the edit that triggered it; budget comparison in output | `cargo run -p voxel-bench -- gate probes` | 0.5 d | [x] |
 | M1-39 | Gate report generator: one MD + one JSON with every pre-registered row, pass/fail, margin and the machine | M1-35…M1-38 | Report has all 12 rows; pass/fail computed, not typed; machine named | `cargo run -p voxel-bench -- gate report` | 1 d | [x] |
 | M1-40 | Analytic 128³ scale-up model: fixed vs variable terms, pessimistic (dirty spans chunk) and optimistic; unit tests on the arithmetic | M1-37 | Model reproduces the measured 64³ numbers when fed 64³ inputs; both projections printed | `cargo test -p voxel-bench scaleup` | 1 d | [x] |
-| M1-41 | Run the gate, record it through `scripts/bench.sh LABEL=m1-gate`, attach the report to the PR | M1-39, M1-40 | `benchmarks/HISTORY.md` has the run; report is linked from it | `scripts/bench.sh LABEL=m1-gate` | 0.5 d | [ ] |
-| M1-42 | Write the gate decision: pass or fallback, with the measured numbers next to each threshold; if pass, amend ADR-002 to greenlight 128³ for M2; if fail, record stay-64³ | M1-41 | Decision doc names every row and its margin; no "renegotiation" language | review | 0.5 d | [ ] |
-| M1-43 | M1 exit: tag `m1`, update the roadmap's milestone status, freeze the gate cases as permanent benches | M1-42 | Tag exists; gate cases run in CI as advisory | `git tag -n m1` | 0.25 d | [ ] |
+| M1-41 | Run the gate, record it through `scripts/bench.sh LABEL=m1-gate`, attach the report to the PR | M1-39, M1-40 | `benchmarks/HISTORY.md` has the run; report is linked from it | `scripts/bench.sh LABEL=m1-gate` | 0.5 d | [x] |
+| M1-42 | Write the gate decision: pass or fallback, with the measured numbers next to each threshold; if pass, amend ADR-002 to greenlight 128³ for M2; if fail, record stay-64³ | M1-41 | Decision doc names every row and its margin; no "renegotiation" language | review | 0.5 d | [x] |
+| M1-43 | M1 exit: tag `m1`, update the roadmap's milestone status, freeze the gate cases as permanent benches | M1-42 | Tag exists; gate cases run in CI as advisory | `git tag -n m1` | 0.25 d | [x] |
 
 ---
 

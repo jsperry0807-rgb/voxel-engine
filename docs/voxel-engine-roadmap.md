@@ -126,6 +126,10 @@ M1-24; ADR-006 states the escalation path if flood-fill under-culls.
 
 ### M1 — Layout at 64³ + measurement gate (7 weeks)
 
+**Status:** Complete — tagged `m1` on 2026-10-27. The gate failed on memory and the
+128³ projection also missed, so the recorded outcome is **stay at 64³**:
+[`m1-gate-decision.md`](m1-gate-decision.md).
+
 **Goal:** the layout is the spec's, and the pre-registered table has real numbers.
 
 Work:

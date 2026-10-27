@@ -214,10 +214,12 @@ mod tests {
         assert_eq!(BASELINE_CHUNK_DIM, 1 << BASELINE_CHUNK_BITS);
         assert_eq!(TARGET_CHUNK_DIM, 1 << TARGET_CHUNK_BITS);
         assert_eq!(TARGET_CHUNK_DIM, BASELINE_CHUNK_DIM * 2);
-        assert!(
-            CHUNK_BITS == BASELINE_CHUNK_BITS || CHUNK_BITS == TARGET_CHUNK_BITS,
-            "the build must select the baseline or target edge"
-        );
+        const {
+            assert!(
+                CHUNK_BITS == BASELINE_CHUNK_BITS || CHUNK_BITS == TARGET_CHUNK_BITS,
+                "the build must select the baseline or target edge"
+            );
+        }
     }
 
     /// The values must work in `const` items, not just at runtime: buffer

@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "fixture": {
+    "id": "m1-representative",
+    "status": "provisional",
+    "provisional_until_first_real_save": true,
+    "limitation": "Provisional until the first real save. This world is synthetic: it exercises the shape of a save (terrain, caves, overhangs, structures and mixed materials) but was not produced by gameplay, by docs/worldgen-design.md, or by the save path on the reference machine. Its byte sizes, material histograms and distributions are illustrative only and must not be quoted as gate results (M1-35, M1-37) until a real save is captured and this fixture is re-frozen.",
+    "manifest": "benchmarks/fixtures/m1-representative/manifest.json",
+    "save_dir": "benchmarks/fixtures/m1-representative/save",
+    "world_hash": "d077250c2a84b0b42f3fd852c76ed7e43c61d21d21c41381fc8808331d8332e5",
+    "chunk_bits": 6,
+    "chunk_dim": 64,
+    "chunks": 72,
+    "total_voxels": 7036505,
+    "overlay_entries": 0,
+    "region_files": 4
+  },
+  "source": {
+    "chunk_bits": 6,
+    "chunk_dim": 64,
+    "chunk_volume": 262144,
+    "levels": 7,
+    "light_cells": 64,
+    "probes": 64,
+    "node_budget": 200000
+  },
+  "target": {
+    "chunk_bits": 7,
+    "chunk_dim": 128,
+    "chunk_volume": 2097152,
+    "levels": 8,
+    "light_cells": 512,
+    "probes": 512,
+    "node_budget": 1500000
+  },
+  "n64": 25736,
+  "n128": 3217,
+  "equal_volume_factor": 8,
+  "measured": {
+    "edit": {
+      "upload_ns": 60,
+      "fence_ns": 20,
+      "flip_ns": 20,
+      "fixed_ns": 91,
+      "cow_ns": 691,
+      "light_ns": 1623,
+      "dirty_ns": 2134,
+      "total_ns": 2224,
+      "upload_bytes_per_edit": 360,
+      "cow_bytes_per_edit": 304,
+      "light_cells_per_edit": 27
+    },
+    "probes": {
+      "select_ns": 105931,
+      "rebake_ns": 41760,
+      "upload_ns": 50,
+      "update_ns": 143512,
+      "affected_probes_per_edit": 1,
+      "rays_tested_per_edit": 1220,
+      "rays_baked_per_edit": 67,
+      "probes_per_chunk": 64,
+      "rays_per_probe": 64
+    },
+    "memory": {
+      "dag_bytes": 259246,
+      "overlay_bytes": 0,
+      "light_bytes": 1024,
+      "probe_bytes": 768,
+      "mesh_bytes": 771172,
+      "total_bytes": 1033124,
+      "dag_nodes": 31095
+    }
+  },
+  "optimistic": {
+    "mode": "optimistic",
+    "same_edge": false,
+    "edit": {
+      "upload_ns": 69,
+      "fence_ns": 20,
+      "flip_ns": 20,
+      "fixed_ns": 109,
+      "cow_ns": 790,
+      "light_ns": 1623,
+      "dirty_ns": 2413,
+      "total_ns": 2522,
+      "light_cells": 27,
+      "budget_ns": 8000000,
+      "margin_ns": 7997478,
+      "within_budget": true
+    },
+    "probes": {
+      "select_ns": 423724,
+      "rebake_ns": 167040,
+      "upload_ns": 200,
+      "update_ns": 590964,
+      "affected_probes": 4,
+      "rays_baked": 268,
+      "budget_ns": 4000000,
+      "margin_ns": 3409036,
+      "within_budget": true
+    },
+    "memory": {
+      "dag_bytes_per_chunk": 2073968,
+      "overlay_bytes_per_chunk": 0,
+      "light_bytes_per_chunk": 8192,
+      "probe_bytes_per_chunk": 6144,
+      "mesh_bytes_per_chunk": 3084688,
+      "total_bytes_per_chunk": 5172992,
+      "dag_nodes_per_chunk": 248760,
+      "loaded_chunks": 3217,
+      "projected_bytes": 16641515264,
+      "target_bytes": 3434086400,
+      "fail_bytes": 5151653888,
+      "within_target": false,
+      "within_fail": false,
+      "node_budget": 1500000,
+      "node_within_budget": true
+    }
+  },
+  "pessimistic": {
+    "mode": "pessimistic",
+    "same_edge": false,
+    "edit": {
+      "upload_ns": 69,
+      "fence_ns": 20,
+      "flip_ns": 20,
+      "fixed_ns": 109,
+      "cow_ns": 5528,
+      "light_ns": 30777,
+      "dirty_ns": 36305,
+      "total_ns": 36414,
+      "light_cells": 512,
+      "budget_ns": 8000000,
+      "margin_ns": 7963586,
+      "within_budget": true
+    },
+    "probes": {
+      "select_ns": 54236672,
+      "rebake_ns": 21381120,
+      "upload_ns": 25600,
+      "update_ns": 75643392,
+      "affected_probes": 512,
+      "rays_baked": 32768,
+      "budget_ns": 4000000,
+      "margin_ns": -71643392,
+      "within_budget": false
+    },
+    "memory": {
+      "dag_bytes_per_chunk": 2073968,
+      "overlay_bytes_per_chunk": 0,
+      "light_bytes_per_chunk": 8192,
+      "probe_bytes_per_chunk": 6144,
+      "mesh_bytes_per_chunk": 6169376,
+      "total_bytes_per_chunk": 8257680,
+      "dag_nodes_per_chunk": 248760,
+      "loaded_chunks": 3217,
+      "projected_bytes": 26564956560,
+      "target_bytes": 3434086400,
+      "fail_bytes": 5151653888,
+      "within_target": false,
+      "within_fail": false,
+      "node_budget": 1500000,
+      "node_within_budget": true
+    }
+  },
+  "notes": [
+    "The model is analytic, not a 128³ measurement. Each p95 component is projected independently and the projected components are summed; the sum of p95s is not itself a p95 of sums.",
+    "Fixed = upload + fence + flip. The fence and flip are per batch and unchanged. Upload follows the COW path, which grows from 7 to 8 levels (1.143), not a whole-chunk transfer. Both projections share the same fixed term.",
+    "Optimistic dirty = one COW path (1.143 scale) and the measured 27 light cells, because a block is still 16³ voxels at the larger edge. The mesh and the affected probe set grow with surface area (×4).",
+    "Pessimistic dirty spans the chunk: COW grows with volume (×8), light evaluates all 512 target block cells (18.96× the measured 27), the probe update rebakes the whole 512 probe grid (32,768 rays), and every memory component grows with volume.",
+    "Memory is compared at equal loaded volume: N64 = 25,736 and N128 = 3,217 (factor 8). The optimistic projection scales the mesh by area and the other components by volume; the pessimistic projection scales every component by volume.",
+    "Fed the measured 64³ inputs and asked for 64³, the model returns those inputs unchanged; that identity is asserted by the unit tests. The projection starts only at a larger edge.",
+    "Fixture limitation, verbatim: Provisional until the first real save. This world is synthetic: it exercises the shape of a save (terrain, caves, overhangs, structures and mixed materials) but was not produced by gameplay, by docs/worldgen-design.md, or by the save path on the reference machine. Its byte sizes, material histograms and distributions are illustrative only and must not be quoted as gate results (M1-35, M1-37) until a real save is captured and this fixture is re-frozen. Re-run this projection after the real save before M1-42 quotes it."
+  ]
+}
