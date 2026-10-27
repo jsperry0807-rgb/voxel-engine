@@ -6,5 +6,7 @@
 //! milliseconds.
 //!
 //! - [`light`] — full-pass block-light flood fill (M1-29).
+//! - [`probe`] — deterministic SH4 probe bake (M1-30).
 
 pub mod light;
+pub mod probe;
