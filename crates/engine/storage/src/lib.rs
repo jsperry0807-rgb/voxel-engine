@@ -15,6 +15,7 @@ pub mod invariants;
 pub mod leaf;
 pub mod node_word;
 pub mod overlay;
+pub mod reference;
 pub mod run;
 pub mod scan;
 pub mod serialize;
