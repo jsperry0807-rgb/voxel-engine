@@ -5,10 +5,12 @@
 //! reference is allowed to take seconds where the production path takes
 //! milliseconds.
 //!
+//! - [`cull`] — hierarchical frustum traversal (M1-32).
 //! - [`light`] — full-pass block-light flood fill (M1-29).
 //! - [`mesh`] — count-only greedy mesher (M1-31).
 //! - [`probe`] — deterministic SH4 probe bake (M1-30).
 
+pub mod cull;
 pub mod light;
 pub mod mesh;
 pub mod probe;
