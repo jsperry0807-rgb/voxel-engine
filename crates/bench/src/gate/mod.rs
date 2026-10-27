@@ -6,5 +6,7 @@
 //! generator (M1-39) can consume the same data a human sees.
 //!
 //! - [`memory`] — per-chunk DAG, overlay, light, probe and mesh bytes (M1-35).
+//! - [`residency`] — loaded chunk count for the configured view/band (M1-36).
 
 pub mod memory;
+pub mod residency;

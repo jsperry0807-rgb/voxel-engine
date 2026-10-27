@@ -112,6 +112,17 @@ fn main() {
                      \x20          estimate and total, with p50/p95/max (M1-35)\n\
                      --manifest   fixture manifest (default: benchmarks/fixtures/m1-representative/manifest.json)\n\
                      --out        also write the JSON report to FILE\n\
+                     --json       print the JSON report instead of the Markdown table\n\
+                     \n\
+                     voxel-bench gate residency [--profile NAME] [--radius M] [--band M]\n\
+                     \x20                  [--out FILE] [--json]\n\
+                     \n\
+                     gate residency  N64 for the configured view/band and the\n\
+                     \x20          equal-volume 128³ equivalent (M1-36)\n\
+                     --profile    minimum | default | high (default: default)\n\
+                     --radius     near voxel radius in metres (overrides the profile)\n\
+                     --band       full vertical shell in metres (overrides the profile)\n\
+                     --out        also write the JSON report to FILE\n\
                      --json       print the JSON report instead of the Markdown table"
                 );
                 return;
@@ -463,10 +474,11 @@ fn fixture_verify(args: &[String]) {
 
 fn gate_mode(args: &[String]) {
     let Some(command) = args.first() else {
-        usage("gate needs `memory`");
+        usage("gate needs `memory` or `residency`");
     };
     match command.as_str() {
         "memory" => gate_memory(&args[1..]),
+        "residency" => gate_residency(&args[1..]),
         other => usage(&format!("unknown gate command `{other}`")),
     }
 }
@@ -508,25 +520,7 @@ fn gate_memory(args: &[String]) {
     };
 
     if let Some(out) = out {
-        let serialized = match serde_json::to_string_pretty(&report) {
-            Ok(serialized) => serialized,
-            Err(error) => {
-                eprintln!("failed to serialize gate memory report: {error}");
-                std::process::exit(1);
-            }
-        };
-        if let Some(parent) = out.parent()
-            && !parent.as_os_str().is_empty()
-            && let Err(error) = std::fs::create_dir_all(parent)
-        {
-            eprintln!("failed to create {}: {error}", parent.display());
-            std::process::exit(1);
-        }
-        if let Err(error) = std::fs::write(&out, serialized + "\n") {
-            eprintln!("failed to write {}: {error}", out.display());
-            std::process::exit(1);
-        }
-        println!("wrote {}", out.display());
+        write_json_report(&out, &report);
     }
 
     if json {
@@ -540,6 +534,117 @@ fn gate_memory(args: &[String]) {
     } else {
         print!("{}", report.markdown());
     }
+}
+
+fn gate_residency(args: &[String]) {
+    let mut profile = voxel_bench::gate::residency::Profile::default();
+    let mut radius: Option<u32> = None;
+    let mut band: Option<u32> = None;
+    let mut out: Option<PathBuf> = None;
+    let mut json = false;
+
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--profile" => {
+                index += 1;
+                let name = args
+                    .get(index)
+                    .unwrap_or_else(|| usage("--profile needs a name"));
+                profile =
+                    voxel_bench::gate::residency::Profile::from_name(name).unwrap_or_else(|| {
+                        usage(&format!(
+                            "unknown profile `{name}`; expected minimum, default or high"
+                        ))
+                    });
+            }
+            "--radius" => {
+                index += 1;
+                let value = args
+                    .get(index)
+                    .unwrap_or_else(|| usage("--radius needs metres"));
+                radius = Some(parse_metres(value, "--radius"));
+            }
+            "--band" => {
+                index += 1;
+                let value = args
+                    .get(index)
+                    .unwrap_or_else(|| usage("--band needs metres"));
+                band = Some(parse_metres(value, "--band"));
+            }
+            "--out" => {
+                index += 1;
+                out = Some(PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--out needs a file")),
+                ));
+            }
+            "--json" => json = true,
+            other => usage(&format!("unknown gate residency argument `{other}`")),
+        }
+        index += 1;
+    }
+
+    let base = voxel_bench::gate::residency::ResidencyConfig::from_profile(profile);
+    let config = voxel_bench::gate::residency::ResidencyConfig {
+        profile,
+        near_radius_m: radius.unwrap_or(base.near_radius_m),
+        vertical_shell_m: band.unwrap_or(base.vertical_shell_m),
+    };
+
+    let report = match voxel_bench::gate::residency::report(config) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("failed to measure the configured view/band: {error}");
+            std::process::exit(1);
+        }
+    };
+
+    if let Some(out) = out {
+        write_json_report(&out, &report);
+    }
+
+    if json {
+        match serde_json::to_string_pretty(&report) {
+            Ok(serialized) => println!("{serialized}"),
+            Err(error) => {
+                eprintln!("failed to serialize gate residency report: {error}");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        print!("{}", report.markdown());
+    }
+}
+
+fn parse_metres(value: &str, flag: &str) -> u32 {
+    value.parse::<u32>().unwrap_or_else(|_| {
+        usage(&format!(
+            "{flag} needs a whole number of metres, got `{value}`"
+        ))
+    })
+}
+
+fn write_json_report<T: serde::Serialize>(out: &std::path::Path, report: &T) {
+    let serialized = match serde_json::to_string_pretty(report) {
+        Ok(serialized) => serialized,
+        Err(error) => {
+            eprintln!("failed to serialize report: {error}");
+            std::process::exit(1);
+        }
+    };
+    if let Some(parent) = out.parent()
+        && !parent.as_os_str().is_empty()
+        && let Err(error) = std::fs::create_dir_all(parent)
+    {
+        eprintln!("failed to create {}: {error}", parent.display());
+        std::process::exit(1);
+    }
+    if let Err(error) = std::fs::write(out, serialized + "\n") {
+        eprintln!("failed to write {}: {error}", out.display());
+        std::process::exit(1);
+    }
+    println!("wrote {}", out.display());
 }
 
 fn usage(message: &str) -> ! {

@@ -47,6 +47,11 @@ cargo run -p voxel-bench -- fixture verify
 # Per-chunk memory distribution over the fixture (M1-35)
 cargo run -p voxel-bench -- gate memory
 cargo run -p voxel-bench -- gate memory --json
+
+# Loaded chunk count for the configured view/band (M1-36)
+cargo run -p voxel-bench -- gate residency
+cargo run -p voxel-bench -- gate residency --profile minimum
+cargo run -p voxel-bench -- gate residency --json
 ```
 
 ## What is measured
@@ -135,6 +140,30 @@ is not part of this measurement. The report carries the fixture's provisional
 limitation verbatim and refuses to measure a save whose live chunk, voxel,
 overlay or region counts differ from the manifest. `--json` prints the
 serializable report; `--out FILE` also writes it.
+
+**Gate residency** (`gate residency`, M1-36) evaluates the frozen residency
+model for the configured near radius and vertical shell:
+
+```text
+N(edge, R, V) = ceil(pi * (R / edge)^2) * ceil(V / edge)
+```
+
+The baseline count is measured at the 64³ edge. The 128³ count is the
+**equal-volume equivalent**, `N128 = N64 / 8`, not a second independently
+rounded view; the report asserts both `N64 = 8 * N128` and
+`N64 * 64³ = N128 * 128³`. `--profile` selects `minimum`, `default` (the
+default) or `high`; `--radius` and `--band` override the profile in metres.
+The report also prints the frozen pre-registration row and its delta. The
+frozen table rounded some rows to nearest instead of ceiling: Minimum/64³ is
+8 chunks lower (6,432 versus the formula's 6,440), and Default/128³ is one
+lower (3,216 versus the equal-volume 3,217). Those deltas are visible rather
+than hidden.
+
+The count is geometric, not content-dependent: the 72-chunk fixture cannot
+fill a 25,736-chunk view. `gate memory` supplies the per-chunk bytes; this row
+supplies `N` for the memory gate. High is accepted but is not gated on the
+reference machine, and a custom view/band is reported without a
+pre-registration comparison.
 
 ## Caveats
 

@@ -57,6 +57,22 @@ pub const CHUNK_BITS: u32 = 6;
 #[cfg(feature = "chunk128")]
 pub const CHUNK_BITS: u32 = 7;
 
+/// `log2` of the chunk edge of the M1 baseline (64³ blocks).
+///
+/// [`CHUNK_BITS`] is either this baseline or [`TARGET_CHUNK_BITS`]. The
+/// residency gate (M1-36) names both shapes explicitly so it can compare them
+/// from either build without assuming which one the feature selected.
+pub const BASELINE_CHUNK_BITS: u32 = 6;
+
+/// `log2` of the chunk edge of the pre-registered 128³ target.
+pub const TARGET_CHUNK_BITS: u32 = BASELINE_CHUNK_BITS + 1;
+
+/// Voxels per edge of the M1 baseline chunk.
+pub const BASELINE_CHUNK_DIM: usize = 1 << BASELINE_CHUNK_BITS;
+
+/// Voxels per edge of the pre-registered target chunk.
+pub const TARGET_CHUNK_DIM: usize = 1 << TARGET_CHUNK_BITS;
+
 /// Voxels per chunk edge ([`CHUNK_BITS`] as a count).
 pub const CHUNK_DIM: usize = 1 << CHUNK_BITS;
 
@@ -110,6 +126,16 @@ pub const fn aabb_extent(level: u32) -> f32 {
 // inconsistent fails the build instead of mis-sizing a buffer at runtime.
 const _: () = {
     assert!(BLOCK_DIM == 1 << BLOCK_BITS);
+
+    // The two frozen shapes in ADR-002 and pre-registration §2. A build must
+    // select exactly one of them; the residency gate compares both by name.
+    assert!(BASELINE_CHUNK_BITS == 6);
+    assert!(TARGET_CHUNK_BITS == 7);
+    assert!(BASELINE_CHUNK_DIM == 64);
+    assert!(TARGET_CHUNK_DIM == 128);
+    assert!(TARGET_CHUNK_DIM == BASELINE_CHUNK_DIM * 2);
+    assert!(CHUNK_BITS == BASELINE_CHUNK_BITS || CHUNK_BITS == TARGET_CHUNK_BITS);
+
     assert!(CHUNK_DIM == 1 << CHUNK_BITS);
     assert!(CHUNK_VOLUME == CHUNK_DIM * CHUNK_DIM * CHUNK_DIM);
 
@@ -179,6 +205,19 @@ mod tests {
         assert_eq!(BLOCKS_PER_CHUNK, (CHUNK_DIM / BLOCK_DIM).pow(3));
         assert_eq!(BLOCKS_PER_CHUNK * BLOCK_DIM.pow(3), CHUNK_VOLUME);
         assert_eq!(LEVEL_SIZE.len(), ROOT_LEVEL as usize + 1);
+    }
+
+    /// The two frozen edges are named explicitly so a gate can compare them
+    /// from either build; the compiled edge must be one of them.
+    #[test]
+    fn baseline_and_target_edges_are_both_named() {
+        assert_eq!(BASELINE_CHUNK_DIM, 1 << BASELINE_CHUNK_BITS);
+        assert_eq!(TARGET_CHUNK_DIM, 1 << TARGET_CHUNK_BITS);
+        assert_eq!(TARGET_CHUNK_DIM, BASELINE_CHUNK_DIM * 2);
+        assert!(
+            CHUNK_BITS == BASELINE_CHUNK_BITS || CHUNK_BITS == TARGET_CHUNK_BITS,
+            "the build must select the baseline or target edge"
+        );
     }
 
     /// The values must work in `const` items, not just at runtime: buffer
