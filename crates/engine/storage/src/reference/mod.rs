@@ -6,7 +6,9 @@
 //! milliseconds.
 //!
 //! - [`light`] — full-pass block-light flood fill (M1-29).
+//! - [`mesh`] — count-only greedy mesher (M1-31).
 //! - [`probe`] — deterministic SH4 probe bake (M1-30).
 
 pub mod light;
+pub mod mesh;
 pub mod probe;
