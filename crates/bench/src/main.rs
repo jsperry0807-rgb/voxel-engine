@@ -42,6 +42,10 @@ fn main() {
         save_scan_mode(&args[1..]);
         return;
     }
+    if args.first().is_some_and(|arg| arg == "fixture") {
+        fixture_mode(&args[1..]);
+        return;
+    }
 
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
@@ -87,7 +91,15 @@ fn main() {
                      \x20          material histograms and p50/p95/max\n\
                      \n\
                      --path     save directory to scan (required)\n\
-                     --out      write the JSON report to a file instead of stdout"
+                     --out      write the JSON report to a file instead of stdout\n\
+                     \n\
+                     voxel-bench fixture build [--out DIR]\n\
+                     voxel-bench fixture verify [--manifest FILE]\n\
+                     \n\
+                     fixture build  freeze the M1-28 fixture world and manifest\n\
+                     fixture verify check hashes, scan the save and rebuild it\n\
+                     --out          output directory (default: benchmarks/fixtures/m1-representative)\n\
+                     --manifest     manifest to verify (default: <out>/manifest.json)"
                 );
                 return;
             }
@@ -317,6 +329,122 @@ fn save_scan_mode(args: &[String]) {
             );
         }
         None => println!("{json}"),
+    }
+}
+
+fn fixture_mode(args: &[String]) {
+    let Some(command) = args.first() else {
+        usage("fixture needs `build` or `verify`");
+    };
+    match command.as_str() {
+        "build" => fixture_build(&args[1..]),
+        "verify" => fixture_verify(&args[1..]),
+        other => usage(&format!("unknown fixture command `{other}`")),
+    }
+}
+
+fn fixture_build(args: &[String]) {
+    let mut out = PathBuf::from(voxel_bench::fixture::DEFAULT_DIR);
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--out" => {
+                index += 1;
+                out = PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--out needs a directory")),
+                );
+            }
+            other => usage(&format!("unknown fixture build argument `{other}`")),
+        }
+        index += 1;
+    }
+
+    match voxel_bench::fixture::build(&out) {
+        Ok(built) => {
+            let manifest = &built.manifest;
+            println!(
+                "froze {} at {} ({} chunks, {} bytes, {} files)",
+                manifest.id,
+                built.save_dir.display(),
+                manifest.observed.live_chunks,
+                manifest.integrity.total_bytes,
+                manifest.integrity.files.len(),
+            );
+            println!("manifest  {}", built.manifest_path.display());
+            println!("blake3    {}", manifest.integrity.world_hash);
+            println!(
+                "evidence  cave air {}, overhang roofs {}, structures {}, trees {}",
+                manifest.checks.cave_air_voxels,
+                manifest.checks.overhang_roof_blocks,
+                manifest.checks.structure_blocks,
+                manifest.checks.tree_blocks,
+            );
+            println!(
+                "status    provisional until the first real save; do not quote its sizes as gate results"
+            );
+        }
+        Err(error) => {
+            eprintln!("failed to build fixture: {error}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn fixture_verify(args: &[String]) {
+    let mut manifest = voxel_bench::fixture::default_manifest();
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--manifest" => {
+                index += 1;
+                manifest = PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--manifest needs a file")),
+                );
+            }
+            other => usage(&format!("unknown fixture verify argument `{other}`")),
+        }
+        index += 1;
+    }
+
+    match voxel_bench::fixture::verify(&manifest) {
+        Ok(verified) => {
+            let manifest = &verified.manifest;
+            println!(
+                "verified {} at {} ({} chunks, {} bytes, {} files)",
+                manifest.id,
+                verified.save_dir.display(),
+                manifest.observed.live_chunks,
+                manifest.integrity.total_bytes,
+                manifest.integrity.files.len(),
+            );
+            println!("manifest  {}", verified.manifest_path.display());
+            println!("blake3    {}", manifest.integrity.world_hash);
+            println!(
+                "format    {} v{}, {}³ chunks, {}",
+                manifest.format.chunk_format,
+                manifest.format.chunk_version,
+                manifest.format.chunk_dim,
+                manifest.format.region_format,
+            );
+            println!(
+                "materials {} distinct; cave air {}, overhang roofs {}, structures {}, trees {}",
+                manifest.observed.materials.len(),
+                manifest.checks.cave_air_voxels,
+                manifest.checks.overhang_roof_blocks,
+                manifest.checks.structure_blocks,
+                manifest.checks.tree_blocks,
+            );
+            if verified.rebuilt {
+                println!("rebuild   byte-identical from the manifest recipe");
+            }
+            println!("status    provisional until the first real save");
+        }
+        Err(error) => {
+            eprintln!("fixture verify failed: {error}");
+            std::process::exit(1);
+        }
     }
 }
 

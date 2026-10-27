@@ -40,6 +40,9 @@ RECORD=0 scripts/bench.sh         # local report only
 # Inspect a save directory without modifying it (JSON on stdout)
 cargo run --release -p voxel-bench -- save-scan --path saves/world
 cargo run --release -p voxel-bench -- save-scan --path saves/world --out target/save.json
+
+# Verify the frozen fixture save (hash, scan, rebuild from manifest)
+cargo run -p voxel-bench -- fixture verify
 ```
 
 ## What is measured
@@ -96,6 +99,16 @@ The scan opens files read-only and never truncates a torn tail (unlike the live
 store, which repairs it on open). Air is excluded from voxel counts and
 histograms; material keys are decimal ids. An empty directory is a valid empty
 report. A missing directory exits non-zero.
+
+**Fixture world** (`fixture`, M1-28) is the frozen counterpart to `save-scan`.
+`benchmarks/fixtures/m1-representative/` contains a deterministic 72-chunk save
+with terrain, caves, canyon overhangs, structures, vegetation and 19 non-air
+materials, plus a manifest that records provenance, the recipe, the raw-id
+palette, BLAKE3 hashes and the M1-27 observations. `fixture build` freezes a new
+directory; `fixture verify` checks the bytes, re-scans them and rebuilds the
+recipe byte-for-byte. The save is **provisional until the first real save**: its
+numbers are illustrative and must not be quoted as gate results. See
+`benchmarks/fixtures/README.md`.
 
 ## Caveats
 

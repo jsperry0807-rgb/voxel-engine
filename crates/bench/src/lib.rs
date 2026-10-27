@@ -22,8 +22,11 @@
 //! `perf stat`.
 //!
 //! [`save_scan`] is the M1-27 reference reader for a save directory; it is not
-//! a benchmark and does not run as part of `all`.
+//! a benchmark and does not run as part of `all`. [`fixture`] is the M1-28
+//! frozen world that reader and the M1 gate measure; `fixture verify` checks
+//! its hashes and rebuilds it from the manifest recipe.
 
+pub mod fixture;
 pub mod fixtures;
 pub mod history;
 pub mod layout;

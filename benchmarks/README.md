@@ -11,6 +11,11 @@ benchmarks/
 ├── README.md          # this file: method, rules, caveats
 ├── HISTORY.md         # generated index of every run, newest first, with deltas
 ├── history.json       # machine-readable run summaries and stable metrics
+├── fixtures/          # frozen, reproducible save worlds (M1-28)
+│   ├── README.md
+│   └── m1-representative/
+│       ├── manifest.json
+│       └── save/r.*.vxr
 └── runs/
     └── 20261025T144501Z-baseline/
         ├── report.json     # every memory, CPU and latency case
@@ -122,3 +127,12 @@ The full case list is in each run's `report.md`.
   host's real cache.
 - GPU cases skip when no wgpu adapter is available; the run is still valid for
   the CPU and memory lenses.
+
+## Fixtures
+
+`fixtures/` holds frozen saves for gates that need a world, not just a pattern.
+`fixtures/m1-representative` is synthetic and **provisional until the first real
+save**: its sizes and histograms are illustrative, not gate results. Verify it
+with `cargo run -p voxel-bench -- fixture verify`; see
+[`fixtures/README.md`](fixtures/README.md) for provenance, hashes and the
+re-freeze procedure.
