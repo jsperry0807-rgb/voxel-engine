@@ -95,10 +95,19 @@ const fn local_index_at(chunk_bits: u32, x: u32, y: u32, z: u32) -> u32 {
 }
 
 /// Inverse of [`local_index_at`]: extracts the three `chunk_bits`-wide axes.
+///
+/// Input outside the index space (`i >= 1 << (3 * chunk_bits)`) is truncated to
+/// that space instead of leaking high bits into `z`; every axis is masked, so
+/// `local_index_at(chunk_bits, local_xyz_at(chunk_bits, i)) == i` holds for
+/// every index the layout can address and the result is always a valid voxel.
 #[inline]
 const fn local_xyz_at(chunk_bits: u32, i: u32) -> (u32, u32, u32) {
     let mask = (1u32 << chunk_bits) - 1;
-    (i & mask, (i >> chunk_bits) & mask, i >> (2 * chunk_bits))
+    (
+        i & mask,
+        (i >> chunk_bits) & mask,
+        (i >> (2 * chunk_bits)) & mask,
+    )
 }
 
 /// Packs chunk-local coordinates into a row-major index at [`CHUNK_BITS`].
@@ -204,6 +213,19 @@ mod tests {
             assert_eq!(i, x + y * dim + z * dim * dim);
             assert_eq!((x, y, z), local_xyz_at(CHUNK_BITS, i));
             assert_eq!(local_index(x, y, z), local_index_at(CHUNK_BITS, x, y, z));
+        }
+    }
+
+    #[test]
+    fn local_xyz_truncates_input_outside_the_index_space() {
+        let mask = (CHUNK_VOLUME as u32).wrapping_sub(1);
+        for i in [CHUNK_VOLUME as u32, u32::MAX, 0xDEAD_BEEF, 1 << 31] {
+            let (x, y, z) = local_xyz(i);
+            assert!(x < CHUNK_DIM as u32);
+            assert!(y < CHUNK_DIM as u32);
+            assert!(z < CHUNK_DIM as u32);
+            assert_eq!((x, y, z), local_xyz_at(CHUNK_BITS, i & mask));
+            assert_eq!(local_index(x, y, z), i & mask);
         }
     }
 
