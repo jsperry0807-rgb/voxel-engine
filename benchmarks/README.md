@@ -23,10 +23,32 @@ benchmarks/
         ├── run.json        # summary row for this run
         ├── criterion.txt   # raw Criterion output
         ├── iai.txt         # raw iai-callgrind instruction/cache/branch counts
-        └── perf.txt        # raw perf-stat counters
+        ├── perf.txt        # raw perf-stat counters
+        └── gate.md         # gate runs also carry the twelve-row report
+            gate.json       # machine-readable report
+            scaleup.md      # 128³ projection when the gate is decided
+            scaleup.json
 ```
 
 The raw files are optional, depending on which tools existed on the machine.
+
+## Gate runs
+
+A milestone gate run uses the same archive and adds the pre-registered report:
+
+```sh
+LABEL=m1-gate scripts/bench.sh
+cargo run --release -p voxel-bench -- gate report --out target/gate
+cargo run --release -p voxel-bench -- gate scaleup --out target/gate/scaleup.json \
+  > target/gate/scaleup.md
+```
+
+Copy `gate.md`, `gate.json`, `scaleup.md` and `scaleup.json` into the recorded run
+directory so the report stays with the numbers it judges. The twelve rows and the
+fallback order are frozen in [`../docs/pre-registration.md`](../docs/pre-registration.md);
+the gate report computes every verdict from a measured value and does not type `PASS`.
+The M1 outcome is recorded in [`../docs/m1-gate-decision.md`](../docs/m1-gate-decision.md).
+
 
 ## Recording a run
 
