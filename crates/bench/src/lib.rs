@@ -20,6 +20,9 @@
 //!
 //! or use `scripts/bench.sh` to also drive Criterion, iai-callgrind and
 //! `perf stat`.
+//!
+//! [`save_scan`] is the M1-27 reference reader for a save directory; it is not
+//! a benchmark and does not run as part of `all`.
 
 pub mod fixtures;
 pub mod history;
@@ -28,6 +31,7 @@ pub mod mem;
 pub mod patterns;
 pub mod proc;
 pub mod report;
+pub mod save_scan;
 pub mod suite;
 
 pub use mem::CountingAllocator;

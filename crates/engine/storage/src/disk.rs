@@ -12,10 +12,36 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 
-const MAGIC: u32 = 0x5856_5231; // "1RVX"
-const KIND_DAG: u8 = 1;
-const KIND_DIFF: u8 = 2;
-const HDR: usize = 16;
+pub(crate) const MAGIC: u32 = 0x5856_5231; // "1RVX"
+pub(crate) const KIND_DAG: u8 = 1;
+pub(crate) const KIND_DIFF: u8 = 2;
+pub(crate) const HDR: usize = 16;
+
+/// A decoded record header, shared by the live store and the read-only scanner.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct RecordHeader {
+    pub kind: u8,
+    pub cell: u16,
+    pub len: u32,
+    pub crc: u32,
+}
+
+/// Decodes a record header, or returns `None` for an unknown magic/kind.
+pub(crate) fn parse_header(h: &[u8; HDR]) -> Option<RecordHeader> {
+    if u32::from_le_bytes(h[0..4].try_into().unwrap()) != MAGIC {
+        return None;
+    }
+    let kind = h[4];
+    if kind != KIND_DAG && kind != KIND_DIFF {
+        return None;
+    }
+    Some(RecordHeader {
+        kind,
+        cell: u16::from_le_bytes(h[6..8].try_into().unwrap()),
+        len: u32::from_le_bytes(h[8..12].try_into().unwrap()),
+        crc: u32::from_le_bytes(h[12..16].try_into().unwrap()),
+    })
+}
 
 #[derive(Default, Clone, Copy)]
 struct Entry {
@@ -38,7 +64,7 @@ impl Region {
     }
 }
 
-type RegionPos = (i32, i32, i32);
+pub type RegionPos = (i32, i32, i32);
 
 pub struct RegionStore {
     dir: PathBuf,
@@ -80,30 +106,26 @@ fn scan(file: &mut File) -> io::Result<(u64, FxMap<u16, Entry>)> {
             if r.read_exact(&mut h).is_err() {
                 break;
             }
-            if u32::from_le_bytes(h[0..4].try_into().unwrap()) != MAGIC {
+            let Some(record) = parse_header(&h) else {
+                break;
+            };
+            if pos + HDR as u64 + record.len as u64 > total {
                 break;
             }
-            let kind = h[4];
-            let cell = u16::from_le_bytes(h[6..8].try_into().unwrap());
-            let len = u32::from_le_bytes(h[8..12].try_into().unwrap());
-            let crc = u32::from_le_bytes(h[12..16].try_into().unwrap());
-            if pos + HDR as u64 + len as u64 > total {
+            let mut p = vec![0u8; record.len as usize];
+            if r.read_exact(&mut p).is_err() || crc32(&p) != record.crc {
                 break;
             }
-            let mut p = vec![0u8; len as usize];
-            if r.read_exact(&mut p).is_err() || crc32(&p) != crc {
-                break;
-            }
-            let e = index.entry(cell).or_default();
-            match kind {
+            let e = index.entry(record.cell).or_default();
+            match record.kind {
                 KIND_DAG => {
-                    e.dag = Some((pos + HDR as u64, len));
+                    e.dag = Some((pos + HDR as u64, record.len));
                     e.diff = None;
                 }
-                KIND_DIFF => e.diff = Some((pos + HDR as u64, len)),
-                _ => break,
+                KIND_DIFF => e.diff = Some((pos + HDR as u64, record.len)),
+                _ => unreachable!("parse_header rejects unknown kinds"),
             }
-            pos += HDR as u64 + len as u64;
+            pos += HDR as u64 + record.len as u64;
         }
     }
     if pos < total {

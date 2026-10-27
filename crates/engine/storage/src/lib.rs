@@ -16,6 +16,7 @@ pub mod leaf;
 pub mod node_word;
 pub mod overlay;
 pub mod run;
+pub mod scan;
 pub mod serialize;
 pub mod world;
 
@@ -61,6 +62,18 @@ impl ChunkPos {
     /// Cell index of this chunk inside its region (0..512).
     pub fn cell(self) -> u16 {
         ((self.x & 7) | ((self.y & 7) << 3) | ((self.z & 7) << 6)) as u16
+    }
+    /// Inverse of [`Self::region`] and [`Self::cell`].
+    ///
+    /// Chunk coordinates are signed and use arithmetic shifts, so this also
+    /// reconstructs chunks in negative regions.
+    pub const fn from_region_cell(region: (i32, i32, i32), cell: u16) -> Self {
+        debug_assert!(cell < 512, "a region has 8x8x8 cells");
+        Self::new(
+            (region.0 << 3) | (cell & 7) as i32,
+            (region.1 << 3) | ((cell >> 3) & 7) as i32,
+            (region.2 << 3) | ((cell >> 6) & 7) as i32,
+        )
     }
 }
 
@@ -239,6 +252,28 @@ mod tests {
             let (x, y, z) = local_xyz(i);
             assert_eq!(morton(i), morton_at(CHUNK_BITS, i));
             assert_eq!(unmorton_at(CHUNK_BITS, morton(i)), (x, y, z));
+        }
+    }
+
+    #[test]
+    fn region_cell_roundtrips_signed_chunks() {
+        for (x, y, z) in [
+            (0, 0, 0),
+            (7, 7, 7),
+            (8, 0, 0),
+            (-1, 0, 0),
+            (-8, -9, -64),
+            (i32::MAX >> 3, i32::MIN >> 3, 12345),
+        ] {
+            let p = ChunkPos::new(x, y, z);
+            assert_eq!(ChunkPos::from_region_cell(p.region(), p.cell()), p);
+        }
+
+        // Every cell maps back to the chunk it was packed from.
+        for cell in 0..512u16 {
+            let p = ChunkPos::from_region_cell((-2, 3, -4), cell);
+            assert_eq!(p.region(), (-2, 3, -4));
+            assert_eq!(p.cell(), cell);
         }
     }
 }

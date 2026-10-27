@@ -36,6 +36,10 @@ VOXEL_GPU_BENCH=1 cargo bench -p voxel-bench --bench render
 scripts/bench.sh
 LABEL=my-change scripts/bench.sh  # name the archived run
 RECORD=0 scripts/bench.sh         # local report only
+
+# Inspect a save directory without modifying it (JSON on stdout)
+cargo run --release -p voxel-bench -- save-scan --path saves/world
+cargo run --release -p voxel-bench -- save-scan --path saves/world --out target/save.json
 ```
 
 ## What is measured
@@ -74,6 +78,24 @@ percentiles, which is the honest way to check the 60 Hz edit requirement:
 a mean of 100 µs is irrelevant if p99 is 20 ms. The policy path is measured
 separately: `latency/world_tick_idle` is the trigger check, and
 `latency/world_consolidate_1` pays one edit, the DAG rebuild and the disk sync.
+
+**Save scan** (`save-scan`, M1-27) is a reference reader, not a benchmark. It
+walks every `r.<x>.<y>.<z>.vxr` region log, resolves the live record per cell
+(last DAG wins, then the last overlay snapshot), and emits one JSON object:
+
+- per chunk: serialized DAG bytes (`dag_bytes`), node words and node bytes
+  (`node_words * 4`), overlay-snapshot bytes, all record bytes for that cell
+  (superseded records included), non-air voxel count, overlay entries, and a
+  material histogram;
+- per save: file/record/live/superseded bytes, total voxels and overrides,
+  the aggregate material histogram, and the per-chunk `node_bytes` and `voxels`
+  distributions (`p50`/`p95`/`max`, nearest rank);
+- `warnings` for torn tails, corrupt records and unreadable files.
+
+The scan opens files read-only and never truncates a torn tail (unlike the live
+store, which repairs it on open). Air is excluded from voxel counts and
+histograms; material keys are decimal ids. An empty directory is a valid empty
+report. A missing directory exits non-zero.
 
 ## Caveats
 

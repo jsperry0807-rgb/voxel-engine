@@ -38,6 +38,10 @@ fn main() {
         refresh_mode(&args[1..]);
         return;
     }
+    if args.first().is_some_and(|arg| arg == "save-scan") {
+        save_scan_mode(&args[1..]);
+        return;
+    }
 
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
@@ -74,7 +78,16 @@ fn main() {
                      \n\
                      voxel-bench refresh [--history DIR]\n\
                      \n\
-                     refresh  regenerate HISTORY.md from history.json"
+                     refresh  regenerate HISTORY.md from history.json\n\
+                     \n\
+                     voxel-bench save-scan --path DIR [--out FILE]\n\
+                     \n\
+                     save-scan  walk a save directory without modifying it and\n\
+                     \x20          emit JSON: per-chunk node bytes, voxel counts,\n\
+                     \x20          material histograms and p50/p95/max\n\
+                     \n\
+                     --path     save directory to scan (required)\n\
+                     --out      write the JSON report to a file instead of stdout"
                 );
                 return;
             }
@@ -235,6 +248,75 @@ fn refresh_mode(args: &[String]) {
             eprintln!("failed to refresh history: {error}");
             std::process::exit(1);
         }
+    }
+}
+
+fn save_scan_mode(args: &[String]) {
+    let mut path: Option<PathBuf> = None;
+    let mut out: Option<PathBuf> = None;
+
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--path" => {
+                index += 1;
+                path = Some(PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--path needs a directory")),
+                ));
+            }
+            "--out" => {
+                index += 1;
+                out = Some(PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--out needs a file")),
+                ));
+            }
+            other => usage(&format!("unknown save-scan argument `{other}`")),
+        }
+        index += 1;
+    }
+
+    let Some(path) = path else {
+        usage("save-scan needs --path <dir>");
+    };
+
+    let report = match voxel_bench::save_scan::scan(&path) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("failed to scan {}: {error}", path.display());
+            std::process::exit(1);
+        }
+    };
+    let json = match serde_json::to_string_pretty(&report) {
+        Ok(json) => json,
+        Err(error) => {
+            eprintln!("failed to serialize save-scan report: {error}");
+            std::process::exit(1);
+        }
+    };
+
+    match out {
+        Some(out) => {
+            if let Some(parent) = out.parent()
+                && !parent.as_os_str().is_empty()
+                && let Err(error) = std::fs::create_dir_all(parent)
+            {
+                eprintln!("failed to create {}: {error}", parent.display());
+                std::process::exit(1);
+            }
+            if let Err(error) = std::fs::write(&out, json + "\n") {
+                eprintln!("failed to write {}: {error}", out.display());
+                std::process::exit(1);
+            }
+            println!(
+                "wrote {} ({} chunks) from {}",
+                out.display(),
+                report.live_chunks,
+                path.display()
+            );
+        }
+        None => println!("{json}"),
     }
 }
 
