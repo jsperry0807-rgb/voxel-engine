@@ -7,6 +7,8 @@
 //!
 //! - [`memory`] — per-chunk DAG, overlay, light, probe and mesh bytes (M1-35).
 //! - [`residency`] — loaded chunk count for the configured view/band (M1-36).
+//! - [`edits`] — per-edit latency split into fixed and dirty-region terms (M1-37).
 
+pub mod edits;
 pub mod memory;
 pub mod residency;

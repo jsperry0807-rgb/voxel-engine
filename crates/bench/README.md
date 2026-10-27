@@ -52,6 +52,10 @@ cargo run -p voxel-bench -- gate memory --json
 cargo run -p voxel-bench -- gate residency
 cargo run -p voxel-bench -- gate residency --profile minimum
 cargo run -p voxel-bench -- gate residency --json
+
+# Per-edit latency split into fixed and dirty-region terms (M1-37)
+cargo run -p voxel-bench -- gate edits
+cargo run -p voxel-bench -- gate edits --json
 ```
 
 ## What is measured
@@ -164,6 +168,28 @@ fill a 25,736-chunk view. `gate memory` supplies the per-chunk bytes; this row
 supplies `N` for the memory gate. High is accepted but is not gated on the
 reference machine, and a custom view/band is reported without a
 pre-registration comparison.
+
+**Gate edits** (`gate edits`, M1-37) measures 1,000 real edits on the fixture and
+splits each one into two terms:
+
+| Term | Components | What the gate charges |
+|---|---|---|
+| **Fixed** | upload, fence, flip | Appended run bytes + leaf materials + the 7-word `levelStart`, the batch-fence boundary, and the version-index flip |
+| **Dirty region** | COW, light | Banded `apply_edits` for the edited path, and the M1-29 reference fill over the dirty block cell plus its 1-cell apron |
+
+`fixed + dirty` is the per-edit total; the Markdown prints p50/p95/max and the
+JSON also carries every edit. Upload is the CPU-side staging copy of exactly the
+appended runs, with no padding words and no whole-chunk transfer, so
+`upload_node_bytes + upload_leaf_bytes` equals the measured COW bytes. A
+single-voxel edit dirties one 16³-voxel block cell, so the reference fill
+evaluates 27 cells (the cell plus its apron); the dirty-region term is not a
+full-chunk relight.
+
+The gate is headless, so the fence is the CPU side of the M4 protocol: submit,
+Release-publish, Acquire-poll, then flip. It is a lower bound on a real device
+fence; M4-05/M4-16 replace it. The fixture is still provisional, and the report
+carries that limitation. `--json` prints the serializable report; `--out FILE`
+also writes it.
 
 ## Caveats
 
