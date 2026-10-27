@@ -10,10 +10,12 @@
 //! - [`edits`] — per-edit latency split into fixed and dirty-region terms (M1-37).
 //! - [`probes`] — incremental probe-update latency per edited chunk (M1-38).
 //! - [`report`] — the twelve pre-registered rows, verdicts and fallback (M1-39).
+//! - [`scaleup`] — analytic 128³ projection from the measured 64³ terms (M1-40).
 
 pub mod edits;
 pub mod memory;
 pub mod probes;
 pub mod report;
 pub mod residency;
+pub mod scaleup;
 mod stat;

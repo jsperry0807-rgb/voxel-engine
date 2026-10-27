@@ -61,6 +61,10 @@ cargo run -p voxel-bench -- gate edits --json
 cargo run -p voxel-bench -- gate probes
 cargo run -p voxel-bench -- gate probes --json
 
+# Analytic 128³ projection from the measured 64³ terms (M1-40)
+cargo run -p voxel-bench -- gate scaleup
+cargo run -p voxel-bench -- gate scaleup --json
+
 # The twelve pre-registered rows as one gate.md + gate.json (M1-39)
 cargo run -p voxel-bench -- gate report
 cargo run -p voxel-bench -- gate report --profile minimum
@@ -223,6 +227,24 @@ look cheap by selecting nothing: zero-work edits are counted and shown. Upload i
 the CPU-side staging copy of exactly the changed records and validity bytes; the
 headless gate excludes device transfer and the M4 fence/flip. `--json` prints the
 serializable report; `--out FILE` also writes it.
+
+**Gate scale-up** (`gate scaleup`, M1-40) projects the measured 64³ terms to the
+pre-registered 128³ edge without multiplying every number by eight:
+
+| Term | Optimistic | Pessimistic (dirty spans chunk) |
+|---|---|---|
+| **Fixed** (upload/fence/flip) | Fence/flip unchanged; upload grows with the one extra COW level (`8/7`) | Same; fixed work does not grow with the dirty span |
+| **Dirty** (COW/light) | One path (`8/7`); one 16³ block cell + apron (27 cells) | COW × volume (`8`); light fills all 512 target cells |
+| **Probe update** | Affected set grows with surface area (`4×`) | Full 512-probe grid, 32,768 rays |
+| **Memory** | Mesh × area (`4×`), other components × volume (`8×`) | Every component × volume (`8×`) |
+
+Memory is multiplied by `N128 = N64 / 8`, the equal-volume chunk count from
+`gate residency`. The report prints both columns, the budget/fail margins, the
+measured work that drove them, and the assumptions. When source and target are
+the same edge the model returns the measured p95 terms unchanged; the unit tests
+assert that identity before testing the 128³ arithmetic. The model is analytic,
+not a 128³ measurement, and the provisional fixture caveat still applies.
+`--json` prints the serializable report; `--out FILE` also writes it.
 
 **Gate report** (`gate report`, M1-39) runs the four harnesses above and writes
 one `gate.md` plus one `gate.json` (default `target/gate/`). The report contains

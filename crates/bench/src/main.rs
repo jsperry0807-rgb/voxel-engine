@@ -143,6 +143,16 @@ fn main() {
                      --out        also write the JSON report to FILE\n\
                      --json       print the JSON report instead of the Markdown table\n\
                      \n\
+                     voxel-bench gate scaleup [--manifest FILE] [--out FILE] [--json]\n\
+                     \n\
+                     gate scaleup  project the measured 64³ edit, probe and memory\n\
+                     \x20          terms to 128³, with optimistic (one dirty cell)\n\
+                     \x20          and pessimistic (dirty spans the chunk) columns;\n\
+                     \x20          fixed terms are corrected rather than multiplied (M1-40)\n\
+                     --manifest   fixture manifest (default: benchmarks/fixtures/m1-representative/manifest.json)\n\
+                     --out        also write the JSON report to FILE\n\
+                     --json       print the JSON report instead of the Markdown table\n\
+                     \n\
                      voxel-bench gate report [--manifest FILE] [--profile NAME]\n\
                      \x20                  [--out DIR] [--json]\n\
                      \n\
@@ -504,13 +514,14 @@ fn fixture_verify(args: &[String]) {
 
 fn gate_mode(args: &[String]) {
     let Some(command) = args.first() else {
-        usage("gate needs `memory`, `residency`, `edits`, `probes` or `report`");
+        usage("gate needs `memory`, `residency`, `edits`, `probes`, `scaleup` or `report`");
     };
     match command.as_str() {
         "memory" => gate_memory(&args[1..]),
         "residency" => gate_residency(&args[1..]),
         "edits" => gate_edits(&args[1..]),
         "probes" => gate_probes(&args[1..]),
+        "scaleup" => gate_scaleup(&args[1..]),
         "report" => gate_report(&args[1..]),
         other => usage(&format!("unknown gate command `{other}`")),
     }
@@ -748,6 +759,62 @@ fn gate_probes(args: &[String]) {
             Ok(serialized) => println!("{serialized}"),
             Err(error) => {
                 eprintln!("failed to serialize gate probes report: {error}");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        print!("{}", report.markdown());
+    }
+}
+
+fn gate_scaleup(args: &[String]) {
+    let mut manifest = voxel_bench::fixture::default_manifest();
+    let mut out: Option<PathBuf> = None;
+    let mut json = false;
+
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--manifest" => {
+                index += 1;
+                manifest = PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--manifest needs a file")),
+                );
+            }
+            "--out" => {
+                index += 1;
+                out = Some(PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--out needs a file")),
+                ));
+            }
+            "--json" => json = true,
+            other => usage(&format!("unknown gate scaleup argument `{other}`")),
+        }
+        index += 1;
+    }
+
+    let report = match voxel_bench::gate::scaleup::report(&manifest) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!(
+                "failed to project {} to the target edge: {error}",
+                manifest.display()
+            );
+            std::process::exit(1);
+        }
+    };
+
+    if let Some(out) = out {
+        write_json_report(&out, &report);
+    }
+
+    if json {
+        match serde_json::to_string_pretty(&report) {
+            Ok(serialized) => println!("{serialized}"),
+            Err(error) => {
+                eprintln!("failed to serialize gate scaleup report: {error}");
                 std::process::exit(1);
             }
         }
