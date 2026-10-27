@@ -1,4 +1,4 @@
-//! wgpu initialization and surface configuration.
+//! wgpu initialization, surface configuration and frame presentation.
 //!
 //! One [`Gpu`] owns the instance's device, queue and window surface. The
 //! surface is configured once the window exists and reconfigured whenever the
@@ -6,14 +6,19 @@
 //! rejects a zero width or height, and the next [`WindowEvent::Resized`] brings
 //! a usable size back.
 //!
+//! [`Gpu::render`] acquires the next frame, clears it and presents it. The
+//! present waits on the swap chain's `Fifo` mode, so the event loop runs at
+//! the display's refresh rate rather than spinning.
+//!
 //! [`WindowEvent::Resized`]: winit::event::WindowEvent::Resized
 
 use std::sync::Arc;
 
 use pollster::block_on;
 use wgpu::{
-    Device, DeviceDescriptor, Instance, InstanceDescriptor, Queue, RequestAdapterOptions, Surface,
-    SurfaceConfiguration,
+    Color, CommandEncoderDescriptor, CurrentSurfaceTexture, Device, DeviceDescriptor, Instance,
+    InstanceDescriptor, LoadOp, Operations, Queue, RenderPassColorAttachment, RenderPassDescriptor,
+    RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, TextureViewDescriptor,
 };
 use winit::dpi::PhysicalSize;
 use winit::event_loop::OwnedDisplayHandle;
@@ -26,7 +31,6 @@ pub struct Gpu {
     /// The logical device that owns every resource the viewer creates.
     pub device: Device,
     /// The queue that executes submissions and presents frame textures.
-    #[expect(dead_code, reason = "the M1.5-03 frame loop submits through the queue")]
     pub queue: Queue,
     /// The presentation surface for the window.
     pub surface: Surface<'static>,
@@ -49,12 +53,22 @@ impl Gpu {
             compatible_surface: Some(&surface),
             ..Default::default()
         }))?;
+        let info = adapter.get_info();
+        log::info!(
+            "adapter: {} (backend {:?}, {:?})",
+            info.name,
+            info.backend,
+            info.device_type
+        );
+        log::debug!("adapter details: {info:?}");
+
         let (device, queue) = block_on(adapter.request_device(&DeviceDescriptor::default()))?;
 
         let size = window.inner_size();
         let config = surface
             .get_default_config(&adapter, size.width.max(1), size.height.max(1))
             .ok_or(ViewerError::UnsupportedSurface)?;
+        log::debug!("surface: {config:?}");
         surface.configure(&device, &config);
 
         Ok(Self {
@@ -79,5 +93,54 @@ impl Gpu {
         self.config.width = size.width;
         self.config.height = size.height;
         self.surface.configure(&self.device, &self.config);
+    }
+
+    /// Acquires the next surface texture, clears it to `clear` and presents it.
+    ///
+    /// A skipped frame is not an error: occluded windows, timeouts and a swap
+    /// chain that had to be reconfigured all return `Ok(())` so the loop can
+    /// try again next frame.
+    pub fn render(&self, clear: Color) -> Result<(), ViewerError> {
+        let frame = match self.surface.get_current_texture() {
+            CurrentSurfaceTexture::Success(frame) => frame,
+            CurrentSurfaceTexture::Suboptimal(frame) => {
+                // A `SurfaceTexture` must not be alive across `configure`.
+                drop(frame);
+                self.surface.configure(&self.device, &self.config);
+                return Ok(());
+            }
+            CurrentSurfaceTexture::Outdated | CurrentSurfaceTexture::Lost => {
+                log::warn!("surface is outdated or lost; reconfiguring");
+                self.surface.configure(&self.device, &self.config);
+                return Ok(());
+            }
+            CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => return Ok(()),
+            CurrentSurfaceTexture::Validation => return Err(ViewerError::SurfaceValidation),
+        };
+
+        let view = frame.texture.create_view(&TextureViewDescriptor::default());
+        let mut encoder = self
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("clear frame"),
+            });
+        {
+            let _pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("clear frame"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(clear),
+                        store: StoreOp::Store,
+                    },
+                })],
+                ..Default::default()
+            });
+        }
+        self.queue.submit([encoder.finish()]);
+        self.queue.present(frame);
+        Ok(())
     }
 }

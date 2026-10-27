@@ -25,6 +25,8 @@ pub enum ViewerError {
     Device(RequestDeviceError),
     /// The adapter cannot present to this surface at all.
     UnsupportedSurface,
+    /// Acquiring the next frame raised a validation error.
+    SurfaceValidation,
 }
 
 impl fmt::Display for ViewerError {
@@ -38,6 +40,7 @@ impl fmt::Display for ViewerError {
             Self::UnsupportedSurface => {
                 f.write_str("the graphics adapter cannot present to this surface")
             }
+            Self::SurfaceValidation => f.write_str("surface acquisition failed validation"),
         }
     }
 }
@@ -50,7 +53,7 @@ impl Error for ViewerError {
             Self::Surface(error) => Some(error),
             Self::Adapter(error) => Some(error),
             Self::Device(error) => Some(error),
-            Self::UnsupportedSurface => None,
+            Self::UnsupportedSurface | Self::SurfaceValidation => None,
         }
     }
 }
