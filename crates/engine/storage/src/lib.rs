@@ -44,6 +44,12 @@ pub use voxel_core::constants::{
     BLOCK_BITS, BLOCK_DIM, BLOCK_LEVEL, BLOCKS_PER_CHUNK, CHUNK_BITS, CHUNK_DIM, CHUNK_VOLUME,
 };
 
+/// Bits per axis in a region's `8x8x8` chunk-cell index.
+///
+/// This is region packing, not chunk geometry: it stays 3 regardless of
+/// `CHUNK_BITS`.
+const REGION_CELL_BITS: u32 = 3;
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct ChunkPos {
     pub x: i32,
@@ -70,9 +76,9 @@ impl ChunkPos {
     pub const fn from_region_cell(region: (i32, i32, i32), cell: u16) -> Self {
         debug_assert!(cell < 512, "a region has 8x8x8 cells");
         Self::new(
-            (region.0 << 3) | (cell & 7) as i32,
-            (region.1 << 3) | ((cell >> 3) & 7) as i32,
-            (region.2 << 3) | ((cell >> 6) & 7) as i32,
+            (region.0 << REGION_CELL_BITS) | (cell & 7) as i32,
+            (region.1 << REGION_CELL_BITS) | ((cell >> REGION_CELL_BITS) & 7) as i32,
+            (region.2 << REGION_CELL_BITS) | ((cell >> (2 * REGION_CELL_BITS)) & 7) as i32,
         )
     }
 }
