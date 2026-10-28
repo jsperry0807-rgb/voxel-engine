@@ -62,6 +62,19 @@ jobs:
       # layout and shader tests still run everywhere.
       - run: cargo test --workspace
 
+  textures:
+    name: texture pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Regenerates every graph in memory and fails on a one-byte diff.
+      - run: cargo run -p voxel-texgen -- check
+      - run: cargo test -p voxel-block texture_manifest
+      - run: cargo test -p voxel-block materials_gen_is_current
+
   shaders:
     name: naga shaders
     runs-on: ubuntu-latest

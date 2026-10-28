@@ -1,0 +1,17 @@
+(
+    schema: 1,
+    key: "voxel:block/dirt",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 20, octaves: 3), inputs: []),
+        (id: 1, op: ValueNoise(period: 48, octaves: 1), inputs: []),
+        (id: 2, op: Threshold(at: 60000), inputs: [1]),
+        (id: 3, op: Ramp(stops: [(0, "#4a3322"), (65535, "#7a5638")]), inputs: [0]),
+        (id: 4, op: Ramp(stops: [(0, "#7a5638"), (65535, "#9b7a58")]), inputs: [2]),
+        (id: 5, op: MixColor, inputs: [3, 4, 2]),
+    ],
+    output: (color: 5, alpha: Const(65535)),
+)

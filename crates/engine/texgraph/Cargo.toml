@@ -1,0 +1,20 @@
+[package]
+name = "voxel-texgraph"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "Deterministic fixed-point texture graph evaluator and bake pipeline"
+
+[dependencies]
+base64 = "0.21"
+blake3 = "1"
+png = "=0.17.16"
+serde_json = "1"
+ron = "0.8"
+serde = { version = "1", features = ["derive"] }
+voxel-block = { path = "../../engine/block" }
+voxel-core = { path = "../../core" }
+
+[[bin]]
+name = "texgen-mcp"
+path = "src/bin/texgen-mcp.rs"

@@ -1,0 +1,17 @@
+(
+    schema: 1,
+    key: "voxel:block/water_still",
+    size: 256,
+    tiling: Both,
+    alpha: Translucent,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Worley(period: 6, mode: F1), inputs: []),
+        (id: 1, op: Fbm(period: 10, octaves: 2), inputs: []),
+        (id: 2, op: Const(value: 50000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: Ramp(stops: [(0, "#2f7fa8"), (65535, "#3a93b8")]), inputs: [3]),
+        (id: 5, op: AlphaBand(min: 38550, max: 48830), inputs: [1]),
+    ],
+    output: (color: 4, alpha: Node(5)),
+)

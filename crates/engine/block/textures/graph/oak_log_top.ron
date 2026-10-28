@@ -1,0 +1,20 @@
+(
+    schema: 1,
+    key: "voxel:block/oak_log_top",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Rings(scale: 7), inputs: []),
+        (id: 1, op: ValueNoise(period: 32, octaves: 2), inputs: []),
+        (id: 2, op: Const(value: 12000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: Ramp(stops: [(0, "#6b4f2a"), (65535, "#a98550")]), inputs: [3]),
+        (id: 5, op: Rings(scale: 2), inputs: []),
+        (id: 6, op: Threshold(at: 50000), inputs: [5]),
+        (id: 7, op: Ramp(stops: [(0, "#a98550"), (65535, "#5a3f20")]), inputs: [6]),
+        (id: 8, op: MixColor, inputs: [4, 7, 6]),
+    ],
+    output: (color: 8, alpha: Const(65535)),
+)

@@ -1,0 +1,17 @@
+(
+    schema: 1,
+    key: "voxel:block/cobblestone",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Worley(period: 8, mode: Edge), inputs: []),
+        (id: 1, op: Worley(period: 8, mode: F1), inputs: []),
+        (id: 2, op: Ramp(stops: [(0, "#3a3a3a"), (65535, "#8a8a8a")]), inputs: [0]),
+        (id: 3, op: Ramp(stops: [(0, "#5a5a5a"), (65535, "#b0b0b0")]), inputs: [1]),
+        (id: 4, op: Const(value: 32768), inputs: []),
+        (id: 5, op: MixColor, inputs: [2, 3, 4]),
+    ],
+    output: (color: 5, alpha: Const(65535)),
+)

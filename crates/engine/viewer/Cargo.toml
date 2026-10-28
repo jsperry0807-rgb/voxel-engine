@@ -15,5 +15,6 @@ pollster = "1"
 ron = "0.8"
 serde = { version = "1", features = ["derive"] }
 voxel-core = { path = "../../core" }
+voxel-texgraph = { path = "../texgraph" }
 wgpu = "30"
 winit = "0.30"

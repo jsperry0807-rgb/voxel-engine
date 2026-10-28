@@ -1,0 +1,17 @@
+(
+    schema: 1,
+    key: "voxel:block/gravel",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Worley(period: 18, mode: F1), inputs: []),
+        (id: 1, op: Worley(period: 18, mode: Edge), inputs: []),
+        (id: 2, op: Ramp(stops: [(0, "#4a4846"), (65535, "#8c8885")]), inputs: [0]),
+        (id: 3, op: Ramp(stops: [(0, "#2f2d2b"), (65535, "#b0aca8")]), inputs: [1]),
+        (id: 4, op: Const(value: 20000), inputs: []),
+        (id: 5, op: MixColor, inputs: [2, 3, 4]),
+    ],
+    output: (color: 5, alpha: Const(65535)),
+)

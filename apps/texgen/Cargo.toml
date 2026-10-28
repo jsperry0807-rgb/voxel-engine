@@ -1,0 +1,19 @@
+[package]
+name = "voxel-texgen"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "Standalone node-graph texture and material editor for Voxel-Stuff"
+
+[lib]
+name = "voxel_texgen"
+path = "src/lib.rs"
+
+[[bin]]
+name = "texgen"
+path = "src/main.rs"
+
+[dependencies]
+eframe = { version = "0.32", default-features = false, features = ["glow", "default_fonts", "wayland", "x11"] }
+voxel-block = { path = "../../crates/engine/block" }
+voxel-texgraph = { path = "../../crates/engine/texgraph" }

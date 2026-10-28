@@ -1,0 +1,16 @@
+(
+    schema: 1,
+    key: "voxel:block/bedrock",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 16, octaves: 4), inputs: []),
+        (id: 1, op: Threshold(at: 45000), inputs: [0]),
+        (id: 2, op: Ramp(stops: [(0, "#0f0f0f"), (65535, "#2b2b2b")]), inputs: [0]),
+        (id: 3, op: Ramp(stops: [(0, "#1a1a1a"), (65535, "#3a3a3a")]), inputs: [1]),
+        (id: 4, op: MixColor, inputs: [2, 3, 1]),
+    ],
+    output: (color: 4, alpha: Const(65535)),
+)

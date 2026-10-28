@@ -1,0 +1,16 @@
+(
+    schema: 1,
+    key: "voxel:block/sandstone_top",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 36, octaves: 2), inputs: []),
+        (id: 1, op: ValueNoise(period: 80, octaves: 1), inputs: []),
+        (id: 2, op: Const(value: 25000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: Ramp(stops: [(0, "#d4c789"), (65535, "#e0d398")]), inputs: [3]),
+    ],
+    output: (color: 4, alpha: Const(65535)),
+)

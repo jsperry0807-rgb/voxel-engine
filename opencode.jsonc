@@ -1,0 +1,32 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "texgen": {
+        "type": "local",
+        "command": [
+          "cargo",
+          "run",
+          "--quiet",
+          "-p",
+          "voxel-texgraph",
+          "--bin",
+          "texgen-mcp"
+        ],
+        "cwd": ".",
+        "timeout": {
+          "startup": 120000,
+          "catalog": 30000,
+          "execution": 600000
+        }
+      }
+    }
+  },
+  "permissions": [
+    {
+      "action": "texgen_*",
+      "resource": "*",
+      "effect": "allow"
+    }
+  ]
+}

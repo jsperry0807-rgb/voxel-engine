@@ -11,9 +11,14 @@
 | [`pre-registration.md`](pre-registration.md) | **Frozen 2026-10-26.** M1 gate: profiles, budgets, residency model, fallback rules |
 | [`reference-machine.md`](reference-machine.md) | The machine every gate number is measured on; gated profiles |
 | [`performance-targets.md`](performance-targets.md) | Frame, VRAM, RAM and CPU budgets; sacrifice ladder; CI policy |
+| [`generator.spec.md`](generator.spec.md) | Material and texture pipeline: graphs, manifest, bake filter, atlas, material table |
 
 When these disagree, the spec wins, then the roadmap, then the task list. Any change to a
 binding number is made in the spec and the pre-registration, never only in a task.
+
+## Tools
+
+- [`apps/texgen/README.md`](../apps/texgen/README.md) — the standalone Material Maker-style texture and material editor.
 
 ## Decision records
 

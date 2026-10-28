@@ -19,8 +19,10 @@
 
 use std::error::Error;
 use std::fmt;
-use std::fs::File;
+use std::fs::{self, File};
 use std::path::{Path, PathBuf};
+
+use serde::Deserialize;
 
 pub use voxel_core::atlas::{
     ATLAS_SIZE, MAX_MATERIALS, MAX_MIP, MIP_LEVELS, TILE_SIZE, TILES_PER_EDGE, tile_origin, uv,
@@ -71,6 +73,7 @@ pub enum AtlasLoadError {
         height: u32,
         expected: u32,
     },
+    Hash(String),
 }
 
 impl fmt::Display for AtlasLoadError {
@@ -91,6 +94,7 @@ impl fmt::Display for AtlasLoadError {
                 "{} is {width}×{height}; expected {expected}×{expected}",
                 path.display()
             ),
+            Self::Hash(message) => f.write_str(message),
         }
     }
 }
@@ -100,9 +104,20 @@ impl Error for AtlasLoadError {
         match self {
             Self::Io { source, .. } => Some(source),
             Self::Png { source, .. } => Some(source),
-            Self::Format { .. } | Self::Dimensions { .. } => None,
+            Self::Format { .. } | Self::Dimensions { .. } | Self::Hash(_) => None,
         }
     }
+}
+
+/// The committed atlas verification data.
+#[derive(Debug, Deserialize)]
+struct AtlasHashFile {
+    schema: u32,
+    filter: String,
+    tile_count: u32,
+    manifest_blake3: String,
+    atlas_png_blake3: String,
+    mip_chain_blake3: String,
 }
 
 /// Collects source tiles and builds the atlas.
@@ -241,6 +256,114 @@ impl Atlas {
             });
         }
         Ok(Self { levels })
+    }
+
+    /// Loads the base `atlas.png` and regenerates the four per-tile mip
+    /// levels. The committed format stores only the base image.
+    pub fn load(path: &Path) -> Result<Self, AtlasLoadError> {
+        let (width, height, pixels) = decode_png(path)?;
+        if width != ATLAS_SIZE || height != ATLAS_SIZE {
+            return Err(AtlasLoadError::Dimensions {
+                path: path.to_owned(),
+                width,
+                height,
+                expected: ATLAS_SIZE,
+            });
+        }
+        let mut builder = AtlasBuilder::new();
+        for tile in 0..MAX_MATERIALS {
+            let (origin_x, origin_y) = tile_origin(tile as u16);
+            let mut tile_pixels = [0u8; TILE_BYTES];
+            for row in 0..TILE_SIZE as usize {
+                let source =
+                    ((origin_y as usize + row) * ATLAS_SIZE as usize + origin_x as usize) * 4;
+                tile_pixels[row * TILE_SIZE as usize * 4..(row + 1) * TILE_SIZE as usize * 4]
+                    .copy_from_slice(&pixels[source..source + TILE_SIZE as usize * 4]);
+            }
+            builder
+                .set_tile(tile as u16, &tile_pixels)
+                .expect("the atlas has exactly MAX_MATERIALS tiles");
+        }
+        Ok(builder.build())
+    }
+
+    /// Loads `atlas.png` and verifies it against the committed
+    /// `atlas.hash.ron` and the manifest hash.
+    ///
+    /// A mismatch is an error. There is no magenta fallback (spec 6.4).
+    pub fn load_verified(path: &Path) -> Result<Self, AtlasLoadError> {
+        let bytes = fs::read(path).map_err(|source| AtlasLoadError::Io {
+            path: path.to_owned(),
+            source,
+        })?;
+        let atlas = Self::load(path)?;
+        let hash_path = path.with_file_name("atlas.hash.ron");
+        let hash_text = fs::read_to_string(&hash_path).map_err(|source| AtlasLoadError::Io {
+            path: hash_path.clone(),
+            source,
+        })?;
+        let hash: AtlasHashFile =
+            ron::from_str(&hash_text).map_err(|error| AtlasLoadError::Format {
+                path: hash_path.clone(),
+                message: format!("could not parse: {error}"),
+            })?;
+        if hash.schema != 1 {
+            return Err(AtlasLoadError::Hash(format!(
+                "{}: schema {} is not supported",
+                hash_path.display(),
+                hash.schema
+            )));
+        }
+        if hash.filter != "box16-linear-premul-v1" {
+            return Err(AtlasLoadError::Hash(format!(
+                "{}: unknown filter {:?}",
+                hash_path.display(),
+                hash.filter
+            )));
+        }
+        let actual_png = blake3::hash(&bytes).to_hex().to_string();
+        if actual_png != hash.atlas_png_blake3 {
+            return Err(AtlasLoadError::Hash(format!(
+                "{}: atlas.png hash {actual_png} does not match {}",
+                hash_path.display(),
+                hash.atlas_png_blake3
+            )));
+        }
+        let mut hasher = blake3::Hasher::new();
+        for level in &atlas.levels {
+            hasher.update(&level.pixels);
+        }
+        let actual_mips = hasher.finalize().to_hex().to_string();
+        if actual_mips != hash.mip_chain_blake3 {
+            return Err(AtlasLoadError::Hash(format!(
+                "{}: mip-chain hash {actual_mips} does not match {}",
+                hash_path.display(),
+                hash.mip_chain_blake3
+            )));
+        }
+        let manifest_path = path
+            .parent()
+            .map(|directory| directory.join("../../../../engine/block/data/textures.ron"))
+            .unwrap_or_else(|| PathBuf::from("crates/engine/block/data/textures.ron"));
+        let manifest = fs::read(&manifest_path).map_err(|source| AtlasLoadError::Io {
+            path: manifest_path.clone(),
+            source,
+        })?;
+        let actual_manifest = blake3::hash(&manifest).to_hex().to_string();
+        if actual_manifest != hash.manifest_blake3 {
+            return Err(AtlasLoadError::Hash(format!(
+                "{}: manifest hash {actual_manifest} does not match {}",
+                hash_path.display(),
+                hash.manifest_blake3
+            )));
+        }
+        if hash.tile_count == 0 {
+            return Err(AtlasLoadError::Hash(format!(
+                "{}: tile_count must be nonzero",
+                hash_path.display()
+            )));
+        }
+        Ok(atlas)
     }
 
     /// Number of levels including the base image; always [`MIP_LEVELS`].
@@ -444,6 +567,14 @@ mod tests {
         assert_eq!(&mip[(3 * 4)..(3 * 4 + 4)], &[0, 0, 0, 255]);
         assert_eq!(&mip[(4 * 4)..(4 * 4 + 4)], &[255, 0, 0, 255]);
         assert_eq!(&mip[(7 * 4)..(7 * 4 + 4)], &[255, 0, 0, 255]);
+    }
+
+    #[test]
+    fn committed_atlas_verifies_against_its_hash_and_manifest() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/atlas/atlas.png");
+        let atlas = Atlas::load_verified(&path).expect("committed atlas should verify");
+        assert_eq!(atlas.mip_count(), MIP_LEVELS);
+        assert_eq!(atlas.byte_len(), 349_184);
     }
 
     #[test]

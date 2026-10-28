@@ -22,7 +22,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use glam::{Vec2, Vec3};
-use voxel_viewer::atlas::{Atlas, AtlasBuilder};
+use voxel_viewer::atlas::Atlas;
 use voxel_viewer::bake;
 use voxel_viewer::camera::Camera;
 use voxel_viewer::error::ViewerError;
@@ -65,7 +65,7 @@ fn main() -> ExitCode {
             return match bake::run(&args[1..]) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(error) => {
-                    report(&error);
+                    report(error.as_ref());
                     ExitCode::FAILURE
                 }
             };
@@ -94,38 +94,66 @@ fn report(error: &dyn Error) {
     }
 }
 
-/// Loads a baked atlas from the local development paths.
+/// Loads and verifies the committed atlas.
 ///
-/// The official committed atlas will live under
-/// `crates/engine/viewer/assets/atlas`. Until the generator produces
-/// redistributable sources, `bake-atlas --out .temp/atlas` provides a local
-/// temporary atlas from the user's resource pack and archived faces.
-fn load_startup_atlas() -> Atlas {
-    let candidates = [
-        std::env::var_os("VOXEL_VIEWER_ATLAS").map(PathBuf::from),
-        Some(PathBuf::from(".temp/atlas")),
-        Some(PathBuf::from("crates/engine/viewer/assets/atlas")),
-    ];
-    for candidate in candidates.into_iter().flatten() {
-        if !candidate.join("atlas-0.png").is_file() {
+/// `VOXEL_VIEWER_ATLAS` may name either `atlas.png` or a directory. The
+/// committed atlas is hash-verified; a temporary `.temp/atlas` directory with
+/// `atlas-0.png`…`atlas-4.png` is accepted as an explicit local-development
+/// fallback and is logged as unverified.
+fn load_startup_atlas() -> Result<Atlas, ViewerError> {
+    let mut candidates = Vec::new();
+    if let Some(value) = std::env::var_os("VOXEL_VIEWER_ATLAS") {
+        candidates.push(PathBuf::from(value));
+    }
+    candidates.push(PathBuf::from("crates/engine/viewer/assets/atlas/atlas.png"));
+    candidates.push(PathBuf::from(".temp/atlas"));
+    for candidate in candidates {
+        if candidate.is_dir() && candidate.join("atlas-0.png").is_file() {
+            return match Atlas::load_dir(&candidate) {
+                Ok(atlas) => {
+                    log::warn!(
+                        "using temporary unverified atlas from {} ({} mips)",
+                        candidate.display(),
+                        atlas.mip_count()
+                    );
+                    Ok(atlas)
+                }
+                Err(error) => {
+                    log::error!(
+                        "temporary atlas load failed at {}: {error}",
+                        candidate.display()
+                    );
+                    Err(ViewerError::Atlas(error.to_string()))
+                }
+            };
+        }
+        let path = if candidate.is_dir() {
+            candidate.join("atlas.png")
+        } else {
+            candidate
+        };
+        if !path.is_file() {
             continue;
         }
-        match Atlas::load_dir(&candidate) {
+        return match Atlas::load_verified(&path) {
             Ok(atlas) => {
                 log::info!(
                     "loaded atlas from {} ({} mips)",
-                    candidate.display(),
+                    path.display(),
                     atlas.mip_count()
                 );
-                return atlas;
+                Ok(atlas)
             }
             Err(error) => {
-                log::warn!("could not load atlas from {}: {error}", candidate.display());
+                log::error!("atlas verification failed at {}: {error}", path.display());
+                Err(ViewerError::Atlas(error.to_string()))
             }
-        }
+        };
     }
-    log::info!("no baked atlas found; using an empty atlas");
-    AtlasBuilder::new().build()
+    log::error!("no committed atlas found at crates/engine/viewer/assets/atlas/atlas.png");
+    Err(ViewerError::Atlas(
+        "missing crates/engine/viewer/assets/atlas/atlas.png".to_owned(),
+    ))
 }
 
 /// Creates the event loop and runs the viewer until the window closes.
@@ -235,11 +263,15 @@ impl ApplicationHandler for Viewer {
             self.camera
                 .set_aspect(size.width as f32 / size.height as f32);
         }
-        match Gpu::new(
-            window.clone(),
-            event_loop.owned_display_handle(),
-            load_startup_atlas(),
-        ) {
+        let atlas = match load_startup_atlas() {
+            Ok(atlas) => atlas,
+            Err(error) => {
+                self.error = Some(error);
+                event_loop.exit();
+                return;
+            }
+        };
+        match Gpu::new(window.clone(), event_loop.owned_display_handle(), atlas) {
             Ok(gpu) => {
                 self.window = Some(window.clone());
                 grab_cursor(&window);

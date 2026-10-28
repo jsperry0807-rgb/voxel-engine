@@ -1,0 +1,19 @@
+(
+    schema: 1,
+    key: "voxel:block/oak_log",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Stripes(axis: Y, count: 14, wobble: 18000), inputs: []),
+        (id: 1, op: Fbm(period: 24, octaves: 2), inputs: []),
+        (id: 2, op: Const(value: 30000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: Ramp(stops: [(0, "#4a361c"), (65535, "#6b4f2a")]), inputs: [3]),
+        (id: 5, op: Threshold(at: 60000), inputs: [3]),
+        (id: 6, op: Ramp(stops: [(0, "#6b4f2a"), (65535, "#3a2a14")]), inputs: [5]),
+        (id: 7, op: MixColor, inputs: [4, 6, 5]),
+    ],
+    output: (color: 7, alpha: Const(65535)),
+)

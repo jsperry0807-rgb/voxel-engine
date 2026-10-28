@@ -1,0 +1,21 @@
+(
+    schema: 1,
+    key: "voxel:block/iron_ore",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 24, octaves: 3), inputs: []),
+        (id: 1, op: Worley(period: 10, mode: Edge), inputs: []),
+        (id: 2, op: Remap(from_lo: 0, from_hi: 18000, to_lo: 65535, to_hi: 0), inputs: [1]),
+        (id: 3, op: Ramp(stops: [(0, "#ffffff"), (65535, "#454545")]), inputs: [2]),
+        (id: 4, op: Ramp(stops: [(0, "#5e5e5e"), (65535, "#7d7d7d")]), inputs: [0]),
+        (id: 5, op: Multiply, inputs: [3, 4]),
+        (id: 6, op: Worley(period: 12, mode: F1), inputs: []),
+        (id: 7, op: Remap(from_lo: 0, from_hi: 36000, to_lo: 65535, to_hi: 0), inputs: [6]),
+        (id: 8, op: Ramp(stops: [(0, "#8a5a30"), (65535, "#c99a6a")]), inputs: [7]),
+        (id: 9, op: MixColor, inputs: [5, 8, 7]),
+    ],
+    output: (color: 9, alpha: Const(65535)),
+)

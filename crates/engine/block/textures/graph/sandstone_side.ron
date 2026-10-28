@@ -1,0 +1,22 @@
+(
+    schema: 1,
+    key: "voxel:block/sandstone_side",
+    size: 256,
+    tiling: Horizontal,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 30, octaves: 3), inputs: []),
+        (id: 1, op: Stripes(axis: Y, count: 10, wobble: 3000), inputs: []),
+        (id: 2, op: Const(value: 30000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: Ramp(stops: [(0, "#bfae70"), (65535, "#d2c58a")]), inputs: [3]),
+        (id: 5, op: HBand(y0: 0, y1: 4096), inputs: []),
+        (id: 6, op: Palette(colors: ["#dccf94"]), inputs: [0]),
+        (id: 7, op: MixColor, inputs: [4, 6, 5]),
+        (id: 8, op: HBand(y0: 61440, y1: 65535), inputs: []),
+        (id: 9, op: Palette(colors: ["#c4b57a"]), inputs: [0]),
+        (id: 10, op: MixColor, inputs: [7, 9, 8]),
+    ],
+    output: (color: 10, alpha: Const(65535)),
+)

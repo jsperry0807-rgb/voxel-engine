@@ -1,0 +1,13 @@
+(
+    schema: 1,
+    key: "voxel:block/snow",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 30, octaves: 2), inputs: []),
+        (id: 1, op: Ramp(stops: [(0, "#dde6ef"), (65535, "#f4f8fc")]), inputs: [0]),
+    ],
+    output: (color: 1, alpha: Const(65535)),
+)

@@ -1,0 +1,17 @@
+(
+    schema: 1,
+    key: "voxel:block/ice",
+    size: 256,
+    tiling: Both,
+    alpha: Translucent,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Worley(period: 10, mode: Edge), inputs: []),
+        (id: 1, op: Fbm(period: 18, octaves: 2), inputs: []),
+        (id: 2, op: Const(value: 40000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: Ramp(stops: [(0, "#8fc3e4"), (65535, "#b8dcf0")]), inputs: [3]),
+        (id: 5, op: AlphaBand(min: 41120, max: 53970), inputs: [1]),
+    ],
+    output: (color: 4, alpha: Node(5)),
+)

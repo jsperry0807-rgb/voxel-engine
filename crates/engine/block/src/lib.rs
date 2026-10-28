@@ -87,12 +87,14 @@
 pub mod hot;
 pub mod id;
 pub mod kind;
+pub mod material_table;
 pub mod palette;
 pub mod properties;
 pub mod registry;
 pub mod ron;
 pub mod tags;
 pub mod texture;
+pub mod texture_manifest;
 
 pub use hot::HotRecord;
 pub use id::{AIR_ID, BUILTIN_NAMESPACE, KeyError, MaterialId, NamespacedKey};

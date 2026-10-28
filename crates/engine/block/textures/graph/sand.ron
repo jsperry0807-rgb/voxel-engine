@@ -1,0 +1,17 @@
+(
+    schema: 1,
+    key: "voxel:block/sand",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 40, octaves: 2), inputs: []),
+        (id: 1, op: ValueNoise(period: 70, octaves: 1), inputs: []),
+        (id: 2, op: Threshold(at: 62000), inputs: [1]),
+        (id: 3, op: Ramp(stops: [(0, "#c9b97a"), (65535, "#e2d49a")]), inputs: [0]),
+        (id: 4, op: Ramp(stops: [(0, "#8a7a4a"), (65535, "#a89860")]), inputs: [1]),
+        (id: 5, op: MixColor, inputs: [3, 4, 2]),
+    ],
+    output: (color: 5, alpha: Const(65535)),
+)

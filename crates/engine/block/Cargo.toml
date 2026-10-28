@@ -8,6 +8,8 @@ publish.workspace = true
 voxel-core = { path = "../../core" }
 serde = { version = "1", features = ["derive"] }
 ron = "0.8"
+blake3 = "1"
+png = "=0.17.16"
 
 [features]
 # Forward the pre-registered 128³ chunk edge to `voxel-core`.
