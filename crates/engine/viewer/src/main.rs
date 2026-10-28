@@ -33,7 +33,7 @@ use winit::dpi::{LogicalSize, PhysicalPosition, PhysicalSize};
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
-use winit::window::{CursorGrabMode, Window, WindowId};
+use winit::window::{CursorGrabMode, CursorIcon, CustomCursor, Window, WindowId};
 
 /// Default window size, in logical pixels.
 const WINDOW_SIZE: LogicalSize<f64> = LogicalSize::new(1920.0, 1080.0);
@@ -183,6 +183,8 @@ struct Viewer {
     controls: Controls,
     timing: FrameTiming,
     cursor_mode: Option<CursorGrabMode>,
+    hidden_cursor: Option<CustomCursor>,
+    capture: bool,
     /// A failure raised inside an event-loop callback.
     ///
     /// Callbacks cannot return an error, so the first one is kept here, the
@@ -221,13 +223,6 @@ impl Viewer {
 
     /// Draws and presents one frame, or stops the loop if that fails.
     fn redraw(&mut self, event_loop: &ActiveEventLoop) {
-        // Some compositors only apply the hide on the first pointer enter, or
-        // restore the window cursor after a grab. Reassert it while grabbed.
-        if self.cursor_mode.is_some()
-            && let Some(window) = &self.window
-        {
-            window.set_cursor_visible(false);
-        }
         let delta = self.timing.tick();
         self.apply_input(delta);
         let result = match &self.gpu {
@@ -245,11 +240,45 @@ impl Viewer {
 
     /// Captures and hides the pointer, resetting the pending look delta.
     fn grab(&mut self, window: &Window) {
+        if !self.capture {
+            return;
+        }
         self.cursor_mode = grab_cursor(window);
+        if self.cursor_mode.is_some() {
+            self.hide_cursor(window);
+        }
         self.controls.mouse_delta = Vec2::ZERO;
         self.controls.last_cursor = None;
         self.controls.raw_motion = false;
         self.controls.ignore_motion_until = Some(Instant::now() + GRAB_SETTLE);
+    }
+
+    /// Hides the pointer with a transparent custom cursor when possible.
+    fn hide_cursor(&self, window: &Window) {
+        match &self.hidden_cursor {
+            Some(cursor) => window.set_cursor(cursor.clone()),
+            None => window.set_cursor_visible(false),
+        }
+    }
+
+    /// Releases or recaptures the pointer for the tutorial/escape hatch.
+    fn toggle_cursor(&mut self) {
+        self.capture = !self.capture;
+        let Some(window) = self.window.clone() else {
+            return;
+        };
+        if self.capture {
+            self.grab(&window);
+            log::info!("cursor captured; press C to release");
+        } else {
+            let _ = window.set_cursor_grab(CursorGrabMode::None);
+            window.set_cursor(CursorIcon::Default);
+            window.set_cursor_visible(true);
+            self.cursor_mode = None;
+            self.controls.mouse_delta = Vec2::ZERO;
+            self.controls.last_cursor = None;
+            log::info!("cursor released; press C to capture");
+        }
     }
 
     /// Handles a new drawable size for the window and camera.
@@ -272,8 +301,11 @@ impl ApplicationHandler for Viewer {
             return;
         }
         let attributes = Window::default_attributes()
-            .with_title("voxel-viewer")
+            .with_title("voxel-viewer - Esc quit, C cursor, R reset")
             .with_inner_size(WINDOW_SIZE);
+        let hidden_cursor = CustomCursor::from_rgba(vec![0, 0, 0, 0], 1, 1, 0, 0)
+            .ok()
+            .map(|source| event_loop.create_custom_cursor(source));
         let window = match event_loop.create_window(attributes) {
             Ok(window) => {
                 window.focus_window();
@@ -301,6 +333,8 @@ impl ApplicationHandler for Viewer {
         match Gpu::new(window.clone(), event_loop.owned_display_handle(), atlas) {
             Ok(gpu) => {
                 self.window = Some(window.clone());
+                self.hidden_cursor = hidden_cursor;
+                self.capture = true;
                 self.grab(&window);
                 self.gpu = Some(gpu);
             }
@@ -327,6 +361,7 @@ impl ApplicationHandler for Viewer {
                     PhysicalKey::Code(KeyCode::KeyS) => self.controls.back = pressed,
                     PhysicalKey::Code(KeyCode::KeyA) => self.controls.left = pressed,
                     PhysicalKey::Code(KeyCode::KeyD) => self.controls.right = pressed,
+                    PhysicalKey::Code(KeyCode::KeyC) if pressed => self.toggle_cursor(),
                     PhysicalKey::Code(KeyCode::KeyR) if pressed => {
                         self.camera = Camera::default();
                         if let Some(window) = &self.window {
@@ -361,7 +396,13 @@ impl ApplicationHandler for Viewer {
                 ..
             } => {
                 if let Some(window) = self.window.clone() {
-                    self.grab(&window);
+                    if self.capture {
+                        if self.cursor_mode.is_none() {
+                            self.grab(&window);
+                        } else {
+                            self.hide_cursor(&window);
+                        }
+                    }
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
@@ -375,12 +416,29 @@ impl ApplicationHandler for Viewer {
                             self.controls.mouse_delta += Vec2::new(dx as f32, dy as f32);
                         }
                     }
-                    self.controls.last_cursor = Some(position);
+
+                    // Without raw relative motion the absolute cursor would
+                    // eventually reach the screen edge and look would stop.
+                    // Re-centre after every fallback sample. X11 allows this
+                    // under Confined; Wayland allows it under Locked.
+                    let recentered = self.window.clone().and_then(|window| {
+                        let size = window.inner_size();
+                        if size.width == 0 || size.height == 0 {
+                            return None;
+                        }
+                        let center = PhysicalPosition::new(
+                            f64::from(size.width) / 2.0,
+                            f64::from(size.height) / 2.0,
+                        );
+                        window.set_cursor_position(center).ok().map(|()| center)
+                    });
+                    self.controls.last_cursor = recentered.or(Some(position));
                 }
             }
             WindowEvent::Focused(false) => {
                 if let Some(window) = &self.window {
                     let _ = window.set_cursor_grab(CursorGrabMode::None);
+                    window.set_cursor(CursorIcon::Default);
                     window.set_cursor_visible(true);
                 }
                 self.cursor_mode = None;
