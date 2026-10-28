@@ -31,9 +31,12 @@ use winit::window::Window;
 use crate::atlas::Atlas;
 use crate::atlas_texture::AtlasTexture;
 use crate::camera::{Camera, CameraUniform};
+use crate::chunk_mesh::ChunkMesh;
 use crate::depth::DepthTarget;
 use crate::error::ViewerError;
+use crate::naive_mesh::{Mesh, naive_mesh};
 use crate::quads::Quads;
+use voxel_core::constants::{CHUNK_BITS, CHUNK_VOLUME};
 
 /// The graphics handles a frame needs.
 pub struct Gpu {
@@ -55,6 +58,8 @@ pub struct Gpu {
     pub quads: Quads,
     /// The material atlas texture, sampler and bind group.
     pub atlas: AtlasTexture,
+    /// One uploaded test chunk. M1.5-12/13 add the draw path.
+    pub chunk: Option<ChunkMesh>,
 }
 
 impl Gpu {
@@ -125,6 +130,14 @@ impl Gpu {
         let depth = DepthTarget::new(&device, config.width, config.height);
         let quads = Quads::new(&device, &camera_layout, config.format);
         let atlas = AtlasTexture::new(&device, &queue, &atlas);
+        let chunk = ChunkMesh::new(&device, &queue, &test_chunk());
+        if let Some(chunk) = &chunk {
+            log::info!(
+                "uploaded test chunk: {} quads, {} bytes",
+                chunk.quad_count(),
+                chunk.byte_len()
+            );
+        }
 
         Ok(Self {
             device,
@@ -136,6 +149,7 @@ impl Gpu {
             depth,
             quads,
             atlas,
+            chunk,
         })
     }
 
@@ -220,4 +234,18 @@ impl Gpu {
         self.queue.present(frame);
         Ok(())
     }
+}
+
+/// Builds a temporary 8³ block for the M1.5-11 upload test.
+fn test_chunk() -> Mesh {
+    let mut volume = vec![0u16; CHUNK_VOLUME];
+    for z in 0..8 {
+        for y in 0..8 {
+            for x in 0..8 {
+                let index = x | (y << CHUNK_BITS) | (z << (2 * CHUNK_BITS));
+                volume[index] = 1;
+            }
+        }
+    }
+    naive_mesh(&volume)
 }

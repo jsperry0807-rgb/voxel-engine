@@ -4,8 +4,46 @@
 //! tests. The full-screen pass samples the centre of slot 5 and reads the
 //! framebuffer back.
 
+use std::sync::OnceLock;
+
+use voxel_core::constants::{CHUNK_BITS, CHUNK_VOLUME};
 use voxel_viewer::atlas::{AtlasBuilder, TILE_BYTES, tile_origin};
 use voxel_viewer::atlas_texture::AtlasTexture;
+use voxel_viewer::chunk_mesh::ChunkMesh;
+use voxel_viewer::naive_mesh::naive_mesh;
+
+struct TestGpu {
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+}
+
+/// One CPU/software adapter for all GPU tests. The instance and adapter are
+/// leaked: llvmpipe crashes if they are torn down after the device.
+fn gpu() -> Option<&'static TestGpu> {
+    static GPU: OnceLock<Option<TestGpu>> = OnceLock::new();
+    GPU.get_or_init(|| {
+        let instance = wgpu::Instance::default();
+        let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
+        let adapter = adapters
+            .into_iter()
+            .find(|adapter| adapter.get_info().device_type == wgpu::DeviceType::Cpu)
+            .or_else(|| {
+                pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    force_fallback_adapter: true,
+                    compatible_surface: None,
+                    apply_limit_buckets: false,
+                }))
+                .ok()
+            })?;
+        let (device, queue) =
+            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()?;
+        std::mem::forget(adapter);
+        std::mem::forget(instance);
+        Some(TestGpu { device, queue })
+    })
+    .as_ref()
+}
 
 const SHADER: &str = r#"
 @group(1) @binding(0) var atlas: texture_2d<f32>;
@@ -40,27 +78,11 @@ fn fs_main() -> @location(0) vec4<f32> {
 
 #[test]
 fn atlas_samples_the_expected_tile() {
-    let instance = wgpu::Instance::default();
-    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
-    let adapter = adapters
-        .into_iter()
-        .find(|adapter| adapter.get_info().device_type == wgpu::DeviceType::Cpu)
-        .or_else(|| {
-            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::LowPower,
-                force_fallback_adapter: true,
-                compatible_surface: None,
-                apply_limit_buckets: false,
-            }))
-            .ok()
-        });
-    let Some(adapter) = adapter else {
+    let Some(gpu) = gpu() else {
         eprintln!("skipping GPU test: no adapter");
         return;
     };
-    let (device, queue) =
-        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
-            .expect("adapter opens a device");
+    let (device, queue) = (&gpu.device, &gpu.queue);
     let mut builder = AtlasBuilder::new();
     let mut red = [0u8; TILE_BYTES];
     for texel in red.as_chunks_mut::<4>().0 {
@@ -68,7 +90,7 @@ fn atlas_samples_the_expected_tile() {
     }
     builder.set_tile(5, &red).expect("slot 5 is valid");
     let atlas = builder.build();
-    let atlas_texture = AtlasTexture::new(&device, &queue, &atlas);
+    let atlas_texture = AtlasTexture::new(device, queue, &atlas);
 
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("atlas test shader"),
@@ -199,10 +221,41 @@ fn atlas_samples_the_expected_tile() {
 
     // The origin helper is part of the contract the test depends on.
     assert_eq!(tile_origin(5), (80, 0));
+}
 
-    // Software Vulkan drivers in this environment crash if the adapter and
-    // instance are torn down after the device. The viewer keeps them alive
-    // for the process lifetime; the test leaks them for the same reason.
-    std::mem::forget(adapter);
-    std::mem::forget(instance);
+#[test]
+fn chunk_mesh_buffers_match_quad_count() {
+    let Some(gpu) = gpu() else {
+        eprintln!("skipping GPU test: no adapter");
+        return;
+    };
+
+    let mut volume = vec![0u16; CHUNK_VOLUME];
+    for z in 0..8 {
+        for y in 0..8 {
+            for x in 0..8 {
+                let index = x | (y << CHUNK_BITS) | (z << (2 * CHUNK_BITS));
+                volume[index] = 1;
+            }
+        }
+    }
+    let mesh = naive_mesh(&volume);
+    let buffers = ChunkMesh::new(&gpu.device, &gpu.queue, &mesh).expect("non-empty mesh");
+
+    assert_eq!(buffers.quad_count(), mesh.quad_count());
+    assert_eq!(buffers.vertex_count as usize, mesh.vertices.len());
+    assert_eq!(buffers.index_count as usize, mesh.indices.len());
+    assert_eq!(
+        buffers.vertices.size(),
+        (mesh.vertices.len() * std::mem::size_of::<voxel_viewer::naive_mesh::Vertex>()) as u64
+    );
+    assert_eq!(
+        buffers.indices.size(),
+        (mesh.indices.len() * std::mem::size_of::<u16>()) as u64
+    );
+    assert_eq!(
+        buffers.byte_len(),
+        (mesh.quad_count() * 76) as u64,
+        "ADR-010 format is 76 bytes per quad"
+    );
 }
