@@ -49,8 +49,9 @@ const FRAME_LOG_INTERVAL: Duration = Duration::from_secs(1);
 /// Fly speed in world units per second. The M1.5 slice is a 4 m chunk, so
 /// this is deliberately slower than a full-world fly speed.
 const MOVE_SPEED: f32 = 3.0;
-/// Radians of rotation per mouse pixel.
-const MOUSE_SENSITIVITY: f32 = 0.0012;
+/// bevy_flycam-style degrees of rotation per pixel, scaled by the smaller
+/// window dimension so horizontal and vertical sensitivity match.
+const MOUSE_SENSITIVITY: f32 = 0.00012;
 /// Reject implausible single mouse deltas, such as X11 pointer-warp bursts
 /// generated while grabbing the cursor.
 const MAX_MOUSE_EVENT: f32 = 100.0;
@@ -211,6 +212,7 @@ struct Viewer {
     hidden_cursor: Option<CustomCursor>,
     capture: bool,
     last_grab_attempt: Option<Instant>,
+    mouse_scale: f32,
     /// A failure raised inside an event-loop callback.
     ///
     /// Callbacks cannot return an error, so the first one is kept here, the
@@ -223,22 +225,34 @@ impl Viewer {
     fn apply_input(&mut self, delta: Duration) {
         let mouse = std::mem::take(&mut self.controls.mouse_delta);
         if mouse != Vec2::ZERO {
+            // Same scaling as bevy_flycam: degrees/pixel × min(w,h), then
+            // to radians.
+            let sensitivity = (MOUSE_SENSITIVITY * self.mouse_scale).to_radians();
             self.camera
-                .rotate(mouse.x * MOUSE_SENSITIVITY, -mouse.y * MOUSE_SENSITIVITY);
+                .rotate(mouse.x * sensitivity, -mouse.y * sensitivity);
         }
 
+        let forward = self.camera.forward();
+        let forward = Vec3::new(forward.x, 0.0, forward.z).normalize_or_zero();
+        let right = self.camera.right();
         let mut direction = Vec3::ZERO;
         if self.controls.forward {
-            direction += self.camera.forward();
+            direction += forward;
         }
         if self.controls.back {
-            direction -= self.camera.forward();
+            direction -= forward;
         }
         if self.controls.right {
-            direction += self.camera.right();
+            direction += right;
         }
         if self.controls.left {
-            direction -= self.camera.right();
+            direction -= right;
+        }
+        if self.controls.up {
+            direction += Vec3::Y;
+        }
+        if self.controls.down {
+            direction -= Vec3::Y;
         }
         if direction.length_squared() > 0.0 {
             let seconds = delta.min(MAX_FRAME_DELTA).as_secs_f32();
@@ -328,6 +342,7 @@ impl Viewer {
         }
         self.camera
             .set_aspect(size.width as f32 / size.height as f32);
+        self.mouse_scale = size.width.min(size.height) as f32;
     }
 }
 
@@ -359,6 +374,7 @@ impl ApplicationHandler for Viewer {
             self.camera
                 .set_aspect(size.width as f32 / size.height as f32);
         }
+        self.mouse_scale = size.width.min(size.height) as f32;
         let atlas = match load_startup_atlas() {
             Ok(atlas) => atlas,
             Err(error) => {
@@ -398,6 +414,9 @@ impl ApplicationHandler for Viewer {
                     PhysicalKey::Code(KeyCode::KeyS) => self.controls.back = pressed,
                     PhysicalKey::Code(KeyCode::KeyA) => self.controls.left = pressed,
                     PhysicalKey::Code(KeyCode::KeyD) => self.controls.right = pressed,
+                    PhysicalKey::Code(KeyCode::Space) => self.controls.up = pressed,
+                    PhysicalKey::Code(KeyCode::ShiftLeft)
+                    | PhysicalKey::Code(KeyCode::ShiftRight) => self.controls.down = pressed,
                     PhysicalKey::Code(KeyCode::KeyC) if pressed => self.toggle_cursor(),
                     PhysicalKey::Code(KeyCode::KeyR) if pressed => {
                         self.camera = Camera::default();
@@ -534,6 +553,8 @@ struct Controls {
     back: bool,
     left: bool,
     right: bool,
+    up: bool,
+    down: bool,
     mouse_delta: Vec2,
     last_cursor: Option<PhysicalPosition<f64>>,
     raw_motion: bool,
