@@ -11,4 +11,5 @@ pub mod camera;
 pub mod depth;
 pub mod error;
 pub mod gpu;
+pub mod naive_mesh;
 pub mod quads;
