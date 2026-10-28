@@ -46,10 +46,14 @@ const CLEAR_COLOR: Color = Color {
 };
 /// How often the averaged frame time is logged.
 const FRAME_LOG_INTERVAL: Duration = Duration::from_secs(1);
-/// Fly speed in world units per second.
-const MOVE_SPEED: f32 = 8.0;
+/// Fly speed in world units per second. The M1.5 slice is a 4 m chunk, so
+/// this is deliberately slower than a full-world fly speed.
+const MOVE_SPEED: f32 = 3.0;
 /// Radians of rotation per mouse pixel.
 const MOUSE_SENSITIVITY: f32 = 0.0025;
+/// Reject implausible single mouse deltas, such as X11 pointer-warp bursts
+/// generated while grabbing the cursor.
+const MAX_MOUSE_EVENT: f32 = 120.0;
 /// A long stall must not teleport the camera across the world.
 const MAX_FRAME_DELTA: Duration = Duration::from_millis(100);
 /// Pointer grabs can emit a synthetic motion burst; ignore it so the camera
@@ -305,6 +309,17 @@ impl ApplicationHandler for Viewer {
                     PhysicalKey::Code(KeyCode::KeyS) => self.controls.back = pressed,
                     PhysicalKey::Code(KeyCode::KeyA) => self.controls.left = pressed,
                     PhysicalKey::Code(KeyCode::KeyD) => self.controls.right = pressed,
+                    PhysicalKey::Code(KeyCode::KeyR) if pressed => {
+                        self.camera = Camera::default();
+                        if let Some(window) = &self.window {
+                            let size = window.inner_size();
+                            if size.height > 0 {
+                                self.camera
+                                    .set_aspect(size.width as f32 / size.height as f32);
+                            }
+                        }
+                        self.controls.mouse_delta = Vec2::ZERO;
+                    }
                     _ => {}
                 }
             }
@@ -354,7 +369,11 @@ impl ApplicationHandler for Viewer {
                 return;
             }
             self.controls.ignore_motion_until = None;
-            self.controls.mouse_delta += Vec2::new(delta.0 as f32, delta.1 as f32);
+            let dx = delta.0 as f32;
+            let dy = delta.1 as f32;
+            if dx.abs() <= MAX_MOUSE_EVENT && dy.abs() <= MAX_MOUSE_EVENT {
+                self.controls.mouse_delta += Vec2::new(dx, dy);
+            }
         }
     }
 

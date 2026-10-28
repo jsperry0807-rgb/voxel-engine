@@ -49,6 +49,18 @@ impl Camera {
         }
     }
 
+    /// Creates a camera at `position` aimed at `target`.
+    pub fn looking_at(position: Vec3, target: Vec3, aspect: f32) -> Self {
+        let mut camera = Self::new(position, aspect);
+        let direction = target - position;
+        if direction.length_squared() > 0.0 {
+            let direction = direction.normalize();
+            camera.yaw = direction.x.atan2(-direction.z).rem_euclid(TAU);
+            camera.pitch = direction.y.asin().clamp(-MAX_PITCH, MAX_PITCH);
+        }
+        camera
+    }
+
     /// Sets the viewport aspect ratio, ignoring non-finite or non-positive
     /// values.
     pub fn set_aspect(&mut self, aspect: f32) {
@@ -111,9 +123,12 @@ impl Camera {
 
 impl Default for Camera {
     fn default() -> Self {
-        // Centred on the M1.5 test block at the chunk origin, one and a half
-        // metres from its +Z face.
-        Self::new(Vec3::new(0.5, 0.5, 2.5), 16.0 / 9.0)
+        // Looking across the generated terrain chunk from outside its 4 m box.
+        Self::looking_at(
+            Vec3::new(4.5, 3.0, 6.0),
+            Vec3::new(2.0, 1.0, 2.0),
+            16.0 / 9.0,
+        )
     }
 }
 
@@ -191,7 +206,7 @@ mod tests {
 
     #[test]
     fn yaw_turns_right_and_pitch_is_clamped() {
-        let mut camera = Camera::default();
+        let mut camera = Camera::new(Vec3::ZERO, 1.0);
 
         camera.rotate(std::f32::consts::FRAC_PI_2, 0.0);
         assert_close(camera.forward(), Vec3::X);
@@ -199,6 +214,16 @@ mod tests {
         camera.rotate(0.0, 10.0);
         assert!(camera.pitch <= MAX_PITCH);
         assert!(camera.forward().y > 0.999);
+    }
+
+    #[test]
+    fn looking_at_faces_the_target() {
+        let position = Vec3::new(4.5, 3.0, 6.0);
+        let target = Vec3::new(2.0, 1.0, 2.0);
+        let camera = Camera::looking_at(position, target, 16.0 / 9.0);
+        let expected = (target - position).normalize();
+
+        assert_close(camera.forward(), expected);
     }
 
     #[test]

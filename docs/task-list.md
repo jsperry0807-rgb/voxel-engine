@@ -398,7 +398,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M1.5-10 | Naive per-face mesher (correct, not greedy) producing the M0 vertex format; quad struct shared with M2 | M1.5-04 | Emits exactly 6 quads for one isolated voxel; 0 for enclosed | `cargo test -p voxel-viewer naive_mesh` | 1 d | [x] |
 | M1.5-11 | Vertex/index buffer creation and upload for one chunk | M1.5-10 | Buffer sizes match the quad count; no validation error | run | 0.5 d | [x] |
 | M1.5-12 | Shader: UV from world position and face axes, atlas tile from material, face shading, AO placeholder | M0-06, M1.5-09 | A 1 m block face shows exactly one 16×16 tile; screenshot | visual | 1 d | [x] |
-| M1.5-13 | Draw one generated chunk end to end | M1.5-11, M1.5-12 | Terrain visible; 60 Hz at 1080p on the reference machine; placeholder tiles are allowed here, M1.5-14 supplies the final art before the M1.5-15 screenshot | run | 0.5 d | [ ] |
+| M1.5-13 | Draw one generated chunk end to end | M1.5-11, M1.5-12 | Terrain visible; 60 Hz at 1080p on the reference machine; placeholder tiles are allowed here, M1.5-14 supplies the final art before the M1.5-15 screenshot | run | 0.5 d | [x] |
 | M1.5-15 | Screenshot artifact in `docs/images/` plus run instructions | M1.5-07, M1.5-13, M1.5-14 | Image committed; README explains how to reproduce | review | 0.25 d | [ ] |
 | M1.5-16 | Zero-validation run and naga shader test in CI | M1.5-13 | CI job passes with `RUST_LOG=wgpu_core=warn` | CI | 0.5 d | [ ] |
 | M1.5-17 | Before/after texel-density screenshots (old 256² face vs 16×16 tile) so the regression is a decision | M1.5-14, M1.5-07 | Two images in `docs/images/` with a one-paragraph note; art matches M1.5-14 | review | 0.25 d | [ ] |

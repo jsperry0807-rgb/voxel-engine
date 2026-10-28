@@ -244,14 +244,30 @@ impl Gpu {
     }
 }
 
-/// Builds a temporary 1 m block (16³ voxels) at the chunk origin.
+/// Builds a deterministic terrain patch inside one chunk.
+///
+/// The patch is 48x48 columns centred in the 64x64 chunk, so the naive
+/// whole-chunk mesh stays below the u16 index limit while still showing
+/// slopes, material changes and multiple block faces.
 fn test_chunk() -> Mesh {
     let mut volume = vec![0u16; CHUNK_VOLUME];
-    for z in 0..16 {
-        for y in 0..16 {
-            for x in 0..16 {
+    for z in 8..56 {
+        for x in 8..56 {
+            let fx = (x as f32 - 32.0) / 16.0;
+            let fz = (z as f32 - 32.0) / 16.0;
+            let mound = (1.0 - (fx * fx + fz * fz).sqrt()).max(0.0);
+            let ripple = (x as f32 * 0.35).sin() * 0.5 + (z as f32 * 0.4).cos() * 0.5;
+            let height = (14.0 + mound * 12.0 + ripple) as usize;
+            for y in 0..height {
+                let material = if y + 1 == height {
+                    3
+                } else if y + 4 >= height {
+                    2
+                } else {
+                    1
+                };
                 let index = x | (y << CHUNK_BITS) | (z << (2 * CHUNK_BITS));
-                volume[index] = 1;
+                volume[index] = material;
             }
         }
     }
