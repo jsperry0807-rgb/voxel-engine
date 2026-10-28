@@ -15,20 +15,16 @@
 //! dependencies and informational messages from the viewer; for a quiet wgpu
 //! run use `RUST_LOG=wgpu_core=warn`.
 
-pub mod atlas;
-mod bake;
-mod camera;
-mod depth;
-mod error;
-mod gpu;
-mod quads;
-
 use std::error::Error;
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use glam::{Vec2, Vec3};
+use voxel_viewer::bake;
+use voxel_viewer::camera::Camera;
+use voxel_viewer::error::ViewerError;
+use voxel_viewer::gpu::Gpu;
 use wgpu::Color;
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalSize, PhysicalSize};
@@ -36,10 +32,6 @@ use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, Window, WindowId};
-
-use crate::camera::Camera;
-use crate::error::ViewerError;
-use crate::gpu::Gpu;
 
 /// Default window size, in logical pixels.
 const WINDOW_SIZE: LogicalSize<f64> = LogicalSize::new(1280.0, 720.0);

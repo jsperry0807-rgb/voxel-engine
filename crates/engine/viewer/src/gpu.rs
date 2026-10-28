@@ -28,6 +28,8 @@ use winit::dpi::PhysicalSize;
 use winit::event_loop::OwnedDisplayHandle;
 use winit::window::Window;
 
+use crate::atlas::AtlasBuilder;
+use crate::atlas_texture::AtlasTexture;
 use crate::camera::{Camera, CameraUniform};
 use crate::depth::DepthTarget;
 use crate::error::ViewerError;
@@ -51,6 +53,8 @@ pub struct Gpu {
     pub depth: DepthTarget,
     /// The two-quad depth-test fixture.
     pub quads: Quads,
+    /// The material atlas texture, sampler and bind group.
+    pub atlas: AtlasTexture,
 }
 
 impl Gpu {
@@ -116,6 +120,9 @@ impl Gpu {
 
         let depth = DepthTarget::new(&device, config.width, config.height);
         let quads = Quads::new(&device, &camera_layout, config.format);
+        // M1.5-12 will bind the baked atlas. Uploading the empty builder here
+        // keeps the texture/sampler/bind-group path live in the meantime.
+        let atlas = AtlasTexture::new(&device, &queue, &AtlasBuilder::new().build());
 
         Ok(Self {
             device,
@@ -126,6 +133,7 @@ impl Gpu {
             camera_bind_group,
             depth,
             quads,
+            atlas,
         })
     }
 
