@@ -50,10 +50,10 @@ const FRAME_LOG_INTERVAL: Duration = Duration::from_secs(1);
 /// this is deliberately slower than a full-world fly speed.
 const MOVE_SPEED: f32 = 3.0;
 /// Radians of rotation per mouse pixel.
-const MOUSE_SENSITIVITY: f32 = 0.0025;
+const MOUSE_SENSITIVITY: f32 = 0.0012;
 /// Reject implausible single mouse deltas, such as X11 pointer-warp bursts
 /// generated while grabbing the cursor.
-const MAX_MOUSE_EVENT: f32 = 120.0;
+const MAX_MOUSE_EVENT: f32 = 500.0;
 /// A long stall must not teleport the camera across the world.
 const MAX_FRAME_DELTA: Duration = Duration::from_millis(100);
 /// Pointer grabs can emit a synthetic motion burst; ignore it so the camera
