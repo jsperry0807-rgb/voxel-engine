@@ -53,7 +53,7 @@ const MOVE_SPEED: f32 = 3.0;
 const MOUSE_SENSITIVITY: f32 = 0.0012;
 /// Reject implausible single mouse deltas, such as X11 pointer-warp bursts
 /// generated while grabbing the cursor.
-const MAX_MOUSE_EVENT: f32 = 500.0;
+const MAX_MOUSE_EVENT: f32 = 100.0;
 /// A long stall must not teleport the camera across the world.
 const MAX_FRAME_DELTA: Duration = Duration::from_millis(100);
 /// Pointer grabs can emit a synthetic motion burst; ignore it so the camera
@@ -89,6 +89,31 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// Builds the event loop.
+///
+/// Wayland pointer capture is unreliable across compositors (the lock can
+/// report success before it is active, and relative motion then stops at the
+/// screen edge). Prefer X11 through XWayland when it is available; set
+/// `VOXEL_VIEWER_WAYLAND=1` to force the native backend.
+fn build_event_loop() -> Result<EventLoop<()>, winit::error::EventLoopError> {
+    let mut builder = EventLoop::builder();
+    #[cfg(all(
+        unix,
+        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+    ))]
+    {
+        use winit::platform::x11::EventLoopBuilderExtX11;
+
+        if std::env::var_os("VOXEL_VIEWER_WAYLAND").is_none()
+            && std::env::var_os("DISPLAY").is_some()
+        {
+            builder.with_x11();
+            log::info!("using X11/XWayland (set VOXEL_VIEWER_WAYLAND=1 for Wayland)");
+        }
+    }
+    builder.build()
 }
 
 /// Prints an error and its source chain.
@@ -165,7 +190,7 @@ fn load_startup_atlas() -> Result<Atlas, ViewerError> {
 
 /// Creates the event loop and runs the viewer until the window closes.
 fn run() -> Result<(), ViewerError> {
-    let event_loop = EventLoop::new()?;
+    let event_loop = build_event_loop()?;
     let mut viewer = Viewer::default();
     event_loop.run_app(&mut viewer)?;
     match viewer.error {
@@ -469,8 +494,6 @@ impl ApplicationHandler for Viewer {
         if let DeviceEvent::MouseMotion { delta } = event
             && self.window.is_some()
         {
-            self.controls.raw_motion = true;
-            self.controls.last_cursor = None;
             if self
                 .controls
                 .ignore_motion_until
@@ -482,7 +505,15 @@ impl ApplicationHandler for Viewer {
             let dx = delta.0 as f32;
             let dy = delta.1 as f32;
             if dx.abs() <= MAX_MOUSE_EVENT && dy.abs() <= MAX_MOUSE_EVENT {
+                self.controls.raw_motion = true;
+                self.controls.last_cursor = None;
                 self.controls.mouse_delta += Vec2::new(dx, dy);
+            } else {
+                // Some backends report absolute positions here. Reject them
+                // and let the CursorMoved recenter fallback handle the look.
+                self.controls.raw_motion = false;
+                self.controls.last_cursor = None;
+                log::debug!("ignoring implausible raw motion {delta:?}");
             }
         }
     }
