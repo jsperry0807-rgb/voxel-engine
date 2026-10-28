@@ -1,6 +1,7 @@
 /target
 visual
 assets
+.temp/
 __archive__/
 __sandbox__/
 __ai-session-history__/

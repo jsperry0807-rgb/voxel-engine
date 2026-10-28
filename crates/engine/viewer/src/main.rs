@@ -8,6 +8,7 @@
 //!
 //! ```text
 //! cargo run -p voxel-viewer
+//! cargo run -p voxel-viewer -- bake-atlas --manifest <path> --out <dir>
 //! ```
 //!
 //! `RUST_LOG` follows `env_logger` syntax. The default shows warnings from
@@ -15,6 +16,7 @@
 //! run use `RUST_LOG=wgpu_core=warn`.
 
 pub mod atlas;
+mod bake;
 mod camera;
 mod depth;
 mod error;
@@ -63,17 +65,38 @@ fn main() -> ExitCode {
     )
     .init();
 
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(command) = args.first() {
+        if command == "bake-atlas" {
+            return match bake::run(&args[1..]) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    report(&error);
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        eprintln!("voxel-viewer: unknown command `{command}`");
+        eprintln!("usage: voxel-viewer [bake-atlas [options]]");
+        return ExitCode::FAILURE;
+    }
+
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("voxel-viewer: {error}");
-            let mut source = error.source();
-            while let Some(cause) = source {
-                eprintln!("  caused by: {cause}");
-                source = cause.source();
-            }
+            report(&error);
             ExitCode::FAILURE
         }
+    }
+}
+
+/// Prints an error and its source chain.
+fn report(error: &dyn Error) {
+    eprintln!("voxel-viewer: {error}");
+    let mut source = error.source();
+    while let Some(cause) = source {
+        eprintln!("  caused by: {cause}");
+        source = cause.source();
     }
 }
 
