@@ -52,6 +52,9 @@ const MOVE_SPEED: f32 = 8.0;
 const MOUSE_SENSITIVITY: f32 = 0.0025;
 /// A long stall must not teleport the camera across the world.
 const MAX_FRAME_DELTA: Duration = Duration::from_millis(100);
+/// Pointer grabs can emit a synthetic motion burst; ignore it so the camera
+/// starts on the test block instead of snapping away.
+const GRAB_SETTLE: Duration = Duration::from_millis(200);
 
 fn main() -> ExitCode {
     env_logger::Builder::from_env(
@@ -275,6 +278,8 @@ impl ApplicationHandler for Viewer {
             Ok(gpu) => {
                 self.window = Some(window.clone());
                 grab_cursor(&window);
+                self.controls.mouse_delta = Vec2::ZERO;
+                self.controls.ignore_motion_until = Some(Instant::now() + GRAB_SETTLE);
                 self.gpu = Some(gpu);
             }
             Err(error) => {
@@ -315,6 +320,8 @@ impl ApplicationHandler for Viewer {
                 if let Some(window) = &self.window {
                     grab_cursor(window);
                 }
+                self.controls.mouse_delta = Vec2::ZERO;
+                self.controls.ignore_motion_until = Some(Instant::now() + GRAB_SETTLE);
             }
             WindowEvent::Focused(false) => {
                 if let Some(window) = &self.window {
@@ -339,6 +346,14 @@ impl ApplicationHandler for Viewer {
                 .as_ref()
                 .is_some_and(|window| window.has_focus())
         {
+            if self
+                .controls
+                .ignore_motion_until
+                .is_some_and(|until| Instant::now() < until)
+            {
+                return;
+            }
+            self.controls.ignore_motion_until = None;
             self.controls.mouse_delta += Vec2::new(delta.0 as f32, delta.1 as f32);
         }
     }
@@ -360,6 +375,7 @@ struct Controls {
     left: bool,
     right: bool,
     mouse_delta: Vec2,
+    ignore_motion_until: Option<Instant>,
 }
 
 /// Captures the pointer for mouse look, falling back to confinement.
