@@ -29,7 +29,7 @@ use voxel_viewer::error::ViewerError;
 use voxel_viewer::gpu::Gpu;
 use wgpu::Color;
 use winit::application::ApplicationHandler;
-use winit::dpi::{LogicalSize, PhysicalSize};
+use winit::dpi::{LogicalSize, PhysicalPosition, PhysicalSize};
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
@@ -58,7 +58,7 @@ const MAX_MOUSE_EVENT: f32 = 500.0;
 const MAX_FRAME_DELTA: Duration = Duration::from_millis(100);
 /// Pointer grabs can emit a synthetic motion burst; ignore it so the camera
 /// starts on the test block instead of snapping away.
-const GRAB_SETTLE: Duration = Duration::from_millis(200);
+const GRAB_SETTLE: Duration = Duration::from_millis(100);
 
 fn main() -> ExitCode {
     env_logger::Builder::from_env(
@@ -182,6 +182,7 @@ struct Viewer {
     camera: Camera,
     controls: Controls,
     timing: FrameTiming,
+    cursor_mode: Option<CursorGrabMode>,
     /// A failure raised inside an event-loop callback.
     ///
     /// Callbacks cannot return an error, so the first one is kept here, the
@@ -220,6 +221,13 @@ impl Viewer {
 
     /// Draws and presents one frame, or stops the loop if that fails.
     fn redraw(&mut self, event_loop: &ActiveEventLoop) {
+        // Some compositors only apply the hide on the first pointer enter, or
+        // restore the window cursor after a grab. Reassert it while grabbed.
+        if self.cursor_mode.is_some()
+            && let Some(window) = &self.window
+        {
+            window.set_cursor_visible(false);
+        }
         let delta = self.timing.tick();
         self.apply_input(delta);
         let result = match &self.gpu {
@@ -233,6 +241,15 @@ impl Viewer {
                 event_loop.exit();
             }
         }
+    }
+
+    /// Captures and hides the pointer, resetting the pending look delta.
+    fn grab(&mut self, window: &Window) {
+        self.cursor_mode = grab_cursor(window);
+        self.controls.mouse_delta = Vec2::ZERO;
+        self.controls.last_cursor = None;
+        self.controls.raw_motion = false;
+        self.controls.ignore_motion_until = Some(Instant::now() + GRAB_SETTLE);
     }
 
     /// Handles a new drawable size for the window and camera.
@@ -258,7 +275,10 @@ impl ApplicationHandler for Viewer {
             .with_title("voxel-viewer")
             .with_inner_size(WINDOW_SIZE);
         let window = match event_loop.create_window(attributes) {
-            Ok(window) => Arc::new(window),
+            Ok(window) => {
+                window.focus_window();
+                Arc::new(window)
+            }
             Err(error) => {
                 self.error = Some(ViewerError::from(error));
                 event_loop.exit();
@@ -281,9 +301,7 @@ impl ApplicationHandler for Viewer {
         match Gpu::new(window.clone(), event_loop.owned_display_handle(), atlas) {
             Ok(gpu) => {
                 self.window = Some(window.clone());
-                grab_cursor(&window);
-                self.controls.mouse_delta = Vec2::ZERO;
-                self.controls.ignore_motion_until = Some(Instant::now() + GRAB_SETTLE);
+                self.grab(&window);
                 self.gpu = Some(gpu);
             }
             Err(error) => {
@@ -319,6 +337,7 @@ impl ApplicationHandler for Viewer {
                             }
                         }
                         self.controls.mouse_delta = Vec2::ZERO;
+                        self.controls.last_cursor = None;
                     }
                     _ => {}
                 }
@@ -332,17 +351,39 @@ impl ApplicationHandler for Viewer {
                 }
             }
             WindowEvent::Focused(true) => {
-                if let Some(window) = &self.window {
-                    grab_cursor(window);
+                if let Some(window) = self.window.clone() {
+                    self.grab(&window);
                 }
-                self.controls.mouse_delta = Vec2::ZERO;
-                self.controls.ignore_motion_until = Some(Instant::now() + GRAB_SETTLE);
+            }
+            WindowEvent::CursorEntered { .. }
+            | WindowEvent::MouseInput {
+                state: ElementState::Pressed,
+                ..
+            } => {
+                if let Some(window) = self.window.clone() {
+                    self.grab(&window);
+                }
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                if !self.controls.raw_motion {
+                    if let Some(last) = self.controls.last_cursor {
+                        let dx = position.x - last.x;
+                        let dy = position.y - last.y;
+                        if dx.abs() <= f64::from(MAX_MOUSE_EVENT)
+                            && dy.abs() <= f64::from(MAX_MOUSE_EVENT)
+                        {
+                            self.controls.mouse_delta += Vec2::new(dx as f32, dy as f32);
+                        }
+                    }
+                    self.controls.last_cursor = Some(position);
+                }
             }
             WindowEvent::Focused(false) => {
                 if let Some(window) = &self.window {
                     let _ = window.set_cursor_grab(CursorGrabMode::None);
                     window.set_cursor_visible(true);
                 }
+                self.cursor_mode = None;
             }
             WindowEvent::RedrawRequested => self.redraw(event_loop),
             _ => {}
@@ -356,11 +397,10 @@ impl ApplicationHandler for Viewer {
         event: DeviceEvent,
     ) {
         if let DeviceEvent::MouseMotion { delta } = event
-            && self
-                .window
-                .as_ref()
-                .is_some_and(|window| window.has_focus())
+            && self.window.is_some()
         {
+            self.controls.raw_motion = true;
+            self.controls.last_cursor = None;
             if self
                 .controls
                 .ignore_motion_until
@@ -394,21 +434,32 @@ struct Controls {
     left: bool,
     right: bool,
     mouse_delta: Vec2,
+    last_cursor: Option<PhysicalPosition<f64>>,
+    raw_motion: bool,
     ignore_motion_until: Option<Instant>,
 }
 
 /// Captures the pointer for mouse look, falling back to confinement.
-fn grab_cursor(window: &Window) {
+fn grab_cursor(window: &Window) -> Option<CursorGrabMode> {
+    let mut last_error = None;
     for mode in [CursorGrabMode::Locked, CursorGrabMode::Confined] {
         match window.set_cursor_grab(mode) {
             Ok(()) => {
                 window.set_cursor_visible(false);
-                return;
+                log::info!("cursor grab: {mode:?}");
+                return Some(mode);
             }
-            Err(error) => log::debug!("cursor grab {mode:?} unavailable: {error}"),
+            Err(error) => {
+                log::debug!("cursor grab {mode:?} unavailable: {error}");
+                last_error = Some(error);
+            }
         }
     }
-    log::debug!("cursor grab unavailable; mouse look stops at the window edge");
+    log::warn!(
+        "cursor grab unavailable; mouse look stops at the window edge: {}",
+        last_error.map_or_else(|| "no supported mode".to_owned(), |error| error.to_string())
+    );
+    None
 }
 
 /// Averages frame intervals and logs one line per [`FRAME_LOG_INTERVAL`].
