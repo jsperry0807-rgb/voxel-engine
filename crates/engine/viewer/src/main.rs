@@ -185,6 +185,7 @@ struct Viewer {
     cursor_mode: Option<CursorGrabMode>,
     hidden_cursor: Option<CustomCursor>,
     capture: bool,
+    last_grab_attempt: Option<Instant>,
     /// A failure raised inside an event-loop callback.
     ///
     /// Callbacks cannot return an error, so the first one is kept here, the
@@ -223,6 +224,18 @@ impl Viewer {
 
     /// Draws and presents one frame, or stops the loop if that fails.
     fn redraw(&mut self, event_loop: &ActiveEventLoop) {
+        // A Wayland grab can return Ok without an active pointer lock. Retry
+        // until the warp probe confirms a mode; this is cheap and bounded.
+        if self.capture
+            && self.cursor_mode.is_none()
+            && self
+                .last_grab_attempt
+                .is_none_or(|last| last.elapsed() >= Duration::from_millis(250))
+            && let Some(window) = self.window.clone()
+        {
+            self.grab(&window);
+        }
+
         let delta = self.timing.tick();
         self.apply_input(delta);
         let result = match &self.gpu {
@@ -244,9 +257,8 @@ impl Viewer {
             return;
         }
         self.cursor_mode = grab_cursor(window);
-        if self.cursor_mode.is_some() {
-            self.hide_cursor(window);
-        }
+        self.hide_cursor(window);
+        self.last_grab_attempt = Some(Instant::now());
         self.controls.mouse_delta = Vec2::ZERO;
         self.controls.last_cursor = None;
         self.controls.raw_motion = false;
@@ -498,14 +510,21 @@ struct Controls {
 }
 
 /// Captures the pointer for mouse look, falling back to confinement.
+///
+/// Wayland can return `Ok` from a lock request without an active lock when
+/// the pointer is not over the surface yet. Probe the grab by warping to the
+/// centre; only a successful warp proves the mode is active.
 fn grab_cursor(window: &Window) -> Option<CursorGrabMode> {
     let mut last_error = None;
     for mode in [CursorGrabMode::Locked, CursorGrabMode::Confined] {
         match window.set_cursor_grab(mode) {
             Ok(()) => {
-                window.set_cursor_visible(false);
-                log::info!("cursor grab: {mode:?}");
-                return Some(mode);
+                if warp_to_centre(window) {
+                    window.set_cursor_visible(false);
+                    log::info!("cursor grab: {mode:?}");
+                    return Some(mode);
+                }
+                log::debug!("cursor grab {mode:?} did not activate yet");
             }
             Err(error) => {
                 log::debug!("cursor grab {mode:?} unavailable: {error}");
@@ -513,11 +532,23 @@ fn grab_cursor(window: &Window) -> Option<CursorGrabMode> {
             }
         }
     }
-    log::warn!(
-        "cursor grab unavailable; mouse look stops at the window edge: {}",
-        last_error.map_or_else(|| "no supported mode".to_owned(), |error| error.to_string())
-    );
+    if let Some(error) = last_error {
+        log::warn!("cursor grab unavailable; retrying: {}", error);
+    }
     None
+}
+
+fn warp_to_centre(window: &Window) -> bool {
+    let size = window.inner_size();
+    if size.width == 0 || size.height == 0 {
+        return false;
+    }
+    window
+        .set_cursor_position(PhysicalPosition::new(
+            f64::from(size.width) / 2.0,
+            f64::from(size.height) / 2.0,
+        ))
+        .is_ok()
 }
 
 /// Averages frame intervals and logs one line per [`FRAME_LOG_INTERVAL`].
