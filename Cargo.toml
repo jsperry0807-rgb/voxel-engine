@@ -9,6 +9,7 @@ members = [
     "crates/engine/viewer",
     "crates/engine/texgraph",
     "apps/texgen",
+    "apps/launcher",
 ]
 
 [workspace.package]

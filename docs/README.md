@@ -18,6 +18,7 @@ binding number is made in the spec and the pre-registration, never only in a tas
 
 ## Tools
 
+- [`apps/launcher/README.md`](../apps/launcher/README.md) — the desktop launcher: viewer, texture tools, checks and the Linux/Windows builds.
 - [`apps/texgen/README.md`](../apps/texgen/README.md) — the standalone Material Maker-style texture and material editor.
 - [`texgen-backlog.md`](texgen-backlog.md) — what texgen still needs, what is deferred, and what is done.
 

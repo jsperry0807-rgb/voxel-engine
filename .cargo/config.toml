@@ -1,0 +1,7 @@
+# Cargo cannot shadow built-in commands, so `cargo build` stays the plain
+# Linux build that CI and the tests use. These aliases are the shortcuts the
+# launcher also exposes in its window.
+
+[alias]
+launcher = "run -p voxel-launcher"
+build-win = "build --workspace --target x86_64-pc-windows-gnu"

@@ -1,0 +1,16 @@
+[package]
+name = "voxel-launcher"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "Desktop launcher for the Voxel-Stuff viewer, texture tools, checks and builds"
+
+[[bin]]
+name = "launcher"
+path = "src/main.rs"
+
+[dependencies]
+eframe = { version = "0.32", default-features = false, features = ["glow", "default_fonts", "wayland", "x11"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

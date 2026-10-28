@@ -3201,6 +3201,14 @@ name = "voxel-core"
 version = "0.1.0"
 
 [[package]]
+name = "voxel-launcher"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "libc",
+]
+
+[[package]]
 name = "voxel-render"
 version = "0.1.0"
 dependencies = [
