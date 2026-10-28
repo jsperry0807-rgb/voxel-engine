@@ -83,6 +83,17 @@ impl Camera {
         Vec3::new(cos_yaw, 0.0, sin_yaw)
     }
 
+    /// Yaw in radians, measured from `-Z` toward `+X`, wrapped into `[0, 2π)`.
+    pub fn yaw(&self) -> f32 {
+        self.yaw
+    }
+
+    /// Pitch in radians, elevation above the horizon, clamped short of the
+    /// poles.
+    pub fn pitch(&self) -> f32 {
+        self.pitch
+    }
+
     /// World-to-view matrix.
     pub fn view(&self) -> Mat4 {
         Mat4::look_at_rh(self.position, self.position + self.forward(), Vec3::Y)
