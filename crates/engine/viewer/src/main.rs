@@ -36,7 +36,7 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, Window, WindowId};
 
 /// Default window size, in logical pixels.
-const WINDOW_SIZE: LogicalSize<f64> = LogicalSize::new(1280.0, 720.0);
+const WINDOW_SIZE: LogicalSize<f64> = LogicalSize::new(1920.0, 1080.0);
 /// Background colour before anything is drawn.
 const CLEAR_COLOR: Color = Color {
     r: 0.02,
