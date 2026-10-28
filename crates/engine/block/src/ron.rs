@@ -7,6 +7,7 @@
 
 use crate::id::KeyError;
 use crate::id::NamespacedKey;
+use crate::material_table::MaterialTable;
 use crate::properties::{BlockFlags, BlockProperties, FaceTextures, RenderType};
 use crate::registry::BlockRegistryBuilder;
 use crate::registry::RegistryError;
@@ -87,6 +88,7 @@ pub struct RonBlockList {
 #[derive(Debug)]
 pub enum BlockLoadError {
     Parse(ron::error::SpannedError),
+    MaterialParse(ron::error::SpannedError),
     Key(KeyError),
     Registry(RegistryError),
 }
@@ -94,7 +96,8 @@ pub enum BlockLoadError {
 impl core::fmt::Display for BlockLoadError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            BlockLoadError::Parse(e) => write!(f, "ron parse error: {e}"),
+            BlockLoadError::Parse(e) => write!(f, "blocks.ron parse error: {e}"),
+            BlockLoadError::MaterialParse(e) => write!(f, "materials.gen.ron parse error: {e}"),
             BlockLoadError::Key(e) => write!(f, "invalid key: {e}"),
             BlockLoadError::Registry(e) => write!(f, "registry error: {e}"),
         }
@@ -104,6 +107,23 @@ impl core::fmt::Display for BlockLoadError {
 impl core::error::Error for BlockLoadError {}
 
 impl BlockRegistryBuilder {
+    /// Register every block described by a RON document and attach a generated
+    /// material table.
+    ///
+    /// The material table is validated against the registered blocks at
+    /// [`BlockRegistryBuilder::freeze`], so a stale or missing row is reported
+    /// there rather than becoming a silent atlas lookup.
+    pub fn load_ron_with_materials(
+        &mut self,
+        blocks: &str,
+        materials: &str,
+    ) -> Result<(), BlockLoadError> {
+        let table: MaterialTable =
+            ron::from_str(materials).map_err(BlockLoadError::MaterialParse)?;
+        self.set_materials(table);
+        self.load_ron(blocks)
+    }
+
     /// Register every block described by a RON document.
     pub fn load_ron(&mut self, input: &str) -> Result<(), BlockLoadError> {
         let list: RonBlockList = ron::from_str(input).map_err(BlockLoadError::Parse)?;

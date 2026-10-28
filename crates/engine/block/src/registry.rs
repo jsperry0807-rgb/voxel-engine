@@ -18,6 +18,8 @@ use crate::kind::BlockKind;
 use voxel_core::Face;
 
 use crate::hot::HotRecord;
+use crate::material::{FaceMaterials, MaterialRegistry, MaterialRegistryError};
+use crate::material_table::MaterialTable;
 use crate::properties::{BlockProperties, BlockRecord};
 use crate::texture::{FaceTextureIds, TextureId, TextureSetId, TextureTable};
 
@@ -76,6 +78,9 @@ pub enum FreezeError {
         /// Number of distinct textures the blocks referred to.
         count: usize,
     },
+    /// The attached `materials.gen.ron` table is not consistent with the
+    /// blocks (cap, duplicate/gap, missing or unused face rows).
+    Material(MaterialRegistryError),
 }
 
 impl fmt::Display for FreezeError {
@@ -86,6 +91,7 @@ impl fmt::Display for FreezeError {
                 "the registry refers to {count} distinct textures, \
                  but at most 65536 can be indexed"
             ),
+            FreezeError::Material(error) => write!(f, "{error}"),
         }
     }
 }
@@ -113,6 +119,8 @@ pub struct BlockRegistryBuilder {
     /// Duplicate-check and `contains` in O(1) instead of scanning `entries`.
     /// Reserved slots are absent, by construction.
     index: HashMap<NamespacedKey, MaterialId>,
+    /// Optional generated material table, resolved into the registry at freeze.
+    materials: Option<MaterialTable>,
 }
 
 impl BlockRegistryBuilder {
@@ -132,6 +140,7 @@ impl BlockRegistryBuilder {
         let mut builder = Self {
             entries: Vec::with_capacity(capacity.max(1)),
             index: HashMap::with_capacity(capacity.max(1)),
+            materials: None,
         };
         // Must succeed: a fresh builder cannot contain a duplicate, and the
         // capacity was reserved above.
@@ -140,6 +149,18 @@ impl BlockRegistryBuilder {
             .expect("fresh builder cannot contain a duplicate key");
         debug_assert_eq!(builder.len(), 1);
         builder
+    }
+
+    /// Attaches a generated material table. It is validated at
+    /// [`Self::freeze`] against the blocks registered here.
+    pub fn set_materials(&mut self, materials: MaterialTable) {
+        self.materials = Some(materials);
+    }
+
+    /// Builder-style [`Self::set_materials`].
+    pub fn with_materials(mut self, materials: MaterialTable) -> Self {
+        self.set_materials(materials);
+        self
     }
 
     /// Registers a block, returning its dense id.
@@ -270,7 +291,11 @@ impl BlockRegistryBuilder {
     /// is a recoverable startup error, and the caller decides what to do
     /// about it.
     pub fn freeze(self) -> Result<BlockRegistry, FreezeError> {
-        let BlockRegistryBuilder { entries, index } = self;
+        let BlockRegistryBuilder {
+            entries,
+            index,
+            materials,
+        } = self;
         let (keys, properties): (Vec<Option<NamespacedKey>>, Vec<BlockProperties>) =
             entries.into_iter().unzip();
         let Resolved {
@@ -279,15 +304,22 @@ impl BlockRegistryBuilder {
             texture_sets,
             textures,
         } = resolve(&properties)?;
-        Ok(BlockRegistry {
+        let mut registry = BlockRegistry {
             keys,
             properties,
             hot,
             templates,
             texture_sets,
             textures,
+            materials: None,
             by_key: index,
-        })
+        };
+        if let Some(table) = materials {
+            let material_registry = MaterialRegistry::from_generated(&table, &registry)
+                .map_err(FreezeError::Material)?;
+            registry.materials = Some(material_registry);
+        }
+        Ok(registry)
     }
 }
 
@@ -396,6 +428,9 @@ pub struct BlockRegistry {
     texture_sets: Vec<FaceTextureIds>,
     /// The resolved texture names behind the ids in `texture_sets`.
     textures: TextureTable,
+    /// Atlas-slot material variants, when a `materials.gen.ron` table was
+    /// attached to the builder.
+    materials: Option<MaterialRegistry>,
     by_key: HashMap<NamespacedKey, MaterialId>,
 }
 
@@ -479,6 +514,22 @@ impl BlockRegistry {
         self.hot(id).texture_set().map(|set| self.texture_set(set))
     }
 
+    /// The atlas material variants for a block, when a material table was
+    /// attached with [`BlockRegistryBuilder::set_materials`].
+    ///
+    /// `None` means either "no table attached" or "this block never draws".
+    #[inline]
+    pub fn face_materials(&self, id: MaterialId) -> Option<FaceMaterials> {
+        self.materials
+            .as_ref()
+            .and_then(|materials| materials.faces(id))
+    }
+
+    /// The attached material registry, if any.
+    pub fn material_registry(&self) -> Option<&MaterialRegistry> {
+        self.materials.as_ref()
+    }
+
     /// A texture set by id.
     ///
     /// # Panics
@@ -515,6 +566,7 @@ impl BlockRegistry {
         let hot = self.hot(id);
         BlockRecord {
             textures: hot.texture_set().map(|set| self.texture_set(set)),
+            materials: self.face_materials(id),
             template_root: self.template_root(id),
             render_type: hot.render_type(),
             flags: self.properties[id.index()].flags,

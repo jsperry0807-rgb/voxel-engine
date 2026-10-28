@@ -345,7 +345,9 @@ impl BlockProperties {
 ///   and a [`crate::TextureSetId`]. This is what a per-voxel or per-hit loop
 ///   reads ([`crate::BlockRegistry::hot`]).
 /// - texture sets — each distinct six-face set stored once, read only on a
-///   surface hit ([`crate::BlockRegistry::texture_set`]).
+///   surface hit ([`crate::BlockRegistry::texture_set`]);
+/// - atlas materials — six `u8` slots per block, when a generated material
+///   table is attached ([`crate::BlockRegistry::face_materials`]).
 /// - template roots — sparse, read only at placement
 ///   ([`crate::BlockRegistry::template_root`]).
 ///
@@ -360,8 +362,13 @@ impl BlockProperties {
 /// one.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct BlockRecord {
-    /// Resolved textures, one per face; `None` for blocks that never draw.
+    /// Resolved texture-array ids, one per face; `None` for blocks that never
+    /// draw. Kept for the existing texture-array path.
     pub textures: Option<FaceTextureIds>,
+    /// Atlas material variants for the six faces, when a `materials.gen.ron`
+    /// table is attached to the registry. `None` for air and non-drawing
+    /// blocks, or when no material table was loaded.
+    pub materials: Option<crate::material::FaceMaterials>,
     /// Root node of the block's 16x16x16 sub-block template, or `None` when
     /// the block is a flat, uniform material.
     pub template_root: Option<u64>,

@@ -83,10 +83,22 @@
 //! [`BlockRegistryBuilder::freeze`] rather than persisted. A file that names
 //! a block gets the textures that block has in the session loading it. The
 //! format contract is `docs/save-format.md`.
+//!
+//! # Atlas materials
+//!
+//! `materials.gen.ron` describes the atlas slots (`material::MaterialId`, a
+//! `u8` that is also `tile_origin`) and each block's six face variants
+//! ([`FaceMaterials`]). Attach it with
+//! [`BlockRegistryBuilder::load_ron_with_materials`] or
+//! [`BlockRegistryBuilder::set_materials`]; the registry validates it at
+//! freeze and exposes [`BlockRegistry::face_materials`]. This is separate from
+//! the older `TextureSetId` path, which remains for the texture-array
+//! renderer until M1.5-12 switches the chunk shader to atlas slots.
 
 pub mod hot;
 pub mod id;
 pub mod kind;
+pub mod material;
 pub mod material_table;
 pub mod palette;
 pub mod properties;
@@ -99,6 +111,10 @@ pub mod texture_manifest;
 pub use hot::HotRecord;
 pub use id::{AIR_ID, BUILTIN_NAMESPACE, KeyError, MaterialId, NamespacedKey};
 pub use kind::BlockKind;
+pub use material::{
+    BlockId as AtlasBlockId, FaceMaterials, Material, MaterialId as AtlasMaterialId,
+    MaterialRegistry, MaterialRegistryError,
+};
 pub use palette::{
     KeyContext, MissingBlockPolicy, MissingKey, Omission, Palette, PaletteError, Resolution,
 };
