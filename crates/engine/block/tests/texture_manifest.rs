@@ -21,7 +21,7 @@ fn texture_manifest_matches_graphs_and_blocks() {
     texture_manifest::validate(&manifest, &root).expect("textures.ron should validate");
 
     assert_eq!(manifest.schema, 1);
-    assert_eq!(manifest.textures.len(), 23);
+    assert_eq!(manifest.textures.len(), 40);
     assert!(!manifest.license.trim().is_empty());
     assert!(!manifest.provenance.trim().is_empty());
     assert!(manifest.textures.iter().all(|entry| !entry.placeholder));
@@ -31,7 +31,7 @@ fn texture_manifest_matches_graphs_and_blocks() {
             .iter()
             .map(|entry| entry.slot)
             .collect::<Vec<_>>(),
-        (1..=23).collect::<Vec<_>>()
+        (1..=40).collect::<Vec<_>>()
     );
 }
 
@@ -57,6 +57,6 @@ fn materials_gen_is_current() {
         "materials.gen.ron is stale; run `cargo run -p voxel-texgen -- generate`"
     );
     assert_eq!(table.schema, 1);
-    assert_eq!(table.materials.len(), 23);
-    assert_eq!(table.faces.len(), 19);
+    assert_eq!(table.materials.len(), 40);
+    assert_eq!(table.faces.len(), 33);
 }

@@ -603,7 +603,10 @@ impl TexgenApp {
             .default_width(250.0)
             .show(ctx, |ui| {
                 ui.heading("Textures");
-                ui.label(RichText::new("M1.5 vertical slice · 23 faces").weak());
+                ui.label(
+                    RichText::new(format!("committed face set · {} faces", self.library.len()))
+                        .weak(),
+                );
                 ui.add(
                     egui::TextEdit::singleline(&mut self.library_filter)
                         .hint_text("Filter…")

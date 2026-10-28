@@ -1,0 +1,20 @@
+(
+    schema: 1,
+    key: "voxel:block/spruce_log",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Stripes(axis: X, count: 22, wobble: 10000), inputs: []),
+        (id: 1, op: Fbm(period: 20, octaves: 3), inputs: []),
+        (id: 2, op: Const(value: 20000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: Ramp(stops: [(0, "#3a2a1a"), (65535, "#5a4028")]), inputs: [3]),
+        (id: 5, op: ValueNoise(period: 64, octaves: 1), inputs: []),
+        (id: 6, op: Threshold(at: 62000), inputs: [5]),
+        (id: 7, op: Ramp(stops: [(0, "#6a5038"), (65535, "#8a6a48")]), inputs: [5]),
+        (id: 8, op: MixColor, inputs: [4, 7, 6]),
+    ],
+    output: (color: 8, alpha: Const(65535)),
+)

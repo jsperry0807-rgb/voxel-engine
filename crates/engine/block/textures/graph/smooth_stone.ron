@@ -1,0 +1,19 @@
+(
+    schema: 1,
+    key: "voxel:block/smooth_stone",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 18, octaves: 3), inputs: []),
+        (id: 1, op: Stripes(axis: Y, count: 6, wobble: 3000), inputs: []),
+        (id: 2, op: Const(value: 18000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: ValueNoise(period: 96, octaves: 1), inputs: []),
+        (id: 5, op: Const(value: 14000), inputs: []),
+        (id: 6, op: Mix, inputs: [3, 4, 5]),
+        (id: 7, op: Ramp(stops: [(0, "#707070"), (65535, "#a4a4a4")]), inputs: [6]),
+    ],
+    output: (color: 7, alpha: Const(65535)),
+)

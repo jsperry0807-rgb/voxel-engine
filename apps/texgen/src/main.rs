@@ -113,7 +113,7 @@ fn print_help() {
          \n\
          commands:\n\
            gui               open the editor (default)\n\
-           list              list the 23 slice faces and slots\n\
+           list              list the committed face keys and slots\n\
            generate          render graphs to PNGs, then write textures.ron and materials.gen.ron\n\
            update-manifest   alias for generate\n\
            materials         write materials.gen.ron only\n\

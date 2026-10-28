@@ -29,8 +29,8 @@ pub const BLOCKS_PATH: &str = "data/blocks.ron";
 pub const SOURCE_EDGE: u32 = 256;
 /// Bytes in one decoded source face.
 pub const SOURCE_BYTES: usize = (SOURCE_EDGE * SOURCE_EDGE * 4) as usize;
-/// Number of faces in the M1.5 vertical slice.
-pub const SLICE_FACE_COUNT: usize = 23;
+/// Number of faces in the committed set.
+pub const SLICE_FACE_COUNT: usize = 40;
 
 /// Alpha class of a source face, as locked by decision D1.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -330,7 +330,7 @@ pub fn validate(manifest: &TextureManifest, crate_root: &Path) -> Result<(), Man
     }
     if manifest.textures.len() != SLICE_FACE_COUNT {
         return Err(ManifestError::Invalid(format!(
-            "manifest has {} textures; the M1.5 slice is exactly {SLICE_FACE_COUNT}",
+            "manifest has {} textures; the committed set is exactly {SLICE_FACE_COUNT}",
             manifest.textures.len()
         )));
     }

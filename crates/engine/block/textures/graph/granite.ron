@@ -1,0 +1,20 @@
+(
+    schema: 1,
+    key: "voxel:block/granite",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 12, octaves: 3), inputs: []),
+        (id: 1, op: Worley(period: 40, mode: F1), inputs: []),
+        (id: 2, op: Ramp(stops: [(0, "#8a5a4a"), (65535, "#b08070")]), inputs: [0]),
+        (id: 3, op: Ramp(stops: [(0, "#c8b8b0"), (65535, "#ffffff")]), inputs: [1]),
+        (id: 4, op: Multiply, inputs: [2, 3]),
+        (id: 5, op: ValueNoise(period: 24, octaves: 1), inputs: []),
+        (id: 6, op: Threshold(at: 59000), inputs: [5]),
+        (id: 7, op: Ramp(stops: [(0, "#ffffff"), (65535, "#d8c0b0")]), inputs: [6]),
+        (id: 8, op: Multiply, inputs: [4, 7]),
+    ],
+    output: (color: 8, alpha: Const(65535)),
+)

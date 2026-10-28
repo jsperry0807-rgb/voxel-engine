@@ -1,0 +1,21 @@
+(
+    schema: 1,
+    key: "voxel:block/dark_oak_log_top",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Rings(scale: 7), inputs: []),
+        (id: 1, op: ValueNoise(period: 14, octaves: 2), inputs: []),
+        (id: 2, op: Warp(amount: 15000), inputs: [0, 1]),
+        (id: 3, op: Fbm(period: 22, octaves: 2), inputs: []),
+        (id: 4, op: Const(value: 14000), inputs: []),
+        (id: 5, op: Mix, inputs: [2, 3, 4]),
+        (id: 6, op: Ramp(stops: [(0, "#3a2a18"), (65535, "#5a4028")]), inputs: [5]),
+        (id: 7, op: Smoothstep(edge0: 42000, edge1: 56000), inputs: [2]),
+        (id: 8, op: Ramp(stops: [(0, "#3f2e1a"), (65535, "#241a10")]), inputs: [2]),
+        (id: 9, op: MixColor, inputs: [6, 8, 7]),
+    ],
+    output: (color: 9, alpha: Const(65535)),
+)

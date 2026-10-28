@@ -11,10 +11,10 @@ cargo run -p voxel-texgen -- check # verify every committed byte
 
 ## What it does
 
-- Edits the 23 M1.5 face graphs under
+- Edits the committed face graphs under
   `crates/engine/block/textures/graph/`.
 - Live previews the 256² source, the 16² atlas tile, and a 2×2 wrap.
-- Generates the 23 source PNGs, `textures.ron`, `materials.gen.ron`, the
+- Generates the committed source PNGs, `textures.ron`, `materials.gen.ron`, the
   256² atlas and `atlas.hash.ron`.
 - Browses the atlas slots and the block → six-face material table.
 - Shares every byte-producing step with the viewer's `bake-atlas` command.
@@ -75,7 +75,7 @@ can call as tools. It exposes the same core as the GUI and CLI:
 
 | Tool | Purpose |
 | --- | --- |
-| `list_faces` | 23 faces, slots, alpha/tiling, paths, hashes, staleness |
+| `list_faces` | every face: slot, alpha/tiling, paths, hashes, staleness |
 | `read_graph` | graph RON plus parse/compile status |
 | `validate_graph` | validate a key or inline RON without writing |
 | `render_preview` | source PNG at 64/128/256 plus the 16² tile, as images |

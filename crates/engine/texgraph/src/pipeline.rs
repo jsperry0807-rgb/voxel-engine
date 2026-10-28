@@ -19,7 +19,7 @@ use crate::bake::{self, BakeError};
 use crate::graph::{Graph, GraphError, pretty_config};
 use crate::png::{self, PngError};
 
-/// The M1.5 face set: key and atlas slot. Graph files are named after the
+/// The committed face set: key and atlas slot. Graph files are named after the
 /// part following `voxel:block/`.
 pub const SLICES: &[(&str, u16)] = &[
     ("voxel:block/stone", 1),
@@ -45,6 +45,23 @@ pub const SLICES: &[(&str, u16)] = &[
     ("voxel:block/sandstone_top", 21),
     ("voxel:block/sandstone_bottom", 22),
     ("voxel:block/sandstone_side", 23),
+    ("voxel:block/stone_bricks", 24),
+    ("voxel:block/mossy_cobblestone", 25),
+    ("voxel:block/smooth_stone", 26),
+    ("voxel:block/granite", 27),
+    ("voxel:block/diorite", 28),
+    ("voxel:block/andesite", 29),
+    ("voxel:block/deepslate", 30),
+    ("voxel:block/tuff", 31),
+    ("voxel:block/birch_log_top", 32),
+    ("voxel:block/birch_log", 33),
+    ("voxel:block/birch_leaves", 34),
+    ("voxel:block/spruce_log_top", 35),
+    ("voxel:block/spruce_log", 36),
+    ("voxel:block/spruce_leaves", 37),
+    ("voxel:block/dark_oak_log_top", 38),
+    ("voxel:block/dark_oak_log", 39),
+    ("voxel:block/dark_oak_leaves", 40),
 ];
 
 /// A workspace rooted at the repository that holds the block crate.

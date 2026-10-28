@@ -1,0 +1,17 @@
+(
+    schema: 1,
+    key: "voxel:block/spruce_leaves",
+    size: 256,
+    tiling: Both,
+    alpha: Cutout,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Worley(period: 16, mode: F1), inputs: []),
+        (id: 1, op: ValueNoise(period: 32, octaves: 2), inputs: []),
+        (id: 2, op: Const(value: 30000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: Ramp(stops: [(0, "#1f4a2a"), (65535, "#35704a")]), inputs: [3]),
+        (id: 5, op: AlphaBinary(at: 23000), inputs: [3]),
+    ],
+    output: (color: 4, alpha: Node(5)),
+)

@@ -1,0 +1,17 @@
+(
+    schema: 1,
+    key: "voxel:block/birch_leaves",
+    size: 256,
+    tiling: Both,
+    alpha: Cutout,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Worley(period: 14, mode: F1), inputs: []),
+        (id: 1, op: ValueNoise(period: 28, octaves: 2), inputs: []),
+        (id: 2, op: Const(value: 35000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: Ramp(stops: [(0, "#5a8a2c"), (65535, "#8ab84a")]), inputs: [3]),
+        (id: 5, op: AlphaBinary(at: 24000), inputs: [3]),
+    ],
+    output: (color: 4, alpha: Node(5)),
+)

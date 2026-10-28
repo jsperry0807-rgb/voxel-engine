@@ -1,0 +1,20 @@
+(
+    schema: 1,
+    key: "voxel:block/deepslate",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Stripes(axis: X, count: 10, wobble: 14000), inputs: []),
+        (id: 1, op: Fbm(period: 14, octaves: 3), inputs: []),
+        (id: 2, op: Const(value: 28000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: Ramp(stops: [(0, "#222226"), (65535, "#4a4a52")]), inputs: [3]),
+        (id: 5, op: Fbm(period: 26, octaves: 2), inputs: []),
+        (id: 6, op: Smoothstep(edge0: 52000, edge1: 64000), inputs: [5]),
+        (id: 7, op: Ramp(stops: [(0, "#4e4e58"), (65535, "#6a6a76")]), inputs: [5]),
+        (id: 8, op: MixColor, inputs: [4, 7, 6]),
+    ],
+    output: (color: 8, alpha: Const(65535)),
+)

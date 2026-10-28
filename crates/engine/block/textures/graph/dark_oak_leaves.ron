@@ -1,0 +1,17 @@
+(
+    schema: 1,
+    key: "voxel:block/dark_oak_leaves",
+    size: 256,
+    tiling: Both,
+    alpha: Cutout,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Worley(period: 12, mode: F1), inputs: []),
+        (id: 1, op: ValueNoise(period: 24, octaves: 2), inputs: []),
+        (id: 2, op: Const(value: 32000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: Ramp(stops: [(0, "#1a3d1a"), (65535, "#2e5c2a")]), inputs: [3]),
+        (id: 5, op: AlphaBinary(at: 22000), inputs: [3]),
+    ],
+    output: (color: 4, alpha: Node(5)),
+)

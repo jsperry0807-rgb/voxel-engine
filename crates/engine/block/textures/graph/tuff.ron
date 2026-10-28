@@ -1,0 +1,21 @@
+(
+    schema: 1,
+    key: "voxel:block/tuff",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 14, octaves: 3), inputs: []),
+        (id: 1, op: Worley(period: 12, mode: Edge), inputs: []),
+        (id: 2, op: Remap(from_lo: 0, from_hi: 20000, to_lo: 65535, to_hi: 0), inputs: [1]),
+        (id: 3, op: Ramp(stops: [(0, "#ffffff"), (65535, "#8a8f7a")]), inputs: [2]),
+        (id: 4, op: Ramp(stops: [(0, "#6a6f60"), (65535, "#8a8f7a")]), inputs: [0]),
+        (id: 5, op: Multiply, inputs: [4, 3]),
+        (id: 6, op: ValueNoise(period: 36, octaves: 1), inputs: []),
+        (id: 7, op: Threshold(at: 59000), inputs: [6]),
+        (id: 8, op: Ramp(stops: [(0, "#ffffff"), (65535, "#d0d4c0")]), inputs: [7]),
+        (id: 9, op: Multiply, inputs: [5, 8]),
+    ],
+    output: (color: 9, alpha: Const(65535)),
+)

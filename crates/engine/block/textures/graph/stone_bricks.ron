@@ -1,0 +1,20 @@
+(
+    schema: 1,
+    key: "voxel:block/stone_bricks",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Bricks(rows: 3, columns: 2, mortar: 10000, offset: 32768), inputs: []),
+        (id: 1, op: Fbm(period: 24, octaves: 3), inputs: []),
+        (id: 2, op: ValueNoise(period: 64, octaves: 1), inputs: []),
+        (id: 3, op: Ramp(stops: [(0, "#6a6a6a"), (65535, "#8e8e8e")]), inputs: [1]),
+        (id: 4, op: Ramp(stops: [(0, "#e0e0e0"), (65535, "#ffffff")]), inputs: [2]),
+        (id: 5, op: Multiply, inputs: [3, 4]),
+        (id: 6, op: Ramp(stops: [(0, "#4a4a4a"), (65535, "#5c5c5c")]), inputs: [2]),
+        (id: 7, op: Invert, inputs: [0]),
+        (id: 8, op: MixColor, inputs: [5, 6, 7]),
+    ],
+    output: (color: 8, alpha: Const(65535)),
+)

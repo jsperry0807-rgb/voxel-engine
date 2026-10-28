@@ -1,0 +1,21 @@
+(
+    schema: 1,
+    key: "voxel:block/birch_log_top",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Rings(scale: 8), inputs: []),
+        (id: 1, op: ValueNoise(period: 14, octaves: 2), inputs: []),
+        (id: 2, op: Warp(amount: 14000), inputs: [0, 1]),
+        (id: 3, op: Fbm(period: 22, octaves: 2), inputs: []),
+        (id: 4, op: Const(value: 16000), inputs: []),
+        (id: 5, op: Mix, inputs: [2, 3, 4]),
+        (id: 6, op: Ramp(stops: [(0, "#d0c19c"), (65535, "#f0e8d4")]), inputs: [5]),
+        (id: 7, op: Smoothstep(edge0: 46000, edge1: 59000), inputs: [2]),
+        (id: 8, op: Ramp(stops: [(0, "#b8aa84"), (65535, "#8a7a5c")]), inputs: [2]),
+        (id: 9, op: MixColor, inputs: [6, 8, 7]),
+    ],
+    output: (color: 9, alpha: Const(65535)),
+)

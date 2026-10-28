@@ -1,0 +1,23 @@
+(
+    schema: 1,
+    key: "voxel:block/birch_log",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Stripes(axis: X, count: 16, wobble: 6000), inputs: []),
+        (id: 1, op: Fbm(period: 20, octaves: 2), inputs: []),
+        (id: 2, op: Const(value: 25000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: Ramp(stops: [(0, "#d8cba8"), (65535, "#efe6cc")]), inputs: [3]),
+        (id: 5, op: Stripes(axis: Y, count: 10, wobble: 12000), inputs: []),
+        (id: 6, op: Threshold(at: 59000), inputs: [5]),
+        (id: 7, op: ValueNoise(period: 10, octaves: 1), inputs: []),
+        (id: 8, op: Threshold(at: 52000), inputs: [7]),
+        (id: 9, op: Mul, inputs: [6, 8]),
+        (id: 10, op: Ramp(stops: [(0, "#5a5240"), (65535, "#6a6250")]), inputs: [7]),
+        (id: 11, op: MixColor, inputs: [4, 10, 9]),
+    ],
+    output: (color: 11, alpha: Const(65535)),
+)

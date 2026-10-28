@@ -1,8 +1,8 @@
 (
     schema: 1,
     filter: "box16-linear-premul-v1",
-    tile_count: 23,
-    manifest_blake3: "06567f7b9259af07764f4822500cae62523f40412087978db1a38cb629f1f8fc",
-    atlas_png_blake3: "7938008a064146b9d2514dbc0707dd8e41c9e918e5724a9655c333edc9f0456c",
-    mip_chain_blake3: "6e4de63fbbc1aed82ddf8b5539e7617aac2fbe256dc040c0d8fdb62043e8d31d",
+    tile_count: 40,
+    manifest_blake3: "056cc61b59bb25c6c6c53515ef6a39bf3e335b5235019317711518259baf80f3",
+    atlas_png_blake3: "851e3b6e3de56d711cf5735cd0d4a9d2f9d120333313b1da8380c086cb9e922b",
+    mip_chain_blake3: "227ec476e8bd9d5bcc05cfb56f7bab7097f5a7e80db65694893ec9feff9fccd6",
 )

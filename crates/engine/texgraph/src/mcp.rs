@@ -585,7 +585,7 @@ impl Server {
 
 fn instructions() -> &'static str {
     "Voxel Texgen is the authoritative generator for this engine's material textures. \
-     Start with list_faces to see the 23 M1.5 faces and whether their committed outputs are stale. \
+     Start with list_faces to see the committed faces and whether their outputs are stale. \
      read_graph and validate_graph inspect a fixed-point node graph; render_preview and render_tile show the result; \
      render_atlas shows the packed material atlas. check verifies every committed byte without writing. \
      generate writes all source PNGs, textures.ron, materials.gen.ron and the atlas; bake_atlas writes only the atlas. \
@@ -597,7 +597,7 @@ fn tools() -> Vec<Value> {
     vec![
         tool(
             "list_faces",
-            "List the 23 slice faces with slot, alpha class, tiling, paths, hashes and staleness.",
+            "List every committed face with slot, alpha class, tiling, paths, hashes and staleness.",
             empty_schema(),
             true,
         ),
@@ -648,7 +648,7 @@ fn tools() -> Vec<Value> {
         ),
         tool(
             "list_materials",
-            "List the generated material table: 23 material rows and 19 block six-face rows, with staleness.",
+            "List the generated material table: one row per material and one six-face row per textured block, with staleness.",
             empty_schema(),
             true,
         ),
@@ -666,7 +666,7 @@ fn tools() -> Vec<Value> {
         ),
         tool(
             "generate",
-            "Write all 23 source PNGs, textures.ron, materials.gen.ron and the atlas. Use check first.",
+            "Write all committed source PNGs, textures.ron, materials.gen.ron and the atlas. Use check first.",
             empty_schema(),
             false,
         ),
@@ -712,7 +712,7 @@ fn resources() -> Vec<Value> {
         json!({
             "uri": "texgen://faces",
             "name": "faces",
-            "description": "The 23 slice faces, slots, hashes and staleness.",
+            "description": "Every committed face, its slot, hashes and staleness.",
             "mimeType": "application/json",
         }),
         json!({

@@ -14,7 +14,7 @@ Priority order is the order a single engineer should take it. An item marked
 | # | Item | Why it matters | Status |
 | --- | --- | --- | --- |
 | 1 | **M1.5-08 material registry integration** — `FaceMaterials` / atlas `MaterialId`, `materials.gen.ron` loading, `BlockRegistry::face_materials(block)` | Core landed in this change. The legacy `TextureSetId` path remains for the current texture-array renderer; the chunk shader swap to atlas slots is the M1.5-12 task. | **core done; render swap pending** |
-| 2 | **Remove the hard-coded 23-face table** — drive `pipeline::SLICES` and `texture_manifest::SLICE_FACE_COUNT` from the manifest / a slot table | Every M2.5 and M3.5 art set currently requires code edits. New textures should be data-only. | open |
+| 2 | **Remove the hard-coded face table** — drive `pipeline::SLICES` and `texture_manifest::SLICE_FACE_COUNT` from the manifest / a slot table | Every M2.5 and M3.5 art set currently requires code edits. New textures should be data-only. | open |
 | 3 | **Incremental generation** — `texgen generate --key stone`, write only changed PNGs, rebuild the atlas only if a source changed | One graph edit currently regenerates 23 PNGs, the manifest, the material table and the atlas. Fine at 23; painful at 100+. | open |
 
 ## 2. Editor and UX
@@ -92,4 +92,5 @@ without a milestone that consumes them.
 | Pattern, shape, transform, colour, blend and effect nodes | `f64babb` |
 | `examples/render` for arbitrary graph RON | `f64babb` |
 | M1.5-08 material registry core: `FaceMaterials`, atlas `MaterialId`, `materials.gen.ron` loading, `BlockRegistry::face_materials`, 64-block fixture | this change |
+| 17 post-M1.5 stone and tree faces (slots 24-40), 14 blocks, regenerated manifest, material table and atlas | this change |
 | Backlog document with deferred work | this change |
