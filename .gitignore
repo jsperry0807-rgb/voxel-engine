@@ -1,6 +1,6 @@
 /target
 visual
-assets
+/assets
 .temp/
 __archive__/
 __sandbox__/
