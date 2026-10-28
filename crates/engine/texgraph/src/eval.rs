@@ -11,9 +11,12 @@
 use crate::graph::{
     AlphaSource, Axis, Program, ProgramAlpha, ProgramNode, ProgramOp, WorleyMode, splitmix64,
 };
+use crate::luts::{ATAN, SINE};
 
 const ONE: i64 = 65_536;
 const MAX: i32 = 65_535;
+/// One source texel in Q16.16 UV space (graph size is 256).
+const TEXEL: i32 = 256;
 
 /// Renders a compiled graph at its declared size to row-major RGBA8 pixels.
 pub fn evaluate(program: &Program) -> Vec<u8> {
@@ -89,6 +92,92 @@ fn eval_scalar(program: &Program, index: usize, u: i32, v: i32) -> i32 {
             } else {
                 0
             }
+        }
+        ProgramOp::Checker { period } => {
+            let period = *period as i64;
+            let x = (u as i64 * period) >> 16;
+            let y = (v as i64 * period) >> 16;
+            if ((x + y) & 1) == 0 { MAX } else { 0 }
+        }
+        ProgramOp::Bricks {
+            rows,
+            columns,
+            mortar,
+            offset,
+        } => {
+            let rows = *rows as i64;
+            let columns = *columns as i64;
+            let px = u as i64 * columns;
+            let py = v as i64 * rows;
+            let row = py >> 16;
+            let fy = (py & 0xFFFF) as i32;
+            let shift = if (row & 1) == 0 { 0 } else { *offset as i64 };
+            let fx = ((px + shift).rem_euclid(ONE)) as i32;
+            let half = *mortar as i32 / 2;
+            if fx >= half && fx <= MAX - half && fy >= half && fy <= MAX - half {
+                MAX
+            } else {
+                0
+            }
+        }
+        ProgramOp::Wave { axis, count, phase } => {
+            let coordinate = match axis {
+                Axis::X => u,
+                Axis::Y => v,
+            };
+            sine(
+                coordinate
+                    .wrapping_mul(*count as i32)
+                    .wrapping_add(*phase as i32),
+            )
+        }
+        ProgramOp::Spiral { turns, arms } => {
+            let (dx, dy) = centre_delta(u, v);
+            let phase = (angle_of(dx, dy) as i64 * *arms as i64
+                + toroidal_distance(u, v) as i64 * *turns as i64) as i32;
+            sine(phase)
+        }
+        ProgramOp::RadialGradient { radius } => {
+            let distance = toroidal_distance(u, v) as i64;
+            let value = distance * MAX as i64 / (*radius as i64).max(1);
+            (MAX as i64 - value).clamp(0, MAX as i64) as i32
+        }
+        ProgramOp::Circle { radius, softness } => {
+            soft_mask(toroidal_distance(u, v), *radius as i32, *softness as i32)
+        }
+        ProgramOp::Star {
+            points,
+            inner,
+            rotation,
+            softness,
+        } => {
+            let (dx, dy) = centre_delta(u, v);
+            let angle = angle_of(dx, dy);
+            let phase = angle
+                .wrapping_mul(*points as i32)
+                .wrapping_add(*rotation as i32);
+            let t = triangle(phase) as i64;
+            let inner = *inner as i64 * 46_340 / MAX as i64;
+            let limit = inner + (46_340 - inner) * t / MAX as i64;
+            soft_mask(toroidal_distance(u, v), limit as i32, *softness as i32)
+        }
+        ProgramOp::Polygon {
+            sides,
+            radius,
+            rotation,
+            softness,
+        } => {
+            let (dx, dy) = centre_delta(u, v);
+            let angle = angle_of(dx, dy).wrapping_add(*rotation as i32);
+            let segment = 65_536 / *sides as i32;
+            let local = angle.rem_euclid(65_536) % segment;
+            let offset = local - segment / 2;
+            let cos_offset = cosine(offset).max(1) as i64;
+            let cos_segment = cosine(segment / 2).max(1) as i64;
+            let circumradius = *radius as i64 * 46_340 / MAX as i64;
+            let inradius = circumradius * cos_segment / MAX as i64;
+            let limit = (inradius * MAX as i64 / cos_offset).min(46_340);
+            soft_mask(toroidal_distance(u, v), limit as i32, *softness as i32)
         }
         ProgramOp::Add => {
             let a = scalar_input(program, node, 0, u, v);
@@ -172,11 +261,34 @@ fn eval_scalar(program: &Program, index: usize, u: i32, v: i32) -> i32 {
             let value = scalar_input(program, node, 0, u, v);
             remap(value, 0, MAX as u16, *min, *max)
         }
+        ProgramOp::Luminance => {
+            let color = eval_color(program, node.inputs[0], u, v);
+            (luma(color).min(255) * 257) as i32
+        }
         ProgramOp::Ramp { .. }
         | ProgramOp::Palette { .. }
         | ProgramOp::Multiply
         | ProgramOp::Overlay
-        | ProgramOp::MixColor => unreachable!("colour op evaluated as a scalar"),
+        | ProgramOp::MixColor
+        | ProgramOp::Rotate { .. }
+        | ProgramOp::Mirror { .. }
+        | ProgramOp::Tile { .. }
+        | ProgramOp::Offset { .. }
+        | ProgramOp::Polar
+        | ProgramOp::Cartesian
+        | ProgramOp::Screen
+        | ProgramOp::AddColor
+        | ProgramOp::Subtract
+        | ProgramOp::Difference
+        | ProgramOp::Lighten
+        | ProgramOp::Darken
+        | ProgramOp::BrightnessContrast { .. }
+        | ProgramOp::Saturate { .. }
+        | ProgramOp::HueShift { .. }
+        | ProgramOp::Blur { .. }
+        | ProgramOp::Emboss { .. }
+        | ProgramOp::NormalMap { .. }
+        | ProgramOp::Bevel { .. } => unreachable!("colour op evaluated as a scalar"),
     }
 }
 
@@ -220,6 +332,181 @@ fn eval_color(program: &Program, index: usize, u: i32, v: i32) -> [u8; 3] {
                 lerp_byte(a[1], b[1], mask),
                 lerp_byte(a[2], b[2], mask),
             ]
+        }
+        ProgramOp::Rotate { angle } => {
+            let (dx, dy) = centre_delta(u, v);
+            let (rx, ry) = rotate_point(dx, dy, *angle as i32);
+            eval_color(
+                program,
+                node.inputs[0],
+                wrap(32_768 + rx),
+                wrap(32_768 + ry),
+            )
+        }
+        ProgramOp::Mirror { axis } => {
+            let (su, sv) = match axis {
+                Axis::X => (MAX - u, v),
+                Axis::Y => (u, MAX - v),
+            };
+            eval_color(program, node.inputs[0], wrap(su), wrap(sv))
+        }
+        ProgramOp::Tile { x, y } => {
+            let su = (u as i64 * *x as i64).rem_euclid(ONE) as i32;
+            let sv = (v as i64 * *y as i64).rem_euclid(ONE) as i32;
+            eval_color(program, node.inputs[0], su, sv)
+        }
+        ProgramOp::Offset { x, y } => eval_color(
+            program,
+            node.inputs[0],
+            wrap(u + *x as i32),
+            wrap(v + *y as i32),
+        ),
+        ProgramOp::Polar => {
+            let angle = u;
+            let radius = v as i64 * 46_340 / MAX as i64;
+            let (dx, dy) = direction(angle, radius as i32);
+            eval_color(
+                program,
+                node.inputs[0],
+                wrap(32_768 + dx),
+                wrap(32_768 + dy),
+            )
+        }
+        ProgramOp::Cartesian => {
+            let (dx, dy) = centre_delta(u, v);
+            let angle = angle_of(dx, dy);
+            let radius = scale_distance(toroidal_distance(u, v) as i64);
+            eval_color(program, node.inputs[0], angle, radius)
+        }
+        ProgramOp::Screen => {
+            let a = eval_color(program, node.inputs[0], u, v);
+            let b = eval_color(program, node.inputs[1], u, v);
+            [
+                screen_channel(a[0], b[0]),
+                screen_channel(a[1], b[1]),
+                screen_channel(a[2], b[2]),
+            ]
+        }
+        ProgramOp::AddColor => {
+            let a = eval_color(program, node.inputs[0], u, v);
+            let b = eval_color(program, node.inputs[1], u, v);
+            [
+                a[0].saturating_add(b[0]),
+                a[1].saturating_add(b[1]),
+                a[2].saturating_add(b[2]),
+            ]
+        }
+        ProgramOp::Subtract => {
+            let a = eval_color(program, node.inputs[0], u, v);
+            let b = eval_color(program, node.inputs[1], u, v);
+            [
+                a[0].saturating_sub(b[0]),
+                a[1].saturating_sub(b[1]),
+                a[2].saturating_sub(b[2]),
+            ]
+        }
+        ProgramOp::Difference => {
+            let a = eval_color(program, node.inputs[0], u, v);
+            let b = eval_color(program, node.inputs[1], u, v);
+            [
+                a[0].abs_diff(b[0]),
+                a[1].abs_diff(b[1]),
+                a[2].abs_diff(b[2]),
+            ]
+        }
+        ProgramOp::Lighten => {
+            let a = eval_color(program, node.inputs[0], u, v);
+            let b = eval_color(program, node.inputs[1], u, v);
+            [a[0].max(b[0]), a[1].max(b[1]), a[2].max(b[2])]
+        }
+        ProgramOp::Darken => {
+            let a = eval_color(program, node.inputs[0], u, v);
+            let b = eval_color(program, node.inputs[1], u, v);
+            [a[0].min(b[0]), a[1].min(b[1]), a[2].min(b[2])]
+        }
+        ProgramOp::BrightnessContrast {
+            brightness,
+            contrast,
+        } => {
+            let color = eval_color(program, node.inputs[0], u, v);
+            [
+                adjust_channel(color[0], *brightness, *contrast),
+                adjust_channel(color[1], *brightness, *contrast),
+                adjust_channel(color[2], *brightness, *contrast),
+            ]
+        }
+        ProgramOp::Saturate { amount } => {
+            let color = eval_color(program, node.inputs[0], u, v);
+            let luma = luma(color) as u8;
+            [
+                lerp_byte(luma, color[0], *amount as i32),
+                lerp_byte(luma, color[1], *amount as i32),
+                lerp_byte(luma, color[2], *amount as i32),
+            ]
+        }
+        ProgramOp::HueShift { angle } => {
+            let color = eval_color(program, node.inputs[0], u, v);
+            hue_shift(color, *angle as i32)
+        }
+        ProgramOp::Blur { radius } => {
+            let radius = *radius as i32;
+            if radius == 0 {
+                return eval_color(program, node.inputs[0], u, v);
+            }
+            let mut sums = [0u32; 3];
+            let mut count = 0u32;
+            for oy in -radius..=radius {
+                for ox in -radius..=radius {
+                    let color = eval_color(
+                        program,
+                        node.inputs[0],
+                        wrap(u + ox * TEXEL),
+                        wrap(v + oy * TEXEL),
+                    );
+                    for (sum, channel) in sums.iter_mut().zip(color) {
+                        *sum += channel as u32;
+                    }
+                    count += 1;
+                }
+            }
+            [
+                ((sums[0] + count / 2) / count) as u8,
+                ((sums[1] + count / 2) / count) as u8,
+                ((sums[2] + count / 2) / count) as u8,
+            ]
+        }
+        ProgramOp::Emboss { strength } => {
+            let plus = eval_color(program, node.inputs[0], wrap(u + TEXEL), wrap(v + TEXEL));
+            let minus = eval_color(program, node.inputs[0], wrap(u - TEXEL), wrap(v - TEXEL));
+            let difference = (luma(plus) - luma(minus)) * *strength as i64 / MAX as i64;
+            let value = (128 + difference).clamp(0, 255) as u8;
+            [value, value, value]
+        }
+        ProgramOp::NormalMap { strength } => {
+            let left = luma(eval_color(program, node.inputs[0], wrap(u - TEXEL), v));
+            let right = luma(eval_color(program, node.inputs[0], wrap(u + TEXEL), v));
+            let top = luma(eval_color(program, node.inputs[0], u, wrap(v - TEXEL)));
+            let bottom = luma(eval_color(program, node.inputs[0], u, wrap(v + TEXEL)));
+            let scale = *strength as i64;
+            let nx = -(right - left) * scale / MAX as i64;
+            let ny = -(bottom - top) * scale / MAX as i64;
+            let nz = 255i64;
+            let length = isqrt((nx * nx + ny * ny + nz * nz) as u64).max(1) as i64;
+            [
+                (128 + nx * 127 / length).clamp(0, 255) as u8,
+                (128 + ny * 127 / length).clamp(0, 255) as u8,
+                (nz * 255 / length).clamp(0, 255) as u8,
+            ]
+        }
+        ProgramOp::Bevel { radius, strength } => {
+            let offset = *radius as i32 * TEXEL;
+            let top = luma(eval_color(program, node.inputs[0], u, wrap(v - offset)));
+            let left = luma(eval_color(program, node.inputs[0], wrap(u - offset), v));
+            let bottom = luma(eval_color(program, node.inputs[0], u, wrap(v + offset)));
+            let right = luma(eval_color(program, node.inputs[0], wrap(u + offset), v));
+            let light = (top + left) - (bottom + right);
+            let value = (128 + light * *strength as i64 / (MAX as i64 * 4)).clamp(0, 255) as u8;
+            [value, value, value]
         }
         _ => unreachable!("scalar op evaluated as a colour"),
     }
@@ -304,6 +591,135 @@ fn smoothstep(edge0: i32, edge1: i32, value: i32) -> i32 {
 
 fn wrap(value: i32) -> i32 {
     value.rem_euclid(ONE as i32)
+}
+
+fn sine(phase: i32) -> i32 {
+    SINE[(phase.rem_euclid(65_536) >> 6) as usize] as i32
+}
+
+fn cosine(phase: i32) -> i32 {
+    sine(phase.wrapping_add(16_384))
+}
+
+fn signed_sine(phase: i32) -> i32 {
+    sine(phase) - 32_768
+}
+
+fn signed_cosine(phase: i32) -> i32 {
+    cosine(phase) - 32_768
+}
+
+fn triangle(phase: i32) -> i32 {
+    let phase = phase.rem_euclid(65_536);
+    if phase < 32_768 {
+        phase * 2
+    } else {
+        (65_536 - phase) * 2
+    }
+}
+
+fn centre_delta(u: i32, v: i32) -> (i32, i32) {
+    (u - 32_768, v - 32_768)
+}
+
+fn toroidal_distance(u: i32, v: i32) -> i32 {
+    let (dx, dy) = centre_delta(u, v);
+    let dx = dx.abs().min(ONE as i32 - dx.abs());
+    let dy = dy.abs().min(ONE as i32 - dy.abs());
+    isqrt((dx as i64 * dx as i64 + dy as i64 * dy as i64) as u64) as i32
+}
+
+fn scale_distance(distance: i64) -> i32 {
+    (distance * MAX as i64 / 46_340).clamp(0, MAX as i64) as i32
+}
+
+fn angle_of(dx: i32, dy: i32) -> i32 {
+    let ax = dx.abs();
+    let ay = dy.abs();
+    if ax == 0 && ay == 0 {
+        return 0;
+    }
+    let (max, min) = if ax >= ay { (ax, ay) } else { (ay, ax) };
+    let ratio = (min as i64 * 256 / max as i64) as usize;
+    let base = ATAN[ratio.min(256)] as i32;
+    let angle = if ax >= ay { base } else { 16_384 - base };
+    let angle = match (dx >= 0, dy >= 0) {
+        (true, true) => angle,
+        (false, true) => 32_768 - angle,
+        (false, false) => 32_768 + angle,
+        (true, false) => 65_536 - angle,
+    };
+    angle.rem_euclid(65_536)
+}
+
+fn soft_mask(distance: i32, radius: i32, softness: i32) -> i32 {
+    if softness <= 0 {
+        return if distance <= radius { MAX } else { 0 };
+    }
+    let inner = (radius - softness).max(0);
+    let outer = radius.saturating_add(softness);
+    if distance <= inner {
+        return MAX;
+    }
+    if distance >= outer {
+        return 0;
+    }
+    let t = ((distance - inner) as i64 * MAX as i64 / (outer - inner) as i64) as i32;
+    MAX - smoothstep(0, MAX, t)
+}
+
+fn rotate_point(dx: i32, dy: i32, angle: i32) -> (i32, i32) {
+    let c = signed_cosine(angle) as i64;
+    let s = signed_sine(angle) as i64;
+    (
+        ((dx as i64 * c - dy as i64 * s) >> 15) as i32,
+        ((dx as i64 * s + dy as i64 * c) >> 15) as i32,
+    )
+}
+
+fn direction(angle: i32, radius: i32) -> (i32, i32) {
+    let c = signed_cosine(angle) as i64;
+    let s = signed_sine(angle) as i64;
+    (
+        (radius as i64 * c / 32_768) as i32,
+        (radius as i64 * s / 32_768) as i32,
+    )
+}
+
+fn luma(color: [u8; 3]) -> i64 {
+    (77 * color[0] as i64 + 150 * color[1] as i64 + 29 * color[2] as i64) >> 8
+}
+
+fn screen_channel(a: u8, b: u8) -> u8 {
+    (255 - (255 - a as u16) * (255 - b as u16) / 255) as u8
+}
+
+fn adjust_channel(channel: u8, brightness: i16, contrast: u16) -> u8 {
+    let value = (channel as i64 - 128) * contrast as i64 / 32_768
+        + 128
+        + brightness as i64 * 255 / MAX as i64;
+    value.clamp(0, 255) as u8
+}
+
+fn hue_shift(color: [u8; 3], angle: i32) -> [u8; 3] {
+    let r = color[0] as i64;
+    let g = color[1] as i64;
+    let b = color[2] as i64;
+    let y = (77 * r + 150 * g + 29 * b) >> 8;
+    let i = (596 * r - 274 * g - 322 * b) >> 10;
+    let q = (211 * r - 523 * g + 312 * b) >> 10;
+    let c = signed_cosine(angle) as i64;
+    let s = signed_sine(angle) as i64;
+    let i2 = (i * c - q * s) >> 15;
+    let q2 = (i * s + q * c) >> 15;
+    let red = y + (956 * i2 + 621 * q2) / 1000;
+    let green = y + (-272 * i2 - 647 * q2) / 1000;
+    let blue = y + (-1106 * i2 + 1703 * q2) / 1000;
+    [
+        red.clamp(0, 255) as u8,
+        green.clamp(0, 255) as u8,
+        blue.clamp(0, 255) as u8,
+    ]
 }
 
 fn value_noise(u: i32, v: i32, period: u32, octaves: u8, stream: u64) -> i32 {

@@ -287,9 +287,13 @@ Every spatial op takes a period in lattice cells and wraps lattice coordinates m
 ### 8.4 Initial op set (enough for all 23 faces)
 
 - Sources: `Const`, `Uv`, `ValueNoise`, `Worley` (F1/F2/edge), `Fbm`, `Rings` (integer sqrt), `Stripes` (axis, count, wobble), `Rect`, `HBand`.
+- Patterns and shapes: `Checker`, `Bricks`, `Wave`, `Spiral`, `RadialGradient`, `Circle`, `Star`, `Polygon`.
+- Domain transforms: `Rotate`, `Mirror`, `Tile`, `Offset`, `Polar`, `Cartesian`, `Luminance`.
 - Math: `Add`, `Mul`, `Min`, `Max`, `Invert`, `Remap`, `Smoothstep`, `Threshold`, `Quantize`, `Mix(mask)`, `MixColor(mask)`.
 - Warp: `Warp(by: node, amount)`.
-- Colour: `Ramp` (gradient to RGBA), `Palette`, `Multiply`, `Overlay`, `MixColor`.
+- Colour: `Ramp` (gradient to RGBA), `Palette`, `Multiply`, `Overlay`, `MixColor`, `BrightnessContrast`, `Saturate`, `HueShift`.
+- Blend: `Screen`, `AddColor`, `Subtract`, `Difference`, `Lighten`, `Darken`.
+- Effects: `Blur`, `Emboss`, `NormalMap`, `Bevel` (all re-sample their colour input at fixed texel offsets).
 - Alpha: `AlphaFromMask`, `AlphaBinary(threshold)` (guarantees Cutout), `AlphaBand(min, max)` (Translucent).
 - Output: `Rgba`.
 
@@ -382,7 +386,9 @@ The generator is implemented and runnable:
 - `cargo run -p voxel-texgen` opens the editor; `cargo run -p voxel-texgen -- check` verifies the committed set.
 - The deterministic core is `voxel-texgraph`; the app is `voxel-texgen` and contains no byte-producing logic of its own.
 - All 23 graphs, PNGs, `textures.ron`, `materials.gen.ron`, `atlas.png` and `atlas.hash.ron` are committed.
-- The evaluator adds `MixColor` for colour blending by a mask; every other op is from section 8.4.
+- The evaluator adds `MixColor`, the pattern/shape nodes, domain transforms and the colour/effect nodes listed in section 8.4.
+- Neighbourhood effects (`Blur`, `Emboss`, `NormalMap`, `Bevel`) re-sample their input at fixed 256-grid texel offsets. They preserve periodicity because the offsets wrap, but cost more than pointwise ops; preview at 128² while authoring.
+- `Circle`, `Star`, `Polygon`, `Rotate` and `Mirror` are tagged as breaking both axes; `Polar` and `Cartesian` break the vertical axis. The validator rejects them under incompatible tiling.
 - The bake filter is `box16-linear-premul-v1` and the PNG encoder is `png =0.17.16` with the section 5.4 settings.
 - `texgen-mcp` exposes the pipeline to OpenCode over MCP stdio (`list_faces`, `read_graph`, `validate_graph`, `render_preview`, `render_tile`, `render_atlas`, `list_materials`, `read_manifest`, `check`, `generate`, `bake_atlas`). It never writes graph RON.
 - Screenshots (section 11) and the remaining M1.5 renderer tasks are not part of this generator change.

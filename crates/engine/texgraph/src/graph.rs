@@ -129,6 +129,43 @@ pub enum Op {
         y0: u16,
         y1: u16,
     },
+    Checker {
+        period: u32,
+    },
+    Bricks {
+        rows: u32,
+        columns: u32,
+        mortar: u16,
+        offset: u16,
+    },
+    Wave {
+        axis: Axis,
+        count: u32,
+        phase: u16,
+    },
+    Spiral {
+        turns: u32,
+        arms: u32,
+    },
+    RadialGradient {
+        radius: u16,
+    },
+    Circle {
+        radius: u16,
+        softness: u16,
+    },
+    Star {
+        points: u32,
+        inner: u16,
+        rotation: u16,
+        softness: u16,
+    },
+    Polygon {
+        sides: u8,
+        radius: u16,
+        rotation: u16,
+        softness: u16,
+    },
     Add,
     Mul,
     Min,
@@ -163,6 +200,52 @@ pub enum Op {
     },
     Multiply,
     Overlay,
+    Rotate {
+        angle: u16,
+    },
+    Mirror {
+        axis: Axis,
+    },
+    Tile {
+        x: u32,
+        y: u32,
+    },
+    Offset {
+        x: u16,
+        y: u16,
+    },
+    Polar,
+    Cartesian,
+    Luminance,
+    Screen,
+    AddColor,
+    Subtract,
+    Difference,
+    Lighten,
+    Darken,
+    BrightnessContrast {
+        brightness: i16,
+        contrast: u16,
+    },
+    Saturate {
+        amount: u16,
+    },
+    HueShift {
+        angle: u16,
+    },
+    Blur {
+        radius: u8,
+    },
+    Emboss {
+        strength: u16,
+    },
+    NormalMap {
+        strength: u16,
+    },
+    Bevel {
+        radius: u8,
+        strength: u16,
+    },
     AlphaFromMask,
     AlphaBinary {
         at: u16,
@@ -237,6 +320,43 @@ pub enum ProgramOp {
         y0: u16,
         y1: u16,
     },
+    Checker {
+        period: u32,
+    },
+    Bricks {
+        rows: u32,
+        columns: u32,
+        mortar: u16,
+        offset: u16,
+    },
+    Wave {
+        axis: Axis,
+        count: u32,
+        phase: u16,
+    },
+    Spiral {
+        turns: u32,
+        arms: u32,
+    },
+    RadialGradient {
+        radius: u16,
+    },
+    Circle {
+        radius: u16,
+        softness: u16,
+    },
+    Star {
+        points: u32,
+        inner: u16,
+        rotation: u16,
+        softness: u16,
+    },
+    Polygon {
+        sides: u8,
+        radius: u16,
+        rotation: u16,
+        softness: u16,
+    },
     Add,
     Mul,
     Min,
@@ -271,6 +391,52 @@ pub enum ProgramOp {
     },
     Multiply,
     Overlay,
+    Rotate {
+        angle: u16,
+    },
+    Mirror {
+        axis: Axis,
+    },
+    Tile {
+        x: u32,
+        y: u32,
+    },
+    Offset {
+        x: u16,
+        y: u16,
+    },
+    Polar,
+    Cartesian,
+    Luminance,
+    Screen,
+    AddColor,
+    Subtract,
+    Difference,
+    Lighten,
+    Darken,
+    BrightnessContrast {
+        brightness: i16,
+        contrast: u16,
+    },
+    Saturate {
+        amount: u16,
+    },
+    HueShift {
+        angle: u16,
+    },
+    Blur {
+        radius: u8,
+    },
+    Emboss {
+        strength: u16,
+    },
+    NormalMap {
+        strength: u16,
+    },
+    Bevel {
+        radius: u8,
+        strength: u16,
+    },
     AlphaFromMask,
     AlphaBinary {
         at: u16,
@@ -570,6 +736,14 @@ impl Op {
             Self::Stripes { .. } => "Stripes",
             Self::Rect { .. } => "Rect",
             Self::HBand { .. } => "H Band",
+            Self::Checker { .. } => "Checker",
+            Self::Bricks { .. } => "Bricks",
+            Self::Wave { .. } => "Wave",
+            Self::Spiral { .. } => "Spiral",
+            Self::RadialGradient { .. } => "Radial Gradient",
+            Self::Circle { .. } => "Circle",
+            Self::Star { .. } => "Star",
+            Self::Polygon { .. } => "Polygon",
             Self::Add => "Add",
             Self::Mul => "Multiply",
             Self::Min => "Minimum",
@@ -586,6 +760,26 @@ impl Op {
             Self::Palette { .. } => "Palette",
             Self::Multiply => "Color Multiply",
             Self::Overlay => "Overlay",
+            Self::Rotate { .. } => "Rotate",
+            Self::Mirror { .. } => "Mirror",
+            Self::Tile { .. } => "Tile",
+            Self::Offset { .. } => "Offset",
+            Self::Polar => "Polar",
+            Self::Cartesian => "Cartesian",
+            Self::Luminance => "Luminance",
+            Self::Screen => "Screen",
+            Self::AddColor => "Color Add",
+            Self::Subtract => "Color Subtract",
+            Self::Difference => "Difference",
+            Self::Lighten => "Lighten",
+            Self::Darken => "Darken",
+            Self::BrightnessContrast { .. } => "Brightness / Contrast",
+            Self::Saturate { .. } => "Saturate",
+            Self::HueShift { .. } => "Hue Shift",
+            Self::Blur { .. } => "Blur",
+            Self::Emboss { .. } => "Emboss",
+            Self::NormalMap { .. } => "Normal Map",
+            Self::Bevel { .. } => "Bevel",
             Self::AlphaFromMask => "Alpha From Mask",
             Self::AlphaBinary { .. } => "Alpha Binary",
             Self::AlphaBand { .. } => "Alpha Band",
@@ -602,7 +796,13 @@ impl Op {
             | Self::Rings { .. }
             | Self::Stripes { .. }
             | Self::Rect { .. }
-            | Self::HBand { .. } => "Pattern",
+            | Self::HBand { .. }
+            | Self::Checker { .. }
+            | Self::Bricks { .. }
+            | Self::Wave { .. }
+            | Self::Spiral { .. }
+            | Self::RadialGradient { .. } => "Pattern",
+            Self::Circle { .. } | Self::Star { .. } | Self::Polygon { .. } => "Shape",
             Self::Add
             | Self::Mul
             | Self::Min
@@ -614,8 +814,31 @@ impl Op {
             | Self::Quantize { .. }
             | Self::Mix
             | Self::Warp { .. } => "Math",
-            Self::MixColor => "Color",
-            Self::Ramp { .. } | Self::Palette { .. } | Self::Multiply | Self::Overlay => "Color",
+            Self::Rotate { .. }
+            | Self::Mirror { .. }
+            | Self::Tile { .. }
+            | Self::Offset { .. }
+            | Self::Polar
+            | Self::Cartesian => "Transform",
+            Self::MixColor
+            | Self::Ramp { .. }
+            | Self::Palette { .. }
+            | Self::Multiply
+            | Self::Overlay
+            | Self::Luminance
+            | Self::BrightnessContrast { .. }
+            | Self::Saturate { .. }
+            | Self::HueShift { .. } => "Color",
+            Self::Screen
+            | Self::AddColor
+            | Self::Subtract
+            | Self::Difference
+            | Self::Lighten
+            | Self::Darken => "Blend",
+            Self::Blur { .. }
+            | Self::Emboss { .. }
+            | Self::NormalMap { .. }
+            | Self::Bevel { .. } => "Effect",
             Self::AlphaFromMask | Self::AlphaBinary { .. } | Self::AlphaBand { .. } => "Alpha",
         }
     }
@@ -632,6 +855,14 @@ impl Op {
             Self::Stripes { .. } => "Periodic stripes with optional wobble.",
             Self::Rect { .. } => "Axis-aligned rectangle mask. Breaks both axes.",
             Self::HBand { .. } => "Horizontal band mask. Breaks the vertical axis.",
+            Self::Checker { .. } => "Periodic checkerboard mask.",
+            Self::Bricks { .. } => "Periodic brick grid with mortar and row offset.",
+            Self::Wave { .. } => "Smooth periodic sine wave along X or Y.",
+            Self::Spiral { .. } => "Periodic spiral arms from the tile centre.",
+            Self::RadialGradient { .. } => "Distance from the centre as a gradient.",
+            Self::Circle { .. } => "Soft-edged circle mask. Breaks both axes.",
+            Self::Star { .. } => "Soft-edged star mask. Breaks both axes.",
+            Self::Polygon { .. } => "Soft-edged regular polygon mask. Breaks both axes.",
             Self::Add => "Clamped addition of two masks.",
             Self::Mul => "Mask multiplication.",
             Self::Min => "Smaller of two masks.",
@@ -648,6 +879,28 @@ impl Op {
             Self::Palette { .. } => "Map a mask to a fixed colour palette.",
             Self::Multiply => "Multiply two colours.",
             Self::Overlay => "Overlay blend two colours.",
+            Self::Rotate { .. } => {
+                "Rotate the input domain around the tile centre. Breaks both axes."
+            }
+            Self::Mirror { .. } => "Mirror the input domain on one axis. Breaks both axes.",
+            Self::Tile { .. } => "Repeat the input domain X and Y times.",
+            Self::Offset { .. } => "Shift the input domain without changing its scale.",
+            Self::Polar => "Sample the input as angle by radius. Breaks the vertical axis.",
+            Self::Cartesian => "Turn angle/radius into a circular image. Breaks the vertical axis.",
+            Self::Luminance => "Convert a colour to a perceptual luminance mask.",
+            Self::Screen => "Screen blend two colours.",
+            Self::AddColor => "Additive blend, clamped.",
+            Self::Subtract => "Subtractive blend, clamped.",
+            Self::Difference => "Absolute difference of two colours.",
+            Self::Lighten => "Keep the lighter channel of each colour.",
+            Self::Darken => "Keep the darker channel of each colour.",
+            Self::BrightnessContrast { .. } => "Adjust brightness and contrast.",
+            Self::Saturate { .. } => "Move between greyscale and the original colour.",
+            Self::HueShift { .. } => "Rotate hue in YIQ space.",
+            Self::Blur { .. } => "Box blur by re-sampling the input at nearby texels.",
+            Self::Emboss { .. } => "Directional emboss from neighbouring luminance.",
+            Self::NormalMap { .. } => "Encode a height field as a tangent-space normal map.",
+            Self::Bevel { .. } => "Light and shade height-field edges.",
             Self::AlphaFromMask => "Alpha equals the mask.",
             Self::AlphaBinary { .. } => "Binary alpha above a threshold.",
             Self::AlphaBand { .. } => "Map a mask into an alpha range.",
@@ -685,6 +938,36 @@ pub fn catalog() -> Vec<Op> {
             y1: 57_344,
         },
         Op::HBand { y0: 0, y1: 16_384 },
+        Op::Checker { period: 8 },
+        Op::Bricks {
+            rows: 6,
+            columns: 4,
+            mortar: 2_000,
+            offset: 32_768,
+        },
+        Op::Wave {
+            axis: Axis::X,
+            count: 6,
+            phase: 0,
+        },
+        Op::Spiral { turns: 4, arms: 3 },
+        Op::RadialGradient { radius: 32_768 },
+        Op::Circle {
+            radius: 20_000,
+            softness: 1_500,
+        },
+        Op::Star {
+            points: 5,
+            inner: 22_000,
+            rotation: 0,
+            softness: 1_200,
+        },
+        Op::Polygon {
+            sides: 6,
+            radius: 24_000,
+            rotation: 0,
+            softness: 1_200,
+        },
         Op::Add,
         Op::Mul,
         Op::Min,
@@ -717,6 +1000,32 @@ pub fn catalog() -> Vec<Op> {
         },
         Op::Multiply,
         Op::Overlay,
+        Op::Rotate { angle: 4_096 },
+        Op::Mirror { axis: Axis::X },
+        Op::Tile { x: 2, y: 2 },
+        Op::Offset { x: 8_192, y: 0 },
+        Op::Polar,
+        Op::Cartesian,
+        Op::Luminance,
+        Op::Screen,
+        Op::AddColor,
+        Op::Subtract,
+        Op::Difference,
+        Op::Lighten,
+        Op::Darken,
+        Op::BrightnessContrast {
+            brightness: 0,
+            contrast: 32_768,
+        },
+        Op::Saturate { amount: 32_768 },
+        Op::HueShift { angle: 8_192 },
+        Op::Blur { radius: 1 },
+        Op::Emboss { strength: 32_768 },
+        Op::NormalMap { strength: 32_768 },
+        Op::Bevel {
+            radius: 2,
+            strength: 32_768,
+        },
         Op::AlphaFromMask,
         Op::AlphaBinary { at: 32_768 },
         Op::AlphaBand {
@@ -744,19 +1053,59 @@ pub fn splitmix64(mut value: u64) -> u64 {
 
 pub fn op_type(op: &Op) -> Type {
     match op {
-        Op::Ramp { .. } | Op::Palette { .. } | Op::Multiply | Op::Overlay | Op::MixColor => {
-            Type::Color
-        }
+        Op::Ramp { .. }
+        | Op::Palette { .. }
+        | Op::Multiply
+        | Op::Overlay
+        | Op::MixColor
+        | Op::Rotate { .. }
+        | Op::Mirror { .. }
+        | Op::Tile { .. }
+        | Op::Offset { .. }
+        | Op::Polar
+        | Op::Cartesian
+        | Op::Screen
+        | Op::AddColor
+        | Op::Subtract
+        | Op::Difference
+        | Op::Lighten
+        | Op::Darken
+        | Op::BrightnessContrast { .. }
+        | Op::Saturate { .. }
+        | Op::HueShift { .. }
+        | Op::Blur { .. }
+        | Op::Emboss { .. }
+        | Op::NormalMap { .. }
+        | Op::Bevel { .. } => Type::Color,
         _ => Type::Scalar,
     }
 }
 
 pub fn op_breaks_h(op: &Op) -> bool {
-    matches!(op, Op::Rect { .. })
+    matches!(
+        op,
+        Op::Rect { .. }
+            | Op::Rotate { .. }
+            | Op::Mirror { .. }
+            | Op::Circle { .. }
+            | Op::Star { .. }
+            | Op::Polygon { .. }
+    )
 }
 
 pub fn op_breaks_v(op: &Op) -> bool {
-    matches!(op, Op::Rect { .. } | Op::HBand { .. })
+    matches!(
+        op,
+        Op::Rect { .. }
+            | Op::HBand { .. }
+            | Op::Rotate { .. }
+            | Op::Mirror { .. }
+            | Op::Circle { .. }
+            | Op::Star { .. }
+            | Op::Polygon { .. }
+            | Op::Polar
+            | Op::Cartesian
+    )
 }
 
 pub fn expected_inputs(op: &Op) -> Vec<Type> {
@@ -770,7 +1119,15 @@ pub fn expected_inputs(op: &Op) -> Vec<Type> {
         | Op::Rings { .. }
         | Op::Stripes { .. }
         | Op::Rect { .. }
-        | Op::HBand { .. } => Vec::new(),
+        | Op::HBand { .. }
+        | Op::Checker { .. }
+        | Op::Bricks { .. }
+        | Op::Wave { .. }
+        | Op::Spiral { .. }
+        | Op::RadialGradient { .. }
+        | Op::Circle { .. }
+        | Op::Star { .. }
+        | Op::Polygon { .. } => Vec::new(),
         Op::Add | Op::Mul | Op::Min | Op::Max => vec![Scalar, Scalar],
         Op::Invert
         | Op::Remap { .. }
@@ -782,10 +1139,31 @@ pub fn expected_inputs(op: &Op) -> Vec<Type> {
         | Op::AlphaFromMask
         | Op::AlphaBinary { .. }
         | Op::AlphaBand { .. } => vec![Scalar],
+        Op::Luminance
+        | Op::Rotate { .. }
+        | Op::Mirror { .. }
+        | Op::Tile { .. }
+        | Op::Offset { .. }
+        | Op::Polar
+        | Op::Cartesian
+        | Op::BrightnessContrast { .. }
+        | Op::Saturate { .. }
+        | Op::HueShift { .. }
+        | Op::Blur { .. }
+        | Op::Emboss { .. }
+        | Op::NormalMap { .. }
+        | Op::Bevel { .. } => vec![Color],
         Op::Mix => vec![Scalar, Scalar, Scalar],
         Op::MixColor => vec![Color, Color, Scalar],
         Op::Warp { .. } => vec![Scalar, Scalar, Scalar],
-        Op::Multiply | Op::Overlay => vec![Color, Color],
+        Op::Multiply
+        | Op::Overlay
+        | Op::Screen
+        | Op::AddColor
+        | Op::Subtract
+        | Op::Difference
+        | Op::Lighten
+        | Op::Darken => vec![Color, Color],
     }
 }
 
@@ -886,6 +1264,98 @@ fn compile_op(key: &str, id: u32, op: &Op) -> Result<ProgramOp, GraphError> {
             }
             ProgramOp::HBand { y0: *y0, y1: *y1 }
         }
+        Op::Checker { period } => {
+            check_period(key, id, *period)?;
+            ProgramOp::Checker { period: *period }
+        }
+        Op::Bricks {
+            rows,
+            columns,
+            mortar,
+            offset,
+        } => {
+            check_period(key, id, *rows)?;
+            check_period(key, id, *columns)?;
+            if *mortar > 60_000 {
+                return Err(invalid(format!(
+                    "{key}: node {id} mortar {mortar} is outside 0..=60000"
+                )));
+            }
+            ProgramOp::Bricks {
+                rows: *rows,
+                columns: *columns,
+                mortar: *mortar,
+                offset: *offset,
+            }
+        }
+        Op::Wave { axis, count, phase } => {
+            check_period(key, id, *count)?;
+            ProgramOp::Wave {
+                axis: *axis,
+                count: *count,
+                phase: *phase,
+            }
+        }
+        Op::Spiral { turns, arms } => {
+            if *turns == 0 || *turns > 64 || *arms == 0 || *arms > 64 {
+                return Err(invalid(format!(
+                    "{key}: node {id} spiral turns and arms must be 1..=64"
+                )));
+            }
+            ProgramOp::Spiral {
+                turns: *turns,
+                arms: *arms,
+            }
+        }
+        Op::RadialGradient { radius } => {
+            if *radius == 0 {
+                return Err(invalid(format!("{key}: node {id} has radius 0")));
+            }
+            ProgramOp::RadialGradient { radius: *radius }
+        }
+        Op::Circle { radius, softness } => ProgramOp::Circle {
+            radius: *radius,
+            softness: *softness,
+        },
+        Op::Star {
+            points,
+            inner,
+            rotation,
+            softness,
+        } => {
+            if *points < 3 || *points > 64 {
+                return Err(invalid(format!(
+                    "{key}: node {id} star points {points} is outside 3..=64"
+                )));
+            }
+            ProgramOp::Star {
+                points: *points,
+                inner: *inner,
+                rotation: *rotation,
+                softness: *softness,
+            }
+        }
+        Op::Polygon {
+            sides,
+            radius,
+            rotation,
+            softness,
+        } => {
+            if *sides < 3 || *sides > 64 {
+                return Err(invalid(format!(
+                    "{key}: node {id} polygon sides {sides} is outside 3..=64"
+                )));
+            }
+            if *radius == 0 {
+                return Err(invalid(format!("{key}: node {id} has radius 0")));
+            }
+            ProgramOp::Polygon {
+                sides: *sides,
+                radius: *radius,
+                rotation: *rotation,
+                softness: *softness,
+            }
+        }
         Op::Add => ProgramOp::Add,
         Op::Mul => ProgramOp::Mul,
         Op::Min => ProgramOp::Min,
@@ -953,6 +1423,60 @@ fn compile_op(key: &str, id: u32, op: &Op) -> Result<ProgramOp, GraphError> {
         }
         Op::Multiply => ProgramOp::Multiply,
         Op::Overlay => ProgramOp::Overlay,
+        Op::Rotate { angle } => ProgramOp::Rotate { angle: *angle },
+        Op::Mirror { axis } => ProgramOp::Mirror { axis: *axis },
+        Op::Tile { x, y } => {
+            if *x == 0 || *x > 64 || *y == 0 || *y > 64 {
+                return Err(invalid(format!(
+                    "{key}: node {id} tile counts must be 1..=64"
+                )));
+            }
+            ProgramOp::Tile { x: *x, y: *y }
+        }
+        Op::Offset { x, y } => ProgramOp::Offset { x: *x, y: *y },
+        Op::Polar => ProgramOp::Polar,
+        Op::Cartesian => ProgramOp::Cartesian,
+        Op::Luminance => ProgramOp::Luminance,
+        Op::Screen => ProgramOp::Screen,
+        Op::AddColor => ProgramOp::AddColor,
+        Op::Subtract => ProgramOp::Subtract,
+        Op::Difference => ProgramOp::Difference,
+        Op::Lighten => ProgramOp::Lighten,
+        Op::Darken => ProgramOp::Darken,
+        Op::BrightnessContrast {
+            brightness,
+            contrast,
+        } => ProgramOp::BrightnessContrast {
+            brightness: *brightness,
+            contrast: *contrast,
+        },
+        Op::Saturate { amount } => ProgramOp::Saturate { amount: *amount },
+        Op::HueShift { angle } => ProgramOp::HueShift { angle: *angle },
+        Op::Blur { radius } => {
+            if *radius > 4 {
+                return Err(invalid(format!(
+                    "{key}: node {id} blur radius {radius} is outside 0..=4"
+                )));
+            }
+            ProgramOp::Blur { radius: *radius }
+        }
+        Op::Emboss { strength } => ProgramOp::Emboss {
+            strength: *strength,
+        },
+        Op::NormalMap { strength } => ProgramOp::NormalMap {
+            strength: *strength,
+        },
+        Op::Bevel { radius, strength } => {
+            if *radius == 0 || *radius > 8 {
+                return Err(invalid(format!(
+                    "{key}: node {id} bevel radius {radius} is outside 1..=8"
+                )));
+            }
+            ProgramOp::Bevel {
+                radius: *radius,
+                strength: *strength,
+            }
+        }
         Op::AlphaFromMask => ProgramOp::AlphaFromMask,
         Op::AlphaBinary { at } => ProgramOp::AlphaBinary { at: *at },
         Op::AlphaBand { min, max } => {

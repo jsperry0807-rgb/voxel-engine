@@ -75,6 +75,80 @@ impl TexgenApp {
                 scalar(ui, "Y0", y0);
                 scalar(ui, "Y1", y1);
             }
+            Op::Checker { period } => {
+                ui.horizontal(|ui| {
+                    ui.label("Period");
+                    ui.add(egui::DragValue::new(period).range(1..=1024));
+                });
+            }
+            Op::Bricks {
+                rows,
+                columns,
+                mortar,
+                offset,
+            } => {
+                ui.horizontal(|ui| {
+                    ui.label("Rows");
+                    ui.add(egui::DragValue::new(rows).range(1..=64));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Columns");
+                    ui.add(egui::DragValue::new(columns).range(1..=64));
+                });
+                scalar(ui, "Mortar", mortar);
+                scalar(ui, "Row offset", offset);
+            }
+            Op::Wave { axis, count, phase } => {
+                axis_combo(ui, "Axis", axis, "wave-axis");
+                ui.horizontal(|ui| {
+                    ui.label("Count");
+                    ui.add(egui::DragValue::new(count).range(1..=64));
+                });
+                scalar(ui, "Phase", phase);
+            }
+            Op::Spiral { turns, arms } => {
+                ui.horizontal(|ui| {
+                    ui.label("Turns");
+                    ui.add(egui::DragValue::new(turns).range(1..=64));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Arms");
+                    ui.add(egui::DragValue::new(arms).range(1..=64));
+                });
+            }
+            Op::RadialGradient { radius } => scalar(ui, "Radius", radius),
+            Op::Circle { radius, softness } => {
+                scalar(ui, "Radius", radius);
+                scalar(ui, "Softness", softness);
+            }
+            Op::Star {
+                points,
+                inner,
+                rotation,
+                softness,
+            } => {
+                ui.horizontal(|ui| {
+                    ui.label("Points");
+                    ui.add(egui::DragValue::new(points).range(3..=64));
+                });
+                scalar(ui, "Inner", inner);
+                scalar(ui, "Rotation", rotation);
+                scalar(ui, "Softness", softness);
+            }
+            Op::Polygon {
+                sides,
+                radius,
+                rotation,
+                softness,
+            } => {
+                ui.horizontal(|ui| {
+                    ui.label("Sides");
+                    ui.add(egui::DragValue::new(sides).range(3..=64));
+                });
+                scalar(ui, "Radius", radius);
+                scalar(ui, "Rotation", rotation);
+                scalar(ui, "Softness", softness);
+            }
             Op::Add | Op::Mul | Op::Min | Op::Max => {}
             Op::Invert => {}
             Op::Remap {
@@ -152,6 +226,56 @@ impl TexgenApp {
                 }
             }
             Op::Multiply | Op::Overlay => {}
+            Op::Rotate { angle } => scalar(ui, "Angle", angle),
+            Op::Mirror { axis } => axis_combo(ui, "Axis", axis, "mirror-axis"),
+            Op::Tile { x, y } => {
+                ui.horizontal(|ui| {
+                    ui.label("Repeat X");
+                    ui.add(egui::DragValue::new(x).range(1..=64));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Repeat Y");
+                    ui.add(egui::DragValue::new(y).range(1..=64));
+                });
+            }
+            Op::Offset { x, y } => {
+                scalar(ui, "Offset X", x);
+                scalar(ui, "Offset Y", y);
+            }
+            Op::Polar | Op::Cartesian | Op::Luminance => {}
+            Op::Screen
+            | Op::AddColor
+            | Op::Subtract
+            | Op::Difference
+            | Op::Lighten
+            | Op::Darken => {}
+            Op::BrightnessContrast {
+                brightness,
+                contrast,
+            } => {
+                ui.horizontal(|ui| {
+                    ui.label("Brightness");
+                    ui.add(egui::DragValue::new(brightness).range(-32_768..=32_767));
+                });
+                scalar(ui, "Contrast", contrast);
+            }
+            Op::Saturate { amount } => scalar(ui, "Amount", amount),
+            Op::HueShift { angle } => scalar(ui, "Angle", angle),
+            Op::Blur { radius } => {
+                ui.horizontal(|ui| {
+                    ui.label("Radius");
+                    ui.add(egui::DragValue::new(radius).range(0..=4));
+                });
+            }
+            Op::Emboss { strength } => scalar(ui, "Strength", strength),
+            Op::NormalMap { strength } => scalar(ui, "Strength", strength),
+            Op::Bevel { radius, strength } => {
+                ui.horizontal(|ui| {
+                    ui.label("Radius");
+                    ui.add(egui::DragValue::new(radius).range(1..=8));
+                });
+                scalar(ui, "Strength", strength);
+            }
             Op::AlphaFromMask => {}
             Op::AlphaBinary { at } => scalar(ui, "Threshold", at),
             Op::AlphaBand { min, max } => {

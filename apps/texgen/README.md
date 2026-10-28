@@ -39,6 +39,26 @@ The inspector edits graph properties, the output colour/alpha, and every op
 parameter. Ramp stops and palette colours are editable in place. Positions are
 stored in the graph RON under `ui`; the evaluator ignores them.
 
+### Node library
+
+| Family | Nodes |
+| --- | --- |
+| Source | Const, UV, Value Noise, FBM, Worley, Rings, Stripes |
+| Pattern | Rect, H Band, Checker, Bricks, Wave, Spiral, Radial Gradient |
+| Shape | Circle, Star, Polygon |
+| Math | Add, Multiply, Minimum, Maximum, Invert, Remap, Smoothstep, Threshold, Quantize, Mix, Warp |
+| Transform | Rotate, Mirror, Tile, Offset, Polar, Cartesian, Luminance |
+| Colour | Ramp, Palette, Multiply, Overlay, Mix Colour, Brightness/Contrast, Saturate, Hue Shift |
+| Blend | Screen, Colour Add, Colour Subtract, Difference, Lighten, Darken |
+| Effect | Blur, Emboss, Normal Map, Bevel |
+| Alpha | Alpha From Mask, Alpha Binary, Alpha Band |
+
+`Circle`, `Star`, `Polygon`, `Rotate` and `Mirror` break both tiling axes;
+`Polar` and `Cartesian` break the vertical axis. Use `Tiling: None` or
+`Horizontal` in the graph header when they are in the output path. Blur,
+emboss, normal map and bevel re-sample their input at fixed texel offsets, so
+they cost more than pointwise nodes; preview at 128² while editing.
+
 ### Subgraphs
 
 `File → Insert subgraph…` inlines another graph's nodes (with remapped ids) at
@@ -121,6 +141,12 @@ The viewer exposes the same bake:
 
 ```sh
 cargo run -p voxel-viewer -- bake-atlas --check
+```
+
+Render any standalone graph RON without touching the committed set:
+
+```sh
+cargo run -p voxel-texgraph --example render -- graph.ron /tmp/preview.png 256
 ```
 
 ## Layout

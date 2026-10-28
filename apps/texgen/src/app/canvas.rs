@@ -63,7 +63,17 @@ impl TexgenApp {
         response.context_menu(|ui| {
             ui.set_min_width(220.0);
             ui.label(RichText::new("Add node").strong());
-            let categories = ["Source", "Pattern", "Math", "Color", "Alpha"];
+            let categories = [
+                "Source",
+                "Pattern",
+                "Shape",
+                "Math",
+                "Transform",
+                "Color",
+                "Blend",
+                "Effect",
+                "Alpha",
+            ];
             for category in categories {
                 ui.menu_button(category, |ui| {
                     for op in catalog().into_iter().filter(|op| op.category() == category) {
@@ -729,8 +739,12 @@ fn category_color(category: &str) -> Color32 {
     match category {
         "Source" => Color32::from_rgb(58, 92, 130),
         "Pattern" => Color32::from_rgb(74, 104, 68),
+        "Shape" => Color32::from_rgb(118, 96, 58),
         "Math" => Color32::from_rgb(98, 80, 130),
+        "Transform" => Color32::from_rgb(62, 96, 110),
         "Color" => Color32::from_rgb(120, 76, 68),
+        "Blend" => Color32::from_rgb(132, 84, 98),
+        "Effect" => Color32::from_rgb(84, 88, 128),
         "Alpha" => Color32::from_rgb(92, 92, 96),
         _ => Color32::from_rgb(72, 74, 80),
     }
