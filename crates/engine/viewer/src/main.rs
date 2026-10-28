@@ -451,13 +451,13 @@ impl ApplicationHandler for Viewer {
                 state: ElementState::Pressed,
                 ..
             } => {
-                if let Some(window) = self.window.clone() {
-                    if self.capture {
-                        if self.cursor_mode.is_none() {
-                            self.grab(&window);
-                        } else {
-                            self.hide_cursor(&window);
-                        }
+                if let Some(window) = self.window.clone()
+                    && self.capture
+                {
+                    if self.cursor_mode.is_none() {
+                        self.grab(&window);
+                    } else {
+                        self.hide_cursor(&window);
                     }
                 }
             }
