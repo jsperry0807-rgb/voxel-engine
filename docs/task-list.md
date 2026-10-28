@@ -415,7 +415,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| M2-01 | Apron API: six 1-voxel face planes (128² u16 each) from the world, including cross-chunk neighbours | M1-15 | 6 planes equal a direct dense read of the 130³ padded volume on 3 fixtures | `cargo test -p voxel-storage apron` | 1 d | [ ] |
+| M2-01 | Apron API: six 1-voxel face planes (128² u16 each) from the world, including cross-chunk neighbours | M1-15 | 6 planes equal a direct dense read of the 130³ padded volume on 3 fixtures | `cargo test -p voxel-storage apron` | 1 d | [x] |
 | M2-02 | Apron cost benchmark vs a dense 130³ copy; record the winner | M2-01 | Face-plane path ≤ 25% of the dense path's bytes and time | `cargo bench -p voxel-storage apron` | 0.5 d | [ ] |
 | M2-03 | Block-granular driver: iterate 16³ blocks, build a bounded scratch per block (18³), no chunk-wide densify | M2-01 | Peak scratch ≤ 64 KiB/worker on the noise fixture | `cargo test -p voxel-mesh scratch_budget` | 1 d | [ ] |
 | M2-04 | Create `crates/engine/mesh` (`voxel-mesh`); greedy bitmask core over one axis at a time | M2-01 | Quad count ≤ visible-face count; matches the M1-31 reference on 5 fixtures | `cargo test -p voxel-mesh greedy_matches_reference` | 2 d | [ ] |

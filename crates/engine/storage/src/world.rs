@@ -2,6 +2,7 @@
 //! override goes straight to the GPU overlay so the next frame sees it. The
 //! compressed DAG is rebuilt by [`World::tick`] when a
 //! [`ConsolidationPolicy`] trigger fires, or explicitly on save/LOD events.
+use crate::apron::Apron;
 use crate::dag::Svdag;
 use crate::disk::RegionStore;
 use crate::gpu::{GpuSink, GpuStore};
@@ -138,6 +139,18 @@ impl<S: GpuSink> World<S> {
                 c.dag.get(lx, ly, lz)
             },
         )))
+    }
+
+    /// The six 1-voxel face planes around `p` (M2-01).
+    ///
+    /// Each plane is [`Apron::PLANE`] raw [`MaterialId`]s read overlay-first
+    /// from the chunk that shares that face. Every face plane therefore costs
+    /// one neighbour lookup and a tree walk, never a dense padded copy.
+    ///
+    /// A neighbour that is not resident reads as [`AIR`](crate::AIR). Load the
+    /// six face neighbours first when a border must be exact.
+    pub fn apron(&self, p: ChunkPos) -> Apron {
+        Apron::gather(self, p)
     }
 
     /// O(1): overlay insert (or removal when the edit reverts to the DAG value).

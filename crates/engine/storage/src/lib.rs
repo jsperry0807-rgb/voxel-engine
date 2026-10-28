@@ -3,6 +3,7 @@
 //! T1 `disk`    region files: append-only log of serialized SVDAGs + overlay snapshots
 //! T2 `world`   `FxMap<ChunkPos, Chunk{Arc<Svdag>, Overlay}>`; edits hit the O(1) overlay only
 //! T3 `gpu`     global deduped node pool + dynamic chunk hash table + per-chunk edit overlay
+pub mod apron;
 pub mod bands;
 pub mod chunk;
 pub mod compact;
@@ -21,6 +22,7 @@ pub mod scan;
 pub mod serialize;
 pub mod world;
 
+pub use apron::{Apron, Face};
 pub use bands::Bands;
 pub use chunk::ChunkDag;
 pub use compact::{BandWaste, CompactBand, CompactionStats, FrameGuard, RootGuard};
