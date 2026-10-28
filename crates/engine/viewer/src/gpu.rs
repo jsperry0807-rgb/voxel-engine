@@ -28,7 +28,7 @@ use winit::dpi::PhysicalSize;
 use winit::event_loop::OwnedDisplayHandle;
 use winit::window::Window;
 
-use crate::atlas::AtlasBuilder;
+use crate::atlas::Atlas;
 use crate::atlas_texture::AtlasTexture;
 use crate::camera::{Camera, CameraUniform};
 use crate::depth::DepthTarget;
@@ -62,7 +62,11 @@ impl Gpu {
     ///
     /// The display handle comes from the event loop: GLES needs it on Wayland
     /// to create a surface at all.
-    pub fn new(window: Arc<Window>, display: OwnedDisplayHandle) -> Result<Self, ViewerError> {
+    pub fn new(
+        window: Arc<Window>,
+        display: OwnedDisplayHandle,
+        atlas: Atlas,
+    ) -> Result<Self, ViewerError> {
         let instance = Instance::new(InstanceDescriptor::new_with_display_handle(Box::new(
             display,
         )));
@@ -120,9 +124,7 @@ impl Gpu {
 
         let depth = DepthTarget::new(&device, config.width, config.height);
         let quads = Quads::new(&device, &camera_layout, config.format);
-        // M1.5-12 will bind the baked atlas. Uploading the empty builder here
-        // keeps the texture/sampler/bind-group path live in the meantime.
-        let atlas = AtlasTexture::new(&device, &queue, &AtlasBuilder::new().build());
+        let atlas = AtlasTexture::new(&device, &queue, &atlas);
 
         Ok(Self {
             device,

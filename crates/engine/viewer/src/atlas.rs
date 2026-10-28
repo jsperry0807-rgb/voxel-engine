@@ -19,6 +19,8 @@
 
 use std::error::Error;
 use std::fmt;
+use std::fs::File;
+use std::path::{Path, PathBuf};
 
 pub use voxel_core::atlas::{
     ATLAS_SIZE, MAX_MATERIALS, MAX_MIP, MIP_LEVELS, TILE_SIZE, TILES_PER_EDGE, tile_origin, uv,
@@ -47,6 +49,61 @@ impl fmt::Display for AtlasError {
 }
 
 impl Error for AtlasError {}
+
+/// A failure while loading a baked atlas from PNG files.
+#[derive(Debug)]
+pub enum AtlasLoadError {
+    Io {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    Png {
+        path: PathBuf,
+        source: png::DecodingError,
+    },
+    Format {
+        path: PathBuf,
+        message: String,
+    },
+    Dimensions {
+        path: PathBuf,
+        width: u32,
+        height: u32,
+        expected: u32,
+    },
+}
+
+impl fmt::Display for AtlasLoadError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io { path, source } => write!(f, "{}: {source}", path.display()),
+            Self::Png { path, source } => {
+                write!(f, "could not decode {}: {source}", path.display())
+            }
+            Self::Format { path, message } => write!(f, "{}: {message}", path.display()),
+            Self::Dimensions {
+                path,
+                width,
+                height,
+                expected,
+            } => write!(
+                f,
+                "{} is {width}×{height}; expected {expected}×{expected}",
+                path.display()
+            ),
+        }
+    }
+}
+
+impl Error for AtlasLoadError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Io { source, .. } => Some(source),
+            Self::Png { source, .. } => Some(source),
+            Self::Format { .. } | Self::Dimensions { .. } => None,
+        }
+    }
+}
 
 /// Collects source tiles and builds the atlas.
 ///
@@ -159,6 +216,33 @@ pub struct Atlas {
 }
 
 impl Atlas {
+    /// Loads `atlas-0.png` through `atlas-4.png` from `dir`.
+    ///
+    /// This is the temporary local-development path for the baked `.temp`
+    /// atlas. The files are RGBA8 and each level must be the expected size.
+    pub fn load_dir(dir: &Path) -> Result<Self, AtlasLoadError> {
+        let mut levels = Vec::with_capacity(MIP_LEVELS as usize);
+        for level in 0..MIP_LEVELS {
+            let path = dir.join(format!("atlas-{level}.png"));
+            let expected = ATLAS_SIZE >> level;
+            let (width, height, pixels) = decode_png(&path)?;
+            if width != expected || height != expected {
+                return Err(AtlasLoadError::Dimensions {
+                    path,
+                    width,
+                    height,
+                    expected,
+                });
+            }
+            levels.push(MipLevel {
+                width,
+                height,
+                pixels,
+            });
+        }
+        Ok(Self { levels })
+    }
+
     /// Number of levels including the base image; always [`MIP_LEVELS`].
     pub fn mip_count(&self) -> u32 {
         self.levels.len() as u32
@@ -178,6 +262,36 @@ impl Atlas {
     pub fn byte_len(&self) -> usize {
         self.levels.iter().map(|level| level.pixels.len()).sum()
     }
+}
+
+fn decode_png(path: &Path) -> Result<(u32, u32, Vec<u8>), AtlasLoadError> {
+    let file = File::open(path).map_err(|source| AtlasLoadError::Io {
+        path: path.to_owned(),
+        source,
+    })?;
+    let decoder = png::Decoder::new(file);
+    let mut reader = decoder.read_info().map_err(|source| AtlasLoadError::Png {
+        path: path.to_owned(),
+        source,
+    })?;
+    let mut pixels = vec![0; reader.output_buffer_size()];
+    let info = reader
+        .next_frame(&mut pixels)
+        .map_err(|source| AtlasLoadError::Png {
+            path: path.to_owned(),
+            source,
+        })?;
+    if info.bit_depth != png::BitDepth::Eight || info.color_type != png::ColorType::Rgba {
+        return Err(AtlasLoadError::Format {
+            path: path.to_owned(),
+            message: format!(
+                "expected RGBA8, found {:?} {:?}",
+                info.color_type, info.bit_depth
+            ),
+        });
+    }
+    pixels.truncate(info.buffer_size());
+    Ok((info.width, info.height, pixels))
 }
 
 /// Copies one tile-sized image into a mip level at `origin`.

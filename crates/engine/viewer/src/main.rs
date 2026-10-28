@@ -16,11 +16,13 @@
 //! run use `RUST_LOG=wgpu_core=warn`.
 
 use std::error::Error;
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use glam::{Vec2, Vec3};
+use voxel_viewer::atlas::{Atlas, AtlasBuilder};
 use voxel_viewer::bake;
 use voxel_viewer::camera::Camera;
 use voxel_viewer::error::ViewerError;
@@ -90,6 +92,40 @@ fn report(error: &dyn Error) {
         eprintln!("  caused by: {cause}");
         source = cause.source();
     }
+}
+
+/// Loads a baked atlas from the local development paths.
+///
+/// The official committed atlas will live under
+/// `crates/engine/viewer/assets/atlas`. Until the generator produces
+/// redistributable sources, `bake-atlas --out .temp/atlas` provides a local
+/// temporary atlas from the user's resource pack and archived faces.
+fn load_startup_atlas() -> Atlas {
+    let candidates = [
+        std::env::var_os("VOXEL_VIEWER_ATLAS").map(PathBuf::from),
+        Some(PathBuf::from(".temp/atlas")),
+        Some(PathBuf::from("crates/engine/viewer/assets/atlas")),
+    ];
+    for candidate in candidates.into_iter().flatten() {
+        if !candidate.join("atlas-0.png").is_file() {
+            continue;
+        }
+        match Atlas::load_dir(&candidate) {
+            Ok(atlas) => {
+                log::info!(
+                    "loaded atlas from {} ({} mips)",
+                    candidate.display(),
+                    atlas.mip_count()
+                );
+                return atlas;
+            }
+            Err(error) => {
+                log::warn!("could not load atlas from {}: {error}", candidate.display());
+            }
+        }
+    }
+    log::info!("no baked atlas found; using an empty atlas");
+    AtlasBuilder::new().build()
 }
 
 /// Creates the event loop and runs the viewer until the window closes.
@@ -199,7 +235,11 @@ impl ApplicationHandler for Viewer {
             self.camera
                 .set_aspect(size.width as f32 / size.height as f32);
         }
-        match Gpu::new(window.clone(), event_loop.owned_display_handle()) {
+        match Gpu::new(
+            window.clone(),
+            event_loop.owned_display_handle(),
+            load_startup_atlas(),
+        ) {
             Ok(gpu) => {
                 self.window = Some(window.clone());
                 grab_cursor(&window);
