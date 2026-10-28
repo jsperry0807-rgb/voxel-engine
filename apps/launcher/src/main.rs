@@ -68,13 +68,14 @@ fn main() -> ExitCode {
 
 /// Opens the launcher window and returns when it closes.
 fn run(root: PathBuf) -> ExitCode {
-    let options = eframe::NativeOptions {
+    let mut options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("Voxel Launcher")
             .with_inner_size([1180.0, 800.0])
             .with_min_inner_size([900.0, 600.0]),
         ..Default::default()
     };
+    prefer_x11(&mut options);
     let result = eframe::run_native(
         "Voxel Launcher",
         options,
@@ -87,6 +88,31 @@ fn run(root: PathBuf) -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// Prefers X11 through XWayland, the same rule the viewer follows.
+///
+/// eframe takes Wayland whenever `WAYLAND_DISPLAY` is set. On WSLg the
+/// Wayland/EGL path can fail to create a usable surface, while XWayland works.
+/// Set `VOXEL_VIEWER_WAYLAND=1` to keep the native backend.
+fn prefer_x11(options: &mut eframe::NativeOptions) {
+    #[cfg(all(
+        unix,
+        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+    ))]
+    {
+        use winit::platform::x11::EventLoopBuilderExtX11;
+
+        if std::env::var_os("VOXEL_VIEWER_WAYLAND").is_none()
+            && std::env::var_os("DISPLAY").is_some()
+        {
+            options.event_loop_builder = Some(Box::new(|builder| {
+                builder.with_x11();
+            }));
+        }
+    }
+    // The parameter is unused on hosts where the block above is compiled out.
+    let _ = options;
 }
 
 /// Finds the workspace root from `VOXEL_ROOT`, the working directory, or the
@@ -144,6 +170,8 @@ fn print_help() {
          \n\
          The window runs the viewer and texture editor, the texture and check\n\
          pipelines, and the Linux and Windows builds. The Windows cross-build\n\
-         starts automatically unless VOXEL_LAUNCHER_NO_AUTOBUILD is set."
+         starts automatically unless VOXEL_LAUNCHER_NO_AUTOBUILD is set.\n\
+         The launcher prefers X11/XWayland, like the viewer; set\n\
+         VOXEL_VIEWER_WAYLAND=1 to use the native backend."
     );
 }

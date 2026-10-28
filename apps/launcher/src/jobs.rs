@@ -368,7 +368,10 @@ fn terminate(child: &mut Child) {
 
 #[cfg(test)]
 mod tests {
-    use super::{CommandSpec, Runner, Status};
+    #[cfg(unix)]
+    use super::Runner;
+    use super::{CommandSpec, Status};
+    #[cfg(unix)]
     use std::time::{Duration, Instant};
 
     #[test]

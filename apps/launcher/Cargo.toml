@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 eframe = { version = "0.32", default-features = false, features = ["glow", "default_fonts", "wayland", "x11"] }
+winit = "0.30"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

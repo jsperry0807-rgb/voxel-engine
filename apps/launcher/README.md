@@ -53,6 +53,10 @@ background Windows build instead of hooking Cargo:
 - Set `VOXEL_LAUNCHER_NO_AUTOBUILD=1` (or untick *Build Windows on launch*) to
   skip the automatic build.
 
+The launcher takes X11 through XWayland, the same rule the viewer follows,
+because the Wayland/EGL path can fail to create a usable surface on WSLg. Set
+`VOXEL_VIEWER_WAYLAND=1` to use the native backend.
+
 The `windows-gnu` target needs `mingw-w64` (`x86_64-w64-mingw32-gcc`) and the
 Rust target:
 
