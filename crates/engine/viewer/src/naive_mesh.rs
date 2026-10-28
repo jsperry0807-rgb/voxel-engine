@@ -298,6 +298,33 @@ mod tests {
     }
 
     #[test]
+    fn block_vertices_cover_the_block_edges() {
+        let mut volume = vec![0u16; CHUNK_VOLUME];
+        for z in 0..16 {
+            for y in 0..16 {
+                for x in 0..16 {
+                    volume[chunk_index(x, y, z)] = 1;
+                }
+            }
+        }
+        let mesh = naive_mesh(&volume);
+        let max = mesh
+            .vertices
+            .iter()
+            .flat_map(|vertex| vertex.local)
+            .max()
+            .unwrap();
+        let min = mesh
+            .vertices
+            .iter()
+            .flat_map(|vertex| vertex.local)
+            .min()
+            .unwrap();
+        assert_eq!(min, 0);
+        assert_eq!(max, 16);
+    }
+
+    #[test]
     fn vertex_layout_matches_adr_010() {
         assert_eq!(std::mem::size_of::<Vertex>(), 16);
         assert_eq!(std::mem::align_of::<Vertex>(), 4);

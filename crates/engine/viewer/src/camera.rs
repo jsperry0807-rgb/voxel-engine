@@ -111,7 +111,9 @@ impl Camera {
 
 impl Default for Camera {
     fn default() -> Self {
-        Self::new(Vec3::new(0.0, 0.0, 8.0), 16.0 / 9.0)
+        // Centred on the M1.5 test block at the chunk origin, one and a half
+        // metres from its +Z face.
+        Self::new(Vec3::new(0.5, 0.5, 2.5), 16.0 / 9.0)
     }
 }
 

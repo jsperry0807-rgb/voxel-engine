@@ -9,6 +9,7 @@ pub mod atlas_texture;
 pub mod bake;
 pub mod camera;
 pub mod chunk_mesh;
+pub mod chunk_render;
 pub mod depth;
 pub mod error;
 pub mod gpu;

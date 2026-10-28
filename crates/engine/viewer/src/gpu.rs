@@ -7,7 +7,7 @@
 //! [`WindowEvent::Resized`] brings a usable size back.
 //!
 //! [`Gpu::render`] uploads the camera, acquires the next frame, clears color
-//! and depth, draws the depth-test quads and presents. The present waits on the
+//! and depth, draws the test chunk and presents. The present waits on the
 //! swap chain's `Fifo` mode, so the event loop runs at the display's refresh
 //! rate rather than spinning.
 //!
@@ -32,10 +32,10 @@ use crate::atlas::Atlas;
 use crate::atlas_texture::AtlasTexture;
 use crate::camera::{Camera, CameraUniform};
 use crate::chunk_mesh::ChunkMesh;
+use crate::chunk_render::ChunkPipeline;
 use crate::depth::DepthTarget;
 use crate::error::ViewerError;
 use crate::naive_mesh::{Mesh, naive_mesh};
-use crate::quads::Quads;
 use voxel_core::constants::{CHUNK_BITS, CHUNK_VOLUME};
 
 /// The graphics handles a frame needs.
@@ -54,12 +54,12 @@ pub struct Gpu {
     pub camera_bind_group: BindGroup,
     /// Depth attachment, recreated with the swap chain.
     pub depth: DepthTarget,
-    /// The two-quad depth-test fixture.
-    pub quads: Quads,
     /// The material atlas texture, sampler and bind group.
     pub atlas: AtlasTexture,
-    /// One uploaded test chunk. M1.5-12/13 add the draw path.
+    /// One uploaded test chunk.
     pub chunk: Option<ChunkMesh>,
+    /// The chunk draw pipeline.
+    pub chunk_pipeline: ChunkPipeline,
 }
 
 impl Gpu {
@@ -128,8 +128,9 @@ impl Gpu {
         surface.configure(&device, &config);
 
         let depth = DepthTarget::new(&device, config.width, config.height);
-        let quads = Quads::new(&device, &camera_layout, config.format);
         let atlas = AtlasTexture::new(&device, &queue, &atlas);
+        let chunk_pipeline =
+            ChunkPipeline::new(&device, &camera_layout, &atlas.layout, config.format);
         let chunk = ChunkMesh::new(&device, &queue, &test_chunk());
         if let Some(chunk) = &chunk {
             log::info!(
@@ -147,9 +148,9 @@ impl Gpu {
             camera_buffer,
             camera_bind_group,
             depth,
-            quads,
             atlas,
             chunk,
+            chunk_pipeline,
         })
     }
 
@@ -171,7 +172,7 @@ impl Gpu {
     }
 
     /// Uploads `camera`, acquires the next surface texture, clears color and
-    /// depth, draws the depth-test quads and presents.
+    /// depth, draws the test chunk and presents.
     ///
     /// A skipped frame is not an error: occluded windows, timeouts and a swap
     /// chain that had to be reconfigured all return `Ok(())` so the loop can
@@ -228,7 +229,14 @@ impl Gpu {
                 }),
                 ..Default::default()
             });
-            self.quads.draw(&mut pass, &self.camera_bind_group);
+            if let Some(chunk) = &self.chunk {
+                self.chunk_pipeline.draw(
+                    &mut pass,
+                    chunk,
+                    &self.camera_bind_group,
+                    &self.atlas.bind_group,
+                );
+            }
         }
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
@@ -236,12 +244,12 @@ impl Gpu {
     }
 }
 
-/// Builds a temporary 8³ block for the M1.5-11 upload test.
+/// Builds a temporary 1 m block (16³ voxels) at the chunk origin.
 fn test_chunk() -> Mesh {
     let mut volume = vec![0u16; CHUNK_VOLUME];
-    for z in 0..8 {
-        for y in 0..8 {
-            for x in 0..8 {
+    for z in 0..16 {
+        for y in 0..16 {
+            for x in 0..16 {
                 let index = x | (y << CHUNK_BITS) | (z << (2 * CHUNK_BITS));
                 volume[index] = 1;
             }
