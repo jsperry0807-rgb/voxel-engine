@@ -26,8 +26,9 @@ binding number is made in the spec and the pre-registration, never only in a tas
 - **M2 is in progress.** The apron API (`M2-01`), its cost benchmark (`M2-02`),
   the block-granular driver (`M2-03`), the greedy core (`M2-04`), the merge key
   (`M2-05`), backface culling (`M2-06`), AO sampling (`M2-07`), the AO
-  merge-ratio measurement (`M2-08`) and the chunk-border AO seam (`M2-09`)
-  landed; `M2-10` vertex packing is next. Light and probes are still to come.
+  merge-ratio measurement (`M2-08`), the chunk-border AO seam (`M2-09`) and the
+  16 B vertex codec (`M2-10`) landed; `M2-11` golden fixtures are next. Light
+  and probes are still to come.
 
 ## Tools
 
