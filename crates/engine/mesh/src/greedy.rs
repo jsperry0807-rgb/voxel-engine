@@ -169,7 +169,7 @@ fn greedy_mask(
     }
 }
 
-fn face_axis(face: Face) -> (usize, i32) {
+pub(crate) fn face_axis(face: Face) -> (usize, i32) {
     let (x, y, z) = face.normal();
     if x != 0 {
         (0, x)
@@ -186,7 +186,7 @@ const AO_LEVELS: [u8; 4] = [0, 85, 170, 255];
 
 /// The `(u, v)` signs of a face's four quad corners, matching the vertex order
 /// used by the M1.5 mesher (`voxel_viewer::naive_mesh::face_corners`).
-fn corner_signs(face: Face) -> [(i32, i32); 4] {
+pub(crate) fn corner_signs(face: Face) -> [(i32, i32); 4] {
     match face {
         Face::East | Face::Bottom | Face::North => [(-1, -1), (-1, 1), (1, 1), (1, -1)],
         Face::West | Face::Top | Face::South => [(-1, -1), (1, -1), (1, 1), (-1, 1)],

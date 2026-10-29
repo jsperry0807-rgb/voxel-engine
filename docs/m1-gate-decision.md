@@ -176,8 +176,9 @@ gate, the chosen profile or any threshold.
   interior faces before the mask; `M2-07` samples four-level vertex AO and
   matches the brute-force reference on 10k corners; `M2-08` measured a 1.65×
   quad cost for AO-safe merging; `M2-09` passes the chunk-border AO seam;
-  `M2-10` packs the 16 B vertex and round-trips all fields. The next task is
-  `M2-11`, the five golden mesh fixtures.
+  `M2-10` packs the 16 B vertex and round-trips all fields; `M2-11` freezes five
+  golden mesh fixtures at both edges. The next task is `M2-12`, thread/order
+  determinism.
 - **128³ Minimum is still unmeasured.** The M2 gate run after `M2-29` is the
   measurement that confirms or rejects the upgrade; mesh compression remains
   the first lever.

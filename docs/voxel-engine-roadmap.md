@@ -36,7 +36,7 @@ Two consequences shape the schedule:
 | `voxel-core` | Canonical `Face` orientation, neighbour offsets, face planes | Complete |
 | `voxel-block` | Registry, materials, texture slices, material variants, palettes, tags, RON | Complete; atlas-backed material ids in use |
 | `voxel-storage` | Parameterized 64³/128³ 8 B-node SVDAG, COW `apply_edits`, overlays, region log, global deduped GPU pool, consolidation policy, six-face apron | **M1 layout complete; M2-01 apron landed** |
-| `voxel-mesh` | Block-granular driver over 16³ blocks with a reusable 18³ scratch; greedy rectangle core with the `(material, orientation, 4×AO)` merge key, backface culling, four-level AO sampling and chunk-border AO equality; 16 B vertex codec | **M2-03…M2-10 landed**; goldens and light pending |
+| `voxel-mesh` | Block-granular driver over 16³ blocks with a reusable 18³ scratch; greedy rectangle core with the `(material, orientation, 4×AO)` merge key, backface culling, four-level AO sampling and chunk-border AO equality; 16 B vertex codec and golden fixtures | **M2-03…M2-11 landed**; light pending |
 | `voxel-render` | `WgpuSink`, `MaterialBuffers`, `GpuWorld`, `svdag.wgsl` | Upload path; the viewer owns the draw loop |
 | `voxel-viewer` | `winit` + `wgpu` window, fly camera, mouse look, atlas sampling, depth pass, naive per-face mesher, input layer | **M1.5 code complete**; production mesh/light/probes pending |
 | `voxel-texgraph` / `voxel-texgen` | Deterministic node-graph evaluator, manifest, material table, atlas bake, editor and MCP tools | Complete for M1.5 |
@@ -214,8 +214,8 @@ drops to 6.25 cm per voxel face; before/after screenshots required.
 
 ### M2 — Production content pipeline (6 weeks)
 
-**Status:** In progress — M2-10 16 B vertex codec landed and round-trips all
-fields. Next: M2-11 five golden mesh fixtures.
+**Status:** In progress — M2-11 five golden fixtures landed at both edges with
+per-quad mismatch diagnostics. Next: M2-12 thread/order determinism.
 
 Runs at the **128³ Minimum** edge (ADR-002). Default is not greenlit.
 

@@ -17,6 +17,9 @@ use voxel_storage::{
 mod greedy;
 pub use greedy::{GreedyQuad, MergeKey, corner_ao, greedy_block, greedy_block_with_ao};
 
+mod mesh;
+pub use mesh::{Mesh, mesh_block, mesh_face};
+
 mod vertex;
 pub use vertex::Vertex;
 
