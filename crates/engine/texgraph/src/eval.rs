@@ -31,15 +31,16 @@ pub fn evaluate(program: &Program) -> Vec<u8> {
 pub fn evaluate_at(program: &Program, size: u32) -> Vec<u8> {
     let edge = size as usize;
     let mut pixels = vec![0u8; edge * edge * 4];
+    let mut memo = Memo::new(program.nodes.len());
 
     for y in 0..edge {
         let v = ((y as i64 * ONE) / edge as i64) as i32;
         for x in 0..edge {
             let u = ((x as i64 * ONE) / edge as i64) as i32;
-            let color = eval_color(program, program.output.color, u, v);
+            let color = eval_color(program, &mut memo, program.output.color, u, v);
             let alpha = match program.output.alpha {
                 ProgramAlpha::Const(value) => value as i32,
-                ProgramAlpha::Node(index) => eval_scalar(program, index, u, v),
+                ProgramAlpha::Node(index) => eval_scalar(program, &mut memo, index, u, v),
             };
             let offset = (y * edge + x) * 4;
             pixels[offset] = color[0];
@@ -56,11 +57,72 @@ pub fn to_byte(value: i32) -> u8 {
     ((value.clamp(0, MAX) as i64 * 255 + MAX as i64 / 2) / MAX as i64) as u8
 }
 
-fn scalar_input(program: &Program, node: &ProgramNode, slot: usize, u: i32, v: i32) -> i32 {
-    eval_scalar(program, node.inputs[slot], u, v)
+/// Last value computed per node, tagged with the coordinate it was computed at.
+///
+/// Spatial ops (`Warp`, `Rotate`, `Blur`, …) re-enter the evaluator at a
+/// shifted coordinate, so an entry is only usable when both the node and the
+/// coordinate match; otherwise it is a miss, never a wrong answer. This turns
+/// a repeated-input fan-out (`Add(inputs: [i-1, i-1])`) from 2^n evaluations
+/// per texel into one evaluation per node per coordinate.
+#[derive(Default)]
+struct Memo {
+    scalar: Vec<Option<(i32, i32, i32)>>,
+    color: Vec<Option<(i32, i32, [u8; 3])>>,
 }
 
-fn eval_scalar(program: &Program, index: usize, u: i32, v: i32) -> i32 {
+impl Memo {
+    fn new(nodes: usize) -> Self {
+        Self {
+            scalar: vec![None; nodes],
+            color: vec![None; nodes],
+        }
+    }
+}
+
+/// Counts uncached evaluations so a test can prove the memo is working.
+#[cfg(test)]
+static EVALS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+fn eval_scalar(program: &Program, memo: &mut Memo, index: usize, u: i32, v: i32) -> i32 {
+    if let Some((cached_u, cached_v, value)) = memo.scalar[index]
+        && cached_u == u
+        && cached_v == v
+    {
+        return value;
+    }
+    #[cfg(test)]
+    EVALS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let value = eval_scalar_uncached(program, memo, index, u, v);
+    memo.scalar[index] = Some((u, v, value));
+    value
+}
+
+fn eval_color(program: &Program, memo: &mut Memo, index: usize, u: i32, v: i32) -> [u8; 3] {
+    if let Some((cached_u, cached_v, value)) = memo.color[index]
+        && cached_u == u
+        && cached_v == v
+    {
+        return value;
+    }
+    #[cfg(test)]
+    EVALS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let value = eval_color_uncached(program, memo, index, u, v);
+    memo.color[index] = Some((u, v, value));
+    value
+}
+
+fn scalar_input(
+    program: &Program,
+    memo: &mut Memo,
+    node: &ProgramNode,
+    slot: usize,
+    u: i32,
+    v: i32,
+) -> i32 {
+    eval_scalar(program, memo, node.inputs[slot], u, v)
+}
+
+fn eval_scalar_uncached(program: &Program, memo: &mut Memo, index: usize, u: i32, v: i32) -> i32 {
     let node = &program.nodes[index];
     let op: &ProgramOp = &node.op;
     match op {
@@ -180,89 +242,90 @@ fn eval_scalar(program: &Program, index: usize, u: i32, v: i32) -> i32 {
             soft_mask(toroidal_distance(u, v), limit as i32, *softness as i32)
         }
         ProgramOp::Add => {
-            let a = scalar_input(program, node, 0, u, v);
-            let b = scalar_input(program, node, 1, u, v);
+            let a = scalar_input(program, memo, node, 0, u, v);
+            let b = scalar_input(program, memo, node, 1, u, v);
             (a + b).clamp(0, MAX)
         }
         ProgramOp::Mul => {
-            let a = scalar_input(program, node, 0, u, v);
-            let b = scalar_input(program, node, 1, u, v);
+            let a = scalar_input(program, memo, node, 0, u, v);
+            let b = scalar_input(program, memo, node, 1, u, v);
             qmul(a, b)
         }
         ProgramOp::Min => {
-            let a = scalar_input(program, node, 0, u, v);
-            let b = scalar_input(program, node, 1, u, v);
+            let a = scalar_input(program, memo, node, 0, u, v);
+            let b = scalar_input(program, memo, node, 1, u, v);
             a.min(b)
         }
         ProgramOp::Max => {
-            let a = scalar_input(program, node, 0, u, v);
-            let b = scalar_input(program, node, 1, u, v);
+            let a = scalar_input(program, memo, node, 0, u, v);
+            let b = scalar_input(program, memo, node, 1, u, v);
             a.max(b)
         }
-        ProgramOp::Invert => MAX - scalar_input(program, node, 0, u, v),
+        ProgramOp::Invert => MAX - scalar_input(program, memo, node, 0, u, v),
         ProgramOp::Remap {
             from_lo,
             from_hi,
             to_lo,
             to_hi,
         } => {
-            let value = scalar_input(program, node, 0, u, v);
+            let value = scalar_input(program, memo, node, 0, u, v);
             remap(value, *from_lo, *from_hi, *to_lo, *to_hi)
         }
         ProgramOp::Smoothstep { edge0, edge1 } => {
-            let value = scalar_input(program, node, 0, u, v);
+            let value = scalar_input(program, memo, node, 0, u, v);
             smoothstep(*edge0 as i32, *edge1 as i32, value)
         }
         ProgramOp::Threshold { at } => {
-            if scalar_input(program, node, 0, u, v) >= *at as i32 {
+            if scalar_input(program, memo, node, 0, u, v) >= *at as i32 {
                 MAX
             } else {
                 0
             }
         }
         ProgramOp::Quantize { levels } => {
-            let value = scalar_input(program, node, 0, u, v) as i64;
+            let value = scalar_input(program, memo, node, 0, u, v) as i64;
             let levels = *levels as i64;
             let step = ((value * levels + MAX as i64 / 2) / MAX as i64).min(levels);
             ((step * MAX as i64) / levels) as i32
         }
         ProgramOp::Mix => {
-            let a = scalar_input(program, node, 0, u, v);
-            let b = scalar_input(program, node, 1, u, v);
-            let mask = scalar_input(program, node, 2, u, v);
+            let a = scalar_input(program, memo, node, 0, u, v);
+            let b = scalar_input(program, memo, node, 1, u, v);
+            let mask = scalar_input(program, memo, node, 2, u, v);
             lerp(a, b, mask)
         }
         ProgramOp::Warp { amount } => {
             let field = node.inputs[0];
-            let warp_x = scalar_input(program, node, 1, u, v);
+            let warp_x = scalar_input(program, memo, node, 1, u, v);
             let dx = (((warp_x - 32_768) as i64 * *amount as i64) / MAX as i64) as i32;
             let dy = if node.inputs.len() > 2 {
-                let warp_y = scalar_input(program, node, 2, u, v);
+                let warp_y = scalar_input(program, memo, node, 2, u, v);
                 (((warp_y - 32_768) as i64 * *amount as i64) / MAX as i64) as i32
             } else {
                 0
             };
             eval_scalar(
                 program,
+                memo,
                 field,
                 wrap(u.saturating_add(dx)),
                 wrap(v.saturating_add(dy)),
             )
         }
-        ProgramOp::AlphaFromMask => scalar_input(program, node, 0, u, v),
+        ProgramOp::AlphaFromMask => scalar_input(program, memo, node, 0, u, v),
         ProgramOp::AlphaBinary { at } => {
-            if scalar_input(program, node, 0, u, v) >= *at as i32 {
+            if scalar_input(program, memo, node, 0, u, v) >= *at as i32 {
                 MAX
             } else {
                 0
             }
         }
         ProgramOp::AlphaBand { min, max } => {
-            let value = scalar_input(program, node, 0, u, v);
+            let value = scalar_input(program, memo, node, 0, u, v);
             remap(value, 0, MAX as u16, *min, *max)
         }
         ProgramOp::Luminance => {
-            let color = eval_color(program, node.inputs[0], u, v);
+            let color = eval_color(program, memo, node.inputs[0], u, v);
             (luma(color).min(255) * 257) as i32
         }
         ProgramOp::Ramp { .. }
@@ -292,22 +355,28 @@ fn eval_scalar(program: &Program, index: usize, u: i32, v: i32) -> i32 {
     }
 }
 
-fn eval_color(program: &Program, index: usize, u: i32, v: i32) -> [u8; 3] {
+fn eval_color_uncached(
+    program: &Program,
+    memo: &mut Memo,
+    index: usize,
+    u: i32,
+    v: i32,
+) -> [u8; 3] {
     let node = &program.nodes[index];
     match &node.op {
         ProgramOp::Ramp { stops } => {
-            let value = scalar_input(program, node, 0, u, v);
+            let value = scalar_input(program, memo, node, 0, u, v);
             sample_ramp(stops, value)
         }
         ProgramOp::Palette { colors } => {
-            let value = scalar_input(program, node, 0, u, v) as i64;
+            let value = scalar_input(program, memo, node, 0, u, v) as i64;
             let last = colors.len() as i64 - 1;
             let pick = ((value * last + MAX as i64 / 2) / MAX as i64) as usize;
             colors[pick.min(colors.len() - 1)]
         }
         ProgramOp::Multiply => {
-            let a = eval_color(program, node.inputs[0], u, v);
-            let b = eval_color(program, node.inputs[1], u, v);
+            let a = eval_color(program, memo, node.inputs[0], u, v);
+            let b = eval_color(program, memo, node.inputs[1], u, v);
             [
                 (a[0] as u16 * b[0] as u16 / 255) as u8,
                 (a[1] as u16 * b[1] as u16 / 255) as u8,
@@ -315,8 +384,8 @@ fn eval_color(program: &Program, index: usize, u: i32, v: i32) -> [u8; 3] {
             ]
         }
         ProgramOp::Overlay => {
-            let a = eval_color(program, node.inputs[0], u, v);
-            let b = eval_color(program, node.inputs[1], u, v);
+            let a = eval_color(program, memo, node.inputs[0], u, v);
+            let b = eval_color(program, memo, node.inputs[1], u, v);
             [
                 overlay_channel(a[0], b[0]),
                 overlay_channel(a[1], b[1]),
@@ -324,9 +393,9 @@ fn eval_color(program: &Program, index: usize, u: i32, v: i32) -> [u8; 3] {
             ]
         }
         ProgramOp::MixColor => {
-            let a = eval_color(program, node.inputs[0], u, v);
-            let b = eval_color(program, node.inputs[1], u, v);
-            let mask = scalar_input(program, node, 2, u, v);
+            let a = eval_color(program, memo, node.inputs[0], u, v);
+            let b = eval_color(program, memo, node.inputs[1], u, v);
+            let mask = scalar_input(program, memo, node, 2, u, v);
             [
                 lerp_byte(a[0], b[0], mask),
                 lerp_byte(a[1], b[1], mask),
@@ -338,6 +407,7 @@ fn eval_color(program: &Program, index: usize, u: i32, v: i32) -> [u8; 3] {
             let (rx, ry) = rotate_point(dx, dy, *angle as i32);
             eval_color(
                 program,
+                memo,
                 node.inputs[0],
                 wrap(32_768 + rx),
                 wrap(32_768 + ry),
@@ -348,15 +418,16 @@ fn eval_color(program: &Program, index: usize, u: i32, v: i32) -> [u8; 3] {
                 Axis::X => (MAX - u, v),
                 Axis::Y => (u, MAX - v),
             };
-            eval_color(program, node.inputs[0], wrap(su), wrap(sv))
+            eval_color(program, memo, node.inputs[0], wrap(su), wrap(sv))
         }
         ProgramOp::Tile { x, y } => {
             let su = (u as i64 * *x as i64).rem_euclid(ONE) as i32;
             let sv = (v as i64 * *y as i64).rem_euclid(ONE) as i32;
-            eval_color(program, node.inputs[0], su, sv)
+            eval_color(program, memo, node.inputs[0], su, sv)
         }
         ProgramOp::Offset { x, y } => eval_color(
             program,
+            memo,
             node.inputs[0],
             wrap(u + *x as i32),
             wrap(v + *y as i32),
@@ -367,6 +438,7 @@ fn eval_color(program: &Program, index: usize, u: i32, v: i32) -> [u8; 3] {
             let (dx, dy) = direction(angle, radius as i32);
             eval_color(
                 program,
+                memo,
                 node.inputs[0],
                 wrap(32_768 + dx),
                 wrap(32_768 + dy),
@@ -376,11 +448,11 @@ fn eval_color(program: &Program, index: usize, u: i32, v: i32) -> [u8; 3] {
             let (dx, dy) = centre_delta(u, v);
             let angle = angle_of(dx, dy);
             let radius = scale_distance(toroidal_distance(u, v) as i64);
-            eval_color(program, node.inputs[0], angle, radius)
+            eval_color(program, memo, node.inputs[0], angle, radius)
         }
         ProgramOp::Screen => {
-            let a = eval_color(program, node.inputs[0], u, v);
-            let b = eval_color(program, node.inputs[1], u, v);
+            let a = eval_color(program, memo, node.inputs[0], u, v);
+            let b = eval_color(program, memo, node.inputs[1], u, v);
             [
                 screen_channel(a[0], b[0]),
                 screen_channel(a[1], b[1]),
@@ -388,8 +460,8 @@ fn eval_color(program: &Program, index: usize, u: i32, v: i32) -> [u8; 3] {
             ]
         }
         ProgramOp::AddColor => {
-            let a = eval_color(program, node.inputs[0], u, v);
-            let b = eval_color(program, node.inputs[1], u, v);
+            let a = eval_color(program, memo, node.inputs[0], u, v);
+            let b = eval_color(program, memo, node.inputs[1], u, v);
             [
                 a[0].saturating_add(b[0]),
                 a[1].saturating_add(b[1]),
@@ -397,8 +469,8 @@ fn eval_color(program: &Program, index: usize, u: i32, v: i32) -> [u8; 3] {
             ]
         }
         ProgramOp::Subtract => {
-            let a = eval_color(program, node.inputs[0], u, v);
-            let b = eval_color(program, node.inputs[1], u, v);
+            let a = eval_color(program, memo, node.inputs[0], u, v);
+            let b = eval_color(program, memo, node.inputs[1], u, v);
             [
                 a[0].saturating_sub(b[0]),
                 a[1].saturating_sub(b[1]),
@@ -406,8 +478,8 @@ fn eval_color(program: &Program, index: usize, u: i32, v: i32) -> [u8; 3] {
             ]
         }
         ProgramOp::Difference => {
-            let a = eval_color(program, node.inputs[0], u, v);
-            let b = eval_color(program, node.inputs[1], u, v);
+            let a = eval_color(program, memo, node.inputs[0], u, v);
+            let b = eval_color(program, memo, node.inputs[1], u, v);
             [
                 a[0].abs_diff(b[0]),
                 a[1].abs_diff(b[1]),
@@ -415,20 +487,20 @@ fn eval_color(program: &Program, index: usize, u: i32, v: i32) -> [u8; 3] {
             ]
         }
         ProgramOp::Lighten => {
-            let a = eval_color(program, node.inputs[0], u, v);
-            let b = eval_color(program, node.inputs[1], u, v);
+            let a = eval_color(program, memo, node.inputs[0], u, v);
+            let b = eval_color(program, memo, node.inputs[1], u, v);
             [a[0].max(b[0]), a[1].max(b[1]), a[2].max(b[2])]
         }
         ProgramOp::Darken => {
-            let a = eval_color(program, node.inputs[0], u, v);
-            let b = eval_color(program, node.inputs[1], u, v);
+            let a = eval_color(program, memo, node.inputs[0], u, v);
+            let b = eval_color(program, memo, node.inputs[1], u, v);
             [a[0].min(b[0]), a[1].min(b[1]), a[2].min(b[2])]
         }
         ProgramOp::BrightnessContrast {
             brightness,
             contrast,
         } => {
-            let color = eval_color(program, node.inputs[0], u, v);
+            let color = eval_color(program, memo, node.inputs[0], u, v);
             [
                 adjust_channel(color[0], *brightness, *contrast),
                 adjust_channel(color[1], *brightness, *contrast),
@@ -436,7 +508,7 @@ fn eval_color(program: &Program, index: usize, u: i32, v: i32) -> [u8; 3] {
             ]
         }
         ProgramOp::Saturate { amount } => {
-            let color = eval_color(program, node.inputs[0], u, v);
+            let color = eval_color(program, memo, node.inputs[0], u, v);
             let luma = luma(color) as u8;
             [
                 lerp_byte(luma, color[0], *amount as i32),
@@ -445,13 +517,13 @@ fn eval_color(program: &Program, index: usize, u: i32, v: i32) -> [u8; 3] {
             ]
         }
         ProgramOp::HueShift { angle } => {
-            let color = eval_color(program, node.inputs[0], u, v);
+            let color = eval_color(program, memo, node.inputs[0], u, v);
             hue_shift(color, *angle as i32)
         }
         ProgramOp::Blur { radius } => {
             let radius = *radius as i32;
             if radius == 0 {
-                return eval_color(program, node.inputs[0], u, v);
+                return eval_color(program, memo, node.inputs[0], u, v);
             }
             let mut sums = [0u32; 3];
             let mut count = 0u32;
@@ -459,6 +531,7 @@ fn eval_color(program: &Program, index: usize, u: i32, v: i32) -> [u8; 3] {
                 for ox in -radius..=radius {
                     let color = eval_color(
                         program,
+                        memo,
                         node.inputs[0],
                         wrap(u + ox * TEXEL),
                         wrap(v + oy * TEXEL),
@@ -476,17 +549,53 @@ fn eval_color(program: &Program, index: usize, u: i32, v: i32) -> [u8; 3] {
             ]
         }
         ProgramOp::Emboss { strength } => {
-            let plus = eval_color(program, node.inputs[0], wrap(u + TEXEL), wrap(v + TEXEL));
-            let minus = eval_color(program, node.inputs[0], wrap(u - TEXEL), wrap(v - TEXEL));
+            let plus = eval_color(
+                program,
+                memo,
+                node.inputs[0],
+                wrap(u + TEXEL),
+                wrap(v + TEXEL),
+            );
+            let minus = eval_color(
+                program,
+                memo,
+                node.inputs[0],
+                wrap(u - TEXEL),
+                wrap(v - TEXEL),
+            );
             let difference = (luma(plus) - luma(minus)) * *strength as i64 / MAX as i64;
             let value = (128 + difference).clamp(0, 255) as u8;
             [value, value, value]
         }
         ProgramOp::NormalMap { strength } => {
-            let left = luma(eval_color(program, node.inputs[0], wrap(u - TEXEL), v));
-            let right = luma(eval_color(program, node.inputs[0], wrap(u + TEXEL), v));
-            let top = luma(eval_color(program, node.inputs[0], u, wrap(v - TEXEL)));
-            let bottom = luma(eval_color(program, node.inputs[0], u, wrap(v + TEXEL)));
+            let left = luma(eval_color(
+                program,
+                memo,
+                node.inputs[0],
+                wrap(u - TEXEL),
+                v,
+            ));
+            let right = luma(eval_color(
+                program,
+                memo,
+                node.inputs[0],
+                wrap(u + TEXEL),
+                v,
+            ));
+            let top = luma(eval_color(
+                program,
+                memo,
+                node.inputs[0],
+                u,
+                wrap(v - TEXEL),
+            ));
+            let bottom = luma(eval_color(
+                program,
+                memo,
+                node.inputs[0],
+                u,
+                wrap(v + TEXEL),
+            ));
             let scale = *strength as i64;
             let nx = -(right - left) * scale / MAX as i64;
             let ny = -(bottom - top) * scale / MAX as i64;
@@ -500,10 +609,34 @@ fn eval_color(program: &Program, index: usize, u: i32, v: i32) -> [u8; 3] {
         }
         ProgramOp::Bevel { radius, strength } => {
             let offset = *radius as i32 * TEXEL;
-            let top = luma(eval_color(program, node.inputs[0], u, wrap(v - offset)));
-            let left = luma(eval_color(program, node.inputs[0], wrap(u - offset), v));
-            let bottom = luma(eval_color(program, node.inputs[0], u, wrap(v + offset)));
-            let right = luma(eval_color(program, node.inputs[0], wrap(u + offset), v));
+            let top = luma(eval_color(
+                program,
+                memo,
+                node.inputs[0],
+                u,
+                wrap(v - offset),
+            ));
+            let left = luma(eval_color(
+                program,
+                memo,
+                node.inputs[0],
+                wrap(u - offset),
+                v,
+            ));
+            let bottom = luma(eval_color(
+                program,
+                memo,
+                node.inputs[0],
+                u,
+                wrap(v + offset),
+            ));
+            let right = luma(eval_color(
+                program,
+                memo,
+                node.inputs[0],
+                wrap(u + offset),
+                v,
+            ));
             let light = (top + left) - (bottom + right);
             let value = (128 + light * *strength as i64 / (MAX as i64 * 4)).clamp(0, 255) as u8;
             [value, value, value]
@@ -894,5 +1027,60 @@ mod tests {
             assert!(current >= previous);
             previous = current;
         }
+    }
+
+    /// A chain where every node feeds the next one twice (`Add([i-1, i-1])`)
+    /// evaluates to 2^n calls per texel without a memo.
+    #[test]
+    fn repeated_inputs_are_evaluated_once_per_pixel() {
+        use std::sync::atomic::Ordering;
+
+        use crate::graph::ProgramOutput;
+        use voxel_block::texture_manifest::{AlphaClass, Tiling};
+
+        const DEPTH: usize = 22;
+        let mut nodes = vec![ProgramNode {
+            id: 0,
+            op: ProgramOp::Const(1),
+            inputs: Vec::new(),
+            stream: 0,
+        }];
+        for index in 1..=DEPTH {
+            nodes.push(ProgramNode {
+                id: index as u32,
+                op: ProgramOp::Add,
+                inputs: vec![index - 1, index - 1],
+                stream: 0,
+            });
+        }
+        let color = DEPTH + 1;
+        nodes.push(ProgramNode {
+            id: color as u32,
+            op: ProgramOp::Ramp {
+                stops: vec![(0, [0, 0, 0]), (u16::MAX, [255, 255, 255])],
+            },
+            inputs: vec![DEPTH],
+            stream: 0,
+        });
+        let program = Program {
+            key: "diamond".to_owned(),
+            size: 8,
+            tiling: Tiling::Both,
+            alpha: AlphaClass::Opaque,
+            seed: 0,
+            nodes,
+            output: ProgramOutput {
+                color,
+                alpha: ProgramAlpha::Const(255),
+            },
+            breaks_h: false,
+            breaks_v: false,
+        };
+
+        EVALS.store(0, Ordering::Relaxed);
+        let pixels = evaluate(&program);
+        assert_eq!(pixels.len(), 8 * 8 * 4);
+        let evals = EVALS.load(Ordering::Relaxed);
+        assert_eq!(evals, 64 * (color + 1), "one evaluation per node per pixel");
     }
 }
