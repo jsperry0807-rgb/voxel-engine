@@ -1,0 +1,144 @@
+//! Greedy block-face meshing (M2-04).
+//!
+//! The driver in [`crate`] supplies one `18³` [`BlockScratch`] at a time. This
+//! module turns the block's 16³ interior into axis-aligned rectangles, merging
+//! equal-material exposed faces inside the block only. It is deliberately the
+//! count/rectangle core, not the final vertex emitter: AO (M2-07/M2-08) and the
+//! 16-byte vertex packing (M2-10) sit on top of these rectangles.
+//!
+//! The scan order matches the M1-31 reference exactly: face, then layer along
+//! the normal, then `v`, then `u`; each rectangle grows in `u` first and `v`
+//! second. That keeps the quad count deterministic where more than one maximal
+//! cover exists.
+
+use voxel_core::Face;
+
+use crate::{BLOCK_EDGE, BlockScratch};
+
+/// One greedy rectangle inside a block.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GreedyQuad {
+    /// Outward face orientation.
+    pub face: Face,
+    /// Atlas material id of the exposed faces.
+    pub material: u16,
+    /// Scratch-local coordinate of the rectangle's minimum corner.
+    pub origin: [u32; 3],
+    /// Rectangle extent; the normal axis is always `1`.
+    pub extent: [u32; 3],
+}
+
+impl GreedyQuad {
+    /// Number of exposed voxel faces covered by the rectangle.
+    pub fn area(&self) -> u32 {
+        self.extent[0] * self.extent[1] * self.extent[2]
+    }
+}
+
+/// Emits the greedy rectangles for one block scratch.
+///
+/// `out` is cleared first and reused across blocks so the caller can keep one
+/// vector per worker. Every rectangle stays inside the 16³ block interior.
+pub fn greedy_block(scratch: &BlockScratch, out: &mut Vec<GreedyQuad>) {
+    out.clear();
+    let mut mask = [0u16; BLOCK_EDGE * BLOCK_EDGE];
+
+    for face in Face::ALL {
+        let (axis, sign) = face_axis(face);
+        let u_axis = (axis + 1) % 3;
+        let v_axis = (axis + 2) % 3;
+
+        for layer in 0..BLOCK_EDGE {
+            mask.fill(0);
+            for v in 0..BLOCK_EDGE {
+                for u in 0..BLOCK_EDGE {
+                    let mut cell = [0u32; 3];
+                    cell[axis] = 1 + layer as u32;
+                    cell[u_axis] = 1 + u as u32;
+                    cell[v_axis] = 1 + v as u32;
+
+                    let material = scratch.get(cell[0], cell[1], cell[2]);
+                    if material == 0 {
+                        continue;
+                    }
+
+                    let mut neighbour = cell;
+                    neighbour[axis] = (neighbour[axis] as i32 + sign) as u32;
+                    if scratch.get(neighbour[0], neighbour[1], neighbour[2]) == 0 {
+                        mask[v * BLOCK_EDGE + u] = material;
+                    }
+                }
+            }
+
+            greedy_mask(&mut mask, face, layer, axis, u_axis, v_axis, out);
+        }
+    }
+}
+
+fn greedy_mask(
+    mask: &mut [u16; BLOCK_EDGE * BLOCK_EDGE],
+    face: Face,
+    layer: usize,
+    axis: usize,
+    u_axis: usize,
+    v_axis: usize,
+    out: &mut Vec<GreedyQuad>,
+) {
+    for v in 0..BLOCK_EDGE {
+        for u in 0..BLOCK_EDGE {
+            let index = v * BLOCK_EDGE + u;
+            let material = mask[index];
+            if material == 0 {
+                continue;
+            }
+
+            let mut width = 1;
+            while u + width < BLOCK_EDGE && mask[index + width] == material {
+                width += 1;
+            }
+
+            let mut height = 1;
+            'grow: while v + height < BLOCK_EDGE {
+                let row = (v + height) * BLOCK_EDGE + u;
+                for offset in 0..width {
+                    if mask[row + offset] != material {
+                        break 'grow;
+                    }
+                }
+                height += 1;
+            }
+
+            for row in 0..height {
+                let start = (v + row) * BLOCK_EDGE + u;
+                mask[start..start + width].fill(0);
+            }
+
+            let mut origin = [0u32; 3];
+            origin[axis] = 1 + layer as u32;
+            origin[u_axis] = 1 + u as u32;
+            origin[v_axis] = 1 + v as u32;
+            let mut extent = [1u32; 3];
+            extent[u_axis] = width as u32;
+            extent[v_axis] = height as u32;
+
+            out.push(GreedyQuad {
+                face,
+                material,
+                origin,
+                extent,
+            });
+        }
+    }
+}
+
+fn face_axis(face: Face) -> (usize, i32) {
+    let (x, y, z) = face.normal();
+    if x != 0 {
+        (0, x)
+    } else if y != 0 {
+        (1, y)
+    } else {
+        debug_assert_ne!(z, 0, "a face normal must use one axis");
+        (2, z)
+    }
+}

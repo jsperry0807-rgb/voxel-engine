@@ -10,7 +10,12 @@
 
 use std::mem::size_of;
 
-use voxel_storage::{AIR, Apron, BLOCK_DIM, CHUNK_DIM, CHUNK_VOLUME, Face, local_index};
+use voxel_storage::{
+    AIR, Apron, BLOCK_DIM, CHUNK_DIM, CHUNK_VOLUME, Face as ApronFace, local_index,
+};
+
+mod greedy;
+pub use greedy::{GreedyQuad, greedy_block};
 
 /// Voxels along one block edge.
 pub const BLOCK_EDGE: usize = BLOCK_DIM;
@@ -175,17 +180,17 @@ fn apron_material(apron: &Apron, x: i32, y: i32, z: i32, edge: i32) -> u16 {
     }
 
     let (face, u, v) = if x == -1 {
-        (Face::NegX, z, y)
+        (ApronFace::NegX, z, y)
     } else if x == edge {
-        (Face::PosX, z, y)
+        (ApronFace::PosX, z, y)
     } else if y == -1 {
-        (Face::NegY, z, x)
+        (ApronFace::NegY, z, x)
     } else if y == edge {
-        (Face::PosY, z, x)
+        (ApronFace::PosY, z, x)
     } else if z == -1 {
-        (Face::NegZ, x, y)
+        (ApronFace::NegZ, x, y)
     } else {
-        (Face::PosZ, x, y)
+        (ApronFace::PosZ, x, y)
     };
     apron.get(face, u as u32, v as u32)
 }
@@ -248,7 +253,7 @@ mod tests {
     fn border_reads_the_matching_apron_face() {
         let chunk = noise_chunk();
         let mut apron = Apron::new();
-        for face in Face::ALL {
+        for face in ApronFace::ALL {
             for v in 0..voxel_storage::Apron::SIDE {
                 for u in 0..voxel_storage::Apron::SIDE {
                     apron.set(face, u, v, 100 + face.index() as u16);
@@ -264,7 +269,7 @@ mod tests {
                     for y in 1..=BLOCK_EDGE as u32 {
                         assert_eq!(
                             scratch.get(0, y, z),
-                            100 + Face::NegX.index() as u16,
+                            100 + ApronFace::NegX.index() as u16,
                             "NegX border at {pos:?} ({y}, {z})"
                         );
                     }
@@ -276,7 +281,7 @@ mod tests {
                     for y in 1..=BLOCK_EDGE as u32 {
                         assert_eq!(
                             scratch.get(SCRATCH_EDGE as u32 - 1, y, z),
-                            100 + Face::PosX.index() as u16,
+                            100 + ApronFace::PosX.index() as u16,
                             "PosX border at {pos:?} ({y}, {z})"
                         );
                     }

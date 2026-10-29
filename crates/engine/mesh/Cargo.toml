@@ -6,6 +6,7 @@ publish.workspace = true
 description = "Block-granular content pipeline for the voxel engine"
 
 [dependencies]
+voxel-core = { path = "../../core" }
 voxel-storage = { path = "../storage" }
 
 [features]

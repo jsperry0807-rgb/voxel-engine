@@ -36,7 +36,7 @@ Two consequences shape the schedule:
 | `voxel-core` | Canonical `Face` orientation, neighbour offsets, face planes | Complete |
 | `voxel-block` | Registry, materials, texture slices, material variants, palettes, tags, RON | Complete; atlas-backed material ids in use |
 | `voxel-storage` | Parameterized 64³/128³ 8 B-node SVDAG, COW `apply_edits`, overlays, region log, global deduped GPU pool, consolidation policy, six-face apron | **M1 layout complete; M2-01 apron landed** |
-| `voxel-mesh` | Block-granular driver over 16³ blocks with a reusable 18³ scratch | **M2-03 driver landed**; greedy core and AO pending |
+| `voxel-mesh` | Block-granular driver over 16³ blocks with a reusable 18³ scratch; greedy rectangle core | **M2-03/M2-04 landed**; AO and vertex packing pending |
 | `voxel-render` | `WgpuSink`, `MaterialBuffers`, `GpuWorld`, `svdag.wgsl` | Upload path; the viewer owns the draw loop |
 | `voxel-viewer` | `winit` + `wgpu` window, fly camera, mouse look, atlas sampling, depth pass, naive per-face mesher, input layer | **M1.5 code complete**; production mesh/light/probes pending |
 | `voxel-texgraph` / `voxel-texgen` | Deterministic node-graph evaluator, manifest, material table, atlas bake, editor and MCP tools | Complete for M1.5 |
@@ -47,9 +47,9 @@ The M1 layout is in place at both edges; the 128³ variant compiles in CI. M1.5
 added the window, camera, atlas and naive mesher. M2-01 added the apron. The
 production content path is now the work in front of the project.
 
-Still missing: the greedy mesher, AO, production block light and probes,
-sparse-set ECS, culling, LOD, streaming, persistence, and the measured 128³ gate
-run. CI, the window/camera app, the naive mesher, the apron/driver and the
+Still missing: AO, production block light and probes, sparse-set ECS, culling,
+LOD, streaming, persistence, and the measured 128³ gate run. CI, the
+window/camera app, the naive mesher, the apron/driver/greedy core and the
 launcher are in place.
 
 ---
@@ -214,8 +214,8 @@ drops to 6.25 cm per voxel face; before/after screenshots required.
 
 ### M2 — Production content pipeline (6 weeks)
 
-**Status:** In progress — M2-03 block-granular driver landed (11,664 B scratch,
-reused for every block). Next: M2-04 greedy bitmask core.
+**Status:** In progress — M2-04 greedy core landed and matches the M1-31
+reference on five fixtures. Next: M2-05 merge key.
 
 Runs at the **128³ Minimum** edge (ADR-002). Default is not greenlit.
 
