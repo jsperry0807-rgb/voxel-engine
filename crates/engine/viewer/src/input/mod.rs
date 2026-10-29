@@ -16,8 +16,9 @@
 //! arrives while it is free is dropped rather than banked.
 //!
 //! The defaults are `W`/`A`/`S`/`D`, `Space`/`Shift`, `Ctrl` to sprint, the
-//! arrow keys to look, `F11` to release the pointer and capture it again,
-//! `F12` for fullscreen, and `Esc` to quit. A bindings file can be loaded from
+//! arrow keys to look, `Esc` to free the pointer (and capture it again on the
+//! next press), `F11` for fullscreen, and `Q` to quit. A bindings file can be
+//! loaded from
 //! the path in `VOXEL_BINDINGS`; see [`Bindings::from_text`]. The
 //! viewer reads the look options from `VOXEL_SENSITIVITY`,
 //! `VOXEL_SMOOTH_CAMERA`, `VOXEL_INVERT_X` and `VOXEL_INVERT_Y`; see
@@ -242,8 +243,8 @@ mod tests {
     #[test]
     fn repeats_do_not_queue_more_clicks() {
         let mut input = Input::default();
-        press(&mut input, KeyCode::Escape);
-        input.key(KeyCode::Escape, KeyAction::Repeat);
+        press(&mut input, KeyCode::KeyQ);
+        input.key(KeyCode::KeyQ, KeyAction::Repeat);
         assert!(input.clicked(Action::Quit));
         assert!(!input.clicked(Action::Quit));
     }
@@ -299,7 +300,7 @@ mod tests {
         let mut input = Input::default();
         input.set_toggleable(Action::Sprint);
         press(&mut input, KeyCode::KeyW);
-        press(&mut input, KeyCode::Escape);
+        press(&mut input, KeyCode::KeyQ);
         press(&mut input, KeyCode::ControlLeft);
         input.release_all();
         assert!(!input.is_down(Action::Forward));

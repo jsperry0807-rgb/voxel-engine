@@ -12,8 +12,8 @@
 //! ```
 //!
 //! Movement is `W`/`A`/`S`/`D`, `Space`/`Shift` fly vertically and `Ctrl`
-//! sprints; the arrow keys look around, `F11` releases the pointer and
-//! captures it again, `F12` toggles borderless fullscreen, `Esc` quits.
+//! sprints; the arrow keys look around, `F11` toggles borderless fullscreen,
+//! `Esc` frees the pointer (press it again to recapture), and `Q` quits.
 //! Bindings can be rebound by pointing `VOXEL_BINDINGS` at a file; see
 //! [`voxel_viewer::input`]. `VOXEL_TOGGLE_SPRINT=1` makes sprint latch instead
 //! of hold. `VOXEL_TRACK=1` logs yaw/pitch once per second, and
