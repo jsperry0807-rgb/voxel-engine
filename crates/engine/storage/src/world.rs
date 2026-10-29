@@ -60,6 +60,21 @@ pub struct Chunk {
     unsaved: bool,
 }
 
+impl Chunk {
+    /// The material at local index `local`: overlay first, then the DAG.
+    ///
+    /// [`World::get`] and the apron both use this so a border read cannot
+    /// disagree with a direct voxel read.
+    #[inline]
+    #[must_use]
+    pub fn material(&self, local: u32) -> u16 {
+        self.overlay.get(local).unwrap_or_else(|| {
+            let (x, y, z) = local_xyz(local);
+            self.dag.get(x, y, z)
+        })
+    }
+}
+
 pub struct Consolidated {
     pub chunks: usize,
     /// pass to `World::reclaim` after GPU frames submitted before this flush have finished
@@ -130,15 +145,11 @@ impl<S: GpuSink> World<S> {
     }
 
     /// Overlay first, then DAG. None if the chunk isn't resident.
+    #[must_use]
     pub fn get(&self, x: i32, y: i32, z: i32) -> Option<MaterialId> {
         let (p, li) = split_voxel(x, y, z);
         let c = self.chunks.get(&p)?;
-        Some(MaterialId::from_raw(c.overlay.get(li).unwrap_or_else(
-            || {
-                let (lx, ly, lz) = local_xyz(li);
-                c.dag.get(lx, ly, lz)
-            },
-        )))
+        Some(MaterialId::from_raw(c.material(li)))
     }
 
     /// The six 1-voxel face planes around `p` (M2-01).
@@ -148,9 +159,21 @@ impl<S: GpuSink> World<S> {
     /// one neighbour lookup and a tree walk, never a dense padded copy.
     ///
     /// A neighbour that is not resident reads as [`AIR`](crate::AIR). Load the
-    /// six face neighbours first when a border must be exact.
+    /// six face neighbours first when a border must be exact. AO samples at an
+    /// edge or corner belong to an edge or corner neighbour and also read as
+    /// [`AIR`](crate::AIR); see [`crate::apron`].
+    #[must_use]
     pub fn apron(&self, p: ChunkPos) -> Apron {
         Apron::gather(self, p)
+    }
+
+    /// Fills `out` with the six face planes around `p`, reusing its buffer.
+    ///
+    /// Same data as [`Self::apron`], but a mesher that visits many chunks per
+    /// frame can keep one [`Apron`] and skip a `6 x SIDE²` allocation per
+    /// chunk.
+    pub fn apron_into(&self, p: ChunkPos, out: &mut Apron) {
+        Apron::gather_into(self, p, out);
     }
 
     /// O(1): overlay insert (or removal when the edit reverts to the DAG value).
@@ -161,7 +184,7 @@ impl<S: GpuSink> World<S> {
         let (p, li) = split_voxel(x, y, z);
         self.load(p)?;
         let (revert, len) = {
-            let c = self.chunks.get_mut(&p).unwrap();
+            let c = self.chunks.get_mut(&p).expect("load inserts the chunk");
             let (lx, ly, lz) = local_xyz(li);
             let revert = v.as_raw() == c.dag.get(lx, ly, lz);
             if revert {
@@ -205,7 +228,7 @@ impl<S: GpuSink> World<S> {
         let ps: Vec<ChunkPos> = self.edited.iter().copied().collect();
         for p in ps {
             self.persist(p)?;
-            if self.chunks[&p].overlay.is_empty() {
+            if self.chunks.get(&p).is_some_and(|c| c.overlay.is_empty()) {
                 self.edited.remove(&p);
             }
         }
@@ -218,6 +241,7 @@ impl<S: GpuSink> World<S> {
     /// [`Self::dirty_chunks`] also counts entries whose overlay was fully
     /// reverted and is waiting for [`Self::flush_edits`] to persist the empty
     /// diff, so use this for consolidation decisions.
+    #[must_use]
     pub fn pending_chunks(&self) -> usize {
         self.edited
             .iter()
@@ -298,7 +322,10 @@ impl<S: GpuSink> World<S> {
             if done > 0 && started.elapsed() >= budget {
                 break;
             }
-            let c = self.chunks.get_mut(&p).unwrap();
+            let c = self
+                .chunks
+                .get_mut(&p)
+                .expect("consolidation candidate is resident");
             // Clear the GPU overlay first: the folded DAG writes land in the same flush,
             // so no frame sees a hole between the two updates.
             self.gpu.clear_chunk_overlay(p);
@@ -358,6 +385,7 @@ impl<S: GpuSink> World<S> {
     ///
     /// Includes fully reverted chunks that still need [`Self::flush_edits`] to
     /// write the empty diff; use [`Self::pending_chunks`] for consolidation.
+    #[must_use]
     pub fn dirty_chunks(&self) -> usize {
         self.edited.len()
     }

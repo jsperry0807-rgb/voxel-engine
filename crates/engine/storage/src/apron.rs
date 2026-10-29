@@ -1,27 +1,30 @@
 //! Six 1-voxel face planes around a chunk (M2-01).
 //!
 //! The mesher needs the voxels just outside a chunk's six faces to cull
-//! backfaces and to sample ambient occlusion at the border without densifying
-//! the chunk or its neighbours. [`Apron`] carries those `6 x CHUNK_DIM²`
-//! [`MaterialId`]s as raw `u16`s, overlay first, exactly as [`World::get`]
-//! reports them.
+//! backfaces at the border without densifying the chunk or its neighbours.
+//! [`Apron`] carries those `6 x CHUNK_DIM²` [`MaterialId`]s as raw `u16`s,
+//! overlay first, exactly as [`World::get`] reports them.
 //!
 //! Each face plane comes from exactly one chunk: the neighbour sharing that
 //! face. A neighbour that is not resident contributes [`AIR`]; load the six
 //! face neighbours first when a border must be exact.
 //!
-//! [`MaterialId`]: voxel_block::MaterialId
+//! A plane is exact for culling and for ambient occlusion of faces whose
+//! normal matches that plane. AO samples at an edge or corner belong to an
+//! edge or corner neighbour instead, so they read as [`AIR`] here; load those
+//! neighbours too when corner-exact AO is required.
 
 use crate::gpu::GpuSink;
 use crate::world::World;
 use crate::{AIR, CHUNK_DIM, ChunkPos, local_index};
+use voxel_block::MaterialId;
 
 /// Side length of one face plane, in voxels.
 pub const SIDE: u32 = CHUNK_DIM as u32;
 /// Voxels in one face plane.
 pub const PLANE: usize = SIDE as usize * SIDE as usize;
 /// Voxels in the whole apron.
-const LEN: usize = 6 * PLANE;
+const LEN: usize = Face::ALL.len() * PLANE;
 
 /// One face of a chunk's 1-voxel apron.
 ///
@@ -112,6 +115,7 @@ impl Apron {
     }
 
     /// One face plane, `PLANE` entries long.
+    #[must_use]
     pub fn face(&self, face: Face) -> &[u16] {
         let start = face.index() * PLANE;
         &self.planes[start..start + PLANE]
@@ -122,8 +126,19 @@ impl Apron {
     /// # Panics
     ///
     /// Panics if `u` or `v` is not below [`SIDE`].
+    #[must_use]
     pub fn get(&self, face: Face, u: u32, v: u32) -> u16 {
         self.planes[index(face, u, v)]
+    }
+
+    /// The material at plane texel `(u, v)`, as a typed id.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `u` or `v` is not below [`SIDE`].
+    #[must_use]
+    pub fn material(&self, face: Face, u: u32, v: u32) -> MaterialId {
+        MaterialId::from_raw(self.get(face, u, v))
     }
 
     /// Replaces the material at plane texel `(u, v)`.
@@ -136,9 +151,20 @@ impl Apron {
         self.planes[index] = material;
     }
 
-    /// Reads all six planes around `pos` from the chunks that share them.
+    /// Reads all six planes around `pos` into a fresh apron.
     pub(crate) fn gather<S: GpuSink>(world: &World<S>, pos: ChunkPos) -> Self {
         let mut apron = Self::new();
+        Self::gather_into(world, pos, &mut apron);
+        apron
+    }
+
+    /// Refills `out` with the six planes around `pos`, reusing its allocation.
+    ///
+    /// Every plane is reset to [`AIR`] first, so a reused apron never leaks the
+    /// previous chunk's border. Keep one `Apron` per mesher to avoid a
+    /// `6 x SIDE²` allocation on every chunk.
+    pub(crate) fn gather_into<S: GpuSink>(world: &World<S>, pos: ChunkPos, out: &mut Apron) {
+        out.planes.fill(AIR);
         let dim = CHUNK_DIM as i32;
         for face in Face::ALL {
             // Only the fixed component is non-zero for texel (0, 0), so it
@@ -152,7 +178,7 @@ impl Apron {
             let Some(chunk) = world.chunk(neighbour) else {
                 continue;
             };
-            let plane = apron.plane_mut(face);
+            let plane = out.plane_mut(face);
             for v in 0..SIDE {
                 for u in 0..SIDE {
                     let (dx, dy, dz) = face.offset(u, v);
@@ -162,14 +188,10 @@ impl Apron {
                         dz.rem_euclid(dim) as u32,
                     );
                     let local = local_index(x, y, z);
-                    plane[(u + v * SIDE) as usize] = chunk
-                        .overlay
-                        .get(local)
-                        .unwrap_or_else(|| chunk.dag.get(x, y, z));
+                    plane[(u + v * SIDE) as usize] = chunk.material(local);
                 }
             }
         }
-        apron
     }
 
     fn plane_mut(&mut self, face: Face) -> &mut [u16] {
@@ -193,6 +215,7 @@ impl core::fmt::Debug for Apron {
     }
 }
 
+#[track_caller]
 fn index(face: Face, u: u32, v: u32) -> usize {
     assert!(
         u < SIDE && v < SIDE,

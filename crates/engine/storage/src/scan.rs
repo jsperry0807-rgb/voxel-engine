@@ -2,9 +2,9 @@
 //!
 //! [`scan_save`] walks the region logs and reports every live chunk without
 //! opening a file for write. The live [`RegionStore`](crate::disk::RegionStore)
-//! truncates a torn or corrupt tail on open; a post-mortem tool must not do
-//! that, so the scanner leaves the file untouched and records a warning
-//! instead.
+//! truncates a torn tail and resynchronises past a corrupt record on open; a
+//! post-mortem tool must not modify the file, so the scanner leaves it
+//! untouched and records a warning instead.
 //!
 //! A chunk is live when its cell has a DAG record. The last DAG record for a
 //! cell supersedes everything before it (including diffs), and the last diff
@@ -17,7 +17,9 @@ use std::path::{Path, PathBuf};
 
 use crate::ChunkPos;
 use crate::dag::Svdag;
-use crate::disk::{HDR, KIND_DAG, KIND_DIFF, RecordHeader, RegionPos, parse_header};
+use crate::disk::{
+    HDR, KIND_DAG, KIND_DIFF, MAX_RECORD_BYTES, RecordHeader, RegionPos, parse_header,
+};
 use crate::hash::{FxMap, crc32};
 use crate::overlay::Overlay;
 
@@ -174,6 +176,15 @@ fn scan_region(
                     path.display(),
                     record.len,
                     total.saturating_sub(parsed + HDR as u64),
+                ));
+                break;
+            }
+            if record.len > MAX_RECORD_BYTES {
+                summary.warnings.push(format!(
+                    "{}: record at byte {parsed} declares {} bytes, over the {} byte cap",
+                    path.display(),
+                    record.len,
+                    MAX_RECORD_BYTES,
                 ));
                 break;
             }
@@ -477,6 +488,35 @@ mod tests {
             "{:?}",
             summary.warnings
         );
+    }
+
+    #[test]
+    fn scan_caps_a_record_length_the_file_can_back() {
+        let dir = tmp("cap");
+        fs::create_dir_all(&dir).unwrap();
+        let path = region_path(&dir, (0, 0, 0));
+        let mut header = record_header(KIND_DAG, 0, &[]);
+        header[8..12].copy_from_slice(&(MAX_RECORD_BYTES + 1).to_le_bytes());
+        {
+            use std::io::Write;
+            let mut file = fs::File::create(&path).unwrap();
+            file.write_all(&header).unwrap();
+            // Back the declared length so the file-size check passes and the
+            // cap is what rejects the record.
+            file.set_len(HDR as u64 + MAX_RECORD_BYTES as u64 + 1)
+                .unwrap();
+        }
+
+        let summary = scan_save(&dir, |_| panic!("no payload to report")).unwrap();
+        assert!(
+            summary
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("cap")),
+            "{:?}",
+            summary.warnings
+        );
+        fs::remove_dir_all(dir).ok();
     }
 
     #[test]

@@ -48,7 +48,7 @@ impl Overlay {
             return None;
         }
         let n = u32::from_le_bytes(b[0..4].try_into().ok()?) as usize;
-        if b.len() != 4 + n * 6 {
+        if n.checked_mul(6).and_then(|bytes| bytes.checked_add(4)) != Some(b.len()) {
             return None;
         }
         let mut o = Overlay::default();

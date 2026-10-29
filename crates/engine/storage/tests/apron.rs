@@ -113,25 +113,32 @@ fn assert_matches_padded_read(world: &World<MemSink>, p: ChunkPos) {
 
 #[test]
 fn apron_matches_dense_read_layered() {
-    let mut world = World::new(tmp("layered"), layered(), MemSink::default()).unwrap();
+    let dir = tmp("layered");
+    let mut world = World::new(&dir, layered(), MemSink::default()).unwrap();
     for p in [ChunkPos::new(0, 0, 0), ChunkPos::new(-1, 2, 1)] {
         load_around(&mut world, p);
         assert_matches_padded_read(&world, p);
     }
+    drop(world);
+    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
 fn apron_matches_dense_read_noise() {
-    let mut world = World::new(tmp("noise"), noisy(), MemSink::default()).unwrap();
+    let dir = tmp("noise");
+    let mut world = World::new(&dir, noisy(), MemSink::default()).unwrap();
     for p in [ChunkPos::new(2, -1, 3), ChunkPos::new(-2, 0, -3)] {
         load_around(&mut world, p);
         assert_matches_padded_read(&world, p);
     }
+    drop(world);
+    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
 fn apron_matches_dense_read_after_edits() {
-    let mut world = World::new(tmp("edits"), noisy(), MemSink::default()).unwrap();
+    let dir = tmp("edits");
+    let mut world = World::new(&dir, noisy(), MemSink::default()).unwrap();
     let p = ChunkPos::new(0, 0, 0);
     load_around(&mut world, p);
     let edge = CHUNK_DIM as i32;
@@ -147,11 +154,14 @@ fn apron_matches_dense_read_after_edits() {
     world.set(0, 0, edge, id(20)).unwrap();
 
     assert_matches_padded_read(&world, p);
+    drop(world);
+    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
 fn apron_face_axes_match_the_documented_mapping() {
-    let mut world = World::new(tmp("axes"), noisy(), MemSink::default()).unwrap();
+    let dir = tmp("axes");
+    let mut world = World::new(&dir, noisy(), MemSink::default()).unwrap();
     let p = ChunkPos::new(0, 0, 0);
     load_around(&mut world, p);
     let apron = world.apron(p);
@@ -167,13 +177,20 @@ fn apron_face_axes_match_the_documented_mapping() {
             assert_eq!(apron.get(Face::PosY, u as u32, v as u32), read(v, edge, u));
             assert_eq!(apron.get(Face::NegZ, u as u32, v as u32), read(u, v, -1));
             assert_eq!(apron.get(Face::PosZ, u as u32, v as u32), read(u, v, edge));
+            assert_eq!(
+                apron.material(Face::PosZ, u as u32, v as u32),
+                MaterialId::from_raw(read(u, v, edge))
+            );
         }
     }
+    drop(world);
+    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
 fn apron_reads_air_when_neighbours_are_missing() {
-    let mut world = World::new(tmp("missing"), noisy(), MemSink::default()).unwrap();
+    let dir = tmp("missing");
+    let mut world = World::new(&dir, noisy(), MemSink::default()).unwrap();
     world.load(ChunkPos::new(0, 0, 0)).unwrap();
     let apron = world.apron(ChunkPos::new(0, 0, 0));
     for face in Face::ALL {
@@ -183,4 +200,62 @@ fn apron_reads_air_when_neighbours_are_missing() {
             }
         }
     }
+    drop(world);
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn apron_into_reuses_one_buffer_and_resets_it() {
+    let dir = tmp("reuse");
+    let mut world = World::new(&dir, noisy(), MemSink::default()).unwrap();
+    let p = ChunkPos::new(0, 0, 0);
+    load_around(&mut world, p);
+
+    let mut buffer = Apron::new();
+    world.apron_into(p, &mut buffer);
+    let fresh = world.apron(p);
+    for face in Face::ALL {
+        assert_eq!(buffer.face(face), fresh.face(face), "{face:?}");
+    }
+
+    // A chunk with no resident neighbours must overwrite every texel with AIR
+    // rather than leave the previous chunk's border behind.
+    let empty = ChunkPos::new(40, 0, 0);
+    world.apron_into(empty, &mut buffer);
+    for face in Face::ALL {
+        assert!(
+            buffer.face(face).iter().all(|&material| material == AIR),
+            "{face:?} kept a stale texel"
+        );
+    }
+    drop(world);
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn apron_reads_neighbours_when_the_target_chunk_is_absent() {
+    let dir = tmp("absent-target");
+    let mut world = World::new(&dir, layered(), MemSink::default()).unwrap();
+    let p = ChunkPos::new(3, 0, -2);
+    for (dx, dy, dz) in [
+        (-1, 0, 0),
+        (1, 0, 0),
+        (0, -1, 0),
+        (0, 1, 0),
+        (0, 0, -1),
+        (0, 0, 1),
+    ] {
+        world
+            .load(ChunkPos::new(p.x + dx, p.y + dy, p.z + dz))
+            .unwrap();
+    }
+    assert!(
+        world.chunk(p).is_none(),
+        "the target itself is not resident"
+    );
+
+    // The apron only reads neighbours, so it still matches a direct read.
+    assert_matches_padded_read(&world, p);
+    drop(world);
+    std::fs::remove_dir_all(dir).ok();
 }

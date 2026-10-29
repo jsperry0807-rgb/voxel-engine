@@ -98,8 +98,12 @@ impl ChunkDag {
         let lengths: [u64; BAND_COUNT] = core::array::from_fn(|level| bands.len(level as u32));
         let leaf_len = bands.leaf_len();
         let total_nodes: u64 = lengths.iter().sum();
+        let payload_bytes = total_nodes
+            .checked_mul(8)
+            .and_then(|nodes| nodes.checked_add(leaf_len.checked_mul(2)?))
+            .expect("chunk node and leaf lengths fit in u64");
         let capacity = HEADER_BYTES
-            + usize::try_from(total_nodes * 8 + leaf_len * 2)
+            + usize::try_from(payload_bytes)
                 .expect("a chunk that fits memory has a byte length that fits usize");
 
         let mut out = Vec::with_capacity(capacity);
