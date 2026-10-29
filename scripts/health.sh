@@ -14,6 +14,7 @@
 # Environment:
 #   HEALTH_LOG_DIR       output directory (default: target/health)
 #   HEALTH_QUIET         "1" prints only the final summary
+#   HEALTH_INREPO        "0" skips the in-repo checks (external tools only)
 #   HEALTH_STRICT        "1" makes WARN count as a failed result
 #   HEALTH_STRICT_GATES  "1" makes a gate report verdict of FAIL/INCOMPLETE fail
 #   HEALTH_GATES         "0" skips the two gate reports
@@ -27,6 +28,8 @@
 #   HEALTH_COVERAGE      "0" skips cargo llvm-cov
 #   HEALTH_MUTANTS       "0" skips cargo mutants
 #   HEALTH_PROFILE       "0" skips flamegraph/samply
+#   HEALTH_DENY_CONFIG   optional cargo-deny config path; without it cargo
+#                         deny falls back to its built-in default policy
 #
 # The bench step is the literal `LABEL=local scripts/bench.sh`, so it archives
 # the run under benchmarks/ as that script normally does (RECORD=0 keeps it in
@@ -649,11 +652,13 @@ check_deny() {
     skip_check "external" "$name" "cargo-deny is not installed"
     return
   fi
-  if [[ ! -f deny.toml && ! -f .deny.toml ]]; then
-    skip_check "external" "$name" "no deny.toml at the repository root (run cargo deny init)"
-    return
+
+  local -a command=(cargo deny)
+  if [[ -n "${HEALTH_DENY_CONFIG:-}" ]]; then
+    command+=(--config "$HEALTH_DENY_CONFIG")
   fi
-  run_check "external" "$name" cargo deny check
+  command+=(check)
+  run_check "external" "$name" "${command[@]}"
 }
 
 check_audit() {
@@ -870,7 +875,9 @@ print_summary() {
 
 # ---- main -----------------------------------------------------------------
 
-run_in_repo_checks
+if [[ "${HEALTH_INREPO:-1}" != "0" ]]; then
+  run_in_repo_checks
+fi
 run_external_checks
 print_summary
 exit $?
