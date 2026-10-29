@@ -5,13 +5,22 @@
 //! them through the queue.
 
 use bytemuck::cast_slice;
-use voxel_storage::gpu::GpuSink;
+use voxel_storage::gpu::{EMPTY, GpuSink, INITIAL_SLOTS, SLOT_WORDS};
 
 /// Binding group the SVDAG shader unit expects (`svdag.wgsl`).
 pub const SVDAG_BIND_GROUP: u32 = 0;
 
 /// Bytes in one `u32` word of the GPU tables.
 const WORD: u64 = 4;
+
+/// Words in the chunk table allocated up front.
+///
+/// `chunk_slot` in `svdag.wgsl` derives `cap = arrayLength / SLOT_WORDS` and
+/// masks with `cap - 1`. A table shorter than one slot gives `cap == 0` and
+/// `mask == u32::MAX`, so the probe can never terminate. The initial table
+/// therefore mirrors the CPU store: [`INITIAL_SLOTS`] slots filled with
+/// [`EMPTY`], which reads as a miss (`root == EMPTY && blocks == NO_TABLE`).
+const INITIAL_TABLE_WORDS: usize = INITIAL_SLOTS * SLOT_WORDS;
 
 /// GPU-resident node pool, chunk table, block tables and edit-overlay pool.
 ///
@@ -36,15 +45,20 @@ impl WgpuSink {
     /// Creates empty tables, ready for the first
     /// [`voxel_storage::gpu::GpuStore::flush`].
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
+        let table = storage_buffer(device, "voxel-chunk-table", INITIAL_TABLE_WORDS);
+        // Seed the probe table before the first `flush`: an uninitialised
+        // (zeroed) or undersized table would make `chunk_slot` loop forever.
+        let empty = vec![EMPTY; INITIAL_TABLE_WORDS];
+        queue.write_buffer(&table, 0, cast_slice(&empty));
         Self {
             device: device.clone(),
             queue: queue.clone(),
             nodes: storage_buffer(device, "voxel-svdag-nodes", 1),
-            table: storage_buffer(device, "voxel-chunk-table", 1),
+            table,
             overlays: storage_buffer(device, "voxel-overlay-pool", 1),
             block_tables: storage_buffer(device, "voxel-block-tables", 1),
             node_words: 1,
-            table_words: 1,
+            table_words: INITIAL_TABLE_WORDS,
             overlay_words: 1,
             block_table_words: 1,
         }
@@ -146,7 +160,9 @@ impl GpuSink for WgpuSink {
     }
 
     fn resize_table(&mut self, words: usize) {
-        let words = words.max(1);
+        // Never shrink below one probe slot, or the shader's capacity/mask
+        // derivation breaks (see `INITIAL_TABLE_WORDS`).
+        let words = words.max(INITIAL_TABLE_WORDS);
         if words != self.table_words {
             Self::resize(&mut self.table, words, &self.device, "voxel-chunk-table");
             self.table_words = words;
@@ -256,4 +272,31 @@ pub(crate) fn storage_bind_group_layout(
         label: Some(label),
         entries: &entries,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use voxel_storage::gpu::{NO_TABLE, SLOT_ROOT, SLOT_TABLE};
+
+    /// The shader treats `root == EMPTY && blocks == NO_TABLE` as a miss, so an
+    /// all-`EMPTY` slot must satisfy that predicate or the probe walks past it.
+    #[test]
+    fn initial_table_has_whole_slots_that_probe_as_empty() {
+        assert_eq!(INITIAL_TABLE_WORDS % SLOT_WORDS, 0);
+        assert_eq!(INITIAL_TABLE_WORDS / SLOT_WORDS, INITIAL_SLOTS);
+        assert!(INITIAL_SLOTS.is_power_of_two());
+
+        let slot = [EMPTY; SLOT_WORDS];
+        assert_eq!(slot[SLOT_ROOT], EMPTY);
+        assert_eq!(slot[SLOT_TABLE], NO_TABLE);
+    }
+
+    /// The capacity the shader derives must be a power of two; the probe masks
+    /// with `cap - 1`.
+    #[test]
+    fn initial_capacity_is_a_power_of_two() {
+        let slots = INITIAL_TABLE_WORDS / SLOT_WORDS;
+        assert!(slots.is_power_of_two(), "slots = {slots}");
+    }
 }

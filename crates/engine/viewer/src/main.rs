@@ -48,8 +48,10 @@ use voxel_viewer::tracker::{MotionSource, Tracker};
 use wgpu::Color;
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalSize, PhysicalPosition, PhysicalSize};
-use winit::event::{DeviceEvent, DeviceId, ElementState, MouseScrollDelta, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::event::{
+    DeviceEvent, DeviceId, ElementState, MouseScrollDelta, StartCause, WindowEvent,
+};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::PhysicalKey;
 use winit::window::{CursorGrabMode, Fullscreen, Window, WindowId};
 
@@ -57,6 +59,12 @@ use winit::window::{CursorGrabMode, Fullscreen, Window, WindowId};
 const WINDOW_SIZE: LogicalSize<f64> = LogicalSize::new(1920.0, 1080.0);
 /// Window title.
 const TITLE: &str = "voxel-viewer";
+
+/// Delay before retrying a frame the surface could not present.
+///
+/// Retrying immediately would spin whenever no presentation paces the loop
+/// (occluded window, swap-chain timeout, WSLg without pacing).
+const RETRY_INTERVAL: Duration = Duration::from_millis(16);
 /// Background colour before anything is drawn.
 const CLEAR_COLOR: Color = Color {
     r: 0.02,
@@ -404,6 +412,10 @@ struct Viewer {
     sensitivity_explicit: bool,
     /// Yaw/pitch tracker; off unless `VOXEL_TRACK` is set.
     tracker: Tracker,
+    /// Whether the last frame reached the swap chain; see `about_to_wait`.
+    last_frame_presented: bool,
+    /// Whether the platform says the window is occluded (minimized/covered).
+    occluded: bool,
 }
 
 impl Default for Viewer {
@@ -432,6 +444,8 @@ impl Default for Viewer {
             look_options: LookOptions::default(),
             sensitivity_explicit: false,
             tracker: Tracker::disabled(),
+            last_frame_presented: true,
+            occluded: false,
         }
     }
 }
@@ -786,7 +800,7 @@ impl Viewer {
             None => return,
         };
         match result {
-            Ok(()) => {}
+            Ok(presented) => self.last_frame_presented = presented,
             Err(error) => {
                 self.error = Some(error);
                 event_loop.exit();
@@ -933,6 +947,14 @@ impl ApplicationHandler for Viewer {
                 // us; do not leave it held or its click pending.
                 self.input.release_all();
             }
+            WindowEvent::Occluded(occluded) => {
+                self.occluded = occluded;
+                // While occluded no frame is presented, so `about_to_wait`
+                // stops retrying; restart when the window is visible again.
+                if !occluded && let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
             WindowEvent::RedrawRequested => self.redraw(event_loop),
             _ => {}
         }
@@ -955,10 +977,33 @@ impl ApplicationHandler for Viewer {
         }
     }
 
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        // Keep one frame in flight. With `Fifo` presentation this is paced by
-        // the display, so it does not spin.
-        if let Some(window) = &self.window {
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // Nothing can be drawn while the platform says the window is hidden;
+        // `Occluded(false)` asks for a frame again.
+        if self.occluded {
+            event_loop.set_control_flow(ControlFlow::Wait);
+            return;
+        }
+        // With `Fifo` presentation a presented frame is paced by the display,
+        // so keep one frame in flight.
+        if self.last_frame_presented {
+            event_loop.set_control_flow(ControlFlow::Wait);
+            if let Some(window) = &self.window {
+                window.request_redraw();
+            }
+            return;
+        }
+        // A skipped frame (occluded, timed out, reconfigured) means nothing is
+        // pacing us. Retry at display cadence instead of spinning at 100% CPU.
+        event_loop.set_control_flow(ControlFlow::WaitUntil(Instant::now() + RETRY_INTERVAL));
+    }
+
+    fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
+        // Wake a skipped frame: `about_to_wait` armed a `WaitUntil` timer
+        // instead of requesting a redraw.
+        if matches!(cause, StartCause::ResumeTimeReached { .. })
+            && let Some(window) = &self.window
+        {
             window.request_redraw();
         }
     }

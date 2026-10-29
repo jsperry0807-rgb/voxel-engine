@@ -1516,9 +1516,9 @@ fn parse_color(key: &str, id: u32, color: &str) -> Result<[u8; 3], GraphError> {
             "{key}: node {id} colour {color:?} must start with `#`"
         ))
     })?;
-    if hex.len() != 6 && hex.len() != 8 {
+    if !hex.is_ascii() || (hex.len() != 6 && hex.len() != 8) {
         return Err(invalid(format!(
-            "{key}: node {id} colour {color:?} must be #rrggbb or #rrggbbaa"
+            "{key}: node {id} colour {color:?} must be ASCII #rrggbb or #rrggbbaa"
         )));
     }
     let channel = |at: usize| {
@@ -1529,4 +1529,29 @@ fn parse_color(key: &str, id: u32, color: &str) -> Result<[u8; 3], GraphError> {
         })
     };
     Ok([channel(0)?, channel(2)?, channel(4)?])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_color;
+
+    #[test]
+    fn parse_color_rejects_non_ascii_channels() {
+        // Eight bytes long, but the first channel slice would land inside a
+        // multi-byte character: this must be an error, never a panic.
+        let error = parse_color("stone", 7, "#€ab€").expect_err("non-ASCII colour");
+        assert!(error.to_string().contains("colour"), "{error}");
+    }
+
+    #[test]
+    fn parse_color_accepts_six_and_eight_digit_hex() {
+        assert_eq!(
+            parse_color("stone", 7, "#aabbcc").unwrap(),
+            [0xaa, 0xbb, 0xcc]
+        );
+        assert_eq!(
+            parse_color("stone", 7, "#AABBCCDD").unwrap(),
+            [0xaa, 0xbb, 0xcc]
+        );
+    }
 }

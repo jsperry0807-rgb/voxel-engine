@@ -77,8 +77,15 @@ pub type RegionPos = (i32, i32, i32);
 
 pub struct RegionStore {
     dir: PathBuf,
+    /// Handle used to fsync the directory itself.
+    ///
+    /// Syncing a new region file's contents is not enough: without a directory
+    /// fsync the file's very existence can be lost on power failure.
+    dir_file: File,
     regions: FxMap<RegionPos, Region>,
     dirty: bool,
+    /// A region file was created since the last [`RegionStore::sync`].
+    dir_dirty: bool,
     recovered_bytes: u64,
 }
 
@@ -217,10 +224,13 @@ impl RegionStore {
     pub fn open(dir: impl Into<PathBuf>) -> io::Result<Self> {
         let dir = dir.into();
         fs::create_dir_all(&dir)?;
+        let dir_file = File::open(&dir)?;
         Ok(Self {
             dir,
+            dir_file,
             regions: FxMap::default(),
             dirty: false,
+            dir_dirty: false,
             recovered_bytes: 0,
         })
     }
@@ -232,6 +242,7 @@ impl RegionStore {
     fn region(&mut self, rp: RegionPos, create: bool) -> io::Result<Option<&mut Region>> {
         if !self.regions.contains_key(&rp) {
             let path = self.path(rp);
+            let created = !path.exists();
             if !create && !path.exists() {
                 return Ok(None);
             }
@@ -243,12 +254,19 @@ impl RegionStore {
                 .open(&path)?;
             let (len, index, recovered) = scan(&mut file)?;
             self.recovered_bytes += recovered;
+            self.dir_dirty |= created;
             self.regions.insert(rp, Region { file, len, index });
         }
         Ok(self.regions.get_mut(&rp))
     }
 
     fn append(&mut self, p: ChunkPos, kind: u8, payload: &[u8]) -> io::Result<()> {
+        // The reader treats an over-cap record as the end of the region
+        // (`read_record`), so writing one would lose the payload on reopen.
+        // Reject it at the writer instead.
+        if payload.len() > MAX_RECORD_BYTES as usize {
+            return Err(bad("record payload exceeds MAX_RECORD_BYTES"));
+        }
         let cell = p.cell();
         let mut hdr = encode_header(kind, cell, payload.len() as u32);
         hdr[12..16].copy_from_slice(&crc32(payload).to_le_bytes());
@@ -316,6 +334,11 @@ impl RegionStore {
                 r.file.sync_data()?;
             }
             self.dirty = false;
+            // A region file created since the last sync must also have its
+            // directory entry persisted, or it can vanish after power loss.
+            if std::mem::take(&mut self.dir_dirty) {
+                self.dir_file.sync_all()?;
+            }
         }
         Ok(())
     }
@@ -389,5 +412,51 @@ mod tests {
             served: false,
         };
         assert!(read_record(&mut reader, 0, total).unwrap().is_none());
+    }
+
+    #[test]
+    fn append_rejects_a_payload_over_the_record_cap() {
+        let dir = std::env::temp_dir().join(format!(
+            "voxel-disk-cap-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        let mut store = RegionStore::open(&dir).expect("open store");
+        let payload = vec![0u8; MAX_RECORD_BYTES as usize + 1];
+        let error = store
+            .append(ChunkPos::new(0, 0, 0), KIND_DAG, &payload)
+            .expect_err("over-cap payload must be rejected");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(
+            !dir.join("r.0.0.0.vxr").exists(),
+            "a rejected append must not create a region file"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn sync_flushes_a_new_region_directory_entry() {
+        let dir = std::env::temp_dir().join(format!(
+            "voxel-disk-sync-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        let pos = ChunkPos::new(0, 0, 0);
+        {
+            let mut store = RegionStore::open(&dir).expect("open store");
+            store
+                .put_diff(pos, &Overlay::default())
+                .expect("write diff");
+            store.sync().expect("sync");
+        }
+        assert!(dir.join("r.0.0.0.vxr").exists());
+        let mut reopened = RegionStore::open(&dir).expect("reopen store");
+        assert!(
+            reopened.region((0, 0, 0), false).expect("scan").is_some(),
+            "the synced region file must be discoverable after reopen"
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 }

@@ -174,10 +174,11 @@ impl Gpu {
     /// Uploads `camera`, acquires the next surface texture, clears color and
     /// depth, draws the test chunk and presents.
     ///
-    /// A skipped frame is not an error: occluded windows, timeouts and a swap
-    /// chain that had to be reconfigured all return `Ok(())` so the loop can
-    /// try again next frame.
-    pub fn render(&self, clear: Color, camera: &Camera) -> Result<(), ViewerError> {
+    /// Returns `true` when a frame was presented. A skipped frame is not an
+    /// error: occluded windows, timeouts and a swap chain that had to be
+    /// reconfigured all return `Ok(false)`, so the caller can wait for the
+    /// platform to request the next frame instead of spinning.
+    pub fn render(&self, clear: Color, camera: &Camera) -> Result<bool, ViewerError> {
         self.queue.write_buffer(
             &self.camera_buffer,
             0,
@@ -190,14 +191,14 @@ impl Gpu {
                 // A `SurfaceTexture` must not be alive across `configure`.
                 drop(frame);
                 self.surface.configure(&self.device, &self.config);
-                return Ok(());
+                return Ok(false);
             }
             CurrentSurfaceTexture::Outdated | CurrentSurfaceTexture::Lost => {
                 log::warn!("surface is outdated or lost; reconfiguring");
                 self.surface.configure(&self.device, &self.config);
-                return Ok(());
+                return Ok(false);
             }
-            CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => return Ok(()),
+            CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => return Ok(false),
             CurrentSurfaceTexture::Validation => return Err(ViewerError::SurfaceValidation),
         };
 
@@ -240,7 +241,7 @@ impl Gpu {
         }
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
-        Ok(())
+        Ok(true)
     }
 }
 
