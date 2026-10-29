@@ -17,6 +17,12 @@ use voxel_storage::{
 mod greedy;
 pub use greedy::{GreedyQuad, MergeKey, corner_ao, greedy_block, greedy_block_with_ao};
 
+pub mod light;
+pub use light::{
+    APRON_CELLS, BlockLight, Channel, LEVELS, LightCell, LightFill, MAX_INTENSITY, MAX_LEVEL,
+    NEIGHBOURS, full_pass,
+};
+
 mod mesh;
 pub use mesh::{Mesh, mesh_block, mesh_face};
 

@@ -178,7 +178,9 @@ gate, the chosen profile or any threshold.
   quad cost for AO-safe merging; `M2-09` passes the chunk-border AO seam;
   `M2-10` packs the 16 B vertex and round-trips all fields; `M2-11` freezes five
   golden mesh fixtures at both edges; `M2-12` passes 1/2/4/8-worker and reversed
-  order determinism. The next task is `M2-13`, production block light.
+  order determinism; `M2-13` ports the full-pass block-light fill and matches
+  the M1-29 reference on five fixtures. The next task is `M2-14`, cross-chunk
+  light seeding.
 - **128³ Minimum is still unmeasured.** The M2 gate run after `M2-29` is the
   measurement that confirms or rejects the upgrade; mesh compression remains
   the first lever.
