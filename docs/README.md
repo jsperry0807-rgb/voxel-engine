@@ -16,9 +16,19 @@
 When these disagree, the spec wins, then the roadmap, then the task list. Any change to a
 binding number is made in the spec and the pre-registration, never only in a task.
 
+## Current position
+
+- **M0 and M1 are complete.** The M1 gate selected the **128³ Minimum** profile for
+  M2, conditional on mesh compression and a measured 128³ run.
+- **M1.5 is code-complete.** The viewer, atlas, naive mesher and chunk screenshot
+  landed; the exit artifacts `M1.5-15`…`M1.5-17` remain open.
+- **M2 is in progress.** The apron API (`M2-01`) landed; `M2-02` is next. The
+  production mesher, AO, light and probes are still to come.
+
 ## Tools
 
 - [`apps/launcher/README.md`](../apps/launcher/README.md) — the desktop launcher: viewer, texture tools, checks and the Linux/Windows builds.
+- [`crates/engine/viewer/README.md`](../crates/engine/viewer/README.md) — the M1.5 viewer: run instructions, controls and the slice screenshot.
 - [`apps/texgen/README.md`](../apps/texgen/README.md) — the standalone Material Maker-style texture and material editor.
 - [`texgen-backlog.md`](texgen-backlog.md) — what texgen still needs, what is deferred, and what is done.
 

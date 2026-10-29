@@ -1,8 +1,9 @@
 # Roadmap Task List
 
-**Status:** v1.5 — derived from spec v2.3 and roadmap v3.1
-**Date:** 2026-10-27
+**Status:** v1.6 — derived from spec v2.3 and roadmap v3.2
+**Date:** 2026-10-29
 **Owner:** engine
+**Current position:** M1 complete. M1.5 code complete; `M1.5-15`…`M1.5-17` open. M2 in progress: `M2-01` done, `M2-02` next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -173,9 +174,9 @@ The schedule is by milestone, not by calendar. The *Consumed by* column is a har
 
 #### Per-material deadlines
 
-The deadline is the art task in the last column; its output must be ready before the consuming task (M1.5-07, M2.5-11, M3.5-06). "Before M1.5-07" means the 256² source is in the manifest and bakes to the 16² tile; M1.5-15 is the final art review. A face may be a marked placeholder earlier, but no milestone may call the set final before its row is done.
+The deadline is the art task in the last column; its output must be ready before the consuming task (M1.5-07, M2.5-11, M3.5-06). "Before M1.5-07" means the 256² source is in the manifest and bakes to the 16² tile; M1.5-15 is the screenshot and reproduction checkpoint (one chunk image has landed), and M1.5-17 is the remaining visual acceptance comparison. A face may be a marked placeholder earlier, but no milestone may call the set final before its row is done.
 
-**Slice set.** All 23 faces are authored in **M1.5-14** and must bake before **M1.5-07**; M1.5-15 reviews the final art.
+**Slice set.** All 23 faces are authored in **M1.5-14** and must bake before **M1.5-07**; M1.5-17 reviews the final art against the texel-density comparison.
 
 | Texture | Applies to | Done in task |
 | --- | --- | --- |
@@ -381,6 +382,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ## 5. M1.5 — Vertical slice
 
 **Goal:** one textured chunk in a window. **Exit:** M1.5-17. **Budget:** 10.5 d code + 4 d art (M1.5-14). **Depends:** M1-15 (layout API), M0-06 (atlas math); M1.5-14 before M1.5-07.
+**Status:** Code complete — M1.5-01…M1.5-14 done. The exit artifacts M1.5-15 (full visual screenshot set), M1.5-16 (zero-validation CI) and M1.5-17 (texel-density pair) remain open; the chunk screenshot and viewer README already landed. M2 work has started before they were closed.
 **Art:** M1.5-14 authors the 23 slice faces; M1.5-17 is the exit art checkpoint.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -399,7 +401,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M1.5-11 | Vertex/index buffer creation and upload for one chunk | M1.5-10 | Buffer sizes match the quad count; no validation error | run | 0.5 d | [x] |
 | M1.5-12 | Shader: UV from world position and face axes, atlas tile from material, face shading, AO placeholder | M0-06, M1.5-09 | A 1 m block face shows exactly one 16×16 tile; screenshot | visual | 1 d | [x] |
 | M1.5-13 | Draw one generated chunk end to end | M1.5-11, M1.5-12 | Terrain visible; 60 Hz at 1080p on the reference machine; placeholder tiles are allowed here, M1.5-14 supplies the final art before the M1.5-15 screenshot | run | 0.5 d | [x] |
-| M1.5-15 | Screenshot artifact in `docs/images/` plus run instructions | M1.5-07, M1.5-13, M1.5-14 | Image committed; README explains how to reproduce | review | 0.25 d | [ ] |
+| M1.5-15 | Screenshot set in `docs/images/` plus run instructions | M1.5-07, M1.5-13, M1.5-14 | D9 screenshot set committed; README explains how to reproduce | review | 0.25 d | [ ] |
 | M1.5-16 | Zero-validation run and naga shader test in CI | M1.5-13 | CI job passes with `RUST_LOG=wgpu_core=warn` | CI | 0.5 d | [ ] |
 | M1.5-17 | Before/after texel-density screenshots (old 256² face vs 16×16 tile) so the regression is a decision | M1.5-14, M1.5-07 | Two images in `docs/images/` with a one-paragraph note; art matches M1.5-14 | review | 0.25 d | [ ] |
 
@@ -407,9 +409,22 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 ## 6. M2 — Production content pipeline
 
-**Goal:** deterministic mesh + AO + block light + probes, at the gated edge.
-**Exit:** M2-30. **Budget:** 26.75 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
+**Goal:** deterministic mesh + AO + block light + probes, at the 128³ Minimum edge.
+**Exit:** M2-30. **Budget:** 27.0 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
+**Status:** In progress — M2-01 done; M2-02 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
 **Art:** none beyond M1.5-14; M2 reuses the slice atlas.
+
+**M1 gate carry-over — blocks M2-30:**
+
+- Mesh compression must bring the 64³ p95 mesh under 600 KiB before the 128³
+  estimate can meet its 2.4 MiB cap. The greedy/AO work in M2-04…M2-09 is the
+  first lever; measure it rather than assuming the ratio.
+- Run the **128³ Minimum** gate after M2-29 and record memory, edit, probe and
+  throughput on the reference machine.
+- Close gate rows 9 and 11: wire the M1-34 granularity reference into the report
+  and replace the provisional fixture with a real populated save.
+- If the 128³ run misses the 4.80 GiB hard-fail line, apply the pre-registered
+  fallback: 64³ Minimum, then mesh compression, near radius, vertical shell.
 
 ### 6.1 Apron and mesher
 
@@ -459,7 +474,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M2-27 | Wire M2 into the viewer: replace the naive mesher; light + probes uploaded | M2-12, M2-21 | Visual parity with M1.5 except better merge ratio; 60 Hz; no new material keys, the M1.5-14 atlas is unchanged | run | 1 d | [ ] |
 | M2-28 | Throughput: ≥ 20 terrain chunks/s single-threaded | M2-27 | Measured over 100 chunks; recorded | `cargo bench -p voxel-mesh build` | 0.5 d | [ ] |
 | M2-29 | Scratch-memory budget test: ≤ 64 KiB per worker, no chunk-wide densify anywhere | M2-03 | Counting allocator test fails if exceeded | `cargo test -p voxel-mesh scratch_budget` | 0.5 d | [ ] |
-| M2-30 | M2 exit: tag `m2`, update roadmap, freeze goldens as CI artifacts | M2-29 | Tag; CI runs the goldens | `git tag -n m2` | 0.25 d | [ ] |
+| M2-30 | M2 exit: tag `m2`, update roadmap, freeze goldens as CI artifacts; record the 128³ Minimum run and close gate rows 9/11 | M2-29; M1 gate carry-over | Tag; CI runs the goldens; 128³ memory/edit/probe numbers and gate rows 9/11 recorded | `git tag -n m2`; gate report | 0.5 d | [ ] |
 
 ---
 
@@ -781,7 +796,7 @@ Raw days are the sum of the task estimates. Contingency is milestone-specific: i
 | M0 | 7.5 | 0% | 7.5 | 1 | gate frozen |
 | M1 | 33.5 | 25% | 41.9 | 4 | 64³/128³ decided |
 | M1.5 | 14.5 | 20% | 17.4 | 1.5 | first pixel |
-| M2 | 26.75 | 25% | 33.4 | 3 | content pipeline |
+| M2 | 27.0 | 25% | 33.75 | 3 | content pipeline |
 | M2.5 | 53.25 | 40% | 74.55 | 3 | 1024 km world with biomes, rivers, caves |
 | M3 | 9 | 40% | 12.6 | 1.5 | 256 chunks at 60 Hz |
 | M3.5 | 19.25 | 50% | 28.9 | 1.5 | 16–32 km view, water, atlas |
@@ -789,8 +804,8 @@ Raw days are the sum of the task estimates. Contingency is milestone-specific: i
 | M5 | 18.25 | 50% | 27.4 | 3 | ≥ 3× draw reduction |
 | M6 | 22.25 | 50% | 33.4 | 3 | 512 m within budget |
 | M7 | 12 | 30% | 15.6 | 2 | enforced budgets |
-| **Total** | **233.5** | — | **315.1** | **27** | |
+| **Total** | **233.75** | — | **315.3** | **27** | |
 
-Milestone rows include their art tasks: 4 d in M1.5, 8 d in M2.5 and 1.5 d in M3.5. There is no separate art track. 233.5 raw days is ~47 weeks; 315.1 planning days is ~63 weeks (~15 months). The **249 tasks** (245 previous + 4 art) are the complete delivery set; the last sprint is unallocated buffer and must not be filled with new scope.
+Milestone rows include their art tasks: 4 d in M1.5, 8 d in M2.5 and 1.5 d in M3.5. There is no separate art track. 233.75 raw days is ~47 weeks; 315.3 planning days is ~63 weeks (~15 months). The **249 tasks** (245 previous + 4 art) are the complete delivery set; the last sprint is unallocated buffer and must not be filled with new scope.
 
 The gate is at S4 because it must not inherit the later milestones' contingency. If it slips, the correct response is to cut reference scope (M1-30, M1-31 can be stubs for the first pass), not to weaken the gate.

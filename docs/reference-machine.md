@@ -23,8 +23,10 @@ gate names it. If a run happens on different hardware, it is not a gate run.
 
 - **Linux is the primary development and test platform now.**
 - **Windows is required before public release.** No Windows-specific code in the
-  engine crates; wgpu and winit carry the portability. CI adds a Windows build
-  before release, not before M3.
+  engine crates; wgpu and winit carry the portability. CI cross-builds the
+  workspace for `x86_64-pc-windows-gnu` from M2 onward (the job installs
+  mingw-w64); native windowing, pointer capture and GPU behaviour still have to
+  be tried on Windows.
 - macOS is not a target.
 
 ## 3. Gated profiles
