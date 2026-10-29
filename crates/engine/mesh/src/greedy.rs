@@ -6,6 +6,10 @@
 //! count/rectangle core, not the final vertex emitter: AO (M2-07/M2-08) and the
 //! 16-byte vertex packing (M2-10) sit on top of these rectangles.
 //!
+//! Backface culling happens before the mask is built: a face whose outward
+//! neighbour is solid is never emitted, so interior faces and the inward half
+//! of a solid boundary cannot reach the quad list (M2-06).
+//!
 //! The scan order matches the M1-31 reference exactly: face, then layer along
 //! the normal, then `v`, then `u`; each rectangle grows in `u` first and `v`
 //! second. That keeps the quad count deterministic where more than one maximal

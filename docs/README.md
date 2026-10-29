@@ -24,9 +24,9 @@ binding number is made in the spec and the pre-registration, never only in a tas
   screenshot set landed; only `M1.5-17` (before/after texel-density pair) remains
   open. The zero-validation CI job (`M1.5-16`) is also in place.
 - **M2 is in progress.** The apron API (`M2-01`), its cost benchmark (`M2-02`),
-  the block-granular driver (`M2-03`), the greedy core (`M2-04`) and the merge
-  key (`M2-05`) landed; `M2-06` backface cull is next. AO sampling, light and
-  probes are still to come.
+  the block-granular driver (`M2-03`), the greedy core (`M2-04`), the merge key
+  (`M2-05`) and backface culling (`M2-06`) landed; `M2-07` AO sampling is next.
+  Light and probes are still to come.
 
 ## Tools
 
