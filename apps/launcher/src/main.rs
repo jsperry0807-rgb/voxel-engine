@@ -2,8 +2,8 @@
 //! checks and the builds.
 //!
 //! The launcher exists so a normal session needs no command line. It discovers
-//! the workspace root, starts the Windows cross-build in the background, and
-//! offers the actions this repository is driven by.
+//! the workspace root, starts the Linux and Windows builds in the background,
+//! and offers the actions this repository is driven by.
 //!
 //! ```text
 //! cargo launcher                     # alias from .cargo/config.toml
@@ -169,8 +169,8 @@ fn print_help() {
            -h, --help    print this help\n\
          \n\
          The window runs the viewer and texture editor, the texture and check\n\
-         pipelines, and the Linux and Windows builds. The Windows cross-build\n\
-         starts automatically unless VOXEL_LAUNCHER_NO_AUTOBUILD is set.\n\
+         pipelines, and the Linux and Windows builds. Both builds start\n\
+         automatically unless VOXEL_LAUNCHER_NO_AUTOBUILD is set.\n\
          The launcher prefers X11/XWayland, like the viewer; set\n\
          VOXEL_VIEWER_WAYLAND=1 to use the native backend."
     );

@@ -96,6 +96,20 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --features chunk128
 
+  windows-cross:
+    name: Windows cross-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y mingw-w64
+      # Same preflight a developer gets from `cargo build-win`.
+      - run: cargo build-win
+
   gate:
     name: M1 gate (advisory)
     runs-on: ubuntu-latest
