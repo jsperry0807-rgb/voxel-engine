@@ -146,12 +146,12 @@ impl Workspace {
 
     /// Graph path for a key.
     pub fn graph_path(&self, key: &str) -> PathBuf {
-        self.graph_dir().join(format!("{}.ron", name_of(key)))
+        self.graph_dir().join(format!("{}.ron", path_name(key)))
     }
 
     /// Committed PNG path for a key.
     pub fn texture_path(&self, key: &str) -> PathBuf {
-        self.texture_dir().join(format!("{}.png", name_of(key)))
+        self.texture_dir().join(format!("{}.png", path_name(key)))
     }
 
     /// All `*.ron` graph files that are not editor subgraphs.
@@ -184,6 +184,22 @@ impl Workspace {
 /// `voxel:block/stone` -> `stone`.
 pub fn name_of(key: &str) -> &str {
     key.strip_prefix("voxel:block/").unwrap_or(key)
+}
+
+/// The file-name component of a key, checked before it is joined to a path.
+///
+/// Keys come from users (the editor, MCP arguments), so a separator or `..`
+/// would otherwise escape the texture directory.
+fn path_name(key: &str) -> &str {
+    let name = name_of(key);
+    assert!(
+        !name.is_empty()
+            && name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'),
+        "face key {key:?} is not a valid file name"
+    );
+    name
 }
 
 /// Slot for a face key.

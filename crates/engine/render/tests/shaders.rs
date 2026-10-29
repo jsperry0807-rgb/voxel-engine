@@ -249,3 +249,69 @@ fn shader_constants_cover_every_declaration() {
         );
     }
 }
+
+/// Parses one `const NAME: u32 = VALUE;` declaration.
+///
+/// `material.wgsl` uses plain literals and `1u << K` flag constants, so this
+/// accepts both rather than reusing the stricter SVDAG mirror parser.
+fn material_const(source: &str, name: &str) -> u64 {
+    let prefix = format!("const {name}: u32 = ");
+    let line = source
+        .lines()
+        .find(|line| line.trim_start().starts_with(&prefix))
+        .unwrap_or_else(|| panic!("material.wgsl is missing `{name}`"));
+    let value = line
+        .trim()
+        .strip_prefix(&prefix)
+        .and_then(|rest| rest.strip_suffix(';'))
+        .unwrap_or_else(|| panic!("material.wgsl: malformed `{name}`: {line}"))
+        .trim();
+
+    if let Some((left, right)) = value.split_once("<<") {
+        let left = left.trim().trim_end_matches('u');
+        let right = right.trim().trim_end_matches('u');
+        let left: u64 = left.parse().unwrap_or_else(|e| panic!("bad `{name}`: {e}"));
+        let right: u64 = right
+            .parse()
+            .unwrap_or_else(|e| panic!("bad `{name}`: {e}"));
+        return left << right;
+    }
+    let value = value.trim_end_matches('u');
+    match value.strip_prefix("0x") {
+        Some(hex) => u64::from_str_radix(hex, 16).unwrap_or_else(|e| panic!("bad `{name}`: {e}")),
+        None => value
+            .parse()
+            .unwrap_or_else(|e| panic!("bad `{name}`: {e}")),
+    }
+}
+
+/// `material.wgsl` mirrors the hot-record packing; nothing checked it without
+/// a GPU adapter before.
+#[test]
+fn material_constants_match_the_hot_record_layout() {
+    use std::mem::size_of;
+
+    use voxel_block::hot::{
+        EMISSION_SHIFT, FLAGS_MASK, FLAGS_SHIFT, HAS_TEXTURES, LIGHT_MASK, OPACITY_SHIFT,
+        RENDER_MASK,
+    };
+
+    let get = |name: &str| material_const(MATERIAL_WGSL, name);
+    assert_eq!(get("RENDER_TYPE_MASK"), u64::from(RENDER_MASK));
+    assert_eq!(get("HAS_TEXTURES"), u64::from(HAS_TEXTURES));
+    assert_eq!(get("EMISSION_SHIFT"), u64::from(EMISSION_SHIFT));
+    assert_eq!(get("OPACITY_SHIFT"), u64::from(OPACITY_SHIFT));
+    assert_eq!(get("FLAGS_SHIFT"), u64::from(FLAGS_SHIFT));
+    assert_eq!(get("LIGHT_MASK"), u64::from(LIGHT_MASK));
+    assert_eq!(get("FLAGS_MASK"), u64::from(FLAGS_MASK));
+
+    // One `HotRecord` is two u32 words; six u16 texture ids are three words.
+    assert_eq!(
+        get("HOT_STRIDE"),
+        (size_of::<voxel_block::hot::HotRecord>() / 4) as u64
+    );
+    assert_eq!(
+        get("SET_STRIDE"),
+        (size_of::<voxel_block::texture::FaceTextureIds>() / 4) as u64
+    );
+}

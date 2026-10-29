@@ -3237,6 +3237,7 @@ dependencies = [
  "eframe",
  "voxel-block",
  "voxel-texgraph",
+ "winit",
 ]
 
 [[package]]

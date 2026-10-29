@@ -54,13 +54,13 @@ use core::fmt;
 use crate::properties::{BlockFlags, RenderType};
 use crate::texture::TextureSetId;
 
-const RENDER_MASK: u32 = 0b111;
-const HAS_TEXTURES: u32 = 1 << 3;
-const EMISSION_SHIFT: u32 = 4;
-const OPACITY_SHIFT: u32 = 8;
-const FLAGS_SHIFT: u32 = 12;
-const LIGHT_MASK: u32 = 0xF;
-const FLAGS_MASK: u32 = 0xFFFF;
+pub const RENDER_MASK: u32 = 0b111;
+pub const HAS_TEXTURES: u32 = 1 << 3;
+pub const EMISSION_SHIFT: u32 = 4;
+pub const OPACITY_SHIFT: u32 = 8;
+pub const FLAGS_SHIFT: u32 = 12;
+pub const LIGHT_MASK: u32 = 0xF;
+pub const FLAGS_MASK: u32 = 0xFFFF;
 
 /// Hot per-block data, 8 bytes. See the [module docs](self) for the layout.
 #[repr(C)]

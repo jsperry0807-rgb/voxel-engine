@@ -264,26 +264,49 @@ pub enum Type {
 }
 
 /// A compiled, validated graph ready to evaluate.
+///
+/// Fields are crate-visible so only [`Graph::compile`] can build one; an
+/// externally constructed `Program` could violate the invariants `eval` relies
+/// on (non-zero polygon sides, non-empty ramps, valid node indices).
 #[derive(Clone, Debug)]
 pub struct Program {
-    pub key: String,
-    pub size: u32,
-    pub tiling: Tiling,
-    pub alpha: AlphaClass,
-    pub seed: u64,
-    pub nodes: Vec<ProgramNode>,
-    pub output: ProgramOutput,
-    pub breaks_h: bool,
-    pub breaks_v: bool,
+    pub(crate) key: String,
+    pub(crate) size: u32,
+    pub(crate) tiling: Tiling,
+    pub(crate) alpha: AlphaClass,
+    pub(crate) seed: u64,
+    pub(crate) nodes: Vec<ProgramNode>,
+    pub(crate) output: ProgramOutput,
+    pub(crate) breaks_h: bool,
+    pub(crate) breaks_v: bool,
 }
 
 #[derive(Clone, Debug)]
 pub struct ProgramNode {
-    pub id: u32,
-    pub op: ProgramOp,
-    pub inputs: Vec<usize>,
+    pub(crate) id: u32,
+    pub(crate) op: ProgramOp,
+    pub(crate) inputs: Vec<usize>,
     /// Per-node RNG stream, derived from the graph seed and node id.
-    pub stream: u64,
+    pub(crate) stream: u64,
+}
+
+impl Program {
+    /// The face key this program was compiled from.
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
+    /// The graph's seed, for callers that report provenance.
+    pub fn seed(&self) -> u64 {
+        self.seed
+    }
+}
+
+impl ProgramNode {
+    /// The graph node id this instruction came from.
+    pub fn id(&self) -> u32 {
+        self.id
+    }
 }
 
 #[derive(Clone, Debug)]

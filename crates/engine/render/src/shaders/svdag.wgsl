@@ -123,7 +123,10 @@ fn dag_get(root: u32, pos: vec3<u32>) -> u32 {
 
 // One chunk-local voxel, or 0 (air) if the chunk or voxel is absent.
 // The 16^3 block's overlay is checked first, then the DAG.
-fn sample_chunk(p: vec3<i32>, local: vec3<u32>) -> u32 {
+fn sample_chunk(p: vec3<i32>, local_in: vec3<u32>) -> u32 {
+    // Mask to the chunk edge. At 64³ a stray `local.x == 64` would set bit 2 of
+    // bx, which aliases the by field and reads a neighbouring block's entry.
+    let local = local_in & vec3<u32>((1u << ROOT_LEVEL) - 1u);
     let base = chunk_slot(p);
     if base == NONE {
         return 0u;

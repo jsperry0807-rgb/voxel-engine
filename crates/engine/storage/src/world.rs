@@ -27,8 +27,9 @@ pub type Generator = Box<dyn FnMut(ChunkPos, &mut [u16]) + Send>;
 /// * **size** — one chunk at [`Self::size_trigger`] entries is folded even when
 ///   the frame budget is otherwise idle;
 /// * **idle** — after [`Self::idle_trigger`] with no edits, drain everything;
-/// * **budget** — never spend more than [`Self::frame_budget`] folding per
-///   [`World::tick`], so a large backlog spreads over frames;
+/// * **budget** — stop starting a new chunk once [`Self::frame_budget`] is
+///   spent. A single fold may overshoot by one chunk's edit batch; the
+///   guarantee is "do not start more work", not "finish under the budget";
 /// * **event** — call [`World::consolidate`] directly on save, unload, or an
 ///   LOD transition when the caller needs the DAG to be authoritative.
 #[derive(Clone, Debug)]
@@ -326,12 +327,15 @@ impl<S: GpuSink> World<S> {
                 .chunks
                 .get_mut(&p)
                 .expect("consolidation candidate is resident");
+            // Persist the folded DAG before touching either in-memory tier: on
+            // an I/O error the CPU keeps the old DAG + overlay and the GPU is
+            // untouched, so the two cannot diverge.
+            let new = Arc::new(c.dag.apply_edits(c.overlay.iter())); // CPU tier
+            self.disk.put_dag(p, &new)?; // supersedes the diff record
             // Clear the GPU overlay first: the folded DAG writes land in the same flush,
             // so no frame sees a hole between the two updates.
             self.gpu.clear_chunk_overlay(p);
             self.gpu.apply_edits(p, c.overlay.iter()); // GPU tier: edit changed paths in place
-            let new = Arc::new(c.dag.apply_edits(c.overlay.iter())); // CPU tier: same edits
-            self.disk.put_dag(p, &new)?; // supersedes the diff record
             c.dag = new;
             c.overlay.clear();
             c.unsaved = false;

@@ -110,7 +110,7 @@ impl std::error::Error for FreezeError {}
 /// air yet); the first block you register must still be air. Use `new()` unless
 /// you are building the registry from external data and want to control air's
 /// properties yourself.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct BlockRegistryBuilder {
     /// `entries[i]` describes `MaterialId(i)`; index is position, so ids stay
     /// dense without a lookup. The key is `None` for slots held by

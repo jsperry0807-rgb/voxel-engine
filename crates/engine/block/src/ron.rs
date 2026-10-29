@@ -122,23 +122,32 @@ impl BlockRegistryBuilder {
     ) -> Result<(), BlockLoadError> {
         let table: MaterialTable =
             ron::from_str(materials).map_err(BlockLoadError::MaterialParse)?;
-        self.set_materials(table);
-        self.load_ron(blocks)
+        // Commit the table and the blocks together: a parse or registry error
+        // must not leave a half-built builder that a retry then rejects as a
+        // duplicate.
+        let mut scratch = self.clone();
+        scratch.set_materials(table);
+        scratch.load_ron(blocks)?;
+        *self = scratch;
+        Ok(())
     }
 
     /// Register every block described by a RON document.
     pub fn load_ron(&mut self, input: &str) -> Result<(), BlockLoadError> {
         let list: RonBlockList = ron::from_str(input).map_err(BlockLoadError::Parse)?;
+        let mut scratch = self.clone();
         for block in list.blocks {
             let (key, props) = block.into_properties().map_err(BlockLoadError::Key)?;
             // Air is pre-registered by `BlockRegistryBuilder::new`; a RON file
             // that also lists it (for completeness) must not be a duplicate.
-            if key == crate::kind::BlockKind::Air.key() && !self.is_empty() {
+            if key == crate::kind::BlockKind::Air.key() && !scratch.is_empty() {
                 continue;
             }
-            self.register(key, props)
+            scratch
+                .register(key, props)
                 .map_err(BlockLoadError::Registry)?;
         }
+        *self = scratch;
         Ok(())
     }
 }
