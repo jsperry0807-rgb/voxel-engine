@@ -477,6 +477,37 @@ fn check_tiling(entry: &TextureEntry, image: &SourceImage) -> Result<(), Manifes
             )));
         }
     }
+    if entry.tiling == Tiling::None {
+        check_no_wrap_margins(entry, image)?;
+    }
+    Ok(())
+}
+
+/// Section 3: a non-tiling face keeps at least 8 texels clear on the left and
+/// right, so horizontal sampling can never pull a neighbour's content in.
+///
+/// The requirement is horizontal only: `tall_grass` and `red_flower` are drawn
+/// down to the bottom edge on purpose.
+fn check_no_wrap_margins(entry: &TextureEntry, image: &SourceImage) -> Result<(), ManifestError> {
+    const MARGIN: u32 = 8;
+    let edge = image.width;
+    if edge <= 2 * MARGIN {
+        return Err(ManifestError::Invalid(format!(
+            "{}: {edge}px is too narrow for a {MARGIN}-texel side margin",
+            entry.key
+        )));
+    }
+    for y in 0..edge {
+        for x in (0..MARGIN).chain(edge - MARGIN..edge) {
+            let offset = ((y * edge + x) * 4) as usize;
+            if image.pixels.get(offset + 3).copied().unwrap_or(0) != 0 {
+                return Err(ManifestError::Invalid(format!(
+                    "{}: Tiling::None content at ({x}, {y}) is inside the {MARGIN}-texel side margin",
+                    entry.key
+                )));
+            }
+        }
+    }
     Ok(())
 }
 
