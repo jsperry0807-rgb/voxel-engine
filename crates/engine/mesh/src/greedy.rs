@@ -66,6 +66,17 @@ impl GreedyQuad {
 /// `out` is cleared first and reused across blocks so the caller can keep one
 /// vector per worker. Every rectangle stays inside the 16³ block interior.
 pub fn greedy_block(scratch: &BlockScratch, out: &mut Vec<GreedyQuad>) {
+    greedy_block_with_ao(scratch, out, corner_ao);
+}
+
+/// Like [`greedy_block`], but with a caller-supplied AO sampler.
+///
+/// Passing `|_, _, _, _| u8::MAX` gives the AO-off merge for the M2-08
+/// comparison; the normal path uses [`corner_ao`].
+pub fn greedy_block_with_ao<F>(scratch: &BlockScratch, out: &mut Vec<GreedyQuad>, mut sample_ao: F)
+where
+    F: FnMut(&BlockScratch, Face, [u32; 3], usize) -> u8,
+{
     out.clear();
     let mut mask: [Option<MergeKey>; BLOCK_EDGE * BLOCK_EDGE] = [None; BLOCK_EDGE * BLOCK_EDGE];
 
@@ -92,7 +103,7 @@ pub fn greedy_block(scratch: &BlockScratch, out: &mut Vec<GreedyQuad>) {
                     neighbour[axis] = (neighbour[axis] as i32 + sign) as u32;
                     if scratch.get(neighbour[0], neighbour[1], neighbour[2]) == 0 {
                         let ao =
-                            std::array::from_fn(|corner| corner_ao(scratch, face, cell, corner));
+                            std::array::from_fn(|corner| sample_ao(scratch, face, cell, corner));
                         mask[v * BLOCK_EDGE + u] = Some(MergeKey::new(face, material, ao));
                     }
                 }

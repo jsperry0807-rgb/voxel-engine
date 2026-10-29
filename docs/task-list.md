@@ -3,7 +3,7 @@
 **Status:** v1.6 — derived from spec v2.3 and roadmap v3.2
 **Date:** 2026-10-29
 **Owner:** engine
-**Current position:** M1 complete. M1.5 code complete; only `M1.5-17` (texel-density pair) remains open. M2 in progress: `M2-07` done, `M2-08` next.
+**Current position:** M1 complete. M1.5 code complete; only `M1.5-17` (texel-density pair) remains open. M2 in progress: `M2-08` done, `M2-09` next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -411,7 +411,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 **Goal:** deterministic mesh + AO + block light + probes, at the 128³ Minimum edge.
 **Exit:** M2-30. **Budget:** 27.0 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
-**Status:** In progress — M2-07 done; M2-08 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
+**Status:** In progress — M2-08 done; M2-09 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
 **Art:** none beyond M1.5-14; M2 reuses the slice atlas.
 
 **M1 gate carry-over — blocks M2-30:**
@@ -456,6 +456,12 @@ two edge neighbours and the diagonal in the outward plane. The production
 sampler matched the brute-force reference on 10,000 random face/cell/corner
 configurations. AO is now live in the merge key; M2-08 measures its merge cost.
 
+**M2-08 measured (2026-10-29):** on a 64³ terrain scene with a stone outcrop,
+18,388 exposed faces produced 6,324 AO-on quads (ratio 0.3439) versus 3,831
+AO-off quads (ratio 0.2083), a **1.65×** quad cost. Both covers have identical
+face area; AO only splits. The rendered artifact check moves to M2-27, where the
+production mesh is wired into the viewer; the shader does not consume AO yet.
+
 ### 6.1 Apron and mesher
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -467,7 +473,7 @@ configurations. AO is now live in the merge key; M2-08 measures its merge cost.
 | M2-05 | Merge key: `(material, orientation, 4×AO)`; quads split on any difference | M2-04 | Mixed-material fixture splits exactly at material changes; no over-merge | `cargo test -p voxel-mesh merge_key` | 1 d | [x] |
 | M2-06 | Backface cull at emit: only the outward quad per exposed face; no interior faces | M2-04 | Isolated voxel → 6 quads; two adjacent → 10 exposed faces; enclosed → 0 | `cargo test -p voxel-mesh backface` | 0.5 d | [x] |
 | M2-07 | AO sampling: 3 neighbours per corner, from the apron, before merge; reference brute force | M2-01 | Matches brute force on 10k random corner configurations | `cargo test -p voxel-mesh ao_matches_bruteforce` | 1.5 d | [x] |
-| M2-08 | AO in the merge key and in the vertex; measure merge-ratio cost of AO-safety | M2-05, M2-07 | Merge ratio reported for AO-on vs AO-off; no AO artifacts in the golden images | `cargo test -p voxel-mesh ao_merge_ratio` | 0.5 d | [ ] |
+| M2-08 | AO in the merge key and in the vertex; measure merge-ratio cost of AO-safety | M2-05, M2-07 | Merge ratio reported for AO-on vs AO-off; AO carried into the quad vertices; rendered artifact in M2-27 | `cargo test -p voxel-mesh ao_merge_ratio` | 0.5 d | [x] |
 | M2-09 | AO seam test: identical neighbours on both sides of a chunk border produce equal corner AO | M2-07 | Fails if the apron is off by one; passes with it | `cargo test -p voxel-mesh ao_seam` | 0.5 d | [ ] |
 | M2-10 | Vertex packing to 16 B (local u16 ×3, material u16, face u8, AO u8 ×4) with encode/decode tests | M2-04 | Size asserted at compile time; round-trip all fields | `cargo test -p voxel-mesh vertex_pack` | 0.5 d | [ ] |
 | M2-11 | Five golden mesh fixtures with content hashes (flat, cave, overhang, mixed material, chunk-border) | M2-10 | Hashes stable across runs; mismatch prints the first differing quad | `cargo test -p voxel-mesh golden` | 1 d | [ ] |

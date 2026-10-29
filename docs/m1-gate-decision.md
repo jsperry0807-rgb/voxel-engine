@@ -174,8 +174,9 @@ gate, the chosen profile or any threshold.
   greedy rectangle core and matched the M1-31 reference on five fixtures;
   `M2-05` added the `(material, orientation, 4×AO)` merge key; `M2-06` culls
   interior faces before the mask; `M2-07` samples four-level vertex AO and
-  matches the brute-force reference on 10k corners. The next task is `M2-08`,
-  the AO merge-ratio cost.
+  matches the brute-force reference on 10k corners; `M2-08` measured a 1.65×
+  quad cost for AO-safe merging. The next task is `M2-09`, the chunk-border AO
+  seam.
 - **128³ Minimum is still unmeasured.** The M2 gate run after `M2-29` is the
   measurement that confirms or rejects the upgrade; mesh compression remains
   the first lever.
