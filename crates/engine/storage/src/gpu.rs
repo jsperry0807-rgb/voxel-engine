@@ -251,6 +251,12 @@ pub struct GpuStore {
     rc: Vec<u32>,
     free: [Vec<u32>; 10], // by node size in words (2..=9)
     dedup: FxMap<u64, u32>,
+    /// Additional live nodes sharing a hash with the [`Self::dedup`] entry.
+    ///
+    /// A content hash is not an identity: when two different nodes collide,
+    /// both must stay addressable or every later insert of the colliding
+    /// content allocates again and the pool grows without bound.
+    dedup_more: FxMap<u64, Vec<u32>>,
     table: Vec<u32>,
     overlays: Vec<u32>,
     overlay_counts: Vec<u32>,
@@ -300,6 +306,7 @@ impl GpuStore {
             rc: Vec::new(),
             free: Default::default(),
             dedup: FxMap::default(),
+            dedup_more: FxMap::default(),
             table: vec![EMPTY; INITIAL_SLOTS * SLOT_WORDS],
             overlays: Vec::new(),
             overlay_counts: Vec::new(),
@@ -637,7 +644,19 @@ impl GpuStore {
             if u + n <= self.pool.len() && self.pool[u..u + n] == *words {
                 return (o, false);
             }
-            return (self.alloc(words), true); // hash collision: keep private, uninterned
+            // Hash collision: reuse a sibling with identical content instead of
+            // allocating a private copy (which would repeat on every insert).
+            if let Some(extras) = self.dedup_more.get(&h) {
+                for &candidate in extras {
+                    let u = candidate as usize;
+                    if u + n <= self.pool.len() && self.pool[u..u + n] == *words {
+                        return (candidate, false);
+                    }
+                }
+            }
+            let o = self.alloc(words);
+            self.dedup_more.entry(h).or_default().push(o);
+            return (o, true);
         }
         let o = self.alloc(words);
         self.dedup.insert(h, o);
@@ -696,6 +715,17 @@ impl GpuStore {
         let h = hash_words(&self.pool[o..o + n]);
         if self.dedup.get(&h) == Some(&(o as u32)) {
             self.dedup.remove(&h);
+            // Promote a colliding sibling so lookups still find a live node.
+            if let Some(extras) = self.dedup_more.get_mut(&h)
+                && let Some(next) = extras.pop()
+            {
+                self.dedup.insert(h, next);
+            }
+        } else if let Some(extras) = self.dedup_more.get_mut(&h) {
+            extras.retain(|&candidate| candidate as usize != o);
+            if extras.is_empty() {
+                self.dedup_more.remove(&h);
+            }
         }
         if hdr_level(hdr) > 1 {
             for k in 0..cnt {
@@ -1010,7 +1040,7 @@ impl GpuStore {
         &self.block_tables
     }
     pub fn unique_nodes(&self) -> usize {
-        self.dedup.len()
+        self.dedup.len() + self.dedup_more.values().map(Vec::len).sum::<usize>()
     }
     pub fn chunk_count(&self) -> usize {
         self.live
@@ -1344,5 +1374,50 @@ mod tests {
         assert_eq!(g.table_slots(), capacity);
         assert_eq!(g.tombs, 1, "the single vacated slot was reused");
         assert_eq!(g.chunk_count(), 0);
+    }
+
+    /// A hash collision must not make the colliding content private: the second
+    /// insert has to reuse the first node instead of allocating again.
+    #[test]
+    fn intern_reuses_content_after_a_hash_collision() {
+        let mut g = GpuStore::new();
+        let words = [0x0000_0002u32, 0x1111_1111];
+        let h = hash_words(&words);
+
+        // Occupy the primary entry for this hash with different content.
+        let occupant = g.alloc(&[0x0000_0002, 0x2222_2222]);
+        g.dedup.insert(h, occupant);
+
+        let (first, created) = g.intern(&words);
+        assert!(created, "the colliding content is new");
+        assert_ne!(first, occupant);
+
+        let (second, created) = g.intern(&words);
+        assert!(
+            !created,
+            "a colliding node must be re-interned, not allocated again"
+        );
+        assert_eq!(first, second);
+        assert_eq!(g.unique_nodes(), 2, "one primary plus one colliding node");
+    }
+
+    /// Retiring a colliding node frees its slot; the next intern allocates but
+    /// does not leave a stale entry behind.
+    #[test]
+    fn intern_after_retiring_a_colliding_node_is_consistent() {
+        let mut g = GpuStore::new();
+        let words = [0x0000_0002u32, 0x3333_3333];
+        let h = hash_words(&words);
+        let occupant = g.alloc(&[0x0000_0002, 0x4444_4444]);
+        g.dedup.insert(h, occupant);
+
+        let (offset, _) = g.intern(&words);
+        g.rc[offset as usize] = 1;
+        g.decref(offset);
+
+        let (again, created) = g.intern(&words);
+        assert!(created, "the node was freed, so this is a fresh allocation");
+        assert_eq!(again, offset, "the allocator may reuse the freed slot");
+        assert_eq!(g.unique_nodes(), 2);
     }
 }
