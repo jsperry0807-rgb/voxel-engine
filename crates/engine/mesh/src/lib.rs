@@ -15,7 +15,7 @@ use voxel_storage::{
 };
 
 mod greedy;
-pub use greedy::{GreedyQuad, greedy_block};
+pub use greedy::{GreedyQuad, MergeKey, greedy_block};
 
 /// Voxels along one block edge.
 pub const BLOCK_EDGE: usize = BLOCK_DIM;

@@ -171,8 +171,9 @@ gate, the chosen profile or any threshold.
   8.5% of the dense path's bytes and 6.6% of its time at 64³ (4.5%/4.3% at
   128³); see [`m2-apron-cost.md`](m2-apron-cost.md). `M2-03` added the
   block-granular driver with an 11,664 B reusable scratch; `M2-04` added the
-  greedy rectangle core and matched the M1-31 reference on five fixtures. The
-  next task is `M2-05`, the merge key.
+  greedy rectangle core and matched the M1-31 reference on five fixtures;
+  `M2-05` added the `(material, orientation, 4×AO)` merge key. The next task is
+  `M2-06`, backface cull at emit.
 - **128³ Minimum is still unmeasured.** The M2 gate run after `M2-29` is the
   measurement that confirms or rejects the upgrade; mesh compression remains
   the first lever.

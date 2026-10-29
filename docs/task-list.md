@@ -3,7 +3,7 @@
 **Status:** v1.6 — derived from spec v2.3 and roadmap v3.2
 **Date:** 2026-10-29
 **Owner:** engine
-**Current position:** M1 complete. M1.5 code complete; only `M1.5-17` (texel-density pair) remains open. M2 in progress: `M2-04` done, `M2-05` next.
+**Current position:** M1 complete. M1.5 code complete; only `M1.5-17` (texel-density pair) remains open. M2 in progress: `M2-05` done, `M2-06` next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -411,7 +411,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 **Goal:** deterministic mesh + AO + block light + probes, at the 128³ Minimum edge.
 **Exit:** M2-30. **Budget:** 27.0 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
-**Status:** In progress — M2-04 done; M2-05 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
+**Status:** In progress — M2-05 done; M2-06 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
 **Art:** none beyond M1.5-14; M2 reuses the slice atlas.
 
 **M1 gate carry-over — blocks M2-30:**
@@ -441,6 +441,11 @@ worker, reused for all 64 blocks at 64³ or 512 blocks at 128³. The
 reference on all five fixtures, per face orientation and covered area, at both
 64³ and 128³. Quad count never exceeds the brute-force exposed-face count.
 
+**M2-05 measured (2026-10-29):** the merge key carries face, material and four
+AO bytes. The mixed-material fixture splits top/bottom and the two z faces at
+`x = 8` and leaves the x faces whole; the key unit test also proves an AO-only
+difference splits. AO is still the all-open placeholder until M2-07.
+
 ### 6.1 Apron and mesher
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -449,7 +454,7 @@ reference on all five fixtures, per face orientation and covered area, at both
 | M2-02 | Apron cost benchmark vs a dense 130³ copy; record the winner | M2-01 | Face-plane path ≤ 25% of the dense path's bytes and time | `cargo bench -p voxel-storage apron` | 0.5 d | [x] |
 | M2-03 | Block-granular driver: iterate 16³ blocks, build a bounded scratch per block (18³), no chunk-wide densify | M2-01 | Peak scratch ≤ 64 KiB/worker on the noise fixture | `cargo test -p voxel-mesh scratch_budget` | 1 d | [x] |
 | M2-04 | Greedy bitmask core in `voxel-mesh`, over one axis at a time | M2-01; M2-03 | Quad count ≤ visible-face count; matches the M1-31 reference on 5 fixtures | `cargo test -p voxel-mesh greedy_matches_reference` | 2 d | [x] |
-| M2-05 | Merge key: `(material, orientation, 4×AO)`; quads split on any difference | M2-04 | Mixed-material fixture splits exactly at material changes; no over-merge | `cargo test -p voxel-mesh merge_key` | 1 d | [ ] |
+| M2-05 | Merge key: `(material, orientation, 4×AO)`; quads split on any difference | M2-04 | Mixed-material fixture splits exactly at material changes; no over-merge | `cargo test -p voxel-mesh merge_key` | 1 d | [x] |
 | M2-06 | Backface cull at emit: only the outward quad per exposed face; no interior faces | M2-04 | Isolated voxel → 6 quads; two adjacent → 10; enclosed → 0 | `cargo test -p voxel-mesh backface` | 0.5 d | [ ] |
 | M2-07 | AO sampling: 3 neighbours per corner, from the apron, before merge; reference brute force | M2-01 | Matches brute force on 10k random corner configurations | `cargo test -p voxel-mesh ao_matches_bruteforce` | 1.5 d | [ ] |
 | M2-08 | AO in the merge key and in the vertex; measure merge-ratio cost of AO-safety | M2-05, M2-07 | Merge ratio reported for AO-on vs AO-off; no AO artifacts in the golden images | `cargo test -p voxel-mesh ao_merge_ratio` | 0.5 d | [ ] |

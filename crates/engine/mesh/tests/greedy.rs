@@ -59,6 +59,38 @@ fn greedy_matches_reference() {
     }
 }
 
+#[test]
+fn mixed_material_splits_exactly_at_material_changes() {
+    let (_, stripe) = fixtures()
+        .into_iter()
+        .find(|(name, _)| *name == "material_stripe_block")
+        .expect("stripe fixture");
+    let apron = Apron::new();
+    let mut quads = Vec::new();
+    let mut by_face = [0usize; 6];
+    let mut top_materials = Vec::new();
+
+    for_each_block(&stripe, &apron, |_, scratch| {
+        greedy_block(scratch, &mut quads);
+        for quad in &quads {
+            by_face[quad.face.index()] += 1;
+            if quad.face == Face::Top {
+                top_materials.push((quad.material, quad.area()));
+            }
+        }
+    });
+
+    assert_eq!(by_face[Face::North.index()], 2);
+    assert_eq!(by_face[Face::South.index()], 2);
+    assert_eq!(by_face[Face::East.index()], 1);
+    assert_eq!(by_face[Face::West.index()], 1);
+    assert_eq!(by_face[Face::Top.index()], 2);
+    assert_eq!(by_face[Face::Bottom.index()], 2);
+
+    top_materials.sort_unstable();
+    assert_eq!(top_materials, [(1, 128), (2, 128)]);
+}
+
 fn fixtures() -> Vec<(&'static str, Vec<u16>)> {
     let mut isolated = vec![0u16; CHUNK_VOLUME];
     set(&mut isolated, 8, 8, 8, 1);

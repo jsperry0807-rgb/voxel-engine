@@ -15,6 +15,26 @@ use voxel_core::Face;
 
 use crate::{BLOCK_EDGE, BlockScratch};
 
+/// The merge key for one exposed voxel face: material, orientation and the four
+/// corner AO values. Two adjacent mask cells merge only when the whole key is
+/// equal.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MergeKey {
+    /// Outward face orientation.
+    pub face: Face,
+    /// Atlas material id.
+    pub material: u16,
+    /// Four corner AO values in `0..=255`.
+    pub ao: [u8; 4],
+}
+
+impl MergeKey {
+    /// Builds a merge key.
+    pub const fn new(face: Face, material: u16, ao: [u8; 4]) -> Self {
+        Self { face, material, ao }
+    }
+}
+
 /// One greedy rectangle inside a block.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct GreedyQuad {
@@ -22,6 +42,8 @@ pub struct GreedyQuad {
     pub face: Face,
     /// Atlas material id of the exposed faces.
     pub material: u16,
+    /// Four corner AO values copied from the merge key.
+    pub ao: [u8; 4],
     /// Scratch-local coordinate of the rectangle's minimum corner.
     pub origin: [u32; 3],
     /// Rectangle extent; the normal axis is always `1`.
@@ -41,7 +63,7 @@ impl GreedyQuad {
 /// vector per worker. Every rectangle stays inside the 16³ block interior.
 pub fn greedy_block(scratch: &BlockScratch, out: &mut Vec<GreedyQuad>) {
     out.clear();
-    let mut mask = [0u16; BLOCK_EDGE * BLOCK_EDGE];
+    let mut mask: [Option<MergeKey>; BLOCK_EDGE * BLOCK_EDGE] = [None; BLOCK_EDGE * BLOCK_EDGE];
 
     for face in Face::ALL {
         let (axis, sign) = face_axis(face);
@@ -49,7 +71,7 @@ pub fn greedy_block(scratch: &BlockScratch, out: &mut Vec<GreedyQuad>) {
         let v_axis = (axis + 2) % 3;
 
         for layer in 0..BLOCK_EDGE {
-            mask.fill(0);
+            mask.fill(None);
             for v in 0..BLOCK_EDGE {
                 for u in 0..BLOCK_EDGE {
                     let mut cell = [0u32; 3];
@@ -65,19 +87,24 @@ pub fn greedy_block(scratch: &BlockScratch, out: &mut Vec<GreedyQuad>) {
                     let mut neighbour = cell;
                     neighbour[axis] = (neighbour[axis] as i32 + sign) as u32;
                     if scratch.get(neighbour[0], neighbour[1], neighbour[2]) == 0 {
-                        mask[v * BLOCK_EDGE + u] = material;
+                        mask[v * BLOCK_EDGE + u] = Some(MergeKey::new(
+                            face,
+                            material,
+                            // M2-07 replaces this placeholder with the corner
+                            // sampler; all-open AO keeps M2-04's merge count.
+                            [u8::MAX; 4],
+                        ));
                     }
                 }
             }
 
-            greedy_mask(&mut mask, face, layer, axis, u_axis, v_axis, out);
+            greedy_mask(&mut mask, layer, axis, u_axis, v_axis, out);
         }
     }
 }
 
 fn greedy_mask(
-    mask: &mut [u16; BLOCK_EDGE * BLOCK_EDGE],
-    face: Face,
+    mask: &mut [Option<MergeKey>; BLOCK_EDGE * BLOCK_EDGE],
     layer: usize,
     axis: usize,
     u_axis: usize,
@@ -87,13 +114,12 @@ fn greedy_mask(
     for v in 0..BLOCK_EDGE {
         for u in 0..BLOCK_EDGE {
             let index = v * BLOCK_EDGE + u;
-            let material = mask[index];
-            if material == 0 {
+            let Some(key) = mask[index] else {
                 continue;
-            }
+            };
 
             let mut width = 1;
-            while u + width < BLOCK_EDGE && mask[index + width] == material {
+            while u + width < BLOCK_EDGE && mask[index + width] == Some(key) {
                 width += 1;
             }
 
@@ -101,7 +127,7 @@ fn greedy_mask(
             'grow: while v + height < BLOCK_EDGE {
                 let row = (v + height) * BLOCK_EDGE + u;
                 for offset in 0..width {
-                    if mask[row + offset] != material {
+                    if mask[row + offset] != Some(key) {
                         break 'grow;
                     }
                 }
@@ -110,7 +136,7 @@ fn greedy_mask(
 
             for row in 0..height {
                 let start = (v + row) * BLOCK_EDGE + u;
-                mask[start..start + width].fill(0);
+                mask[start..start + width].fill(None);
             }
 
             let mut origin = [0u32; 3];
@@ -122,8 +148,9 @@ fn greedy_mask(
             extent[v_axis] = height as u32;
 
             out.push(GreedyQuad {
-                face,
-                material,
+                face: key.face,
+                material: key.material,
+                ao: key.ao,
                 origin,
                 extent,
             });
@@ -140,5 +167,46 @@ fn face_axis(face: Face) -> (usize, i32) {
     } else {
         debug_assert_ne!(z, 0, "a face normal must use one axis");
         (2, z)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn mask_with(keys: &[(usize, MergeKey)]) -> [Option<MergeKey>; BLOCK_EDGE * BLOCK_EDGE] {
+        let mut mask = [None; BLOCK_EDGE * BLOCK_EDGE];
+        for (index, key) in keys {
+            mask[*index] = Some(*key);
+        }
+        mask
+    }
+
+    #[test]
+    fn merge_key_splits_on_any_difference() {
+        let key = MergeKey::new(Face::Top, 3, [255; 4]);
+        let mut out = Vec::new();
+
+        // Same material, orientation and AO: one 2x1 rectangle.
+        let mut mask = mask_with(&[(0, key), (1, key)]);
+        greedy_mask(&mut mask, 0, 1, 2, 0, &mut out);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].area(), 2);
+        assert_eq!(out[0].ao, [255; 4]);
+
+        // AO differs on one corner: split.
+        out.clear();
+        let mut mask = mask_with(&[
+            (0, key),
+            (1, MergeKey::new(Face::Top, 3, [0, 255, 255, 255])),
+        ]);
+        greedy_mask(&mut mask, 0, 1, 2, 0, &mut out);
+        assert_eq!(out.len(), 2);
+
+        // Material differs: split.
+        out.clear();
+        let mut mask = mask_with(&[(0, key), (1, MergeKey::new(Face::Top, 4, [255; 4]))]);
+        greedy_mask(&mut mask, 0, 1, 2, 0, &mut out);
+        assert_eq!(out.len(), 2);
     }
 }
