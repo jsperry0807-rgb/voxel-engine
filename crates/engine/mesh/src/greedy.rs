@@ -91,13 +91,9 @@ pub fn greedy_block(scratch: &BlockScratch, out: &mut Vec<GreedyQuad>) {
                     let mut neighbour = cell;
                     neighbour[axis] = (neighbour[axis] as i32 + sign) as u32;
                     if scratch.get(neighbour[0], neighbour[1], neighbour[2]) == 0 {
-                        mask[v * BLOCK_EDGE + u] = Some(MergeKey::new(
-                            face,
-                            material,
-                            // M2-07 replaces this placeholder with the corner
-                            // sampler; all-open AO keeps M2-04's merge count.
-                            [u8::MAX; 4],
-                        ));
+                        let ao =
+                            std::array::from_fn(|corner| corner_ao(scratch, face, cell, corner));
+                        mask[v * BLOCK_EDGE + u] = Some(MergeKey::new(face, material, ao));
                     }
                 }
             }
@@ -172,6 +168,53 @@ fn face_axis(face: Face) -> (usize, i32) {
         debug_assert_ne!(z, 0, "a face normal must use one axis");
         (2, z)
     }
+}
+
+/// Four AO levels: fully occluded, one edge, two edges, fully open.
+const AO_LEVELS: [u8; 4] = [0, 85, 170, 255];
+
+/// The `(u, v)` signs of a face's four quad corners, matching the vertex order
+/// used by the M1.5 mesher (`voxel_viewer::naive_mesh::face_corners`).
+fn corner_signs(face: Face) -> [(i32, i32); 4] {
+    match face {
+        Face::East | Face::Bottom | Face::North => [(-1, -1), (-1, 1), (1, 1), (1, -1)],
+        Face::West | Face::Top | Face::South => [(-1, -1), (1, -1), (1, 1), (-1, 1)],
+    }
+}
+
+/// Samples one vertex AO value from the `18³` scratch.
+///
+/// `cell` is the scratch-local coordinate of the exposed face's voxel (`1..=16`
+/// on the block interior). The three samples are the two edge neighbours and the
+/// diagonal in the plane one voxel outward; two solid edges mean full occlusion,
+/// otherwise the count of solid samples reduces the four-level value. The
+/// result is in [`AO_LEVELS`], with `255` fully open.
+pub fn corner_ao(scratch: &BlockScratch, face: Face, cell: [u32; 3], corner: usize) -> u8 {
+    let (axis, sign) = face_axis(face);
+    let u_axis = (axis + 1) % 3;
+    let v_axis = (axis + 2) % 3;
+    let (du, dv) = corner_signs(face)[corner];
+    let outer = (cell[axis] as i32 + sign) as u32;
+    let u = cell[u_axis] as i32 + du;
+    let v = cell[v_axis] as i32 + dv;
+
+    let sample = |u: i32, v: i32| {
+        let mut sample = [0u32; 3];
+        sample[axis] = outer;
+        sample[u_axis] = u as u32;
+        sample[v_axis] = v as u32;
+        scratch.get(sample[0], sample[1], sample[2])
+    };
+
+    let side_u = sample(u, cell[v_axis] as i32) != 0;
+    let side_v = sample(cell[u_axis] as i32, v) != 0;
+    let diagonal = sample(u, v) != 0;
+    let level = if side_u && side_v {
+        0
+    } else {
+        3 - usize::from(side_u) - usize::from(side_v) - usize::from(diagonal)
+    };
+    AO_LEVELS[level]
 }
 
 #[cfg(test)]

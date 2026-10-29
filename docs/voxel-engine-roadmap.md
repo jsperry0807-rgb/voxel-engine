@@ -36,7 +36,7 @@ Two consequences shape the schedule:
 | `voxel-core` | Canonical `Face` orientation, neighbour offsets, face planes | Complete |
 | `voxel-block` | Registry, materials, texture slices, material variants, palettes, tags, RON | Complete; atlas-backed material ids in use |
 | `voxel-storage` | Parameterized 64³/128³ 8 B-node SVDAG, COW `apply_edits`, overlays, region log, global deduped GPU pool, consolidation policy, six-face apron | **M1 layout complete; M2-01 apron landed** |
-| `voxel-mesh` | Block-granular driver over 16³ blocks with a reusable 18³ scratch; greedy rectangle core with the `(material, orientation, 4×AO)` merge key and backface culling | **M2-03…M2-06 landed**; AO sampling and vertex packing pending |
+| `voxel-mesh` | Block-granular driver over 16³ blocks with a reusable 18³ scratch; greedy rectangle core with the `(material, orientation, 4×AO)` merge key, backface culling and four-level AO sampling | **M2-03…M2-07 landed**; vertex packing pending |
 | `voxel-render` | `WgpuSink`, `MaterialBuffers`, `GpuWorld`, `svdag.wgsl` | Upload path; the viewer owns the draw loop |
 | `voxel-viewer` | `winit` + `wgpu` window, fly camera, mouse look, atlas sampling, depth pass, naive per-face mesher, input layer | **M1.5 code complete**; production mesh/light/probes pending |
 | `voxel-texgraph` / `voxel-texgen` | Deterministic node-graph evaluator, manifest, material table, atlas bake, editor and MCP tools | Complete for M1.5 |
@@ -214,8 +214,8 @@ drops to 6.25 cm per voxel face; before/after screenshots required.
 
 ### M2 — Production content pipeline (6 weeks)
 
-**Status:** In progress — M2-06 backface cull landed; interior faces never reach
-the mask. Next: M2-07 AO sampling.
+**Status:** In progress — M2-07 AO sampling landed and matches the brute-force
+reference on 10k corner configurations. Next: M2-08 AO merge-ratio cost.
 
 Runs at the **128³ Minimum** edge (ADR-002). Default is not greenlit.
 

@@ -15,7 +15,7 @@ use voxel_storage::{
 };
 
 mod greedy;
-pub use greedy::{GreedyQuad, MergeKey, greedy_block};
+pub use greedy::{GreedyQuad, MergeKey, corner_ao, greedy_block};
 
 /// Voxels along one block edge.
 pub const BLOCK_EDGE: usize = BLOCK_DIM;
@@ -89,6 +89,14 @@ impl BlockScratch {
     /// The material at scratch-local `(x, y, z)`.
     pub fn get(&self, x: u32, y: u32, z: u32) -> u16 {
         self.voxels[index(x, y, z)]
+    }
+
+    /// Builds a scratch from an already-filled 18³ volume.
+    ///
+    /// The driver uses this shape internally; tests and future offline tools can
+    /// use it to exercise the AO sampler without a world.
+    pub fn from_voxels(voxels: [u16; SCRATCH_VOXELS]) -> Self {
+        Self { voxels }
     }
 
     fn set(&mut self, x: usize, y: usize, z: usize, material: u16) {
