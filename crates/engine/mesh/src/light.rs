@@ -251,6 +251,223 @@ where
     )
 }
 
+/// One block or sky edit in chunk-local cell coordinates.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CellEdit {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+    pub block: BlockLight,
+    pub sky: bool,
+}
+
+impl CellEdit {
+    pub const fn new(x: i32, y: i32, z: i32, block: BlockLight, sky: bool) -> Self {
+        Self {
+            x,
+            y,
+            z,
+            block,
+            sky,
+        }
+    }
+}
+
+/// Persistent light state for one chunk, updated by dirty-region edits.
+///
+/// A light change cannot travel more than [`MAX_LEVEL`] cells because every
+/// step costs at least one level. Each edit batch therefore recomputes only the
+/// edited cells expanded by that radius, using the unchanged cells outside the
+/// region as fixed seeds. At the 4³/8³ chunk-cell edges the region often covers
+/// the whole chunk; the API is still chunk-local and allocation-free after
+/// construction.
+pub struct LightState {
+    edge: usize,
+    padded_edge: usize,
+    blocks: Vec<BlockLight>,
+    sky_seeds: Vec<bool>,
+    sky: Vec<u8>,
+    block: Vec<u8>,
+}
+
+impl LightState {
+    /// Builds a full-pass state from chunk-local cell closures.
+    pub fn new<B, S>(edge_cells: usize, mut block_at: B, mut sky_at: S) -> Self
+    where
+        B: FnMut(i32, i32, i32) -> BlockLight,
+        S: FnMut(i32, i32, i32) -> bool,
+    {
+        assert!(edge_cells > 0);
+        let padded_edge = edge_cells + 2 * APRON_CELLS as usize;
+        let volume = padded_edge * padded_edge * padded_edge;
+        let lower = -APRON_CELLS;
+        let upper = edge_cells as i32 + APRON_CELLS - 1;
+
+        let mut blocks = Vec::with_capacity(volume);
+        let mut sky_seeds = Vec::with_capacity(volume);
+        for z in lower..=upper {
+            for y in lower..=upper {
+                for x in lower..=upper {
+                    blocks.push(block_at(x, y, z));
+                    sky_seeds.push(sky_at(x, y, z));
+                }
+            }
+        }
+
+        let mut sky = vec![0u8; volume];
+        let mut block = vec![0u8; volume];
+        seed_channels(&blocks, &sky_seeds, &mut sky, &mut block);
+        propagate(&blocks, &mut sky, padded_edge);
+        propagate(&blocks, &mut block, padded_edge);
+
+        Self {
+            edge: edge_cells,
+            padded_edge,
+            blocks,
+            sky_seeds,
+            sky,
+            block,
+        }
+    }
+
+    /// Applies a batch of edits and recomputes only the dirty region.
+    pub fn apply_edits(&mut self, edits: &[CellEdit]) {
+        if edits.is_empty() {
+            return;
+        }
+        let mut min = [i32::MAX; 3];
+        let mut max = [i32::MIN; 3];
+        for edit in edits {
+            let index = index_at(edit.x, edit.y, edit.z, self.padded_edge);
+            self.blocks[index] = edit.block;
+            self.sky_seeds[index] = edit.sky;
+            let cell = [edit.x, edit.y, edit.z];
+            for axis in 0..3 {
+                min[axis] = min[axis].min(cell[axis]);
+                max[axis] = max[axis].max(cell[axis]);
+            }
+        }
+
+        let last = self.edge as i32;
+        let radius = i32::from(MAX_LEVEL);
+        for axis in 0..3 {
+            min[axis] = (min[axis] - radius).max(-APRON_CELLS);
+            max[axis] = (max[axis] + radius).min(last);
+        }
+        self.recompute_region(min, max);
+    }
+
+    /// Applies one edit.
+    pub fn apply_edit(&mut self, edit: CellEdit) {
+        self.apply_edits(std::slice::from_ref(&edit));
+    }
+
+    /// Reads a chunk-local cell.
+    pub fn local(&self, x: usize, y: usize, z: usize) -> LightCell {
+        assert!(x < self.edge && y < self.edge && z < self.edge);
+        self.cell(x as i32, y as i32, z as i32)
+    }
+
+    /// Reads a cell including the apron.
+    pub fn with_apron(&self, x: i32, y: i32, z: i32) -> LightCell {
+        self.cell(x, y, z)
+    }
+
+    fn cell(&self, x: i32, y: i32, z: i32) -> LightCell {
+        let index = index_at(x, y, z, self.padded_edge);
+        LightCell {
+            sky: Channel::from_level(self.sky[index]),
+            block: Channel::from_level(self.block[index]),
+        }
+    }
+
+    fn recompute_region(&mut self, min: [i32; 3], max: [i32; 3]) {
+        for z in min[2]..=max[2] {
+            for y in min[1]..=max[1] {
+                for x in min[0]..=max[0] {
+                    let index = index_at(x, y, z, self.padded_edge);
+                    let block = self.blocks[index];
+                    self.sky[index] = if !block.is_fully_opaque() && self.sky_seeds[index] {
+                        MAX_LEVEL
+                    } else {
+                        0
+                    };
+                    self.block[index] = block.emission;
+                }
+            }
+        }
+        propagate_region(&self.blocks, &mut self.sky, self.padded_edge, min, max);
+        propagate_region(&self.blocks, &mut self.block, self.padded_edge, min, max);
+    }
+}
+
+fn seed_channels(blocks: &[BlockLight], sky_seeds: &[bool], sky: &mut [u8], block: &mut [u8]) {
+    for (index, sample) in blocks.iter().copied().enumerate() {
+        block[index] = sample.emission;
+        sky[index] = if !sample.is_fully_opaque() && sky_seeds[index] {
+            MAX_LEVEL
+        } else {
+            0
+        };
+    }
+}
+
+fn propagate_region(
+    blocks: &[BlockLight],
+    levels: &mut [u8],
+    padded_edge: usize,
+    min: [i32; 3],
+    max: [i32; 3],
+) {
+    let mut buckets: [Vec<usize>; LEVELS] = array::from_fn(|_| Vec::new());
+    for (index, level) in levels.iter().copied().enumerate() {
+        if level > 0 {
+            buckets[level as usize].push(index);
+        }
+    }
+
+    let lower = -APRON_CELLS;
+    let upper = padded_edge as i32 - APRON_CELLS - 1;
+    for level in (1..=MAX_LEVEL).rev() {
+        let mut cursor = 0;
+        while cursor < buckets[level as usize].len() {
+            let index = buckets[level as usize][cursor];
+            cursor += 1;
+            if levels[index] != level {
+                continue;
+            }
+            let (x, y, z) = coords_at(index, padded_edge);
+            for (dx, dy, dz) in NEIGHBOURS {
+                let nx = x + dx;
+                let ny = y + dy;
+                let nz = z + dz;
+                if nx < lower || nx > upper || ny < lower || ny > upper || nz < lower || nz > upper
+                {
+                    continue;
+                }
+                if nx < min[0]
+                    || nx > max[0]
+                    || ny < min[1]
+                    || ny > max[1]
+                    || nz < min[2]
+                    || nz > max[2]
+                {
+                    continue;
+                }
+                let neighbour = index_at(nx, ny, nz, padded_edge);
+                let next = level.saturating_sub(1 + blocks[neighbour].opacity);
+                if next == 0 {
+                    continue;
+                }
+                if next > levels[neighbour] {
+                    levels[neighbour] = next;
+                    buckets[next as usize].push(neighbour);
+                }
+            }
+        }
+    }
+}
+
 /// Runs a full light pass for one chunk plus a one-cell apron.
 ///
 /// `block_at` and `sky_at` are read over `-1 ..= edge` in `z, y, x` order with

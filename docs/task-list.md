@@ -3,7 +3,7 @@
 **Status:** v1.6 — derived from spec v2.3 and roadmap v3.2
 **Date:** 2026-10-29
 **Owner:** engine
-**Current position:** M1 complete. M1.5 code complete; only `M1.5-17` (texel-density pair) remains open. M2 in progress: `M2-14` done, `M2-15` next.
+**Current position:** M1 complete. M1.5 code complete; only `M1.5-17` (texel-density pair) remains open. M2 in progress: `M2-15` done, `M2-16` next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -411,7 +411,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 **Goal:** deterministic mesh + AO + block light + probes, at the 128³ Minimum edge.
 **Exit:** M2-30. **Budget:** 27.0 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
-**Status:** In progress — M2-14 done; M2-15 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
+**Status:** In progress — M2-15 done; M2-16 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
 **Art:** none beyond M1.5-14; M2 reuses the slice atlas.
 
 **M1 gate carry-over — blocks M2-30:**
@@ -491,6 +491,11 @@ light and seeds the one-cell apron. Two 4³-cell chunks match the corresponding
 halves of one 8³-cell union fill in both channels, including aprons. An opaque
 border wall stops the torch, so nothing leaks into the far chunk.
 
+**M2-15 measured (2026-10-29):** `LightState` updates 1,000 random edit sets of
+one to three cells, including emission removal, opacity changes and sky
+changes. Every chunk and apron cell in both channels matches a fresh full pass.
+The dirty region is expanded by 15 cells, the maximum light travel.
+
 ### 6.1 Apron and mesher
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -514,7 +519,7 @@ border wall stops the torch, so nothing leaks into the far chunk.
 | --- | --- | --- | --- | --- | --- | --- |
 | M2-13 | Production full-pass block-light flood fill over 16³ cells with 2 channels | M1-29 | Equals the M1-29 reference on 5 fixtures | `cargo test -p voxel-mesh light_full` | 1.5 d | [x] |
 | M2-14 | Cross-chunk seeding from 1-block aprons; light does not leak through opaque blocks | M2-13 | Border fixture matches a single-chunk reference on both sides | `cargo test -p voxel-mesh light_apron` | 1 d | [x] |
-| M2-15 | Incremental light: dirty cells only, seeded from the edit, with a removal pass | M2-14 | Equals full recompute on 1 000 random edit sets, removals included | `cargo test -p voxel-mesh light_incremental` | 2 d | [ ] |
+| M2-15 | Incremental light: dirty cells only, seeded from the edit, with a removal pass | M2-14 | Equals full recompute on 1 000 random edit sets, removals included | `cargo test -p voxel-mesh light_incremental` | 2 d | [x] |
 | M2-16 | Escalation rule: relight the chunk when the removal front reaches the dirty expansion boundary | M2-15 | An adversarial test forces escalation and still equals full | `cargo test -p voxel-mesh light_escalation` | 0.5 d | [ ] |
 | M2-17 | Light border fixture and benchmark: full vs incremental cost | M2-16 | Incremental p95 ≤ 20% of full on a single edit; recorded | `cargo bench -p voxel-mesh light` | 0.5 d | [ ] |
 
