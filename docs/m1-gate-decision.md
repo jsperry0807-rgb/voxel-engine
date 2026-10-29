@@ -181,8 +181,8 @@ gate, the chosen profile or any threshold.
   order determinism; `M2-13` ports the full-pass block-light fill and matches
   the M1-29 reference on five fixtures; `M2-14` seeds the apron across chunk
   borders and matches the union fill; `M2-15` updates 1,000 random edit sets to
-  the same values as a full recompute. The next task is `M2-16`, removal-front
-  escalation.
+  the same values as a full recompute; `M2-16` escalates boundary removals to a
+  full relight. The next task is `M2-17`, the light cost benchmark.
 - **128³ Minimum is still unmeasured.** The M2 gate run after `M2-29` is the
   measurement that confirms or rejects the upgrade; mesh compression remains
   the first lever.

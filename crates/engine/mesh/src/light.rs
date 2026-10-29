@@ -288,6 +288,7 @@ pub struct LightState {
     sky_seeds: Vec<bool>,
     sky: Vec<u8>,
     block: Vec<u8>,
+    full_relights: usize,
 }
 
 impl LightState {
@@ -327,7 +328,13 @@ impl LightState {
             sky_seeds,
             sky,
             block,
+            full_relights: 0,
         }
+    }
+
+    /// Number of edits that escalated to a full-chunk relight.
+    pub fn full_relights(&self) -> usize {
+        self.full_relights
     }
 
     /// Applies a batch of edits and recomputes only the dirty region.
@@ -337,22 +344,43 @@ impl LightState {
         }
         let mut min = [i32::MAX; 3];
         let mut max = [i32::MIN; 3];
+        let radius = i32::from(MAX_LEVEL);
+        let last = self.edge as i32 - 1;
+        let mut removal = false;
+        let mut crosses_boundary = false;
+
         for edit in edits {
             let index = index_at(edit.x, edit.y, edit.z, self.padded_edge);
-            self.blocks[index] = edit.block;
+            let old = self.blocks[index];
+            let old_sky = self.sky_seeds[index];
+            let new = edit.block;
+            if new.emission < old.emission || new.opacity > old.opacity || (old_sky && !edit.sky) {
+                removal = true;
+            }
+            self.blocks[index] = new;
             self.sky_seeds[index] = edit.sky;
+
             let cell = [edit.x, edit.y, edit.z];
             for axis in 0..3 {
                 min[axis] = min[axis].min(cell[axis]);
                 max[axis] = max[axis].max(cell[axis]);
+                if cell[axis] - radius < 0 || cell[axis] + radius > last {
+                    crosses_boundary = true;
+                }
             }
         }
 
-        let last = self.edge as i32;
-        let radius = i32::from(MAX_LEVEL);
+        // A removed source can pull light back through the whole chunk. If the
+        // theoretical removal front reaches a chunk edge, relight everything
+        // rather than trusting a clipped dirty window.
+        if removal && crosses_boundary {
+            self.full_relight();
+            return;
+        }
+
         for axis in 0..3 {
             min[axis] = (min[axis] - radius).max(-APRON_CELLS);
-            max[axis] = (max[axis] + radius).min(last);
+            max[axis] = (max[axis] + radius).min(self.edge as i32);
         }
         self.recompute_region(min, max);
     }
@@ -398,6 +426,18 @@ impl LightState {
         }
         propagate_region(&self.blocks, &mut self.sky, self.padded_edge, min, max);
         propagate_region(&self.blocks, &mut self.block, self.padded_edge, min, max);
+    }
+
+    fn full_relight(&mut self) {
+        seed_channels(
+            &self.blocks,
+            &self.sky_seeds,
+            &mut self.sky,
+            &mut self.block,
+        );
+        propagate(&self.blocks, &mut self.sky, self.padded_edge);
+        propagate(&self.blocks, &mut self.block, self.padded_edge);
+        self.full_relights += 1;
     }
 }
 
