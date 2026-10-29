@@ -13,9 +13,9 @@ pass/fail measurement, not a build-out.
 
 M0 and M1 are complete. The M1 gate selected the **128³ Minimum** profile for M2,
 conditional on mesh compression and a measured 128³ run. The M1.5 vertical slice
-is code-complete; its two remaining exit artifacts (`M1.5-15`, `M1.5-17`) are
-still open. The zero-validation CI job (M1.5-16) is in place. M2 has started: the
-apron API (M2-01) landed on 2026-10-28.
+is code-complete; only `M1.5-17` (before/after texel-density screenshots) remains
+open. The full M1.5-15 screenshot set and zero-validation CI (M1.5-16) are in
+place. M2 has started: the apron API (M2-01) landed on 2026-10-28.
 
 Two consequences shape the schedule:
 
@@ -190,9 +190,9 @@ provisional pass without the re-run.
 
 ### M1.5 — Vertical slice: one chunk on screen (2 weeks)
 
-**Status:** Code complete — viewer, atlas, naive mesher, chunk screenshot and
-zero-validation CI landed. Exit artifacts `M1.5-15` (full visual screenshot set)
-and `M1.5-17` (before/after texel-density screenshots) remain open.
+**Status:** Code complete — viewer, atlas, naive mesher, full M1.5-15 screenshot
+set and zero-validation CI landed. Only `M1.5-17` (before/after texel-density
+screenshots) remains open.
 
 At 64³, so the slice is cheap.
 

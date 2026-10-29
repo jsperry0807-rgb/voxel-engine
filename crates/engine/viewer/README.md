@@ -51,11 +51,27 @@ The test validates `src/shaders/chunk.wgsl` with naga and records an offscreen
 chunk draw inside a wgpu validation error scope. Without an adapter it skips,
 unless `VOXEL_REQUIRE_GPU=1` is set; CI uses that with a software Vulkan driver.
 
-## Screenshot
+## Screenshots
 
-The committed slice screenshot is
-[`docs/images/m1.5-13-chunk-1080p.png`](../../../docs/images/m1.5-13-chunk-1080p.png).
-To reproduce it, run the viewer from the repository root at the default
-1920×1080 window size and capture the generated chunk. This is one image of the
-M1.5-15 set; the remaining face-sheet/material shots and the M1.5-17 texel-density
-pair are still open.
+The M1.5-15 acceptance set lives in `docs/images/`:
+
+- [`m1.5-15-face-sheet.png`](../../../docs/images/m1.5-15-face-sheet.png) — slots
+  1–40 row-major on an 8×5 grid, 256² each at 1:1.
+- [`m1.5-15-grass-block.png`](../../../docs/images/m1.5-15-grass-block.png) — top
+  and side view plus a bottom view.
+- [`m1.5-15-sandstone-block.png`](../../../docs/images/m1.5-15-sandstone-block.png)
+- [`m1.5-15-log-and-leaves.png`](../../../docs/images/m1.5-15-log-and-leaves.png)
+- [`m1.5-15-ores.png`](../../../docs/images/m1.5-15-ores.png) — stone, coal, iron,
+  gold and diamond.
+- [`m1.5-15-translucent.png`](../../../docs/images/m1.5-15-translucent.png) — water
+  and ice over the dark background.
+- [`m1.5-15-chunk-1080p.png`](../../../docs/images/m1.5-15-chunk-1080p.png) — one
+  chunk at near, mid and far distances.
+
+Regenerate them with:
+
+```sh
+cargo run -p voxel-viewer --example m1_5_screenshots
+```
+
+The M1.5-17 before/after texel-density pair is still open.

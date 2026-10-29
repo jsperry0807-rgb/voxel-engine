@@ -2,7 +2,7 @@
 
 Status: Draft v0.2 — pipeline implemented; visual acceptance items open
 Input: "Requirements brief: M1.5 material and texture pipeline" (authoritative; this SPEC locks the decisions in its section 13).
-Tasks: M1.5-06, -07, -08, -09, -12, -13, -14, -16 (done); -15 (full visual set) and -17 (texel-density screenshots) open.
+Tasks: M1.5-06, -07, -08, -09, -12, -13, -14, -15, -16 (done); -17 (texel-density screenshots) open.
 
 ---
 
@@ -382,10 +382,9 @@ Clean-checkout CI job: fresh clone, no generator run, run all of the above.
 
 M1.5-12/13 gates: one 1 m face shows exactly one 16x16 tile; one chunk at 60 Hz at 1080p.
 
-M1.5-15 screenshots. The committed slice artifact is
-`docs/images/m1.5-13-chunk-1080p.png` (task-named, predating this convention).
-New acceptance screenshots are committed next to `atlas.hash.ron`, filename
-includes first 8 hex of `atlas_png_blake3`:
+M1.5-15 screenshots. The committed set lives under `docs/images/m1.5-15-*.png`.
+Future art-set acceptance screenshots include the first 8 hex of
+`atlas_png_blake3` in the filename.
 
 1. `face-sheet`: all 40 faces on an 8x5 grid, nearest filtering, 1:1 (the M1.5 review sheet is the 23 M1.5 faces on a 6x4 grid).
 2. `grass-block`: top, side and bottom visible, side fringe matches top.
@@ -421,4 +420,4 @@ The generator is implemented and runnable:
 - The bake filter is `box16-linear-premul-v1` and the PNG encoder is `png =0.17.16` with the section 5.4 settings.
 - The material table is now consumable at runtime: `BlockRegistryBuilder::load_ron_with_materials` parses `materials.gen.ron`, `BlockRegistry::face_materials(block)` returns the six atlas slots, and `BlockRecord` carries them. `cargo test -p voxel-block cap_256`, `material_registry` and `fixture_64_blocks_freeze_after_m1_5_08` cover the cap, typed errors and the 64-block freeze. The legacy `TextureSetId` path remains only for the unused texture-array renderer; M1.5-12 switched the chunk shader to atlas slots.
 - `texgen-mcp` exposes the pipeline to OpenCode over MCP stdio (`list_faces`, `read_graph`, `validate_graph`, `render_preview`, `render_tile`, `render_atlas`, `list_materials`, `read_manifest`, `check`, `generate`, `bake_atlas`). It never writes graph RON.
-- The chunk screenshot (`docs/images/m1.5-13-chunk-1080p.png`) and the viewer README are committed. They cover the `chunk-1080p` image only; the rest of the M1.5-15 set and the M1.5-17 before/after pair remain open.
+- The full M1.5-15 screenshot set is committed under `docs/images/m1.5-15-*.png` and can be regenerated with `cargo run -p voxel-viewer --example m1_5_screenshots`. The M1.5-17 before/after texel-density pair remains open.

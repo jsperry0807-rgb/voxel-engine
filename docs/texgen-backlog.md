@@ -48,7 +48,7 @@ Priority order is the order a single engineer should take it. An item marked
 | # | Item | Why it matters | Status |
 | --- | --- | --- | --- |
 | 16 | **Slice art review** — use the new pattern/effect nodes to improve cobblestone, sandstone, water, foliage | The slice set passes the technical tests but is still placeholder art in places. | open |
-| 17 | **M1.5-15/17 screenshots** — face sheet, material block shots, before/after texel density | One chunk screenshot and the viewer README are committed; the rest of the M1.5-15 set and the M1.5-17 before/after pair are still open. | **partial** |
+| 17 | **M1.5-15/17 screenshots** — face sheet, material block shots, before/after texel density | The M1.5-15 set is committed under `docs/images/m1.5-15-*.png`; the M1.5-17 before/after pair is still open. | **15 done; 17 open** |
 
 ## 6. Not needed yet (deliberately deferred)
 
