@@ -2,7 +2,7 @@
 
 Status: Draft v0.2 — pipeline implemented; visual acceptance items open
 Input: "Requirements brief: M1.5 material and texture pipeline" (authoritative; this SPEC locks the decisions in its section 13).
-Tasks: M1.5-06, -07, -08, -09, -12, -13, -14 (done); -15 (full visual set), -16 (zero-validation CI) and -17 (texel-density screenshots) open.
+Tasks: M1.5-06, -07, -08, -09, -12, -13, -14, -16 (done); -15 (full visual set) and -17 (texel-density screenshots) open.
 
 ---
 

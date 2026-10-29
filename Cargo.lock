@@ -3262,6 +3262,7 @@ dependencies = [
  "env_logger",
  "glam",
  "log",
+ "naga 30.0.1",
  "png 0.17.16",
  "pollster",
  "ron",

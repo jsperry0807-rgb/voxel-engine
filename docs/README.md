@@ -21,7 +21,8 @@ binding number is made in the spec and the pre-registration, never only in a tas
 - **M0 and M1 are complete.** The M1 gate selected the **128³ Minimum** profile for
   M2, conditional on mesh compression and a measured 128³ run.
 - **M1.5 is code-complete.** The viewer, atlas, naive mesher and chunk screenshot
-  landed; the exit artifacts `M1.5-15`…`M1.5-17` remain open.
+  landed; the remaining exit artifacts `M1.5-15` and `M1.5-17` are open. The
+  zero-validation CI job (`M1.5-16`) is in place.
 - **M2 is in progress.** The apron API (`M2-01`) landed; `M2-02` is next. The
   production mesher, AO, light and probes are still to come.
 

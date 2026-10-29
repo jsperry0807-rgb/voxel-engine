@@ -144,8 +144,8 @@ widened in either direction.
   mesh compression. Default is not greenlit.
 - **Layout:** 8.0–8.4 B/internal node including padding (limit ≤ 9); COW 258–366 B
   per edited path for one edit and 93–175 B for a 100-edit batch (limit ≤ 512).
-- **Next milestone:** M1.5, then M2. M1.5 is code-complete; its exit artifacts
-  `M1.5-15`…`M1.5-17` remain open. M2 is in progress: `M2-01` (apron) landed on
+- **Next milestone:** M1.5, then M2. M1.5 is code-complete; its remaining exit
+  artifacts `M1.5-15` and `M1.5-17` are open. M2 is in progress: `M2-01` (apron) landed on
   2026-10-28. Gate cases remain runnable (`voxel-bench gate report`,
   `gate scaleup --profile minimum`) and are advisory in CI.
 
@@ -160,10 +160,13 @@ gate, the chosen profile or any threshold.
   verifies the committed atlas, draws one generated chunk with the naive
   per-face mesher, and has the camera, mouse look and input layer. The
   `docs/images/m1.5-13-chunk-1080p.png` artifact and viewer README are committed.
-- **M1.5 exit artifacts still open:** `M1.5-15` (full visual screenshot set),
-  `M1.5-16` (zero-validation CI) and `M1.5-17` (before/after texel-density
-  screenshots). The chunk screenshot and viewer README have landed, but they do
-  not cover the full D9 set.
+- **M1.5 exit artifacts still open:** `M1.5-15` (full visual screenshot set) and
+  `M1.5-17` (before/after texel-density screenshots). The chunk screenshot and
+  viewer README have landed, but they do not cover the full D9 set.
+- **M1.5-16 closed:** `crates/engine/viewer/tests/validation.rs` validates the
+  chunk shader with naga and records an offscreen chunk draw inside a wgpu
+  validation error scope. CI runs it with `RUST_LOG=wgpu_core=warn` against
+  Lavapipe.
 - **M2 started:** `M2-01` six-face apron landed. The next task is `M2-02`, the
   apron-vs-dense benchmark, followed by `M2-03` and the greedy/AO work.
 - **128³ Minimum is still unmeasured.** The M2 gate run after `M2-29` is the

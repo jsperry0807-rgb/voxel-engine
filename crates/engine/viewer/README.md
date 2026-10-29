@@ -41,6 +41,16 @@ Bindings can be overridden by pointing `VOXEL_BINDINGS` at a file; see
 `VOXEL_INVERT_X` and `VOXEL_INVERT_Y` configure mouse look, and
 `VOXEL_TOGGLE_SPRINT=1` makes sprint latch.
 
+## Validation
+
+```sh
+cargo test -p voxel-viewer --test validation
+```
+
+The test validates `src/shaders/chunk.wgsl` with naga and records an offscreen
+chunk draw inside a wgpu validation error scope. Without an adapter it skips,
+unless `VOXEL_REQUIRE_GPU=1` is set; CI uses that with a software Vulkan driver.
+
 ## Screenshot
 
 The committed slice screenshot is

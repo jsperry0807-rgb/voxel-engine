@@ -18,3 +18,6 @@ voxel-core = { path = "../../core" }
 voxel-texgraph = { path = "../texgraph" }
 wgpu = "30"
 winit = "0.30"
+
+[dev-dependencies]
+naga = { version = "30", features = ["wgsl-in"] }

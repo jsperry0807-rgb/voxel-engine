@@ -86,6 +86,23 @@ jobs:
       # Parses and validates the WGSL sources with naga; no GPU required.
       - run: cargo test -p voxel-render --test shaders
 
+  viewer-validation:
+    name: viewer validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Lavapipe supplies a real Vulkan adapter for the offscreen chunk draw.
+      - run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+      - name: Chunk shader and pipeline validation
+        env:
+          RUST_LOG: wgpu_core=warn
+          WGPU_BACKEND: vulkan
+          VOXEL_REQUIRE_GPU: "1"
+        run: cargo test -p voxel-viewer --test validation
+
   chunk128:
     name: chunk128 (128³ edge)
     runs-on: ubuntu-latest

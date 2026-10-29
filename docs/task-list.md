@@ -3,7 +3,7 @@
 **Status:** v1.6 — derived from spec v2.3 and roadmap v3.2
 **Date:** 2026-10-29
 **Owner:** engine
-**Current position:** M1 complete. M1.5 code complete; `M1.5-15`…`M1.5-17` open. M2 in progress: `M2-01` done, `M2-02` next.
+**Current position:** M1 complete. M1.5 code complete; `M1.5-15` and `M1.5-17` open. M2 in progress: `M2-01` done, `M2-02` next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -382,7 +382,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ## 5. M1.5 — Vertical slice
 
 **Goal:** one textured chunk in a window. **Exit:** M1.5-17. **Budget:** 10.5 d code + 4 d art (M1.5-14). **Depends:** M1-15 (layout API), M0-06 (atlas math); M1.5-14 before M1.5-07.
-**Status:** Code complete — M1.5-01…M1.5-14 done. The exit artifacts M1.5-15 (full visual screenshot set), M1.5-16 (zero-validation CI) and M1.5-17 (texel-density pair) remain open; the chunk screenshot and viewer README already landed. M2 work has started before they were closed.
+**Status:** Code complete — M1.5-01…M1.5-14 and M1.5-16 done. The remaining exit artifacts are M1.5-15 (full visual screenshot set) and M1.5-17 (texel-density pair); the chunk screenshot and viewer README already landed. M2 work has started before they were closed.
 **Art:** M1.5-14 authors the 23 slice faces; M1.5-17 is the exit art checkpoint.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -402,7 +402,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M1.5-12 | Shader: UV from world position and face axes, atlas tile from material, face shading, AO placeholder | M0-06, M1.5-09 | A 1 m block face shows exactly one 16×16 tile; screenshot | visual | 1 d | [x] |
 | M1.5-13 | Draw one generated chunk end to end | M1.5-11, M1.5-12 | Terrain visible; 60 Hz at 1080p on the reference machine; placeholder tiles are allowed here, M1.5-14 supplies the final art before the M1.5-15 screenshot | run | 0.5 d | [x] |
 | M1.5-15 | Screenshot set in `docs/images/` plus run instructions | M1.5-07, M1.5-13, M1.5-14 | D9 screenshot set committed; README explains how to reproduce | review | 0.25 d | [ ] |
-| M1.5-16 | Zero-validation run and naga shader test in CI | M1.5-13 | CI job passes with `RUST_LOG=wgpu_core=warn` | CI | 0.5 d | [ ] |
+| M1.5-16 | Zero-validation run and naga shader test in CI | M1.5-13 | CI job passes with `RUST_LOG=wgpu_core=warn` | CI | 0.5 d | [x] |
 | M1.5-17 | Before/after texel-density screenshots (old 256² face vs 16×16 tile) so the regression is a decision | M1.5-14, M1.5-07 | Two images in `docs/images/` with a one-paragraph note; art matches M1.5-14 | review | 0.25 d | [ ] |
 
 ---
