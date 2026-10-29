@@ -144,7 +144,45 @@ widened in either direction.
   mesh compression. Default is not greenlit.
 - **Layout:** 8.0–8.4 B/internal node including padding (limit ≤ 9); COW 258–366 B
   per edited path for one edit and 93–175 B for a 100-edit batch (limit ≤ 512).
-- **Next milestone:** M1.5. Gate cases remain runnable (`voxel-bench gate report`,
+- **Next milestone:** M1.5, then M2. M1.5 is code-complete; only `M1.5-17`
+  remains open. M2 is in progress: `M2-01` (apron) landed on
+  2026-10-28. Gate cases remain runnable (`voxel-bench gate report`,
   `gate scaleup --profile minimum`) and are advisory in CI.
 
 **Signed off:** Home <jsperry0807@gmail.com> (M1 owner), 2026-10-27.
+
+## 7. Implementation progress — 2026-10-29
+
+This section records progress after the decision. It does not change the frozen
+gate, the chosen profile or any threshold.
+
+- **M1.5 vertical slice:** `voxel-viewer` opens a `winit`/`wgpu` window, loads and
+  verifies the committed atlas, draws one generated chunk with the naive
+  per-face mesher, and has the camera, mouse look and input layer. The
+  `docs/images/m1.5-13-chunk-1080p.png` artifact and viewer README are committed.
+- **M1.5 exit artifact still open:** `M1.5-17` (before/after texel-density
+  screenshots). M1.5-15 is closed by the full D9 set under `docs/images/m1.5-15-*`
+  and the viewer README.
+- **M1.5-16 closed:** `crates/engine/viewer/tests/validation.rs` validates the
+  chunk shader with naga and records an offscreen chunk draw inside a wgpu
+  validation error scope. CI runs it with `RUST_LOG=wgpu_core=warn` against
+  Lavapipe.
+- **M2 started:** `M2-01` six-face apron landed. `M2-02` measured the apron at
+  8.5% of the dense path's bytes and 6.6% of its time at 64³ (4.5%/4.3% at
+  128³); see [`m2-apron-cost.md`](m2-apron-cost.md). `M2-03` added the
+  block-granular driver with an 11,664 B reusable scratch; `M2-04` added the
+  greedy rectangle core and matched the M1-31 reference on five fixtures;
+  `M2-05` added the `(material, orientation, 4×AO)` merge key; `M2-06` culls
+  interior faces before the mask; `M2-07` samples four-level vertex AO and
+  matches the brute-force reference on 10k corners; `M2-08` measured a 1.65×
+  quad cost for AO-safe merging; `M2-09` passes the chunk-border AO seam;
+  `M2-10` packs the 16 B vertex and round-trips all fields; `M2-11` freezes five
+  golden mesh fixtures at both edges; `M2-12` passes 1/2/4/8-worker and reversed
+  order determinism; `M2-13` ports the full-pass block-light fill and matches
+  the M1-29 reference on five fixtures; `M2-14` seeds the apron across chunk
+  borders and matches the union fill; `M2-15` updates 1,000 random edit sets to
+  the same values as a full recompute; `M2-16` escalates boundary removals to a
+  full relight. The next task is `M2-17`, the light cost benchmark.
+- **128³ Minimum is still unmeasured.** The M2 gate run after `M2-29` is the
+  measurement that confirms or rejects the upgrade; mesh compression remains
+  the first lever.

@@ -772,6 +772,418 @@
           ]
         }
       ]
+    },
+    {
+      "id": "20261029T171441Z-m1-gate",
+      "label": "m1-gate",
+      "timestamp_unix": 1793294081,
+      "git_commit": "f9bd6fc3819ce47f843fe5854076ab5be8b17adc",
+      "git_dirty": true,
+      "cpu_model": "Intel(R) Core(TM) i7-10700 CPU @ 2.90GHz",
+      "os": "linux",
+      "arch": "x86_64",
+      "path": "runs/20261029T171441Z-m1-gate",
+      "note": null,
+      "suite": "m15-c26-l7-172e89c11be0b154",
+      "metrics": {
+        "chunk_terrain_mem": 263640.0,
+        "dag_build_terrain_ns": 2076316.625,
+        "dag_get_ns": 32.56610107421875,
+        "dag_get_p99_us": 0.2,
+        "gpu_apply_edits_100_ns": 32146.6259765625,
+        "gpu_edit_p99_us": 0.501,
+        "gpu_lookup_ns": 27.452993392944336,
+        "gpu_lookup_overlay_ns": 12.316913604736328,
+        "gpu_overlay_1_block_mem": 316416.0,
+        "gpu_overlay_64_blocks_mem": 871024.0,
+        "gpu_overlay_flush_64_ns": 1068.3622436523438,
+        "gpu_overlay_set_100_ns": 1456.951904296875,
+        "gpu_overlay_set_p99_us": 0.1,
+        "gpu_tables_mem": 525056.0,
+        "hot_lookup_ns": 1.4815430641174316,
+        "hot_lookup_p99_us": 0.1,
+        "palette_resolve_ns": 97404.203125,
+        "peak_rss_bytes": 132395008.0,
+        "process_cpu_ns": 8403686000.0,
+        "process_cpu_percent": 99.71186584191226,
+        "process_wall_ns": 8427969860.0,
+        "registry_65536_mem": 24112595.0,
+        "registry_freeze_65536_ns": 89825698.0,
+        "resolved_lookup_ns": 10.187970161437988,
+        "world_256_mem": 27590688.0,
+        "world_consolidate_p99_us": 12741.697,
+        "world_set_p99_us": 0.7,
+        "world_tick_idle_ns": 6.189477205276489,
+        "world_tick_idle_p99_us": 0.1
+      },
+      "layout": [
+        {
+          "fixture": "solid",
+          "internal_bytes": 328,
+          "nodes": 41,
+          "padding_bytes": 0,
+          "bytes_per_node": 8.0,
+          "padding_ratio": 0.0,
+          "internal_runs": 5,
+          "leaf_runs": 1,
+          "shared_runs": 5,
+          "expanded_nodes": 37449,
+          "dedup_new": 913.390243902439,
+          "dedup_old": 6241.5,
+          "old_nodes": 6,
+          "old_bytes": 224,
+          "new_bytes": 424,
+          "size_ratio": 0.5283018867924528,
+          "cow": [
+            {
+              "paths": 1,
+              "runs": 6,
+              "leaf_runs": 1,
+              "node_bytes": 328,
+              "leaf_bytes": 16,
+              "total_bytes": 344,
+              "node_bytes_per_path": 328.0,
+              "bytes_per_path": 344.0
+            },
+            {
+              "paths": 100,
+              "runs": 249,
+              "leaf_runs": 100,
+              "node_bytes": 15880,
+              "leaf_bytes": 1600,
+              "total_bytes": 17480,
+              "node_bytes_per_path": 158.8,
+              "bytes_per_path": 174.8
+            }
+          ]
+        },
+        {
+          "fixture": "terrain",
+          "internal_bytes": 110704,
+          "nodes": 13437,
+          "padding_bytes": 3208,
+          "bytes_per_node": 8.238743767209943,
+          "padding_ratio": 0.028978176036999568,
+          "internal_runs": 1813,
+          "leaf_runs": 119,
+          "shared_runs": 231,
+          "expanded_nodes": 18442,
+          "dedup_new": 1.3724789759618965,
+          "dedup_old": 9.089206505667816,
+          "old_nodes": 2029,
+          "old_bytes": 67380,
+          "new_bytes": 112418,
+          "size_ratio": 0.5993702076179971,
+          "cow": [
+            {
+              "paths": 1,
+              "runs": 6,
+              "leaf_runs": 1,
+              "node_bytes": 352,
+              "leaf_bytes": 14,
+              "total_bytes": 366,
+              "node_bytes_per_path": 352.0,
+              "bytes_per_path": 366.0
+            },
+            {
+              "paths": 100,
+              "runs": 249,
+              "leaf_runs": 100,
+              "node_bytes": 9912,
+              "leaf_bytes": 766,
+              "total_bytes": 10678,
+              "node_bytes_per_path": 99.12,
+              "bytes_per_path": 106.78
+            }
+          ]
+        },
+        {
+          "fixture": "noise30%",
+          "internal_bytes": 299464,
+          "nodes": 35580,
+          "padding_bytes": 14824,
+          "bytes_per_node": 8.41663856098932,
+          "padding_ratio": 0.04950177650735982,
+          "internal_runs": 4681,
+          "leaf_runs": 5220,
+          "shared_runs": 1840,
+          "expanded_nodes": 35580,
+          "dedup_new": 1.0,
+          "dedup_old": 1.766019754802204,
+          "old_nodes": 20147,
+          "old_bytes": 435728,
+          "new_bytes": 344562,
+          "size_ratio": 1.2645851835083382,
+          "cow": [
+            {
+              "paths": 1,
+              "runs": 6,
+              "leaf_runs": 1,
+              "node_bytes": 328,
+              "leaf_bytes": 4,
+              "total_bytes": 332,
+              "node_bytes_per_path": 328.0,
+              "bytes_per_path": 332.0
+            },
+            {
+              "paths": 100,
+              "runs": 249,
+              "leaf_runs": 100,
+              "node_bytes": 15880,
+              "leaf_bytes": 592,
+              "total_bytes": 16472,
+              "node_bytes_per_path": 158.8,
+              "bytes_per_path": 164.72
+            }
+          ]
+        },
+        {
+          "fixture": "sparse4k",
+          "internal_bytes": 46456,
+          "nodes": 5755,
+          "padding_bytes": 416,
+          "bytes_per_node": 8.07228496959166,
+          "padding_ratio": 0.00895470983296022,
+          "internal_runs": 1888,
+          "leaf_runs": 32,
+          "shared_runs": 311,
+          "expanded_nodes": 7081,
+          "dedup_new": 1.2304083405734143,
+          "dedup_old": 3.389660124461465,
+          "old_nodes": 2089,
+          "old_bytes": 32768,
+          "new_bytes": 46664,
+          "size_ratio": 0.702211554945997,
+          "cow": [
+            {
+              "paths": 1,
+              "runs": 6,
+              "leaf_runs": 1,
+              "node_bytes": 256,
+              "leaf_bytes": 2,
+              "total_bytes": 258,
+              "node_bytes_per_path": 256.0,
+              "bytes_per_path": 258.0
+            },
+            {
+              "paths": 100,
+              "runs": 249,
+              "leaf_runs": 100,
+              "node_bytes": 9104,
+              "leaf_bytes": 224,
+              "total_bytes": 9328,
+              "node_bytes_per_path": 91.04,
+              "bytes_per_path": 93.28
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "20261029T180603Z-local",
+      "label": "local",
+      "timestamp_unix": 1793297163,
+      "git_commit": "7b418ed4fe4504c37945b31f93ed30d7bf16f63f",
+      "git_dirty": true,
+      "cpu_model": "Intel(R) Core(TM) i7-10700 CPU @ 2.90GHz",
+      "os": "linux",
+      "arch": "x86_64",
+      "path": "runs/20261029T180603Z-local",
+      "note": null,
+      "suite": "m15-c26-l7-172e89c11be0b154",
+      "metrics": {
+        "chunk_terrain_mem": 266200.0,
+        "dag_build_terrain_ns": 2046611.125,
+        "dag_get_ns": 32.22927284240723,
+        "dag_get_p99_us": 0.1,
+        "gpu_apply_edits_100_ns": 30707.974609375,
+        "gpu_edit_p99_us": 0.5,
+        "gpu_lookup_ns": 26.77373695373535,
+        "gpu_lookup_overlay_ns": 11.738646507263184,
+        "gpu_overlay_1_block_mem": 316416.0,
+        "gpu_overlay_64_blocks_mem": 871024.0,
+        "gpu_overlay_flush_64_ns": 1043.795867919922,
+        "gpu_overlay_set_100_ns": 1447.5147705078125,
+        "gpu_overlay_set_p99_us": 0.1,
+        "gpu_tables_mem": 525056.0,
+        "hot_lookup_ns": 1.218297004699707,
+        "hot_lookup_p99_us": 0.1,
+        "palette_resolve_ns": 98457.51171875,
+        "peak_rss_bytes": 142905344.0,
+        "process_cpu_ns": 6953232000.0,
+        "process_cpu_percent": 99.95432362011994,
+        "process_wall_ns": 6956409436.0,
+        "registry_65536_mem": 24112595.0,
+        "registry_freeze_65536_ns": 64177577.0,
+        "resolved_lookup_ns": 8.998723030090332,
+        "world_256_mem": 27590688.0,
+        "world_consolidate_p99_us": 2990.049,
+        "world_set_p99_us": 0.6,
+        "world_tick_idle_ns": 6.1725592613220215,
+        "world_tick_idle_p99_us": 0.1
+      },
+      "layout": [
+        {
+          "fixture": "solid",
+          "internal_bytes": 328,
+          "nodes": 41,
+          "padding_bytes": 0,
+          "bytes_per_node": 8.0,
+          "padding_ratio": 0.0,
+          "internal_runs": 5,
+          "leaf_runs": 1,
+          "shared_runs": 5,
+          "expanded_nodes": 37449,
+          "dedup_new": 913.390243902439,
+          "dedup_old": 6241.5,
+          "old_nodes": 6,
+          "old_bytes": 224,
+          "new_bytes": 424,
+          "size_ratio": 0.5283018867924528,
+          "cow": [
+            {
+              "paths": 1,
+              "runs": 6,
+              "leaf_runs": 1,
+              "node_bytes": 328,
+              "leaf_bytes": 16,
+              "total_bytes": 344,
+              "node_bytes_per_path": 328.0,
+              "bytes_per_path": 344.0
+            },
+            {
+              "paths": 100,
+              "runs": 249,
+              "leaf_runs": 100,
+              "node_bytes": 15880,
+              "leaf_bytes": 1600,
+              "total_bytes": 17480,
+              "node_bytes_per_path": 158.8,
+              "bytes_per_path": 174.8
+            }
+          ]
+        },
+        {
+          "fixture": "terrain",
+          "internal_bytes": 110704,
+          "nodes": 13437,
+          "padding_bytes": 3208,
+          "bytes_per_node": 8.238743767209943,
+          "padding_ratio": 0.028978176036999568,
+          "internal_runs": 1813,
+          "leaf_runs": 119,
+          "shared_runs": 231,
+          "expanded_nodes": 18442,
+          "dedup_new": 1.3724789759618965,
+          "dedup_old": 9.089206505667816,
+          "old_nodes": 2029,
+          "old_bytes": 67380,
+          "new_bytes": 112418,
+          "size_ratio": 0.5993702076179971,
+          "cow": [
+            {
+              "paths": 1,
+              "runs": 6,
+              "leaf_runs": 1,
+              "node_bytes": 352,
+              "leaf_bytes": 14,
+              "total_bytes": 366,
+              "node_bytes_per_path": 352.0,
+              "bytes_per_path": 366.0
+            },
+            {
+              "paths": 100,
+              "runs": 249,
+              "leaf_runs": 100,
+              "node_bytes": 9912,
+              "leaf_bytes": 766,
+              "total_bytes": 10678,
+              "node_bytes_per_path": 99.12,
+              "bytes_per_path": 106.78
+            }
+          ]
+        },
+        {
+          "fixture": "noise30%",
+          "internal_bytes": 299464,
+          "nodes": 35580,
+          "padding_bytes": 14824,
+          "bytes_per_node": 8.41663856098932,
+          "padding_ratio": 0.04950177650735982,
+          "internal_runs": 4681,
+          "leaf_runs": 5220,
+          "shared_runs": 1840,
+          "expanded_nodes": 35580,
+          "dedup_new": 1.0,
+          "dedup_old": 1.766019754802204,
+          "old_nodes": 20147,
+          "old_bytes": 435728,
+          "new_bytes": 344562,
+          "size_ratio": 1.2645851835083382,
+          "cow": [
+            {
+              "paths": 1,
+              "runs": 6,
+              "leaf_runs": 1,
+              "node_bytes": 328,
+              "leaf_bytes": 4,
+              "total_bytes": 332,
+              "node_bytes_per_path": 328.0,
+              "bytes_per_path": 332.0
+            },
+            {
+              "paths": 100,
+              "runs": 249,
+              "leaf_runs": 100,
+              "node_bytes": 15880,
+              "leaf_bytes": 592,
+              "total_bytes": 16472,
+              "node_bytes_per_path": 158.8,
+              "bytes_per_path": 164.72
+            }
+          ]
+        },
+        {
+          "fixture": "sparse4k",
+          "internal_bytes": 46456,
+          "nodes": 5755,
+          "padding_bytes": 416,
+          "bytes_per_node": 8.07228496959166,
+          "padding_ratio": 0.00895470983296022,
+          "internal_runs": 1888,
+          "leaf_runs": 32,
+          "shared_runs": 311,
+          "expanded_nodes": 7081,
+          "dedup_new": 1.2304083405734143,
+          "dedup_old": 3.389660124461465,
+          "old_nodes": 2089,
+          "old_bytes": 32768,
+          "new_bytes": 46664,
+          "size_ratio": 0.702211554945997,
+          "cow": [
+            {
+              "paths": 1,
+              "runs": 6,
+              "leaf_runs": 1,
+              "node_bytes": 256,
+              "leaf_bytes": 2,
+              "total_bytes": 258,
+              "node_bytes_per_path": 256.0,
+              "bytes_per_path": 258.0
+            },
+            {
+              "paths": 100,
+              "runs": 249,
+              "leaf_runs": 100,
+              "node_bytes": 9104,
+              "leaf_bytes": 224,
+              "total_bytes": 9328,
+              "node_bytes_per_path": 91.04,
+              "bytes_per_path": 93.28
+            }
+          ]
+        }
+      ]
     }
   ]
 }

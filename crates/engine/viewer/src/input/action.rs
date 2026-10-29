@@ -123,9 +123,9 @@ impl Action {
             Self::LookUp => Key::Keyboard(KeyCode::ArrowUp),
             Self::LookDown => Key::Keyboard(KeyCode::ArrowDown),
             Self::Sprint => Key::Keyboard(KeyCode::ControlLeft),
-            Self::ToggleCapture => Key::Keyboard(KeyCode::F11),
-            Self::ToggleFullscreen => Key::Keyboard(KeyCode::F12),
-            Self::Quit => Key::Keyboard(KeyCode::Escape),
+            Self::ToggleCapture => Key::Keyboard(KeyCode::Escape),
+            Self::ToggleFullscreen => Key::Keyboard(KeyCode::F11),
+            Self::Quit => Key::Keyboard(KeyCode::KeyQ),
         }
     }
 
@@ -187,5 +187,18 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn escape_frees_the_pointer_and_q_quits() {
+        assert_eq!(
+            Action::ToggleCapture.default_key(),
+            Key::Keyboard(KeyCode::Escape)
+        );
+        assert_eq!(
+            Action::ToggleFullscreen.default_key(),
+            Key::Keyboard(KeyCode::F11)
+        );
+        assert_eq!(Action::Quit.default_key(), Key::Keyboard(KeyCode::KeyQ));
     }
 }

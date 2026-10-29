@@ -1,8 +1,8 @@
 # Voxel Engine Roadmap
 
-**Status:** v3.1 — worldgen, far field and water added
+**Status:** v3.2 — M1 gate decided, M1.5 slice landed, M2 in progress
 **Companion to:** [`voxel-engine-architecture-spec.md`](voxel-engine-architecture-spec.md), [`worldgen-design.md`](worldgen-design.md)
-**Date:** 2026-10-26
+**Date:** 2026-10-29
 **Scope:** storage, content pipeline, worldgen, renderer, far field, water, GPU sync, culling, LOD, streaming
 **Not in scope:** gameplay, editor, networking, audio, physics, damage rendering, content authoring
 
@@ -11,14 +11,21 @@ per-block light, and a chunk edge that is **64³ in M1 with 128³ pre-registered
 This roadmap turns those into an ordered plan whose first milestone is a
 pass/fail measurement, not a build-out.
 
+M0 and M1 are complete. The M1 gate selected the **128³ Minimum** profile for M2,
+conditional on mesh compression and a measured 128³ run. The M1.5 vertical slice
+is code-complete; only `M1.5-17` (before/after texel-density screenshots) remains
+open. The full M1.5-15 screenshot set and zero-validation CI (M1.5-16) are in
+place. M2 has started: the apron API (M2-01) landed on 2026-10-28.
+
 Two consequences shape the schedule:
 
 1. **The gate needs oracles.** Edit latency, probe update and culling granularity
    cannot be measured without a reference light fill, a reference probe bake and a
    reference cull. M1 builds them slow and correct; M2 and M5 productionise them.
-2. **M1 does not build 128³.** The code is parameterized, the 128³ variant must
-   compile in CI, but only 64³ is benchmarked. The upgrade is decided
-   analytically plus measurement, then applied as a `CHUNK_BITS` flip in M2.
+2. **M2 implements and measures the 128³ Minimum edge.** The 64³ Default gate
+   failed on memory. The 128³ Minimum projection clears the hard-fail line
+   optimistically, so the upgrade is now a measured decision, not a theoretical
+   one: mesh compression and the 128³ gate run are part of M2.
 
 ---
 
@@ -27,17 +34,23 @@ Two consequences shape the schedule:
 | Crate | What exists | State |
 |---|---|---|
 | `voxel-core` | Canonical `Face` orientation, neighbour offsets, face planes | Complete |
-| `voxel-block` | Registry, materials, 256² texture slices, texture sets, palettes, tags, RON | Complete; atlas migration pending |
-| `voxel-storage` | **64³**/6-level hash-consed SVDAG (variable `u32` nodes), COW `apply_edits`, overlays, region log, global deduped GPU pool with refcounts and epoch retirement, consolidation policy | **Chunk size already matches the M1 baseline**; node layout does not |
-| `voxel-render` | `WgpuSink`, `MaterialBuffers`, `GpuWorld`, `svdag.wgsl` | Upload only; draws nothing |
+| `voxel-block` | Registry, materials, texture slices, material variants, palettes, tags, RON | Complete; atlas-backed material ids in use |
+| `voxel-storage` | Parameterized 64³/128³ 8 B-node SVDAG, COW `apply_edits`, overlays, region log, global deduped GPU pool, consolidation policy, six-face apron | **M1 layout complete; M2-01 apron landed** |
+| `voxel-mesh` | Block-granular driver over 16³ blocks with a reusable 18³ scratch; greedy rectangle core with the `(material, orientation, 4×AO)` merge key, backface culling, four-level AO sampling and chunk-border AO equality; 16 B vertex codec, golden fixtures, thread/order determinism, full-pass two-channel block light, cross-chunk apron seeding, dirty-region incremental light and removal-front escalation | **M2-03…M2-16 landed**; light benchmark and probes pending |
+| `voxel-render` | `WgpuSink`, `MaterialBuffers`, `GpuWorld`, `svdag.wgsl` | Upload path; the viewer owns the draw loop |
+| `voxel-viewer` | `winit` + `wgpu` window, fly camera, mouse look, atlas sampling, depth pass, naive per-face mesher, input layer | **M1.5 code complete**; production mesh/light/probes pending |
+| `voxel-texgraph` / `voxel-texgen` | Deterministic node-graph evaluator, manifest, material table, atlas bake, editor and MCP tools | Complete for M1.5 |
+| `voxel-launcher` / `xtask` | Desktop launcher, Linux/Windows builds, toolchain preflight and on-demand install | Complete |
 | `voxel-bench` | Memory/CPU/latency/counter suites, archived history, `iai` counters | Complete; the gate depends on it |
 
-The good news from the gate decision: the store is already 64³, so M1 is **only**
-the node-layout rewrite, parameterization and measurement — not a coordinate
-migration. That removes the riskiest part of the previous plan.
+The M1 layout is in place at both edges; the 128³ variant compiles in CI. M1.5
+added the window, camera, atlas and naive mesher. M2-01 added the apron. The
+production content path is now the work in front of the project.
 
-Missing entirely: mesher, AO, lighting, probes, sparse-set ECS, culling, LOD,
-streaming, a window/camera app, CI.
+Still missing: AO, production block light and probes, sparse-set ECS, culling,
+LOD, streaming, persistence, and the measured 128³ gate run. CI, the
+window/camera app, the naive mesher, the apron/driver/greedy core and the
+launcher are in place.
 
 ---
 
@@ -45,13 +58,13 @@ streaming, a window/camera app, CI.
 
 | Gate | Answer | What it changes in this plan |
 |---|---|---|
-| Chunk edge | 64³ in M1; 128³ pre-registered upgrade | M1 measures at 64³; M2 onward runs at the gated edge |
+| Chunk edge | 64³ measured in M1; 128³ Minimum greenlit for M2 | M2 implements and measures the 128³ Minimum edge; Default is not greenlit |
 | Render path | Raster | M1.5 draws meshes; the node pool serves culling/lighting/picking |
 | Occlusion | Block-level flood-fill (M1); ray-test deferred (M2) | Extra dispatch before broad phase; ray-test is an M2 flag |
 | Light resolution | Per-block (16³) + vertex AO | Light volume is 1 KiB at 64³, 8 KiB at 128³; no per-voxel BFS |
 
-No architectural decision remains open. The only thing that can reopen the
-architecture is the M1 gate.
+No architectural decision remains open. The 128³ measurement can still reject
+the upgrade and trigger the pre-registered fallback.
 
 ---
 
@@ -178,6 +191,10 @@ provisional pass without the re-run.
 
 ### M1.5 — Vertical slice: one chunk on screen (2 weeks)
 
+**Status:** Code complete — viewer, atlas, naive mesher, full M1.5-15 screenshot
+set and zero-validation CI landed. Only `M1.5-17` (before/after texel-density
+screenshots) remains open.
+
 At 64³, so the slice is cheap.
 
 - `crates/engine/viewer`: `winit` + `wgpu`, camera, depth pass, present.
@@ -197,7 +214,10 @@ drops to 6.25 cm per voxel face; before/after screenshots required.
 
 ### M2 — Production content pipeline (6 weeks)
 
-Runs at the **gated edge** (64³ or 128³).
+**Status:** In progress — M2-16 removal-front escalation passes the adversarial
+test. Next: M2-17 light cost benchmark.
+
+Runs at the **128³ Minimum** edge (ADR-002). Default is not greenlit.
 
 - **Apron API:** six 1-voxel face planes, block-granular access; no dense chunk
   expands.
@@ -220,6 +240,12 @@ Runs at the **gated edge** (64³ or 128³).
 - ≥ 20 terrain chunks/s single-threaded; scrub ≤ 4 ms; scratch ≤ 64 KiB/worker.
 - Ray-test flag produces a documented delta (accuracy and cost) versus flood-fill,
   without changing default behaviour.
+- **128³ Minimum gate run** recorded after M2-29: memory, edit, probe and
+  throughput measured on the reference machine. If it misses the 4.80 GiB
+  hard-fail line, fall back to 64³ Minimum with the pre-registered sacrifice
+  ladder.
+- Gate rows 9 and 11 closed: the M1-34 granularity reference is wired into the
+  report, and a real populated save replaces the provisional fixture.
 
 ---
 

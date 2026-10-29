@@ -1,9 +1,11 @@
 [workspace]
 resolver = "3"
 members = [
+    "xtask",
     "crates/bench",
     "crates/core",
     "crates/engine/block",
+    "crates/engine/mesh",
     "crates/engine/render",
     "crates/engine/storage",
     "crates/engine/viewer",

@@ -2,6 +2,7 @@
 
 **Status:** v2.3 — world scale, worldgen, far field and water locked
 **Date:** 2026-10-26
+**M1 outcome (2026-10-27):** the 64³ Default gate failed on memory; **128³ Minimum** is greenlit for M2 implementation and measurement (ADR-002). Default is not greenlit.
 **Companion:** [`voxel-engine-roadmap.md`](voxel-engine-roadmap.md), [`worldgen-design.md`](worldgen-design.md)
 
 **Changes in v2.3**
@@ -301,7 +302,7 @@ a face-textured block registers its variants as separate materials.
 
 | Decision | Resolution |
 | --- | --- |
-| Chunk edge | **64³ in M1; 128³ pre-registered upgrade**, gated by §9.1 |
+| Chunk edge | **64³ measured in M1; 128³ Minimum greenlit for M2**, conditional on mesh compression and the 128³ gate run (§9.1, ADR-002) |
 | Render path | **Raster.** No raymarch in M0/M1; far-field/shadow revisit in M2+ |
 | Occlusion | **Block-level flood-fill primary (M1); ray-test deferred (M2, flagged)** |
 | Light resolution | **Per-block (16³) + vertex AO**; 512 cells at 128³, 64 at 64³ |
@@ -325,8 +326,13 @@ The gate lives in the roadmap's M0 and is written **before** M1 measures. Summar
   culling granularity ≤ **15%** traversed-but-invisible at boundaries.
 - Dataset: a real populated save; report median, p95 and max per chunk. Synthetic
   chunks are not admissible.
-- **Fallback trigger:** any budget failure at 64³ → stay at 64³. No renegotiation
-  inside M1. If 128³ is greenlit, the upgrade is a `CHUNK_BITS` flip in M2.
+- **Fallback trigger:** a memory-row failure at 64³ does not automatically mean
+  "stay at 64³"; run the 128³ projection. The M1 outcome (2026-10-27) is that
+  64³ Default failed memory and **128³ Minimum** is greenlit for M2
+  implementation and measurement. If the 128³ run misses the hard-fail line,
+  fall back to 64³ Minimum with the pre-registered sacrifice ladder: mesh
+  compression, then near radius, then vertical shell. No threshold is
+  renegotiated inside M1 or M2.
 
 ## 10. Node Layout (locked)
 

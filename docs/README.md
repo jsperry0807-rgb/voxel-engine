@@ -16,9 +16,27 @@
 When these disagree, the spec wins, then the roadmap, then the task list. Any change to a
 binding number is made in the spec and the pre-registration, never only in a task.
 
+## Current position
+
+- **M0 and M1 are complete.** The M1 gate selected the **128³ Minimum** profile for
+  M2, conditional on mesh compression and a measured 128³ run.
+- **M1.5 is code-complete.** The viewer, atlas, naive mesher and full M1.5-15
+  screenshot set landed; only `M1.5-17` (before/after texel-density pair) remains
+  open. The zero-validation CI job (`M1.5-16`) is also in place.
+- **M2 is in progress.** The apron API (`M2-01`), its cost benchmark (`M2-02`),
+  the block-granular driver (`M2-03`), the greedy core (`M2-04`), the merge key
+  (`M2-05`), backface culling (`M2-06`), AO sampling (`M2-07`), the AO
+  merge-ratio measurement (`M2-08`), the chunk-border AO seam (`M2-09`), the
+  16 B vertex codec (`M2-10`), the five golden fixtures (`M2-11`), thread/order
+  determinism (`M2-12`), the production full-pass block light (`M2-13`),
+  cross-chunk apron seeding (`M2-14`), dirty-region incremental light (`M2-15`)
+  and removal-front escalation (`M2-16`) landed; `M2-17` light cost benchmark is
+  next. Probes are still to come.
+
 ## Tools
 
 - [`apps/launcher/README.md`](../apps/launcher/README.md) — the desktop launcher: viewer, texture tools, checks and the Linux/Windows builds.
+- [`crates/engine/viewer/README.md`](../crates/engine/viewer/README.md) — the M1.5 viewer: run instructions, controls and the slice screenshot.
 - [`apps/texgen/README.md`](../apps/texgen/README.md) — the standalone Material Maker-style texture and material editor.
 - [`texgen-backlog.md`](texgen-backlog.md) — what texgen still needs, what is deferred, and what is done.
 
@@ -55,6 +73,7 @@ where they conflict with the spec.
 
 - [`m0-exit.md`](m0-exit.md) — M0 exit checklist, command evidence and tag `m0`
 - [`m1-gate-decision.md`](m1-gate-decision.md) — M1 gate verdict, all twelve rows and the fallback decision
+- [`m2-apron-cost.md`](m2-apron-cost.md) — M2-02 apron vs dense padded-copy measurement
 - [`../benchmarks/README.md`](../benchmarks/README.md) — run archive, lenses, caveats
 - [`../benchmarks/HISTORY.md`](../benchmarks/HISTORY.md) — every recorded run with deltas
 - [`../crates/bench/README.md`](../crates/bench/README.md) — harness internals

@@ -14,9 +14,16 @@ use crate::jobs::{CommandSpec, Job, Runner, Status};
 
 /// The Windows target used for the background build.
 const WINDOWS_TARGET: &str = "x86_64-pc-windows-gnu";
-/// The cross-linker the `windows-gnu` target needs; without it the build would
-/// fail with a linker error, so the launcher does not start one automatically.
-const WINDOWS_LINKER: &str = "x86_64-w64-mingw32-gcc";
+/// Tools shipped by mingw-w64. `gcc` reaches for the others by name, so a
+/// partial install fails late; the launcher checks the whole set up front.
+const WINDOWS_TOOLS: &[&str] = &[
+    "x86_64-w64-mingw32-gcc",
+    "x86_64-w64-mingw32-ld",
+    "x86_64-w64-mingw32-ar",
+    "x86_64-w64-mingw32-dlltool",
+    "x86_64-w64-mingw32-windres",
+];
+const WINDOWS_SETUP: &str = "Windows toolchain";
 const LINUX_BUILD: &str = "Linux build";
 const WINDOWS_BUILD: &str = "Windows build";
 
@@ -26,6 +33,10 @@ const IDLE_REPAINT: Duration = Duration::from_millis(500);
 /// Output lines rendered at once. The buffer keeps more, but a chatty viewer
 /// log must not turn every frame into thousands of labels.
 const VISIBLE_LINES: usize = 800;
+/// Output text at the reference launcher size (1180×800). The log grows with
+/// the window; the cap keeps long lines usable on a 4K display.
+const LOG_TEXT_BASE: f32 = 15.0;
+const LOG_TEXT_MAX_SCALE: f32 = 1.35;
 
 const OK: Color32 = Color32::from_rgb(112, 190, 124);
 const WARN: Color32 = Color32::from_rgb(226, 176, 92);
@@ -39,11 +50,18 @@ pub struct LauncherApp {
     /// Job shown in the output panel. Newly started jobs take over.
     selected: Option<u64>,
     viewer: ViewerOptions,
-    /// Whether the Windows build starts by itself on the next frame.
-    auto_windows: bool,
+    /// Whether the Linux and Windows builds start by themselves on the next
+    /// frame.
+    auto_build: bool,
     autostart_done: bool,
     windows_job: Option<u64>,
     linux_job: Option<u64>,
+    /// The on-demand install job started by Build Windows or the setup button.
+    windows_setup_job: Option<u64>,
+    /// Cached preflight result; refreshed when a setup job finishes.
+    windows_ready: bool,
+    /// Start the cross-build as soon as an install job succeeds.
+    build_after_setup: bool,
     /// A launcher-level message, such as a spawn failure.
     notice: Option<String>,
 }
@@ -111,39 +129,38 @@ impl LauncherApp {
             root,
             selected: None,
             viewer: ViewerOptions::default(),
-            auto_windows: std::env::var_os("VOXEL_LAUNCHER_NO_AUTOBUILD").is_none(),
+            auto_build: std::env::var_os("VOXEL_LAUNCHER_NO_AUTOBUILD").is_none(),
             autostart_done: false,
             windows_job: None,
             linux_job: None,
+            windows_setup_job: None,
+            windows_ready: windows_toolchain_ready(),
+            build_after_setup: false,
             notice: None,
         }
     }
 
-    /// Starts the Windows cross-build once, on the first frame.
+    /// Starts the Linux and Windows builds once, on the first frame.
     ///
-    /// The Linux build stays the default (`cargo build`); the Windows build
-    /// only exists so the same change can be tried natively without a second
-    /// terminal. Set `VOXEL_LAUNCHER_NO_AUTOBUILD` to keep it manual.
+    /// They are separate jobs and separate target directories, so they
+    /// overlap. A missing Windows toolchain is installed first and the
+    /// cross-build continues when that job passes. Set
+    /// `VOXEL_LAUNCHER_NO_AUTOBUILD` to keep both manual.
     fn autostart(&mut self) {
         if self.autostart_done {
             return;
         }
         self.autostart_done = true;
-        if !self.auto_windows || self.windows_job.is_some() {
+        if !self.auto_build {
             return;
         }
-        // The cross-build is a Linux-host tool; a launcher running natively on
-        // Windows should use its own toolchain instead.
-        if !cfg!(unix) {
-            return;
+        // A launcher running natively on Windows has no cross toolchain to
+        // install, so it just builds its own target.
+        if cfg!(unix) {
+            self.start_both_builds();
+        } else {
+            self.start_build(false);
         }
-        if !program_on_path(WINDOWS_LINKER) {
-            self.notice = Some(format!(
-                "{WINDOWS_LINKER} not found; install mingw-w64 to enable Windows builds"
-            ));
-            return;
-        }
-        self.start_build(true);
     }
 
     fn start(&mut self, spec: CommandSpec) {
@@ -157,6 +174,13 @@ impl LauncherApp {
     }
 
     fn start_build(&mut self, windows: bool) {
+        if windows && !self.windows_ready {
+            // Make the build button do the setup too, then continue the build
+            // automatically when the installer job passes.
+            self.build_after_setup = true;
+            self.start_windows_setup();
+            return;
+        }
         let (label, args): (&str, Vec<&str>) = if windows {
             (
                 WINDOWS_BUILD,
@@ -176,6 +200,71 @@ impl LauncherApp {
                 self.notice = None;
             }
             Err(error) => self.notice = Some(error),
+        }
+    }
+
+    /// Starts the Linux and Windows builds as independent jobs.
+    ///
+    /// Cargo keeps separate locks for `target/debug` and the cross target, so
+    /// the target-specific work overlaps; only shared host build scripts can
+    /// briefly serialise the two jobs.
+    fn start_both_builds(&mut self) {
+        self.start_build(false);
+        self.start_build(true);
+    }
+
+    /// Installs mingw-w64 and the Rust target through `xtask`.
+    fn start_windows_setup(&mut self) {
+        if self.job_running(self.windows_setup_job) {
+            return;
+        }
+        let spec = CommandSpec::new(
+            WINDOWS_SETUP,
+            "cargo",
+            &["run", "--quiet", "-p", "xtask", "--", "doctor", "--install"],
+        )
+        .note("installs mingw-w64 and the x86_64-pc-windows-gnu target when missing");
+        match self.runner.start(spec) {
+            Ok(id) => {
+                self.selected = Some(id);
+                self.windows_setup_job = Some(id);
+                self.notice = None;
+            }
+            Err(error) => {
+                self.build_after_setup = false;
+                self.notice = Some(error);
+            }
+        }
+    }
+
+    /// Refreshes the cached preflight once an install job stops.
+    fn finish_windows_setup(&mut self) {
+        let Some(id) = self.windows_setup_job else {
+            return;
+        };
+        let Some(job) = self.runner.job(id) else {
+            self.windows_setup_job = None;
+            return;
+        };
+        let status = job.status();
+        if status.is_running() {
+            return;
+        }
+        self.windows_setup_job = None;
+        self.windows_ready = windows_toolchain_ready();
+        if status == Status::Passed && self.windows_ready {
+            if self.build_after_setup {
+                self.build_after_setup = false;
+                self.start_build(true);
+            } else {
+                self.notice = Some("Windows toolchain ready".to_owned());
+            }
+        } else {
+            self.build_after_setup = false;
+            self.notice = Some(
+                "Windows toolchain setup failed; install mingw-w64 and the Rust target in a terminal"
+                    .to_owned(),
+            );
         }
     }
 
@@ -257,6 +346,12 @@ impl LauncherApp {
 
     /// The Windows build status shown in the header.
     fn windows_state(&self) -> (&'static str, Color32) {
+        if self.job_running(self.windows_setup_job) {
+            return ("installing…", WARN);
+        }
+        if !self.windows_ready {
+            return ("toolchain missing", FAIL);
+        }
         match self.windows_job.and_then(|id| self.runner.job(id)) {
             Some(job) => state_of(job.status()),
             None if is_executable(&self.windows_exe()) => ("exe present", OK),
@@ -278,10 +373,15 @@ impl LauncherApp {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let (text, color) = self.windows_state();
                     ui.colored_label(color, RichText::new(format!("Windows: {text}")).strong());
-                    let building = self.job_running(self.windows_job);
+                    let building = self.job_running(self.windows_job)
+                        || self.job_running(self.windows_setup_job);
                     if ui
                         .add_enabled(!building, egui::Button::new("Build Windows"))
-                        .on_hover_text(format!("cargo build --workspace --target {WINDOWS_TARGET}"))
+                        .on_hover_text(if self.windows_ready {
+                            format!("cargo build --workspace --target {WINDOWS_TARGET}")
+                        } else {
+                            "Installs mingw-w64 and the Rust target first, then builds".to_owned()
+                        })
                         .clicked()
                     {
                         self.start_build(true);
@@ -332,9 +432,12 @@ impl LauncherApp {
     }
 
     fn sidebar(&mut self, ctx: &egui::Context) {
+        // Give the action list a little more room as the window grows, but
+        // keep it from swallowing the output pane on a wide display.
+        let width = (ctx.screen_rect().width() * 0.27).clamp(340.0, 460.0);
         egui::SidePanel::left("actions")
             .resizable(false)
-            .exact_width(340.0)
+            .exact_width(width)
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
@@ -550,12 +653,45 @@ impl LauncherApp {
         if action_button(
             ui,
             "Build Windows (background)",
-            &format!("cargo build --workspace --target {WINDOWS_TARGET}"),
-            !self.job_running(self.windows_job),
+            if self.windows_ready {
+                format!("cargo build --workspace --target {WINDOWS_TARGET}")
+            } else {
+                "Installs mingw-w64 and the Rust target first, then builds".to_owned()
+            }
+            .as_str(),
+            !self.job_running(self.windows_job) && !self.job_running(self.windows_setup_job),
         ) {
             self.start_build(true);
         }
-        ui.checkbox(&mut self.auto_windows, "Build Windows on launch")
+        if !self.windows_ready {
+            if action_button(
+                ui,
+                "Install Windows toolchain",
+                "cargo setup-win: mingw-w64 plus the Rust target; may ask for sudo",
+                !self.job_running(self.windows_setup_job),
+            ) {
+                self.start_windows_setup();
+            }
+            ui.label(
+                RichText::new(
+                    "The first Windows build installs these automatically; CI checks the same preflight.",
+                )
+                .weak()
+                .small(),
+            );
+        }
+        let busy = self.job_running(self.linux_job)
+            || self.job_running(self.windows_job)
+            || self.job_running(self.windows_setup_job);
+        if action_button(
+            ui,
+            "Build both (Linux + Windows)",
+            "Starts both targets as separate jobs. They share host build scripts, so Cargo may briefly wait on its build lock.",
+            !busy,
+        ) {
+            self.start_both_builds();
+        }
+        ui.checkbox(&mut self.auto_build, "Build Linux + Windows on launch")
             .on_hover_text(
                 "Set VOXEL_LAUNCHER_NO_AUTOBUILD to keep this off without changing the box.",
             );
@@ -667,17 +803,24 @@ impl LauncherApp {
     }
 
     fn output_log(&mut self, ui: &mut egui::Ui) {
+        let size = log_text_size(ui);
         let Some(id) = self.selected else {
             ui.centered_and_justified(|ui| {
                 ui.label(
-                    RichText::new("Pick an action on the left. Its output appears here.").weak(),
+                    RichText::new("Pick an action on the left. Its output appears here.")
+                        .size(size)
+                        .weak(),
                 );
             });
             return;
         };
         let Some(job) = self.runner.job(id) else {
             ui.centered_and_justified(|ui| {
-                ui.label(RichText::new("This job is no longer in the list.").weak());
+                ui.label(
+                    RichText::new("This job is no longer in the list.")
+                        .size(size)
+                        .weak(),
+                );
             });
             return;
         };
@@ -688,12 +831,12 @@ impl LauncherApp {
             .auto_shrink([false, false])
             .stick_to_bottom(true)
             .show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 1.0;
+                ui.spacing_mut().item_spacing.y = (size * 0.18).max(1.0);
                 if skip > 0 {
                     ui.label(
                         RichText::new(format!("… {skip} earlier lines hidden"))
-                            .weak()
-                            .small(),
+                            .size(size * 0.85)
+                            .weak(),
                     );
                 }
                 let plain = ui.visuals().text_color();
@@ -701,12 +844,12 @@ impl LauncherApp {
                     ui.label(
                         RichText::new(line)
                             .monospace()
-                            .small()
+                            .size(size)
                             .color(line_color(line, plain)),
                     );
                 }
                 if job.status().is_running() {
-                    ui.label(RichText::new("…").weak());
+                    ui.label(RichText::new("…").size(size).weak());
                 }
             });
     }
@@ -716,6 +859,7 @@ impl eframe::App for LauncherApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.autostart();
         self.runner.poll();
+        self.finish_windows_setup();
         self.top_bar(ctx);
         self.status_bar(ctx);
         self.sidebar(ctx);
@@ -805,6 +949,47 @@ fn action_button(ui: &mut egui::Ui, text: &str, hint: &str, enabled: bool) -> bo
     response.clicked()
 }
 
+/// Font size for the output log. It follows the window size, with a floor at
+/// the reference size and a ceiling so long lines still fit on a wide display.
+fn log_text_size(ui: &egui::Ui) -> f32 {
+    log_text_size_for(ui.available_width(), ui.available_height())
+}
+
+fn log_text_size_for(width: f32, height: f32) -> f32 {
+    let width = width.max(1.0);
+    let height = height.max(1.0);
+    let scale = (width / 900.0)
+        .min(height / 700.0)
+        .clamp(1.0, LOG_TEXT_MAX_SCALE);
+    LOG_TEXT_BASE * scale
+}
+
+/// True when both the Rust target and every mingw-w64 tool are installed.
+fn windows_toolchain_ready() -> bool {
+    target_installed() && WINDOWS_TOOLS.iter().all(|tool| program_on_path(tool))
+}
+
+/// True when `rustc` has the standard library for the cross target.
+fn target_installed() -> bool {
+    let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
+    let Ok(output) = std::process::Command::new(rustc)
+        .args(["--print", "sysroot"])
+        .stderr(std::process::Stdio::null())
+        .output()
+    else {
+        return false;
+    };
+    if !output.status.success() {
+        return false;
+    }
+    let sysroot = String::from_utf8_lossy(&output.stdout);
+    Path::new(sysroot.trim())
+        .join("lib/rustlib")
+        .join(WINDOWS_TARGET)
+        .join("lib")
+        .is_dir()
+}
+
 /// True when `name` resolves to an executable on `PATH`.
 fn program_on_path(name: &str) -> bool {
     std::env::var_os("PATH").is_some_and(|paths| {
@@ -857,4 +1042,26 @@ fn dark_visuals() -> egui::Visuals {
     visuals.selection.bg_fill = Color32::from_rgb(54, 112, 158);
     visuals.hyperlink_color = Color32::from_rgb(111, 186, 230);
     visuals
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LOG_TEXT_BASE, LOG_TEXT_MAX_SCALE, log_text_size_for};
+
+    #[test]
+    fn log_text_keeps_a_readable_floor() {
+        assert_eq!(log_text_size_for(900.0, 700.0), LOG_TEXT_BASE);
+        assert_eq!(log_text_size_for(600.0, 400.0), LOG_TEXT_BASE);
+    }
+
+    #[test]
+    fn log_text_grows_with_the_window_and_stops_at_the_cap() {
+        let wide = log_text_size_for(1_200.0, 800.0);
+        assert!(wide > LOG_TEXT_BASE);
+        assert!(wide < LOG_TEXT_BASE * LOG_TEXT_MAX_SCALE);
+        assert_eq!(
+            log_text_size_for(8_000.0, 8_000.0),
+            LOG_TEXT_BASE * LOG_TEXT_MAX_SCALE
+        );
+    }
 }

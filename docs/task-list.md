@@ -1,8 +1,9 @@
 # Roadmap Task List
 
-**Status:** v1.5 — derived from spec v2.3 and roadmap v3.1
-**Date:** 2026-10-27
+**Status:** v1.6 — derived from spec v2.3 and roadmap v3.2
+**Date:** 2026-10-29
 **Owner:** engine
+**Current position:** M1 complete. M1.5 code complete; only `M1.5-17` (texel-density pair) remains open. M2 in progress: `M2-16` done, `M2-17` next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -173,9 +174,9 @@ The schedule is by milestone, not by calendar. The *Consumed by* column is a har
 
 #### Per-material deadlines
 
-The deadline is the art task in the last column; its output must be ready before the consuming task (M1.5-07, M2.5-11, M3.5-06). "Before M1.5-07" means the 256² source is in the manifest and bakes to the 16² tile; M1.5-15 is the final art review. A face may be a marked placeholder earlier, but no milestone may call the set final before its row is done.
+The deadline is the art task in the last column; its output must be ready before the consuming task (M1.5-07, M2.5-11, M3.5-06). "Before M1.5-07" means the 256² source is in the manifest and bakes to the 16² tile; M1.5-15 is the screenshot and reproduction checkpoint (the full set has landed), and M1.5-17 is the remaining visual acceptance comparison. A face may be a marked placeholder earlier, but no milestone may call the set final before its row is done.
 
-**Slice set.** All 23 faces are authored in **M1.5-14** and must bake before **M1.5-07**; M1.5-15 reviews the final art.
+**Slice set.** All 23 faces are authored in **M1.5-14** and must bake before **M1.5-07**; M1.5-17 reviews the final art against the texel-density comparison.
 
 | Texture | Applies to | Done in task |
 | --- | --- | --- |
@@ -381,6 +382,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ## 5. M1.5 — Vertical slice
 
 **Goal:** one textured chunk in a window. **Exit:** M1.5-17. **Budget:** 10.5 d code + 4 d art (M1.5-14). **Depends:** M1-15 (layout API), M0-06 (atlas math); M1.5-14 before M1.5-07.
+**Status:** Code complete — M1.5-01…M1.5-16 done. The remaining exit artifact is M1.5-17 (before/after texel-density pair); the full M1.5-15 screenshot set and viewer README have landed. M2 work has started before the final visual checkpoint was closed.
 **Art:** M1.5-14 authors the 23 slice faces; M1.5-17 is the exit art checkpoint.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -399,43 +401,131 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M1.5-11 | Vertex/index buffer creation and upload for one chunk | M1.5-10 | Buffer sizes match the quad count; no validation error | run | 0.5 d | [x] |
 | M1.5-12 | Shader: UV from world position and face axes, atlas tile from material, face shading, AO placeholder | M0-06, M1.5-09 | A 1 m block face shows exactly one 16×16 tile; screenshot | visual | 1 d | [x] |
 | M1.5-13 | Draw one generated chunk end to end | M1.5-11, M1.5-12 | Terrain visible; 60 Hz at 1080p on the reference machine; placeholder tiles are allowed here, M1.5-14 supplies the final art before the M1.5-15 screenshot | run | 0.5 d | [x] |
-| M1.5-15 | Screenshot artifact in `docs/images/` plus run instructions | M1.5-07, M1.5-13, M1.5-14 | Image committed; README explains how to reproduce | review | 0.25 d | [ ] |
-| M1.5-16 | Zero-validation run and naga shader test in CI | M1.5-13 | CI job passes with `RUST_LOG=wgpu_core=warn` | CI | 0.5 d | [ ] |
+| M1.5-15 | Screenshot set in `docs/images/` plus run instructions | M1.5-07, M1.5-13, M1.5-14 | D9 screenshot set committed; README explains how to reproduce | review | 0.25 d | [x] |
+| M1.5-16 | Zero-validation run and naga shader test in CI | M1.5-13 | CI job passes with `RUST_LOG=wgpu_core=warn` | CI | 0.5 d | [x] |
 | M1.5-17 | Before/after texel-density screenshots (old 256² face vs 16×16 tile) so the regression is a decision | M1.5-14, M1.5-07 | Two images in `docs/images/` with a one-paragraph note; art matches M1.5-14 | review | 0.25 d | [ ] |
 
 ---
 
 ## 6. M2 — Production content pipeline
 
-**Goal:** deterministic mesh + AO + block light + probes, at the gated edge.
-**Exit:** M2-30. **Budget:** 26.75 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
+**Goal:** deterministic mesh + AO + block light + probes, at the 128³ Minimum edge.
+**Exit:** M2-30. **Budget:** 27.0 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
+**Status:** In progress — M2-16 done; M2-17 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
 **Art:** none beyond M1.5-14; M2 reuses the slice atlas.
+
+**M1 gate carry-over — blocks M2-30:**
+
+- Mesh compression must bring the 64³ p95 mesh under 600 KiB before the 128³
+  estimate can meet its 2.4 MiB cap. The greedy/AO work in M2-04…M2-09 is the
+  first lever; measure it rather than assuming the ratio.
+- Run the **128³ Minimum** gate after M2-29 and record memory, edit, probe and
+  throughput on the reference machine.
+- Close gate rows 9 and 11: wire the M1-34 granularity reference into the report
+  and replace the provisional fixture with a real populated save.
+- If the 128³ run misses the 4.80 GiB hard-fail line, apply the pre-registered
+  fallback: 64³ Minimum, then mesh compression, near radius, vertical shell.
+
+**M2-02 measured (2026-10-29, development host):** the face planes used 49,152 B
+and 694 µs versus 574,992 B and 10.52 ms for the dense padded read at 64³
+(8.5% / 6.6%); at 128³ they used 196,608 B and 2.70 ms versus 4,394,000 B and
+63.0 ms (4.5% / 4.3%). Apron wins; method and caveats are in
+[`m2-apron-cost.md`](m2-apron-cost.md).
+
+**M2-03 measured (2026-10-29):** `BlockScratch` is `18³ × 2 B = 11,664 B` per
+worker, reused for all 64 blocks at 64³ or 512 blocks at 128³. The
+`voxel-mesh` driver allocates no chunk-wide buffer. Verified with
+`cargo test -p voxel-mesh scratch_budget` at both chunk edges.
+
+**M2-04 measured (2026-10-29):** the production greedy core matches the M1-31
+reference on all five fixtures, per face orientation and covered area, at both
+64³ and 128³. Quad count never exceeds the brute-force exposed-face count.
+
+**M2-05 measured (2026-10-29):** the merge key carries face, material and four
+AO bytes. The mixed-material fixture splits top/bottom and the two z faces at
+`x = 8` and leaves the x faces whole; the key unit test also proves an AO-only
+difference splits. AO is still the all-open placeholder until M2-07.
+
+**M2-06 measured (2026-10-29):** an isolated voxel emits 6 quads; two adjacent
+voxels expose 10 faces and emit 6 quads when same-material, 10 when the material
+differs; an interior block in a solid chunk emits 0. The shared face is culled
+before the mask is built.
+
+**M2-07 measured (2026-10-29):** four-level AO (`0, 85, 170, 255`) samples the
+two edge neighbours and the diagonal in the outward plane. The production
+sampler matched the brute-force reference on 10,000 random face/cell/corner
+configurations. AO is now live in the merge key; M2-08 measures its merge cost.
+
+**M2-08 measured (2026-10-29):** on a 64³ terrain scene with a stone outcrop,
+18,388 exposed faces produced 6,324 AO-on quads (ratio 0.3439) versus 3,831
+AO-off quads (ratio 0.2083), a **1.65×** quad cost. Both covers have identical
+face area; AO only splits. The rendered artifact check moves to M2-27, where the
+production mesh is wired into the viewer; the shader does not consume AO yet.
+
+**M2-09 measured (2026-10-29):** a surface constant in x with z steps gives
+equal four-corner AO on both sides of the border. Copying the apron plane with
+a one-voxel z shift changes the AO and fails the assertion. Passes at 64³ and
+128³.
+
+**M2-10 measured (2026-10-29):** `Vertex` is 16 B with 4 B alignment, asserted
+at compile time. The little-endian codec round-trips 10,000 random vertices,
+including every field and the three zero reserved bytes.
+
+**M2-11 measured (2026-10-29):** five fixtures (flat, cave, overhang, mixed
+material, chunk-border) have overall mesh hashes plus per-quad hashes at 64³ and
+128³. A mismatch prints the quad index, block and `GreedyQuad`. Regenerate with
+`UPDATE_GOLDEN=1 cargo test -p voxel-mesh golden` at each edge.
+
+**M2-12 measured (2026-10-29):** four chunks from one world-space height field
+produce the same aggregate mesh hash for 1, 2, 4 and 8 workers over ten repeats,
+and for a reversed single-thread order. `--release` runs in ~2.4 s; the 128³
+single-chunk variant also passes.
+
+**M2-13 measured (2026-10-29):** the production `voxel-mesh::light` full pass
+uses the M1-29 level-ordered rule, fixed neighbour order and 16 B two-channel
+cells. It equals the reference on open sky, cave, torch, opaque wall and mixed
+fields, including every apron cell, at both chunk edges.
+
+**M2-14 measured (2026-10-29):** `full_pass_at_seeded` accepts neighbour border
+light and seeds the one-cell apron. Two 4³-cell chunks match the corresponding
+halves of one 8³-cell union fill in both channels, including aprons. An opaque
+border wall stops the torch, so nothing leaks into the far chunk.
+
+**M2-15 measured (2026-10-29):** `LightState` updates 1,000 random edit sets of
+one to three cells, including emission removal, opacity changes and sky
+changes. Every chunk and apron cell in both channels matches a fresh full pass.
+The dirty region is expanded by 15 cells, the maximum light travel.
+
+**M2-16 measured (2026-10-29):** a removal within 15 cells of a chunk edge
+escalates to a full relight; the `full_relights` counter proves the path. A
+central removal stays incremental. Both results match a fresh full pass. The
+adversarial fixture uses an emitter on the boundary and another at the centre.
 
 ### 6.1 Apron and mesher
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
 | M2-01 | Apron API: six 1-voxel face planes (128² u16 each) from the world, including cross-chunk neighbours | M1-15 | 6 planes equal a direct dense read of the 130³ padded volume on 3 fixtures | `cargo test -p voxel-storage apron` | 1 d | [x] |
-| M2-02 | Apron cost benchmark vs a dense 130³ copy; record the winner | M2-01 | Face-plane path ≤ 25% of the dense path's bytes and time | `cargo bench -p voxel-storage apron` | 0.5 d | [ ] |
-| M2-03 | Block-granular driver: iterate 16³ blocks, build a bounded scratch per block (18³), no chunk-wide densify | M2-01 | Peak scratch ≤ 64 KiB/worker on the noise fixture | `cargo test -p voxel-mesh scratch_budget` | 1 d | [ ] |
-| M2-04 | Create `crates/engine/mesh` (`voxel-mesh`); greedy bitmask core over one axis at a time | M2-01 | Quad count ≤ visible-face count; matches the M1-31 reference on 5 fixtures | `cargo test -p voxel-mesh greedy_matches_reference` | 2 d | [ ] |
-| M2-05 | Merge key: `(material, orientation, 4×AO)`; quads split on any difference | M2-04 | Mixed-material fixture splits exactly at material changes; no over-merge | `cargo test -p voxel-mesh merge_key` | 1 d | [ ] |
-| M2-06 | Backface cull at emit: only the outward quad per exposed face; no interior faces | M2-04 | Isolated voxel → 6 quads; two adjacent → 10; enclosed → 0 | `cargo test -p voxel-mesh backface` | 0.5 d | [ ] |
-| M2-07 | AO sampling: 3 neighbours per corner, from the apron, before merge; reference brute force | M2-01 | Matches brute force on 10k random corner configurations | `cargo test -p voxel-mesh ao_matches_bruteforce` | 1.5 d | [ ] |
-| M2-08 | AO in the merge key and in the vertex; measure merge-ratio cost of AO-safety | M2-05, M2-07 | Merge ratio reported for AO-on vs AO-off; no AO artifacts in the golden images | `cargo test -p voxel-mesh ao_merge_ratio` | 0.5 d | [ ] |
-| M2-09 | AO seam test: identical neighbours on both sides of a chunk border produce equal corner AO | M2-07 | Fails if the apron is off by one; passes with it | `cargo test -p voxel-mesh ao_seam` | 0.5 d | [ ] |
-| M2-10 | Vertex packing to 16 B (local u16 ×3, material u16, face u8, AO u8 ×4) with encode/decode tests | M2-04 | Size asserted at compile time; round-trip all fields | `cargo test -p voxel-mesh vertex_pack` | 0.5 d | [ ] |
-| M2-11 | Five golden mesh fixtures with content hashes (flat, cave, overhang, mixed material, chunk-border) | M2-10 | Hashes stable across runs; mismatch prints the first differing quad | `cargo test -p voxel-mesh golden` | 1 d | [ ] |
-| M2-12 | Determinism across thread counts and chunk order | M2-11 | Same hash for 1, 2, 4, 8 workers; 10 repeats | `cargo test -p voxel-mesh --release determinism` | 0.5 d | [ ] |
+| M2-02 | Apron cost benchmark vs a dense 130³ copy; record the winner | M2-01 | Face-plane path ≤ 25% of the dense path's bytes and time | `cargo bench -p voxel-storage apron` | 0.5 d | [x] |
+| M2-03 | Block-granular driver: iterate 16³ blocks, build a bounded scratch per block (18³), no chunk-wide densify | M2-01 | Peak scratch ≤ 64 KiB/worker on the noise fixture | `cargo test -p voxel-mesh scratch_budget` | 1 d | [x] |
+| M2-04 | Greedy bitmask core in `voxel-mesh`, over one axis at a time | M2-01; M2-03 | Quad count ≤ visible-face count; matches the M1-31 reference on 5 fixtures | `cargo test -p voxel-mesh greedy_matches_reference` | 2 d | [x] |
+| M2-05 | Merge key: `(material, orientation, 4×AO)`; quads split on any difference | M2-04 | Mixed-material fixture splits exactly at material changes; no over-merge | `cargo test -p voxel-mesh merge_key` | 1 d | [x] |
+| M2-06 | Backface cull at emit: only the outward quad per exposed face; no interior faces | M2-04 | Isolated voxel → 6 quads; two adjacent → 10 exposed faces; enclosed → 0 | `cargo test -p voxel-mesh backface` | 0.5 d | [x] |
+| M2-07 | AO sampling: 3 neighbours per corner, from the apron, before merge; reference brute force | M2-01 | Matches brute force on 10k random corner configurations | `cargo test -p voxel-mesh ao_matches_bruteforce` | 1.5 d | [x] |
+| M2-08 | AO in the merge key and in the vertex; measure merge-ratio cost of AO-safety | M2-05, M2-07 | Merge ratio reported for AO-on vs AO-off; AO carried into the quad vertices; rendered artifact in M2-27 | `cargo test -p voxel-mesh ao_merge_ratio` | 0.5 d | [x] |
+| M2-09 | AO seam test: identical neighbours on both sides of a chunk border produce equal corner AO | M2-07 | Fails if the apron is off by one; passes with it | `cargo test -p voxel-mesh ao_seam` | 0.5 d | [x] |
+| M2-10 | Vertex packing to 16 B (local u16 ×3, material u16, face u8, AO u8 ×4) with encode/decode tests | M2-04 | Size asserted at compile time; round-trip all fields | `cargo test -p voxel-mesh vertex_pack` | 0.5 d | [x] |
+| M2-11 | Five golden mesh fixtures with content hashes (flat, cave, overhang, mixed material, chunk-border) | M2-10 | Hashes stable across runs; mismatch prints the first differing quad | `cargo test -p voxel-mesh golden` | 1 d | [x] |
+| M2-12 | Determinism across thread counts and chunk order | M2-11 | Same hash for 1, 2, 4, 8 workers; 10 repeats | `cargo test -p voxel-mesh --release determinism` | 0.5 d | [x] |
 
 ### 6.2 Block light
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| M2-13 | Production full-pass block-light flood fill over 16³ cells with 2 channels | M1-29 | Equals the M1-29 reference on 5 fixtures | `cargo test -p voxel-mesh light_full` | 1.5 d | [ ] |
-| M2-14 | Cross-chunk seeding from 1-block aprons; light does not leak through opaque blocks | M2-13 | Border fixture matches a single-chunk reference on both sides | `cargo test -p voxel-mesh light_apron` | 1 d | [ ] |
-| M2-15 | Incremental light: dirty cells only, seeded from the edit, with a removal pass | M2-14 | Equals full recompute on 1 000 random edit sets, removals included | `cargo test -p voxel-mesh light_incremental` | 2 d | [ ] |
-| M2-16 | Escalation rule: relight the chunk when the removal front reaches the dirty expansion boundary | M2-15 | An adversarial test forces escalation and still equals full | `cargo test -p voxel-mesh light_escalation` | 0.5 d | [ ] |
+| M2-13 | Production full-pass block-light flood fill over 16³ cells with 2 channels | M1-29 | Equals the M1-29 reference on 5 fixtures | `cargo test -p voxel-mesh light_full` | 1.5 d | [x] |
+| M2-14 | Cross-chunk seeding from 1-block aprons; light does not leak through opaque blocks | M2-13 | Border fixture matches a single-chunk reference on both sides | `cargo test -p voxel-mesh light_apron` | 1 d | [x] |
+| M2-15 | Incremental light: dirty cells only, seeded from the edit, with a removal pass | M2-14 | Equals full recompute on 1 000 random edit sets, removals included | `cargo test -p voxel-mesh light_incremental` | 2 d | [x] |
+| M2-16 | Escalation rule: relight the chunk when the removal front reaches the dirty expansion boundary | M2-15 | An adversarial test forces escalation and still equals full | `cargo test -p voxel-mesh light_escalation` | 0.5 d | [x] |
 | M2-17 | Light border fixture and benchmark: full vs incremental cost | M2-16 | Incremental p95 ≤ 20% of full on a single edit; recorded | `cargo bench -p voxel-mesh light` | 0.5 d | [ ] |
 
 ### 6.3 Probes
@@ -459,7 +549,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M2-27 | Wire M2 into the viewer: replace the naive mesher; light + probes uploaded | M2-12, M2-21 | Visual parity with M1.5 except better merge ratio; 60 Hz; no new material keys, the M1.5-14 atlas is unchanged | run | 1 d | [ ] |
 | M2-28 | Throughput: ≥ 20 terrain chunks/s single-threaded | M2-27 | Measured over 100 chunks; recorded | `cargo bench -p voxel-mesh build` | 0.5 d | [ ] |
 | M2-29 | Scratch-memory budget test: ≤ 64 KiB per worker, no chunk-wide densify anywhere | M2-03 | Counting allocator test fails if exceeded | `cargo test -p voxel-mesh scratch_budget` | 0.5 d | [ ] |
-| M2-30 | M2 exit: tag `m2`, update roadmap, freeze goldens as CI artifacts | M2-29 | Tag; CI runs the goldens | `git tag -n m2` | 0.25 d | [ ] |
+| M2-30 | M2 exit: tag `m2`, update roadmap, freeze goldens as CI artifacts; record the 128³ Minimum run and close gate rows 9/11 | M2-29; M1 gate carry-over | Tag; CI runs the goldens; 128³ memory/edit/probe numbers and gate rows 9/11 recorded | `git tag -n m2`; gate report | 0.5 d | [ ] |
 
 ---
 
@@ -781,7 +871,7 @@ Raw days are the sum of the task estimates. Contingency is milestone-specific: i
 | M0 | 7.5 | 0% | 7.5 | 1 | gate frozen |
 | M1 | 33.5 | 25% | 41.9 | 4 | 64³/128³ decided |
 | M1.5 | 14.5 | 20% | 17.4 | 1.5 | first pixel |
-| M2 | 26.75 | 25% | 33.4 | 3 | content pipeline |
+| M2 | 27.0 | 25% | 33.75 | 3 | content pipeline |
 | M2.5 | 53.25 | 40% | 74.55 | 3 | 1024 km world with biomes, rivers, caves |
 | M3 | 9 | 40% | 12.6 | 1.5 | 256 chunks at 60 Hz |
 | M3.5 | 19.25 | 50% | 28.9 | 1.5 | 16–32 km view, water, atlas |
@@ -789,8 +879,8 @@ Raw days are the sum of the task estimates. Contingency is milestone-specific: i
 | M5 | 18.25 | 50% | 27.4 | 3 | ≥ 3× draw reduction |
 | M6 | 22.25 | 50% | 33.4 | 3 | 512 m within budget |
 | M7 | 12 | 30% | 15.6 | 2 | enforced budgets |
-| **Total** | **233.5** | — | **315.1** | **27** | |
+| **Total** | **233.75** | — | **315.3** | **27** | |
 
-Milestone rows include their art tasks: 4 d in M1.5, 8 d in M2.5 and 1.5 d in M3.5. There is no separate art track. 233.5 raw days is ~47 weeks; 315.1 planning days is ~63 weeks (~15 months). The **249 tasks** (245 previous + 4 art) are the complete delivery set; the last sprint is unallocated buffer and must not be filled with new scope.
+Milestone rows include their art tasks: 4 d in M1.5, 8 d in M2.5 and 1.5 d in M3.5. There is no separate art track. 233.75 raw days is ~47 weeks; 315.3 planning days is ~63 weeks (~15 months). The **249 tasks** (245 previous + 4 art) are the complete delivery set; the last sprint is unallocated buffer and must not be filled with new scope.
 
 The gate is at S4 because it must not inherit the later milestones' contingency. If it slips, the correct response is to cut reference scope (M1-30, M1-31 can be stubs for the first pass), not to weaken the gate.

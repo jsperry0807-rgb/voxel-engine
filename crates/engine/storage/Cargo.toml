@@ -26,3 +26,7 @@ required-features = ["chunk128"]
 [[bench]]
 name = "store"
 harness = false
+
+[[bench]]
+name = "apron"
+harness = false

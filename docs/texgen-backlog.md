@@ -1,6 +1,6 @@
 # Texgen backlog
 
-Status: living document, 2026-10-27.
+Status: living document, 2026-10-29.
 
 This is the gap list for `apps/texgen` and `crates/engine/texgraph`. It records
 what the generator still needs, what is deliberately deferred, and why. When a
@@ -13,7 +13,6 @@ Priority order is the order a single engineer should take it. An item marked
 
 | # | Item | Why it matters | Status |
 | --- | --- | --- | --- |
-| 1 | **M1.5-08 material registry integration** — `FaceMaterials` / atlas `MaterialId`, `materials.gen.ron` loading, `BlockRegistry::face_materials(block)` | Core landed in this change. The legacy `TextureSetId` path remains for the current texture-array renderer; the chunk shader swap to atlas slots is the M1.5-12 task. | **core done; render swap pending** |
 | 2 | **Remove the hard-coded face table** — drive `pipeline::SLICES` and `texture_manifest::SLICE_FACE_COUNT` from the manifest / a slot table | Every M2.5 and M3.5 art set currently requires code edits. New textures should be data-only. | open |
 | 3 | **Incremental generation** — `texgen generate --key stone`, write only changed PNGs, rebuild the atlas only if a source changed | One graph edit currently regenerates 23 PNGs, the manifest, the material table and the atlas. Fine at 23; painful at 100+. | open |
 
@@ -23,7 +22,7 @@ Priority order is the order a single engineer should take it. An item marked
 | --- | --- | --- | --- |
 | 4 | **Graph editing ergonomics** — box-select, multi-select, copy/paste, detach/reconnect wires, fit-to-view, autosave, unsaved-changes prompt on quit | Undo/redo and subgraph flattening exist, but the canvas is still single-node-oriented. | open |
 | 5 | **Async preview evaluation** — evaluate previews on a worker with a generation counter | 256² graphs with Blur/Normal Map/Bevel currently evaluate on the UI thread and can stall. | open |
-| 6 | **Better visual inspection** — 3D block/cube preview, RGB/A/luminance channel views, mip-level view | Current preview is 2D only. The visual acceptance tasks (M1.5-15/17) need more than a flat 256² image. | open |
+| 6 | **Better visual inspection** — 3D block/cube preview, RGB/A/luminance channel views, mip-level view | Current preview is 2D only. The remaining M1.5-17 texel-density comparison needs more than a flat 256² image. | open |
 | 7 | **Node readability** — parameter summaries on nodes and per-node compile errors | Nodes show `Op #id` only. Larger graphs are hard to scan. | open |
 | 8 | **Graph file watching** — reload an externally edited graph, or warn that it changed on disk | OpenCode and the GUI can edit the same file; today the GUI silently keeps its in-memory copy. | open |
 
@@ -34,7 +33,7 @@ Priority order is the order a single engineer should take it. An item marked
 | 9 | **Graph complexity limits** — node-count, chain-depth and fan-out caps; property/fuzz tests for validation and evaluation | A pathological graph can be very slow or recurse deeply. Current validation only checks topology and parameter ranges. | open |
 | 10 | **Windows determinism job** — run `texgen check` on Linux and Windows | Spec 5.3 requires identical bytes on both. CI currently runs the texture job on Ubuntu only. | open |
 | 11 | **Cutout mip alpha decision** — alpha-coverage rescale in the mip filter, or accept thinning | Still open in generator spec §12.3. Leaves will thin at distance either way. | open |
-| 12 | **Lock the remaining spec open items** — face enum naming, M1.5-17 definition, tiling confirmation | `generator.spec.md` is still Draft v0.1 with open questions. | open |
+| 12 | **Lock the remaining spec open items** — face enum naming, M1.5-17 definition, tiling confirmation | `generator.spec.md` is Draft v0.2 with open questions. | open |
 
 ## 4. MCP / OpenCode
 
@@ -48,8 +47,8 @@ Priority order is the order a single engineer should take it. An item marked
 
 | # | Item | Why it matters | Status |
 | --- | --- | --- | --- |
-| 16 | **M1.5-15 art review** — use the new pattern/effect nodes to improve cobblestone, sandstone, water, foliage | The slice set passes the technical tests but is still placeholder art in places. | open |
-| 17 | **M1.5-15/17 screenshots** — face sheet, material block shots, before/after texel density | Required visual artifacts; not a texgen code task. | open |
+| 16 | **Slice art review** — use the new pattern/effect nodes to improve cobblestone, sandstone, water, foliage | The slice set passes the technical tests but is still placeholder art in places. | open |
+| 17 | **M1.5-15/17 screenshots** — face sheet, material block shots, before/after texel density | The M1.5-15 set is committed under `docs/images/m1.5-15-*.png`; the M1.5-17 before/after pair is still open. | **15 done; 17 open** |
 
 ## 6. Not needed yet (deliberately deferred)
 
@@ -92,5 +91,6 @@ without a milestone that consumes them.
 | Pattern, shape, transform, colour, blend and effect nodes | `f64babb` |
 | `examples/render` for arbitrary graph RON | `f64babb` |
 | M1.5-08 material registry core: `FaceMaterials`, atlas `MaterialId`, `materials.gen.ron` loading, `BlockRegistry::face_materials`, 64-block fixture | this change |
+| M1.5-12 chunk shader reads atlas slots; legacy `TextureSetId` path is unused by the viewer | M1.5-12 |
 | 17 post-M1.5 stone and tree faces (slots 24-40), 14 blocks, regenerated manifest, material table and atlas | this change |
 | Backlog document with deferred work | this change |
