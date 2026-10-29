@@ -41,8 +41,10 @@ pub enum BlockKind {
 impl BlockKind {
     /// All built-in kinds, in registration order.
     ///
-    /// New kinds are appended rather than inserted: ids are stable and saved
-    /// chunks refer to them, so the order is part of the save contract.
+    /// New kinds are appended rather than inserted, so a given registration
+    /// order keeps producing the same [`MaterialId`]s. Ids themselves are
+    /// session-local: saved chunks store materials by name, not by id (see
+    /// `id.rs`).
     pub const ALL: [BlockKind; 20] = [
         BlockKind::Air,
         BlockKind::Stone,

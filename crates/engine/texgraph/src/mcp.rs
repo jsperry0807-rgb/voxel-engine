@@ -427,8 +427,13 @@ impl Server {
             Ok(png) => png,
             Err(error) => return ToolResult::error(error.to_string()),
         };
+        let tile_note = if size == 256 {
+            "tile: 128x128 preview of the committed 16² downsample"
+        } else {
+            "tile: 128x128 preview of this render's 16² downsample (differs from the committed 256² tile)"
+        };
         let text = format!(
-            "{} slot {} · {:?} · {:?} · preview {}²\nsource: {}x{} RGBA8\ntile: 128x128 preview of the committed 16² downsample",
+            "{} slot {} · {:?} · {:?} · preview {}²\nsource: {}x{} RGBA8\n{tile_note}",
             key,
             pipeline::slot_of(&key).unwrap_or(0),
             graph.alpha,

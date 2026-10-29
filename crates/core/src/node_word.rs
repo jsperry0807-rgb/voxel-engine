@@ -70,12 +70,12 @@ const BASE_FIELD_MAX: u64 = (1 << NODE_BASE_BITS) - 1;
 /// Packs `mask`, `level` and `base` into one node word.
 ///
 /// The fields must fit their widths ([`NODE_MASK_MAX`], [`NODE_LEVEL_MAX`],
-/// [`NODE_BASE_MAX`]); debug builds assert that they do. Values are masked to
-/// their field width so they can never overwrite a neighbouring field. The
-/// flag bits are always zero.
+/// [`NODE_BASE_MAX`]); an out-of-range value is a caller bug and asserts in
+/// every build, because silently masking it would corrupt the tree. The flag
+/// bits are always zero.
 pub const fn encode_node(mask: u8, level: u32, base: u64) -> u64 {
-    debug_assert!(level <= NODE_LEVEL_MAX);
-    debug_assert!(base <= NODE_BASE_MAX);
+    assert!(level <= NODE_LEVEL_MAX);
+    assert!(base <= NODE_BASE_MAX);
 
     (((mask as u64) & MASK_FIELD_MAX) << NODE_MASK_SHIFT)
         | (((level as u64) & LEVEL_FIELD_MAX) << NODE_LEVEL_SHIFT)

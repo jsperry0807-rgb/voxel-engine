@@ -192,7 +192,11 @@ pub fn dag_get(pool: &[u32], root: u32, x: u32, y: u32, z: u32) -> u16 {
     let mut n = root as usize;
     let mut level = ROOT_LEVEL;
     loop {
-        let h = pool[n];
+        // A malformed or out-of-range reference reads as air instead of
+        // panicking: this is the shader's behaviour too.
+        let Some(&h) = pool.get(n) else {
+            return 0;
+        };
         let mask = hdr_mask(h);
         let b = level - 1;
         let c = ((x >> b) & 1) | (((y >> b) & 1) << 1) | (((z >> b) & 1) << 2);
@@ -200,7 +204,9 @@ pub fn dag_get(pool: &[u32], root: u32, x: u32, y: u32, z: u32) -> u16 {
             return 0;
         }
         let k = (mask & ((1 << c) - 1)).count_ones() as usize;
-        let w = pool[n + 1 + k];
+        let Some(&w) = pool.get(n + 1 + k) else {
+            return 0;
+        };
         if level == 1 {
             return w as u16;
         }

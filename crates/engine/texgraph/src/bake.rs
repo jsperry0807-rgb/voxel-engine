@@ -112,7 +112,7 @@ pub fn build_atlas(workspace: &pipeline::Workspace) -> Result<AtlasBuild, BakeEr
         let image = voxel_block::texture_manifest::load_source(&workspace.block_crate(), entry)
             .map_err(BakeError::Manifest)?;
         let tile = downsample(&image.pixels, entry.alpha)?;
-        blit_tile(&mut base, entry.slot, &tile, TILE_SIZE);
+        blit_tile(&mut base, entry.slot, &tile, TILE_SIZE)?;
     }
 
     let mut levels = Vec::with_capacity(MIP_LEVELS as usize);
@@ -129,7 +129,7 @@ pub fn build_atlas(workspace: &pipeline::Workspace) -> Result<AtlasBuild, BakeEr
             let origin = tile_origin(entry.slot);
             let source_origin = (origin.0 >> (level - 1), origin.1 >> (level - 1));
             let previous = &levels[(level - 1) as usize];
-            let tile = read_region(previous, source_origin, TILE_SIZE >> (level - 1));
+            let tile = read_region(previous, source_origin, TILE_SIZE >> (level - 1))?;
             let reduced = halve(&tile, TILE_SIZE >> (level - 1));
             blit_region(
                 &mut pixels,
@@ -137,7 +137,7 @@ pub fn build_atlas(workspace: &pipeline::Workspace) -> Result<AtlasBuild, BakeEr
                 (origin.0 >> level, origin.1 >> level),
                 &reduced,
                 tile_edge,
-            );
+            )?;
         }
         levels.push(Level {
             width: edge,
@@ -315,31 +315,49 @@ pub fn downsample_edge(
     Ok(tile)
 }
 
-fn blit_tile(base: &mut [u8], slot: u16, tile: &[u8], tile_edge: u32) {
+fn blit_tile(base: &mut [u8], slot: u16, tile: &[u8], tile_edge: u32) -> Result<(), BakeError> {
     let origin = tile_origin(slot);
-    blit_region(base, ATLAS_SIZE, origin, tile, tile_edge);
+    blit_region(base, ATLAS_SIZE, origin, tile, tile_edge)
 }
 
-fn blit_region(destination: &mut [u8], edge: u32, origin: (u32, u32), tile: &[u8], tile_edge: u32) {
+fn blit_region(
+    destination: &mut [u8],
+    edge: u32,
+    origin: (u32, u32),
+    tile: &[u8],
+    tile_edge: u32,
+) -> Result<(), BakeError> {
     let row_bytes = tile_edge as usize * 4;
     let stride = edge as usize * 4;
     let start = origin.1 as usize * stride + origin.0 as usize * 4;
     for (row, source) in tile.chunks_exact(row_bytes).enumerate() {
         let offset = start + row * stride;
-        destination[offset..offset + row_bytes].copy_from_slice(source);
+        let Some(target) = destination.get_mut(offset..offset + row_bytes) else {
+            return Err(BakeError::Invalid(format!(
+                "tile blit at ({}, {}) is outside the {edge}x{edge} destination",
+                origin.0, origin.1,
+            )));
+        };
+        target.copy_from_slice(source);
     }
+    Ok(())
 }
 
-fn read_region(level: &Level, origin: (u32, u32), edge: u32) -> Vec<u8> {
+fn read_region(level: &Level, origin: (u32, u32), edge: u32) -> Result<Vec<u8>, BakeError> {
     let row_bytes = edge as usize * 4;
     let stride = level.width as usize * 4;
     let mut out = vec![0u8; row_bytes * edge as usize];
     for row in 0..edge as usize {
         let source = origin.1 as usize * stride + origin.0 as usize * 4 + row * stride;
-        out[row * row_bytes..(row + 1) * row_bytes]
-            .copy_from_slice(&level.pixels[source..source + row_bytes]);
+        let Some(pixels) = level.pixels.get(source..source + row_bytes) else {
+            return Err(BakeError::Invalid(format!(
+                "mip read at ({}, {}) is outside the {}x{} level",
+                origin.0, origin.1, level.width, level.height,
+            )));
+        };
+        out[row * row_bytes..(row + 1) * row_bytes].copy_from_slice(pixels);
     }
-    out
+    Ok(out)
 }
 
 fn halve(source: &[u8], edge: u32) -> Vec<u8> {

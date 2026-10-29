@@ -490,8 +490,9 @@ impl UploadDevice {
 ///
 /// The gate has no GPU, so this records the cost of the boundary itself: submit
 /// a token, publish its completion, and poll with Acquire until the Release
-/// store is visible. A real device fence adds the GPU completion latency; M4-05
-/// and M4-16 replace this model.
+/// store is visible. Because the signal happens immediately before the wait,
+/// the measured fence term is the submit/signal/poll protocol cost, not GPU
+/// completion latency; M4-05/M4-16 replace this model with a real fence.
 struct Fence {
     signalled: AtomicU64,
     next_token: u64,
@@ -608,6 +609,11 @@ fn measure(
             candidate.first
         };
 
+        // Keep the arena in a steady state: without periodic compaction the
+        // retired band slots accumulate and p95 depends on the edit index.
+        if step.is_multiple_of(64) {
+            let _ = state.dag.compact_if_needed();
+        }
         let before = BandSnapshot::capture(&state.dag);
 
         let cow_start = Instant::now();

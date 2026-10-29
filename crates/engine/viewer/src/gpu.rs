@@ -95,6 +95,12 @@ impl Gpu {
         log::debug!("adapter details: {info:?}");
 
         let (device, queue) = block_on(adapter.request_device(&DeviceDescriptor::default()))?;
+        // Log instead of panicking inside a winit callback when a validation
+        // error slips through (for example a surface larger than the adapter's
+        // limit).
+        device.on_uncaptured_error(std::sync::Arc::new(|error: wgpu::Error| {
+            log::error!("wgpu uncaptured error: {error}");
+        }));
 
         let camera_buffer = device.create_buffer(&BufferDescriptor {
             label: Some("camera uniform"),
@@ -168,13 +174,29 @@ impl Gpu {
         if size.width == 0 || size.height == 0 {
             return;
         }
-        if size.width == self.config.width && size.height == self.config.height {
+        // A drawable larger than the adapter's limit fails validation, so clamp
+        // before configuring the surface.
+        let max = self.device.limits().max_texture_dimension_2d;
+        let width = size.width.min(max);
+        let height = size.height.min(max);
+        if width == self.config.width && height == self.config.height {
             return;
         }
-        self.config.width = size.width;
-        self.config.height = size.height;
+        self.config.width = width;
+        self.config.height = height;
         self.surface.configure(&self.device, &self.config);
         self.depth = DepthTarget::new(&self.device, self.config.width, self.config.height);
+    }
+
+    /// Rebuilds the presentation surface and the depth target.
+    ///
+    /// Used when the surface is lost and when the platform recreates the
+    /// window (resume): reconfiguring a dead surface is not enough.
+    pub fn recreate_surface(&mut self) -> Result<(), ViewerError> {
+        self.surface = self.instance.create_surface(self.window.clone())?;
+        self.surface.configure(&self.device, &self.config);
+        self.depth = DepthTarget::new(&self.device, self.config.width, self.config.height);
+        Ok(())
     }
 
     /// Uploads `camera`, acquires the next surface texture, clears color and
@@ -203,9 +225,7 @@ impl Gpu {
                 // `Lost` means the surface itself is dead; reconfiguring it is
                 // not enough. Rebuild it from the window and keep the device.
                 log::warn!("surface lost; recreating");
-                self.surface = self.instance.create_surface(self.window.clone())?;
-                self.surface.configure(&self.device, &self.config);
-                self.depth = DepthTarget::new(&self.device, self.config.width, self.config.height);
+                self.recreate_surface()?;
                 return Ok(false);
             }
             CurrentSurfaceTexture::Outdated => {

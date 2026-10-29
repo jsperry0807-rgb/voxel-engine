@@ -674,8 +674,17 @@ impl GpuStore {
 
     fn decref(&mut self, off: u32) {
         let o = off as usize;
-        self.rc[o] -= 1;
-        if self.rc[o] == 0 {
+        let Some(rc) = self.rc.get_mut(o) else {
+            debug_assert!(false, "refcount for node {o} is out of range");
+            return;
+        };
+        let Some(next) = rc.checked_sub(1) else {
+            // An unbalanced retire must never hand a live node to the allocator.
+            debug_assert!(false, "refcount underflow for node {o}");
+            return;
+        };
+        *rc = next;
+        if next == 0 {
             self.free_node(o);
         }
     }

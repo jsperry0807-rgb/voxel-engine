@@ -230,14 +230,31 @@ fn memory_disk(out: &mut Vec<MemoryRecord>) {
         })
         .collect();
 
-    let (store, stats) = mem::measure(|| {
-        let mut store = RegionStore::open(&dir).expect("open region store");
+    let (result, stats) = mem::measure(|| -> std::io::Result<RegionStore> {
+        let mut store = RegionStore::open(&dir)?;
         for (pos, dag) in &chunks {
-            store.put_dag(*pos, dag).expect("write dag");
+            store.put_dag(*pos, dag)?;
         }
-        store.sync().expect("sync region store");
-        store
+        store.sync()?;
+        Ok(store)
     });
+    let store = match result {
+        Ok(store) => store,
+        Err(error) => {
+            // A full or read-only temp dir must skip this lens, not abort the
+            // whole `all` run.
+            out.push(MemoryRecord {
+                case: "disk/64_chunks".to_owned(),
+                resident: 0,
+                allocated: 0,
+                allocs: 0,
+                peak: 0,
+                note: format!("skipped: {error}"),
+            });
+            std::fs::remove_dir_all(dir).ok();
+            return;
+        }
+    };
     let on_disk = dir_bytes(&dir);
     out.push(MemoryRecord {
         case: "disk/64_chunks".to_owned(),
@@ -387,7 +404,15 @@ fn cpu_dag(out: &mut Vec<CpuRecord>) {
 fn cpu_edits(out: &mut Vec<CpuRecord>) {
     let mut overlay = Overlay::default();
     let mut index = 0u32;
+    let mut since_clear = 0u32;
     out.push(bench_ops("overlay/set", "HashMap insert", || {
+        // Keep the map at a steady size. An ever-growing map measures the
+        // amortised cost of rehashing, not an insert.
+        if since_clear == 4_096 {
+            overlay = Overlay::default();
+            since_clear = 0;
+        }
+        since_clear += 1;
         index = index.wrapping_add(1);
         overlay.set(index.wrapping_mul(2_654_435_761) % CHUNK_VOLUME as u32, 2);
     }));

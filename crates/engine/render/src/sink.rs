@@ -230,10 +230,13 @@ fn write_words(
     if data.is_empty() {
         return;
     }
+    // `word_off + data.len()` must not wrap before the bound check.
+    let end = word_off
+        .checked_add(data.len())
+        .expect("GPU table write offset overflows usize");
     assert!(
-        word_off + data.len() <= capacity,
-        "GPU table write out of bounds: {word_off}..{} > {capacity}",
-        word_off + data.len(),
+        end <= capacity,
+        "GPU table write out of bounds: {word_off}..{end} > {capacity}",
     );
     queue.write_buffer(buffer, word_off as u64 * WORD, cast_slice(data));
 }

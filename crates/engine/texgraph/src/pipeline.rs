@@ -436,22 +436,39 @@ pub fn update_all(workspace: &Workspace) -> Result<String, PipelineError> {
 
 /// Writes bytes via a temp file in the same directory, then renames.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), PipelineError> {
+    use std::io::Write as _;
+
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(parent).map_err(|source| PipelineError::Io {
         path: parent.to_owned(),
         source,
     })?;
+    // A per-write suffix keeps two writers (threads or two workspaces sharing a
+    // directory) from clobbering each other's temp file.
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let unique = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let temp = parent.join(format!(
-        ".{}.tmp-{}",
+        ".{}.tmp-{}-{unique}",
         path.file_name()
             .map(|name| name.to_string_lossy())
             .unwrap_or_default(),
         std::process::id()
     ));
-    fs::write(&temp, bytes).map_err(|source| PipelineError::Io {
+    let mut file = fs::File::create(&temp).map_err(|source| PipelineError::Io {
         path: temp.clone(),
         source,
     })?;
+    file.write_all(bytes).map_err(|source| PipelineError::Io {
+        path: temp.clone(),
+        source,
+    })?;
+    // Without this a crash between write and rename can leave a zero-length
+    // file at `path`.
+    file.sync_all().map_err(|source| PipelineError::Io {
+        path: temp.clone(),
+        source,
+    })?;
+    drop(file);
     fs::rename(&temp, path).map_err(|source| PipelineError::Io {
         path: path.to_owned(),
         source,

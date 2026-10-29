@@ -693,20 +693,15 @@ impl Graph {
     }
 
     /// Writes the graph in canonical RON form.
+    ///
+    /// Goes through the atomic pipeline writer: an editor save interrupted
+    /// mid-write must not truncate a committed graph.
     pub fn save(&self, path: &Path) -> Result<(), GraphError> {
         let text = self
             .to_ron()
             .map_err(|error| GraphError::Invalid(format!("could not serialize graph: {error}")))?;
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|source| GraphError::Io {
-                path: parent.to_owned(),
-                source,
-            })?;
-        }
-        std::fs::write(path, text).map_err(|source| GraphError::Io {
-            path: path.to_owned(),
-            source,
-        })
+        crate::pipeline::write_atomic(path, text.as_bytes())
+            .map_err(|error| GraphError::Invalid(error.to_string()))
     }
 
     /// The effective seed: the explicit override, or BLAKE3(key) per section

@@ -97,7 +97,7 @@ const _: () = {
 /// assert_eq!(tile_origin(16), (0, TILE_SIZE));
 /// ```
 pub const fn tile_origin(tile: u16) -> (u32, u32) {
-    debug_assert!((tile as u32) < MAX_MATERIALS);
+    assert!((tile as u32) < MAX_MATERIALS);
     let tile = tile as u32;
     (
         (tile % TILES_PER_EDGE) * TILE_SIZE,

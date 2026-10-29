@@ -339,12 +339,14 @@ impl WorldGenerator {
             height += (mountain - 600) * 44 / 400;
         }
         // One guaranteed massif gives the fixture a snow/ice peak even when the
-        // hash field would otherwise land low.
-        let dx = x + 96;
-        let dz = z - 96;
+        // hash field would otherwise land low. The distance is computed in i64:
+        // `x`/`z` can reach ±262,144 at the largest allowed recipe, which
+        // overflows an i32 square.
+        let dx = i64::from(x) + 96;
+        let dz = i64::from(z) - 96;
         let distance = dx * dx + dz * dz;
         if distance < 48 * 48 {
-            height += (48 * 48 - distance) * 26 / (48 * 48);
+            height += ((48 * 48 - distance) * 26 / (48 * 48)) as i32;
         }
         height.clamp(8, 116)
     }

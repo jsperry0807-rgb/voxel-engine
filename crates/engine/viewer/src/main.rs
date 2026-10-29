@@ -827,6 +827,18 @@ impl ApplicationHandler for Viewer {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // `resumed` may fire again on platforms that recreate the surface.
         if self.window.is_some() {
+            // The old surface is no longer valid after suspend/resume or a
+            // display-server restart.
+            if let Some(gpu) = &mut self.gpu
+                && let Err(error) = gpu.recreate_surface()
+            {
+                self.error = Some(error);
+                event_loop.exit();
+                return;
+            }
+            if let Some(window) = &self.window {
+                window.request_redraw();
+            }
             return;
         }
         let attributes = Window::default_attributes()
@@ -914,8 +926,10 @@ impl ApplicationHandler for Viewer {
                 };
                 let steps = self.input.scroll(x, y);
                 if steps != 0 {
-                    self.speed_steps =
-                        (self.speed_steps + steps).clamp(MIN_SPEED_STEPS, MAX_SPEED_STEPS);
+                    self.speed_steps = self
+                        .speed_steps
+                        .saturating_add(steps)
+                        .clamp(MIN_SPEED_STEPS, MAX_SPEED_STEPS);
                     log::info!("fly speed: {:.1} units/s", self.fly_speed());
                 }
             }
@@ -978,6 +992,11 @@ impl ApplicationHandler for Viewer {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // A DPI change can report a stale inner size from inside the event, so
+        // resync against the window here; this also catches a missed `Resized`.
+        if let (Some(window), Some(gpu)) = (&self.window, &mut self.gpu) {
+            gpu.resize(window.inner_size());
+        }
         // Nothing can be drawn while the platform says the window is hidden;
         // `Occluded(false)` asks for a frame again.
         if self.occluded {

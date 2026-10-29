@@ -117,7 +117,13 @@ const fn level_sizes() -> [usize; LEVEL_COUNT] {
 ///
 /// `level` must be in `0..=ROOT_LEVEL`; this is the CPU reference for the
 /// implicit node AABBs the GPU traversal builds from origin and level.
+///
+/// # Panics
+///
+/// Panics when `level` is outside `0..=ROOT_LEVEL`; an out-of-range level has
+/// no extent, and indexing the table with it would read past the end.
 pub const fn aabb_extent(level: u32) -> f32 {
+    assert!(level <= ROOT_LEVEL);
     LEVEL_SIZE[level as usize] as f32 * VOXEL_SIZE
 }
 

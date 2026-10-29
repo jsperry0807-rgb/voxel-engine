@@ -544,6 +544,13 @@ fn measure(
         let select_ns = elapsed_ns(select_start);
         black_box(reach);
 
+        // Keep the arena in a steady state across the sequence; otherwise
+        // retired band slots accumulate and the measured edit depends on its
+        // position in the run.
+        if step.is_multiple_of(64) {
+            let _ = state.dag.compact_if_needed();
+        }
+
         // The COW edit is the trigger, not probe work; M1-37 charges it.
         let stats = state.dag.apply_edits([(candidate.index, material)]);
         black_box(&stats);

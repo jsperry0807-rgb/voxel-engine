@@ -332,7 +332,9 @@ fn axis_combo(ui: &mut egui::Ui, label: &str, axis: &mut Axis, id: &str) {
 
 fn parse_hex(color: &str) -> [u8; 3] {
     let hex = color.trim_start_matches('#');
-    if hex.len() >= 6 {
+    // `is_ascii` makes the byte length a character length, so the channel
+    // slices below can never land inside a multi-byte character.
+    if hex.len() >= 6 && hex.is_ascii() {
         let channel = |at: usize| u8::from_str_radix(&hex[at..at + 2], 16).unwrap_or(128);
         [channel(0), channel(2), channel(4)]
     } else {

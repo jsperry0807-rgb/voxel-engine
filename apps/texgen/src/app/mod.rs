@@ -417,7 +417,7 @@ impl TexgenApp {
         if redo {
             self.redo();
         }
-        if ctx.input(|input| input.key_pressed(egui::Key::Delete)) {
+        if !ctx.wants_keyboard_input() && ctx.input(|input| input.key_pressed(egui::Key::Delete)) {
             self.delete_selected();
         }
         if ctx.input(|input| input.key_pressed(egui::Key::D) && input.modifiers.command) {
@@ -1186,6 +1186,7 @@ impl TexgenApp {
         }
         if ui.button("Rebuild atlas preview").clicked() {
             self.atlas.texture = None;
+            self.ensure_atlas(ui.ctx());
         }
     }
 
@@ -1239,6 +1240,7 @@ impl TexgenApp {
         if ui.button("Reload materials").clicked() {
             self.materials.table = None;
             self.materials.manifest = None;
+            self.ensure_materials();
         }
     }
 }

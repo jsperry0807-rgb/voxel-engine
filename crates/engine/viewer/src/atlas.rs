@@ -282,7 +282,10 @@ impl Atlas {
             }
             builder
                 .set_tile(tile as u16, &tile_pixels)
-                .expect("the atlas has exactly MAX_MATERIALS tiles");
+                .map_err(|error| AtlasLoadError::Format {
+                    path: path.to_owned(),
+                    message: error.to_string(),
+                })?;
         }
         Ok(builder.build())
     }

@@ -190,13 +190,29 @@ pub fn load_source(crate_root: &Path, entry: &TextureEntry) -> Result<SourceImag
 
 /// Decodes a 256x256 RGBA8 source PNG.
 pub fn decode_source(path: &Path, bytes: &[u8]) -> Result<SourceImage, ManifestError> {
-    let decoder = png::Decoder::new(bytes);
+    let mut decoder = png::Decoder::new(bytes);
+    // Bound the decoder before it sizes its buffer: a hostile manifest must
+    // not be able to request a multi-gigabyte allocation.
+    decoder.set_limits(png::Limits {
+        bytes: (SOURCE_EDGE as usize) * (SOURCE_EDGE as usize) * 4,
+    });
     let mut reader = decoder
         .read_info()
         .map_err(|source| ManifestError::Decode {
             path: path.to_owned(),
             source,
         })?;
+    {
+        let info = reader.info();
+        if info.width != SOURCE_EDGE || info.height != SOURCE_EDGE {
+            return Err(ManifestError::Invalid(format!(
+                "{} is {}x{}; expected {SOURCE_EDGE}x{SOURCE_EDGE} RGBA8",
+                path.display(),
+                info.width,
+                info.height,
+            )));
+        }
+    }
     let mut pixels = vec![0; reader.output_buffer_size()];
     let info = reader
         .next_frame(&mut pixels)

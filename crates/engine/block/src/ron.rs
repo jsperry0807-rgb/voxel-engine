@@ -13,6 +13,7 @@ use crate::registry::BlockRegistryBuilder;
 use crate::registry::RegistryError;
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct RonFaceTextures {
     pub top: String,
     pub bottom: String,
@@ -36,6 +37,7 @@ impl RonFaceTextures {
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct RonBlock {
     pub key: String,
     #[serde(default)]

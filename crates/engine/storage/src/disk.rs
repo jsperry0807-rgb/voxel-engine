@@ -319,6 +319,11 @@ impl RegionStore {
         };
         let dag =
             Svdag::from_bytes(&reg.read(off, len)?).ok_or_else(|| bad("corrupt dag record"))?;
+        // `from_bytes` checks framing only; parent bases and band tails are
+        // validated here so a CRC-valid but semantically invalid record cannot
+        // panic later in the chunk accessors.
+        dag.check()
+            .map_err(|error| bad(&format!("invalid dag record: {error}")))?;
         let ov = match e.diff {
             Some((o, l)) => {
                 Overlay::from_bytes(&reg.read(o, l)?).ok_or_else(|| bad("corrupt diff record"))?
@@ -350,22 +355,29 @@ impl RegionStore {
         };
         let path = self.path(rp);
         let tmp = path.with_extension("tmp");
-        let mut out = File::create(&tmp)?;
-        let mut cells: Vec<u16> = reg.index.keys().copied().collect();
-        cells.sort_unstable();
-        for c in cells {
-            let e = reg.index[&c];
-            if let Some((o, l)) = e.dag {
-                out.write_all(&encode(KIND_DAG, c, &reg.read(o, l)?))?;
+        let result = (|| -> io::Result<()> {
+            let mut out = File::create(&tmp)?;
+            let mut cells: Vec<u16> = reg.index.keys().copied().collect();
+            cells.sort_unstable();
+            for c in cells {
+                let e = reg.index[&c];
+                if let Some((o, l)) = e.dag {
+                    out.write_all(&encode(KIND_DAG, c, &reg.read(o, l)?))?;
+                }
+                if let Some((o, l)) = e.diff {
+                    out.write_all(&encode(KIND_DIFF, c, &reg.read(o, l)?))?;
+                }
             }
-            if let Some((o, l)) = e.diff {
-                out.write_all(&encode(KIND_DIFF, c, &reg.read(o, l)?))?;
-            }
+            out.sync_all()?;
+            drop(out);
+            fs::rename(&tmp, &path)
+        })();
+        // Renaming changes the directory entry, so persist the directory too.
+        let result = result.and_then(|()| self.dir_file.sync_all());
+        if result.is_err() {
+            let _ = fs::remove_file(&tmp);
         }
-        out.sync_all()?;
-        drop(out);
-        drop(reg);
-        fs::rename(&tmp, &path)
+        result
     }
 
     pub fn open_regions(&self) -> Vec<RegionPos> {

@@ -76,6 +76,10 @@ pub fn noise(seed: u64, permille: u64) -> Vec<u16> {
 
 /// Exactly `voxels` non-air voxels at random positions.
 pub fn sparse(seed: u64, voxels: usize) -> Vec<u16> {
+    assert!(
+        voxels <= CHUNK_VOLUME,
+        "sparse() cannot place {voxels} voxels in a {CHUNK_VOLUME}-voxel chunk"
+    );
     let mut state = seed | 1;
     let mut d = vec![0u16; CHUNK_VOLUME];
     let mut placed = 0;

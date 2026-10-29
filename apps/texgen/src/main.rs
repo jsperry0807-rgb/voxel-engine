@@ -41,8 +41,29 @@ fn main() -> ExitCode {
     };
 
     let command = args.first().map(String::as_str).unwrap_or("gui");
+    if let Some(unknown) = args
+        .iter()
+        .skip(1)
+        .find(|arg| arg.starts_with('-') && arg.as_str() != "--check")
+    {
+        eprintln!("texgen: unknown flag `{unknown}`");
+        print_help();
+        return ExitCode::FAILURE;
+    }
+    if let Some(extra) = args.iter().skip(1).find(|arg| !arg.starts_with('-')) {
+        eprintln!("texgen: unexpected argument `{extra}`");
+        return ExitCode::FAILURE;
+    }
+    // `--check` verifies instead of writing for every command that can write.
+    let check = args.iter().skip(1).any(|arg| arg == "--check");
     let result = match command {
-        "gui" | "edit" => return run_gui(workspace),
+        "gui" | "edit" => {
+            if check {
+                eprintln!("texgen: --check does not apply to the editor");
+                return ExitCode::FAILURE;
+            }
+            return run_gui(workspace);
+        }
         "help" | "--help" | "-h" => {
             print_help();
             Ok(String::new())
@@ -53,15 +74,29 @@ fn main() -> ExitCode {
             }
             Ok(String::new())
         }
-        "generate" => pipeline::generate_all(&workspace),
-        "update-manifest" => pipeline::generate_all(&workspace),
-        "materials" => pipeline::write_materials(&workspace),
-        "update-all" | "all" => pipeline::update_all(&workspace),
-        "check" => pipeline::check_all(&workspace),
-        "bake-atlas" => {
-            let check = args.iter().skip(1).any(|arg| arg == "--check");
-            bake::bake_atlas(&workspace, check).map_err(pipeline::PipelineError::Bake)
+        "generate" | "update-manifest" => {
+            if check {
+                pipeline::check_all(&workspace)
+            } else {
+                pipeline::generate_all(&workspace)
+            }
         }
+        "materials" => {
+            if check {
+                pipeline::check_all(&workspace)
+            } else {
+                pipeline::write_materials(&workspace)
+            }
+        }
+        "update-all" | "all" => {
+            if check {
+                pipeline::check_all(&workspace)
+            } else {
+                pipeline::update_all(&workspace)
+            }
+        }
+        "check" => pipeline::check_all(&workspace),
+        "bake-atlas" => bake::bake_atlas(&workspace, check).map_err(pipeline::PipelineError::Bake),
         other => {
             eprintln!("texgen: unknown command `{other}`");
             print_help();

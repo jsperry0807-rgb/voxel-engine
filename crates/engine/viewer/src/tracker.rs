@@ -134,7 +134,7 @@ impl Tracker {
         self.pitch += look.pitch;
         if let Some(file) = &mut self.file {
             let t_ms = self.started.elapsed().as_secs_f64() * 1_000.0;
-            let _ = writeln!(
+            let result = writeln!(
                 file,
                 "{t_ms:.0},{},{:.1},{:.1},{:.3},{:.3}",
                 source.name(),
@@ -143,6 +143,10 @@ impl Tracker {
                 camera.yaw().to_degrees(),
                 camera.pitch().to_degrees()
             );
+            if let Err(error) = result {
+                log::warn!("track log write failed: {error}");
+                self.file = None;
+            }
         }
     }
 
@@ -178,8 +182,11 @@ impl Tracker {
             self.yaw.to_degrees(),
             self.pitch.to_degrees(),
         );
-        if let Some(file) = &mut self.file {
-            let _ = file.flush();
+        if let Some(file) = &mut self.file
+            && let Err(error) = file.flush()
+        {
+            log::warn!("track log flush failed: {error}");
+            self.file = None;
         }
         self.last_report = now;
         self.frames = 0;
