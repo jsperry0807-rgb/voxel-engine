@@ -126,8 +126,15 @@ impl Svdag {
     /// Rebuild with `edits` (local voxel index, material; 0 = air) applied.
     ///
     /// The old chunk is not mutated. The returned chunk carries the same
-    /// content in the banded layout; a full offline compaction keeps the
-    /// immutable API's memory bounded across repeated edits.
+    /// content in the banded layout. The band arenas are compacted only when
+    /// their waste crosses the 25% threshold ([`ChunkDag::compact_if_needed`]):
+    /// a full renumber on every edit was O(chunk) work per batch, and the
+    /// canonical v1 pool is rebuilt from node content, not band offsets, so the
+    /// rebuild-equality contract is unaffected.
+    ///
+    /// The legacy v1 `pool` is still carried alongside the banded chunk; it is
+    /// the on-disk and GPU-import format until those paths move to the banded
+    /// layout (M4/M6).
     pub fn apply_edits(&self, edits: impl IntoIterator<Item = (u32, u16)>) -> Self {
         let edits: Vec<(u32, u16)> = edits.into_iter().collect();
         if edits.is_empty() {
@@ -136,7 +143,7 @@ impl Svdag {
 
         let mut chunk = self.chunk.clone();
         chunk.apply_edits(edits);
-        chunk.compact();
+        chunk.compact_if_needed();
         Self::from_chunk(chunk)
     }
 
