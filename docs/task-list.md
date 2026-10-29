@@ -3,7 +3,7 @@
 **Status:** v1.6 — derived from spec v2.3 and roadmap v3.2
 **Date:** 2026-10-29
 **Owner:** engine
-**Current position:** M1 complete. M1.5 code complete; only `M1.5-17` (texel-density pair) remains open. M2 in progress: `M2-11` done, `M2-12` next.
+**Current position:** M1 complete. M1.5 code complete; only `M1.5-17` (texel-density pair) remains open. M2 in progress: `M2-12` done, `M2-13` next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -411,7 +411,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 **Goal:** deterministic mesh + AO + block light + probes, at the 128³ Minimum edge.
 **Exit:** M2-30. **Budget:** 27.0 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
-**Status:** In progress — M2-11 done; M2-12 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
+**Status:** In progress — M2-12 done; M2-13 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
 **Art:** none beyond M1.5-14; M2 reuses the slice atlas.
 
 **M1 gate carry-over — blocks M2-30:**
@@ -476,6 +476,11 @@ material, chunk-border) have overall mesh hashes plus per-quad hashes at 64³ an
 128³. A mismatch prints the quad index, block and `GreedyQuad`. Regenerate with
 `UPDATE_GOLDEN=1 cargo test -p voxel-mesh golden` at each edge.
 
+**M2-12 measured (2026-10-29):** four chunks from one world-space height field
+produce the same aggregate mesh hash for 1, 2, 4 and 8 workers over ten repeats,
+and for a reversed single-thread order. `--release` runs in ~2.4 s; the 128³
+single-chunk variant also passes.
+
 ### 6.1 Apron and mesher
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -491,7 +496,7 @@ material, chunk-border) have overall mesh hashes plus per-quad hashes at 64³ an
 | M2-09 | AO seam test: identical neighbours on both sides of a chunk border produce equal corner AO | M2-07 | Fails if the apron is off by one; passes with it | `cargo test -p voxel-mesh ao_seam` | 0.5 d | [x] |
 | M2-10 | Vertex packing to 16 B (local u16 ×3, material u16, face u8, AO u8 ×4) with encode/decode tests | M2-04 | Size asserted at compile time; round-trip all fields | `cargo test -p voxel-mesh vertex_pack` | 0.5 d | [x] |
 | M2-11 | Five golden mesh fixtures with content hashes (flat, cave, overhang, mixed material, chunk-border) | M2-10 | Hashes stable across runs; mismatch prints the first differing quad | `cargo test -p voxel-mesh golden` | 1 d | [x] |
-| M2-12 | Determinism across thread counts and chunk order | M2-11 | Same hash for 1, 2, 4, 8 workers; 10 repeats | `cargo test -p voxel-mesh --release determinism` | 0.5 d | [ ] |
+| M2-12 | Determinism across thread counts and chunk order | M2-11 | Same hash for 1, 2, 4, 8 workers; 10 repeats | `cargo test -p voxel-mesh --release determinism` | 0.5 d | [x] |
 
 ### 6.2 Block light
 
