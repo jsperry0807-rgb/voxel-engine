@@ -1,0 +1,39 @@
+# To get started with Dependabot version updates, you'll need to specify which
+# package ecosystems to update and where the package manifests are located.
+# Please see the documentation for all configuration options:
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/"                    # Points to your root Cargo.toml
+    schedule:
+      interval: "weekly"              # Weekly is the standard sweet spot for games
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5       # Caps the initial PR avalanche
+    labels:
+      - "dependencies"
+      - "rust"
+    commit-message:
+      prefix: "chore(deps)"           # Keeps commits clean
+      include: "scope"
+    groups:
+      # Patch + minor updates for PRODUCTION dependencies (your game engine, rendering, networking, etc.)
+      cargo-production-minor-patch:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
+      # ALL updates for DEVELOPMENT dependencies (test tools, linters, etc.)
+      cargo-development:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Do NOT auto-update major versions for ANY dependency.
+      # For a game, major bumps in rendering/physics/engine crates need manual testing.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
