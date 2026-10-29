@@ -419,7 +419,10 @@ impl Server {
             Ok(png) => png,
             Err(error) => return ToolResult::error(error.to_string()),
         };
-        let tile = bake::downsample_edge(&pixels, edge, graph.alpha);
+        let tile = match bake::downsample_edge(&pixels, edge, graph.alpha) {
+            Ok(tile) => tile,
+            Err(error) => return ToolResult::error(error.to_string()),
+        };
         let tile_png = match png::encode_rgba(128, 128, &upscale(&tile, 16, 128)) {
             Ok(png) => png,
             Err(error) => return ToolResult::error(error.to_string()),
@@ -461,7 +464,10 @@ impl Server {
             Ok(image) => image,
             Err(error) => return ToolResult::error(error.to_string()),
         };
-        let tile = bake::downsample(&image.pixels, entry.alpha);
+        let tile = match bake::downsample(&image.pixels, entry.alpha) {
+            Ok(tile) => tile,
+            Err(error) => return ToolResult::error(error.to_string()),
+        };
         let png = match png::encode_rgba(128, 128, &upscale(&tile, 16, 128)) {
             Ok(png) => png,
             Err(error) => return ToolResult::error(error.to_string()),

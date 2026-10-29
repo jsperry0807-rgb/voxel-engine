@@ -795,7 +795,7 @@ impl Viewer {
         self.apply_input(delta);
         self.tracker
             .report(&self.camera, self.input.captured(), self.grab_mode);
-        let result = match &self.gpu {
+        let result = match &mut self.gpu {
             Some(gpu) => gpu.render(CLEAR_COLOR, &self.camera),
             None => return,
         };

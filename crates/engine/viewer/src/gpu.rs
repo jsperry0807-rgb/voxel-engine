@@ -40,6 +40,11 @@ use voxel_core::constants::{CHUNK_BITS, CHUNK_VOLUME};
 
 /// The graphics handles a frame needs.
 pub struct Gpu {
+    /// The instance the surface was created from; kept so a lost surface can
+    /// be recreated on the same adapter/device.
+    instance: Instance,
+    /// The window the surface targets.
+    window: Arc<Window>,
     /// The logical device that owns every resource the viewer creates.
     pub device: Device,
     /// The queue that executes submissions and presents frame textures.
@@ -76,7 +81,6 @@ impl Gpu {
             display,
         )));
         let surface = instance.create_surface(window.clone())?;
-
         let adapter = block_on(instance.request_adapter(&RequestAdapterOptions {
             compatible_surface: Some(&surface),
             ..Default::default()
@@ -141,6 +145,8 @@ impl Gpu {
         }
 
         Ok(Self {
+            instance,
+            window,
             device,
             queue,
             surface,
@@ -178,7 +184,7 @@ impl Gpu {
     /// error: occluded windows, timeouts and a swap chain that had to be
     /// reconfigured all return `Ok(false)`, so the caller can wait for the
     /// platform to request the next frame instead of spinning.
-    pub fn render(&self, clear: Color, camera: &Camera) -> Result<bool, ViewerError> {
+    pub fn render(&mut self, clear: Color, camera: &Camera) -> Result<bool, ViewerError> {
         self.queue.write_buffer(
             &self.camera_buffer,
             0,
@@ -193,8 +199,17 @@ impl Gpu {
                 self.surface.configure(&self.device, &self.config);
                 return Ok(false);
             }
-            CurrentSurfaceTexture::Outdated | CurrentSurfaceTexture::Lost => {
-                log::warn!("surface is outdated or lost; reconfiguring");
+            CurrentSurfaceTexture::Lost => {
+                // `Lost` means the surface itself is dead; reconfiguring it is
+                // not enough. Rebuild it from the window and keep the device.
+                log::warn!("surface lost; recreating");
+                self.surface = self.instance.create_surface(self.window.clone())?;
+                self.surface.configure(&self.device, &self.config);
+                self.depth = DepthTarget::new(&self.device, self.config.width, self.config.height);
+                return Ok(false);
+            }
+            CurrentSurfaceTexture::Outdated => {
+                log::warn!("surface is outdated; reconfiguring");
                 self.surface.configure(&self.device, &self.config);
                 return Ok(false);
             }

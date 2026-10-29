@@ -20,7 +20,7 @@ use voxel_core::Face;
 use crate::hot::HotRecord;
 use crate::material::{FaceMaterials, MaterialRegistry, MaterialRegistryError};
 use crate::material_table::MaterialTable;
-use crate::properties::{BlockProperties, BlockRecord};
+use crate::properties::{BlockFlags, BlockProperties, BlockRecord};
 use crate::texture::{FaceTextureIds, TextureId, TextureSetId, TextureTable};
 
 /// Error returned when registration fails.
@@ -298,6 +298,18 @@ impl BlockRegistryBuilder {
         } = self;
         let (keys, properties): (Vec<Option<NamespacedKey>>, Vec<BlockProperties>) =
             entries.into_iter().unzip();
+        // `OPAQUE` is the authoritative "blocks light" flag: normalize the
+        // authoring value so the cold properties, the hot record and the docs
+        // ("15 for a full blocker") agree even when the data omits it.
+        let properties: Vec<BlockProperties> = properties
+            .into_iter()
+            .map(|mut properties| {
+                if properties.flags.contains(BlockFlags::OPAQUE) {
+                    properties.light_opacity = 15;
+                }
+                properties
+            })
+            .collect();
         let Resolved {
             hot,
             templates,

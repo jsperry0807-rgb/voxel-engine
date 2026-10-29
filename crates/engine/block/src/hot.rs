@@ -77,6 +77,10 @@ const _: () = assert!(64 % size_of::<HotRecord>() == 0);
 impl HotRecord {
     /// Packs a record. Light values above 15 are clamped; flag bits above the
     /// 16th are dropped (they are cold-only, see [`BlockFlags::HOT_MASK`]).
+    ///
+    /// An `OPAQUE` block always packs opacity 15, whatever the authoring data
+    /// says: the flag means "fully blocks light", and builtin blocks (and the
+    /// committed `data/blocks.ron`) omit the explicit opacity.
     pub const fn pack(
         render_type: RenderType,
         flags: BlockFlags,
@@ -89,7 +93,7 @@ impl HotRecord {
         } else {
             light_emission
         } as u32;
-        let opacity = if light_opacity > 15 {
+        let opacity = if flags.contains(BlockFlags::OPAQUE) || light_opacity > 15 {
             15
         } else {
             light_opacity
@@ -221,6 +225,24 @@ mod tests {
         assert_eq!(rec.light_opacity(), 15);
         assert!(rec.flags().contains(BlockFlags::SOLID));
         assert!(!rec.flags().contains(cold), "bit 20 is cold-only");
+    }
+
+    #[test]
+    fn opaque_blocks_always_pack_full_opacity() {
+        // Builtin blocks and `data/blocks.ron` set OPAQUE without an explicit
+        // opacity; the flag alone must mean a full blocker.
+        let stone = HotRecord::pack(
+            RenderType::Solid,
+            BlockFlags::SOLID | BlockFlags::OPAQUE,
+            0,
+            0,
+            None,
+        );
+        assert_eq!(stone.light_opacity(), 15);
+
+        // Non-opaque blocks keep the opacity they authored.
+        let glass = HotRecord::pack(RenderType::Cutout, BlockFlags::NONE, 0, 3, None);
+        assert_eq!(glass.light_opacity(), 3);
     }
 
     #[test]

@@ -111,7 +111,7 @@ pub fn build_atlas(workspace: &pipeline::Workspace) -> Result<AtlasBuild, BakeEr
     for entry in manifest.sorted() {
         let image = voxel_block::texture_manifest::load_source(&workspace.block_crate(), entry)
             .map_err(BakeError::Manifest)?;
-        let tile = downsample(&image.pixels, entry.alpha);
+        let tile = downsample(&image.pixels, entry.alpha)?;
         blit_tile(&mut base, entry.slot, &tile, TILE_SIZE);
     }
 
@@ -230,18 +230,40 @@ pub fn bake_atlas(workspace: &pipeline::Workspace, check: bool) -> Result<String
 }
 
 /// Box-filters one 256x256 RGBA8 source to a 16x16 tile.
-pub fn downsample(source: &[u8], alpha: AlphaClass) -> [u8; TILE_BYTES] {
+pub fn downsample(source: &[u8], alpha: AlphaClass) -> Result<[u8; TILE_BYTES], BakeError> {
     downsample_edge(source, SOURCE_EDGE as u32, alpha)
 }
 
 /// Box-filters any square RGBA8 source whose edge is a multiple of 16.
 ///
 /// The editor uses this at 64x64 and 128x128 for a live tile preview; the final
-/// bake always calls [`downsample`] at 256x256.
-pub fn downsample_edge(source: &[u8], source_edge: u32, alpha: AlphaClass) -> [u8; TILE_BYTES] {
+/// bake always calls [`downsample`] at 256x256. Rejects a source edge below one
+/// tile or a buffer whose length does not match `edge × edge × 4`, so a
+/// mis-sized RGBA8 buffer is an error rather than a panic.
+pub fn downsample_edge(
+    source: &[u8],
+    source_edge: u32,
+    alpha: AlphaClass,
+) -> Result<[u8; TILE_BYTES], BakeError> {
+    let tile_edge = TILE_EDGE as u32;
+    if source_edge < tile_edge || !source_edge.is_multiple_of(tile_edge) {
+        return Err(BakeError::Invalid(format!(
+            "source edge {source_edge} must be a positive multiple of {tile_edge}"
+        )));
+    }
+    let edge = source_edge as usize;
+    let expected = edge
+        .checked_mul(edge)
+        .and_then(|texels| texels.checked_mul(4))
+        .ok_or_else(|| BakeError::Invalid(format!("source edge {source_edge} is too large")))?;
+    if source.len() != expected {
+        return Err(BakeError::Invalid(format!(
+            "source is {} bytes, expected {expected} for {source_edge}x{source_edge} RGBA8",
+            source.len(),
+        )));
+    }
+    let box_edge = edge / TILE_EDGE;
     let source_edge = source_edge as usize;
-    let box_edge = source_edge / TILE_EDGE;
-    debug_assert_eq!(source.len(), source_edge * source_edge * 4);
     let mut tile = [0u8; TILE_BYTES];
     for ty in 0..TILE_EDGE {
         for tx in 0..TILE_EDGE {
@@ -290,7 +312,7 @@ pub fn downsample_edge(source: &[u8], source_edge: u32, alpha: AlphaClass) -> [u
             };
         }
     }
-    tile
+    Ok(tile)
 }
 
 fn blit_tile(base: &mut [u8], slot: u16, tile: &[u8], tile_edge: u32) {
@@ -348,7 +370,7 @@ pub fn preview_tile(
 ) -> Result<[u8; TILE_BYTES], BakeError> {
     let image = voxel_block::texture_manifest::load_source(&workspace.block_crate(), entry)
         .map_err(BakeError::Manifest)?;
-    Ok(downsample(&image.pixels, entry.alpha))
+    downsample(&image.pixels, entry.alpha)
 }
 
 /// Writes a PNG without going through the atlas layout (used by tests).
@@ -367,7 +389,7 @@ mod tests {
         for texel in source.as_chunks_mut::<4>().0 {
             *texel = [255, 0, 0, 255];
         }
-        let tile = downsample(&source, AlphaClass::Opaque);
+        let tile = downsample(&source, AlphaClass::Opaque).expect("256x256 RGBA8");
         assert_eq!(tile[0..4], [255, 0, 0, 255]);
         assert!(
             tile.as_chunks::<4>()
@@ -385,9 +407,27 @@ mod tests {
             let filled = (x / 8).is_multiple_of(2);
             *texel = [10, 20, 30, if filled { 255 } else { 0 }];
         }
-        let tile = downsample(&source, AlphaClass::Cutout);
+        let tile = downsample(&source, AlphaClass::Cutout).expect("256x256 RGBA8");
         for texel in tile.as_chunks::<4>().0 {
             assert_eq!(texel[3], 255, "half coverage rounds to opaque");
         }
+    }
+
+    #[test]
+    fn downsample_edge_rejects_invalid_geometry() {
+        let tiny = vec![0u8; 8 * 8 * 4];
+        assert!(
+            downsample_edge(&tiny, 8, AlphaClass::Opaque).is_err(),
+            "an edge below one tile would divide by zero"
+        );
+
+        let short = vec![0u8; 8 * 8 * 4];
+        assert!(
+            downsample_edge(&short, 64, AlphaClass::Opaque).is_err(),
+            "the buffer length must match the edge"
+        );
+
+        let ok = vec![0u8; 64 * 64 * 4];
+        assert!(downsample_edge(&ok, 64, AlphaClass::Opaque).is_ok());
     }
 }

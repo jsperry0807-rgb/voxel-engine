@@ -25,7 +25,13 @@ impl TexgenApp {
         };
         let edge = self.preview_size;
         let pixels = eval::evaluate_at(&program, edge);
-        let tile = bake::downsample_edge(&pixels, edge, self.graph.alpha);
+        let tile = match bake::downsample_edge(&pixels, edge, self.graph.alpha) {
+            Ok(tile) => tile,
+            Err(error) => {
+                self.preview_error = Some(error.to_string());
+                return;
+            }
+        };
         let source_image =
             egui::ColorImage::from_rgba_unmultiplied([edge as usize, edge as usize], &pixels);
         let tile_image = egui::ColorImage::from_rgba_unmultiplied([16, 16], &tile);

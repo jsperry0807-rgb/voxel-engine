@@ -329,6 +329,26 @@ impl Runner {
     }
 }
 
+impl Drop for Runner {
+    /// Stops every running job when the launcher exits.
+    ///
+    /// Dropping a `Child` does not kill it, and jobs run in their own process
+    /// groups (so Cargo and the viewer it spawned keep going). Closing the
+    /// window must not leave builds compiling in the background.
+    fn drop(&mut self) {
+        for job in &mut self.jobs {
+            if job.status != Status::Running {
+                continue;
+            }
+            if let Some(mut child) = job.child.take() {
+                terminate(&mut child);
+            }
+            job.status = Status::Stopped;
+            job.finished = Some(Instant::now());
+        }
+    }
+}
+
 fn push_notice(job: &mut Job, line: &str) {
     if job.lines.len() == LINE_LIMIT {
         job.lines.pop_front();
@@ -436,5 +456,32 @@ mod tests {
             runner.job(id).expect("job should exist").status(),
             Status::Stopped
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn dropping_the_runner_kills_running_jobs() {
+        let dir = std::env::temp_dir().join(format!(
+            "voxel-launcher-drop-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let marker = dir.join("finished");
+        let script = format!("sleep 0.4; touch {}", marker.display());
+
+        let mut runner = Runner::new(&dir);
+        runner
+            .start(CommandSpec::new("delayed", "sh", &["-c", &script]))
+            .expect("delayed job should start");
+        drop(runner);
+
+        // Long enough for the marker to appear if the job survived.
+        std::thread::sleep(Duration::from_millis(900));
+        assert!(
+            !marker.exists(),
+            "a dropped runner must terminate its process group"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
