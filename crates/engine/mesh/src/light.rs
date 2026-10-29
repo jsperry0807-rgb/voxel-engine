@@ -213,14 +213,73 @@ pub const NEIGHBOURS: [(i32, i32, i32); 6] = [
     (0, 0, -1),
 ];
 
+/// A source of block-light properties in cell coordinates.
+///
+/// [`full_pass_at`] shifts the fill's padded reads by a chunk origin, so the
+/// caller can supply a world view that crosses chunk borders.
+pub trait LightSource {
+    /// Material light properties at a world cell.
+    fn block(&self, x: i32, y: i32, z: i32) -> BlockLight;
+    /// Whether the cell is exposed to the sky.
+    fn sky(&self, x: i32, y: i32, z: i32) -> bool;
+}
+
+/// Runs a full pass for the chunk whose cell origin is `origin`.
+///
+/// This is the cross-chunk entry point: the one-cell apron reads through
+/// `source`, so neighbour border cells seed this chunk's fill and vice versa.
+pub fn full_pass_at<S: LightSource>(edge_cells: usize, origin: [i32; 3], source: &S) -> LightFill {
+    full_pass_at_seeded(edge_cells, origin, source, |_, _, _| LightCell::DARK)
+}
+
+/// Like [`full_pass_at`], with a world-coordinate seed lookup.
+pub fn full_pass_at_seeded<S, L>(
+    edge_cells: usize,
+    origin: [i32; 3],
+    source: &S,
+    mut seed_at: L,
+) -> LightFill
+where
+    S: LightSource,
+    L: FnMut(i32, i32, i32) -> LightCell,
+{
+    full_pass_seeded(
+        edge_cells,
+        |x, y, z| source.block(origin[0] + x, origin[1] + y, origin[2] + z),
+        |x, y, z| source.sky(origin[0] + x, origin[1] + y, origin[2] + z),
+        |x, y, z| seed_at(origin[0] + x, origin[1] + y, origin[2] + z),
+    )
+}
+
 /// Runs a full light pass for one chunk plus a one-cell apron.
 ///
 /// `block_at` and `sky_at` are read over `-1 ..= edge` in `z, y, x` order with
 /// x fastest. `sky_at` is only consulted for non-opaque cells.
-pub fn full_pass<B, S>(edge_cells: usize, mut block_at: B, mut sky_at: S) -> LightFill
+pub fn full_pass<B, S>(edge_cells: usize, block_at: B, sky_at: S) -> LightFill
 where
     B: FnMut(i32, i32, i32) -> BlockLight,
     S: FnMut(i32, i32, i32) -> bool,
+{
+    full_pass_seeded(edge_cells, block_at, sky_at, |_, _, _| LightCell::DARK)
+}
+
+/// Runs a full pass with light already present in the apron.
+///
+/// `seed_at` is consulted for every padded cell; the fill starts each channel
+/// at the maximum of the local seed and the imported value. The cross-chunk
+/// caller seeds the one-cell apron from the neighbour's border light, then the
+/// normal propagation fills the interior. Interior seeds are allowed but the
+/// streaming path uses only the apron.
+pub fn full_pass_seeded<B, S, L>(
+    edge_cells: usize,
+    mut block_at: B,
+    mut sky_at: S,
+    mut seed_at: L,
+) -> LightFill
+where
+    B: FnMut(i32, i32, i32) -> BlockLight,
+    S: FnMut(i32, i32, i32) -> bool,
+    L: FnMut(i32, i32, i32) -> LightCell,
 {
     assert!(edge_cells > 0);
     let padded_edge = edge_cells + 2 * APRON_CELLS as usize;
@@ -243,6 +302,9 @@ where
                 if !sample.is_fully_opaque() && sky_at(x, y, z) {
                     sky[index] = MAX_LEVEL;
                 }
+                let seed = seed_at(x, y, z);
+                sky[index] = sky[index].max(seed.sky_level());
+                block[index] = block[index].max(seed.block_level());
                 blocks.push(sample);
             }
         }

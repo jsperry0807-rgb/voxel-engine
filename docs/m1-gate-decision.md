@@ -179,8 +179,9 @@ gate, the chosen profile or any threshold.
   `M2-10` packs the 16 B vertex and round-trips all fields; `M2-11` freezes five
   golden mesh fixtures at both edges; `M2-12` passes 1/2/4/8-worker and reversed
   order determinism; `M2-13` ports the full-pass block-light fill and matches
-  the M1-29 reference on five fixtures. The next task is `M2-14`, cross-chunk
-  light seeding.
+  the M1-29 reference on five fixtures; `M2-14` seeds the apron across chunk
+  borders and matches the union fill. The next task is `M2-15`, incremental
+  light.
 - **128³ Minimum is still unmeasured.** The M2 gate run after `M2-29` is the
   measurement that confirms or rejects the upgrade; mesh compression remains
   the first lever.

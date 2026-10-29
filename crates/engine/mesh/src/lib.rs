@@ -19,8 +19,8 @@ pub use greedy::{GreedyQuad, MergeKey, corner_ao, greedy_block, greedy_block_wit
 
 pub mod light;
 pub use light::{
-    APRON_CELLS, BlockLight, Channel, LEVELS, LightCell, LightFill, MAX_INTENSITY, MAX_LEVEL,
-    NEIGHBOURS, full_pass,
+    APRON_CELLS, BlockLight, Channel, LEVELS, LightCell, LightFill, LightSource, MAX_INTENSITY,
+    MAX_LEVEL, NEIGHBOURS, full_pass, full_pass_at, full_pass_at_seeded, full_pass_seeded,
 };
 
 mod mesh;

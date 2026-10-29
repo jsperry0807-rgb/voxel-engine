@@ -27,10 +27,10 @@ binding number is made in the spec and the pre-registration, never only in a tas
   the block-granular driver (`M2-03`), the greedy core (`M2-04`), the merge key
   (`M2-05`), backface culling (`M2-06`), AO sampling (`M2-07`), the AO
   merge-ratio measurement (`M2-08`), the chunk-border AO seam (`M2-09`), the
-  16 B vertex codec (`M2-10`), the five golden fixtures (`M2-11`) and
-  thread/order determinism (`M2-12`) and the production full-pass block light
-  (`M2-13`) landed; `M2-14` cross-chunk light seeding is next. Incremental
-  light and probes are still to come.
+  16 B vertex codec (`M2-10`), the five golden fixtures (`M2-11`), thread/order
+  determinism (`M2-12`), the production full-pass block light (`M2-13`) and
+  cross-chunk apron seeding (`M2-14`) landed; `M2-15` incremental light is
+  next. Probes are still to come.
 
 ## Tools
 
