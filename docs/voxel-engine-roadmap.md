@@ -213,8 +213,8 @@ drops to 6.25 cm per voxel face; before/after screenshots required.
 
 ### M2 — Production content pipeline (6 weeks)
 
-**Status:** In progress — M2-01 apron landed on 2026-10-28. Next: M2-02 apron
-benchmark, then M2-03 driver and M2-04…M2-09 greedy mesher/AO.
+**Status:** In progress — M2-02 apron benchmark landed (8.5% of dense bytes and
+6.6% of dense time at 64³; 4.5%/4.3% at 128³). Next: M2-03 block-granular driver.
 
 Runs at the **128³ Minimum** edge (ADR-002). Default is not greenlit.
 

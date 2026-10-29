@@ -167,8 +167,10 @@ gate, the chosen profile or any threshold.
   chunk shader with naga and records an offscreen chunk draw inside a wgpu
   validation error scope. CI runs it with `RUST_LOG=wgpu_core=warn` against
   Lavapipe.
-- **M2 started:** `M2-01` six-face apron landed. The next task is `M2-02`, the
-  apron-vs-dense benchmark, followed by `M2-03` and the greedy/AO work.
+- **M2 started:** `M2-01` six-face apron landed. `M2-02` measured the apron at
+  8.5% of the dense path's bytes and 6.6% of its time at 64³ (4.5%/4.3% at
+  128³); see [`m2-apron-cost.md`](m2-apron-cost.md). The next task is `M2-03`,
+  the block-granular driver.
 - **128³ Minimum is still unmeasured.** The M2 gate run after `M2-29` is the
   measurement that confirms or rejects the upgrade; mesh compression remains
   the first lever.
