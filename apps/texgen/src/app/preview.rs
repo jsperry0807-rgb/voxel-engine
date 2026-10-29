@@ -1,4 +1,10 @@
 //! Live preview rendering.
+//!
+//! Evaluating a 256² graph (and the atlas-style downsample) takes long enough
+//! to drop frames, so it runs on a worker thread and the UI only uploads the
+//! finished pixels. One job is in flight at a time.
+
+use std::sync::mpsc::{self, TryRecvError};
 
 use eframe::egui::{self, Color32, Pos2, Rect, RichText, Vec2};
 
@@ -7,8 +13,44 @@ use crate::eval;
 
 use super::{Preview, TexgenApp};
 
+/// A preview render running off the UI thread.
+pub(crate) struct PreviewJob {
+    revision: u64,
+    edge: u32,
+    receiver: mpsc::Receiver<Result<PreviewPixels, String>>,
+}
+
+/// Finished preview pixels, ready to become egui textures.
+struct PreviewPixels {
+    pixels: Vec<u8>,
+    tile: Vec<u8>,
+}
+
 impl TexgenApp {
     pub(super) fn poll_preview(&mut self, ctx: &egui::Context) {
+        // Finish (or keep waiting for) the in-flight job first.
+        if let Some(job) = self.preview_job.take() {
+            match job.receiver.try_recv() {
+                Ok(result) => {
+                    // A result for an older revision is stale; the debounce
+                    // below schedules a fresh render.
+                    if job.revision == self.revision && job.edge == self.preview_size {
+                        match result {
+                            Ok(done) => self.apply_preview(ctx, job.edge, done),
+                            Err(error) => self.preview_error = Some(error),
+                        }
+                    }
+                }
+                Err(TryRecvError::Empty) => {
+                    self.preview_job = Some(job);
+                    return;
+                }
+                Err(TryRecvError::Disconnected) => {
+                    self.preview_error = Some("preview worker stopped without a result".to_owned());
+                }
+            }
+        }
+
         let Some(due) = self.preview_due else {
             return;
         };
@@ -16,25 +58,38 @@ impl TexgenApp {
             return;
         }
         self.preview_due = None;
-        let program = match self.graph.compile() {
-            Ok(program) => program,
-            Err(error) => {
-                self.preview_error = Some(error.to_string());
-                return;
-            }
-        };
+
+        let graph = self.graph.clone();
         let edge = self.preview_size;
-        let pixels = eval::evaluate_at(&program, edge);
-        let tile = match bake::downsample_edge(&pixels, edge, self.graph.alpha) {
-            Ok(tile) => tile,
-            Err(error) => {
-                self.preview_error = Some(error.to_string());
-                return;
-            }
-        };
+        let revision = self.revision;
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let result = (|| -> Result<PreviewPixels, String> {
+                let program = graph.compile().map_err(|error| error.to_string())?;
+                let pixels = eval::evaluate_at(&program, edge);
+                let tile = bake::downsample_edge(&pixels, edge, graph.alpha)
+                    .map_err(|error| error.to_string())?;
+                Ok(PreviewPixels {
+                    pixels,
+                    tile: tile.to_vec(),
+                })
+            })();
+            let _ = sender.send(result);
+        });
+        self.preview_job = Some(PreviewJob {
+            revision,
+            edge,
+            receiver,
+        });
+        // Come back soon to collect the result; the idle loop also repaints at
+        // 20 fps, so this only shortens the wait.
+        ctx.request_repaint_after(std::time::Duration::from_millis(16));
+    }
+
+    fn apply_preview(&mut self, ctx: &egui::Context, edge: u32, done: PreviewPixels) {
         let source_image =
-            egui::ColorImage::from_rgba_unmultiplied([edge as usize, edge as usize], &pixels);
-        let tile_image = egui::ColorImage::from_rgba_unmultiplied([16, 16], &tile);
+            egui::ColorImage::from_rgba_unmultiplied([edge as usize, edge as usize], &done.pixels);
+        let tile_image = egui::ColorImage::from_rgba_unmultiplied([16, 16], &done.tile);
         let revision = self.revision;
         let source = ctx.load_texture(
             format!("preview-source-{revision}-{edge}"),

@@ -101,6 +101,7 @@ pub struct TexgenApp {
     pub(crate) generate_on_save: bool,
 
     pub(crate) preview: Option<Preview>,
+    pub(crate) preview_job: Option<preview::PreviewJob>,
     pub(crate) preview_size: u32,
     pub(crate) show_tiled: bool,
     pub(crate) show_checker: bool,
@@ -163,6 +164,7 @@ impl TexgenApp {
             dirty: false,
             generate_on_save: true,
             preview: None,
+            preview_job: None,
             preview_size: 128,
             show_tiled: true,
             show_checker: true,
