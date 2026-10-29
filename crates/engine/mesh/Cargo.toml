@@ -1,0 +1,13 @@
+[package]
+name = "voxel-mesh"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "Block-granular content pipeline for the voxel engine"
+
+[dependencies]
+voxel-storage = { path = "../storage" }
+
+[features]
+# Forward the pre-registered 128³ chunk edge to the storage crate.
+chunk128 = ["voxel-storage/chunk128"]

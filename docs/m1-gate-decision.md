@@ -169,8 +169,9 @@ gate, the chosen profile or any threshold.
   Lavapipe.
 - **M2 started:** `M2-01` six-face apron landed. `M2-02` measured the apron at
   8.5% of the dense path's bytes and 6.6% of its time at 64³ (4.5%/4.3% at
-  128³); see [`m2-apron-cost.md`](m2-apron-cost.md). The next task is `M2-03`,
-  the block-granular driver.
+  128³); see [`m2-apron-cost.md`](m2-apron-cost.md). `M2-03` added the
+  block-granular driver with an 11,664 B reusable scratch; the next task is
+  `M2-04`, the greedy bitmask core.
 - **128³ Minimum is still unmeasured.** The M2 gate run after `M2-29` is the
   measurement that confirms or rejects the upgrade; mesh compression remains
   the first lever.

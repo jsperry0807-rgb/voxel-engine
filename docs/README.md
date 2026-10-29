@@ -23,9 +23,9 @@ binding number is made in the spec and the pre-registration, never only in a tas
 - **M1.5 is code-complete.** The viewer, atlas, naive mesher and full M1.5-15
   screenshot set landed; only `M1.5-17` (before/after texel-density pair) remains
   open. The zero-validation CI job (`M1.5-16`) is also in place.
-- **M2 is in progress.** The apron API (`M2-01`) and its cost benchmark (`M2-02`)
-  landed; `M2-03` is next. The production mesher, AO, light and probes are still
-  to come.
+- **M2 is in progress.** The apron API (`M2-01`), its cost benchmark (`M2-02`) and
+  the block-granular driver (`M2-03`) landed; `M2-04` greedy core is next. The
+  production mesher, AO, light and probes are still to come.
 
 ## Tools
 

@@ -3210,6 +3210,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "voxel-mesh"
+version = "0.1.0"
+dependencies = [
+ "voxel-storage",
+]
+
+[[package]]
 name = "voxel-render"
 version = "0.1.0"
 dependencies = [
