@@ -727,7 +727,10 @@ fn wrap(value: i32) -> i32 {
 }
 
 fn sine(phase: i32) -> i32 {
-    SINE[(phase.rem_euclid(65_536) >> 6) as usize] as i32
+    // Derive the table stride from the table itself so the LUT stays the one
+    // place that defines its resolution (no hard-coded 6-bit shift here).
+    let step = ONE as i32 / SINE.len() as i32;
+    SINE[(phase.rem_euclid(ONE as i32) / step) as usize] as i32
 }
 
 fn cosine(phase: i32) -> i32 {
