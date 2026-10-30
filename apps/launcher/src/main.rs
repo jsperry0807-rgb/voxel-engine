@@ -90,11 +90,6 @@ fn run(root: PathBuf) -> ExitCode {
     }
 }
 
-/// Prefers X11 through XWayland, the same rule the viewer follows.
-///
-/// eframe takes Wayland whenever `WAYLAND_DISPLAY` is set. On WSLg the
-/// Wayland/EGL path can fail to create a usable surface, while XWayland works.
-/// Set `VOXEL_VIEWER_WAYLAND=1` to keep the native backend.
 /// Finds the workspace root from `VOXEL_ROOT`, the working directory, or the
 /// launcher's own manifest directory.
 fn find_root() -> Result<PathBuf, String> {

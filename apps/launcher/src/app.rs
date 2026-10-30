@@ -211,6 +211,12 @@ impl LauncherApp {
     /// Installing is a deliberate action, so autostart leaves that to the
     /// *Build Windows* button rather than running a package manager.
     fn start_both_builds(&mut self) {
+        // On a native Windows host both "targets" are the same host build, so
+        // queuing two identical jobs would only fight over Cargo's lock.
+        if !CROSS_BUILD {
+            self.start_build(false);
+            return;
+        }
         self.start_build(false);
         if self.windows_ready {
             self.start_build(true);
@@ -318,6 +324,9 @@ impl LauncherApp {
     fn windows_exe(&self) -> PathBuf {
         let directory = if CROSS_BUILD {
             self.target_dir().join(WINDOWS_TARGET)
+        } else if let Some(target) = std::env::var_os("CARGO_BUILD_TARGET") {
+            // A host build under an explicit `--target` lands in the triple dir.
+            self.target_dir().join(target)
         } else {
             self.target_dir()
         };
@@ -708,7 +717,11 @@ impl LauncherApp {
             || self.job_running(self.windows_setup_job);
         if action_button(
             ui,
-            "Build both (Linux + Windows)",
+            if CROSS_BUILD {
+                "Build both (Linux + Windows)"
+            } else {
+                "Build"
+            },
             "Starts both targets as separate jobs. They share host build scripts, so Cargo may briefly wait on its build lock.",
             !busy,
         ) {

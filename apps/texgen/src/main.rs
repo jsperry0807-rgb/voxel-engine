@@ -141,11 +141,6 @@ fn run_gui(workspace: Workspace) -> ExitCode {
     }
 }
 
-/// Prefers X11 through XWayland, the same rule the launcher and viewer follow.
-///
-/// eframe takes Wayland whenever `WAYLAND_DISPLAY` is set. On WSLg the
-/// Wayland/EGL path can fail to create a usable surface, while XWayland works.
-/// Set `VOXEL_VIEWER_WAYLAND=1` to keep the native backend.
 fn print_help() {
     println!(
         "voxel-texgen: node-graph texture and material generator\n\

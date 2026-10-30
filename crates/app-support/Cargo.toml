@@ -6,5 +6,8 @@ publish.workspace = true
 description = "Shared eframe/winit policy for the Voxel-Stuff desktop binaries"
 
 [dependencies]
-eframe = { version = "0.32", default-features = false }
+# `NativeOptions::event_loop_builder` only exists with a renderer feature, so
+# this crate must enable one itself; relying on the binaries' features made
+# `cargo check -p voxel-app-support` (and package-scoped CI steps) fail.
+eframe = { version = "0.32", default-features = false, features = ["glow"] }
 winit = "0.30"

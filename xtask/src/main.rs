@@ -46,6 +46,11 @@ fn build_win(args: &[String]) -> ExitCode {
             }
             "--install" => install = true,
             "--no-install" => install = false,
+            other if other == "--target" || other.starts_with("--target=") => {
+                return usage_error(
+                    "build-win fixes --target; run `cargo build --target …` directly",
+                );
+            }
             _ => cargo_args.push(arg.clone()),
         }
     }
