@@ -14,6 +14,7 @@ png = "0.17"
 pollster = "1"
 ron = "0.8"
 serde = { version = "1", features = ["derive"] }
+voxel-app-support = { path = "../../app-support" }
 voxel-core = { path = "../../core" }
 voxel-texgraph = { path = "../texgraph" }
 wgpu = "30"

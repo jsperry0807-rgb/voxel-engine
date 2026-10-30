@@ -75,7 +75,7 @@ fn run(root: PathBuf) -> ExitCode {
             .with_min_inner_size([900.0, 600.0]),
         ..Default::default()
     };
-    prefer_x11(&mut options);
+    voxel_app_support::prefer_x11_event_loop(&mut options);
     let result = eframe::run_native(
         "Voxel Launcher",
         options,
@@ -95,26 +95,6 @@ fn run(root: PathBuf) -> ExitCode {
 /// eframe takes Wayland whenever `WAYLAND_DISPLAY` is set. On WSLg the
 /// Wayland/EGL path can fail to create a usable surface, while XWayland works.
 /// Set `VOXEL_VIEWER_WAYLAND=1` to keep the native backend.
-fn prefer_x11(options: &mut eframe::NativeOptions) {
-    #[cfg(all(
-        unix,
-        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
-    ))]
-    {
-        use winit::platform::x11::EventLoopBuilderExtX11;
-
-        if std::env::var_os("VOXEL_VIEWER_WAYLAND").is_none()
-            && std::env::var_os("DISPLAY").is_some()
-        {
-            options.event_loop_builder = Some(Box::new(|builder| {
-                builder.with_x11();
-            }));
-        }
-    }
-    // The parameter is unused on hosts where the block above is compiled out.
-    let _ = options;
-}
-
 /// Finds the workspace root from `VOXEL_ROOT`, the working directory, or the
 /// launcher's own manifest directory.
 fn find_root() -> Result<PathBuf, String> {

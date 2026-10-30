@@ -40,11 +40,39 @@
 # HEALTH_STRICT=1. External tools that are not installed are SKIP, not FAIL.
 set -uo pipefail
 
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+if ! cd "$(dirname "${BASH_SOURCE[0]}")/.."; then
+  printf 'health: cannot enter the repository root\n' >&2
+  exit 2
+fi
 ROOT="$PWD"
 
-LOG_DIR="${HEALTH_LOG_DIR:-target/health}"
-mkdir -p "$LOG_DIR"
+# Cargo's target directory, honouring CARGO_TARGET_DIR. Without this a build
+# with a shared target dir succeeds and the viewer/samply checks then look in
+# the wrong place.
+target_dir() {
+  if [[ -n "${CARGO_TARGET_DIR:-}" ]]; then
+    if [[ "$CARGO_TARGET_DIR" = /* ]]; then
+      printf '%s\n' "$CARGO_TARGET_DIR"
+    else
+      printf '%s\n' "$ROOT/$CARGO_TARGET_DIR"
+    fi
+    return
+  fi
+  local meta
+  meta=$(mktemp "${TMPDIR:-/tmp}/voxel-health-metadata.XXXXXX") || meta=""
+  if [[ -n "$meta" ]] && cargo metadata --no-deps --format-version 1 >"$meta" 2>/dev/null; then
+    local dir
+    dir=$(json_query "$meta" '.target_directory')
+    rm -f "$meta"
+    if [[ -n "$dir" ]]; then
+      printf '%s\n' "$dir"
+      return
+    fi
+  else
+    [[ -n "$meta" ]] && rm -f "$meta"
+  fi
+  printf '%s\n' "$ROOT/target"
+}
 
 START_SECONDS=$SECONDS
 
@@ -226,6 +254,12 @@ PY
       ;;
   esac
 }
+
+# Resolved after `json_query` exists; `target_dir` falls back to $ROOT/target
+# when cargo metadata or a JSON tool is unavailable.
+TARGET_DIR="$(target_dir)"
+LOG_DIR="${HEALTH_LOG_DIR:-$TARGET_DIR/health}"
+mkdir -p "$LOG_DIR"
 
 gate_rows() {
   local file="$1"
@@ -515,9 +549,9 @@ check_viewer_smoke() {
     return
   fi
 
-  local bin="$ROOT/target/debug/voxel-viewer"
+  local bin="$TARGET_DIR/debug/voxel-viewer"
   if [[ ! -x "$bin" ]]; then
-    end_check "in-repo" "$name" FAIL "target/debug/voxel-viewer missing" "$build_log" $((SECONDS - t0))
+    end_check "in-repo" "$name" FAIL "$bin is missing after the build" "$build_log" $((SECONDS - t0))
     return
   fi
 
@@ -743,7 +777,7 @@ check_profile() {
 
     local log="$LOG_DIR/samply.log"
     samply record --save-only --output "$LOG_DIR/samply.json" -- \
-      ./target/release/voxel-bench cpu --out "$LOG_DIR/samply-bench" >"$log" 2>&1
+      "$TARGET_DIR/release/voxel-bench" cpu --out "$LOG_DIR/samply-bench" >"$log" 2>&1
     local rc=$?
     local secs=$((SECONDS - t0))
     if (( rc == 0 )); then

@@ -47,10 +47,10 @@ The M1 layout is in place at both edges; the 128³ variant compiles in CI. M1.5
 added the window, camera, atlas and naive mesher. M2-01 added the apron. The
 production content path is now the work in front of the project.
 
-Still missing: AO, production block light and probes, sparse-set ECS, culling,
-LOD, streaming, persistence, and the measured 128³ gate run. CI, the
-window/camera app, the naive mesher, the apron/driver/greedy core and the
-launcher are in place.
+Still missing: probes, sparse-set ECS, culling, LOD, streaming, persistence,
+and the measured 128³ gate run. AO, production block light, the greedy core,
+the apron and the 16 B vertex stream landed with M2; CI, the window/camera
+app, the naive mesher and the launcher are in place.
 
 ---
 

@@ -12,20 +12,11 @@ use eframe::egui::{self, Color32, RichText};
 
 use crate::jobs::{CommandSpec, Job, Runner, Status};
 
-/// The Windows target used for the background build.
-const WINDOWS_TARGET: &str = "x86_64-pc-windows-gnu";
+/// The Windows target, shared with `xtask` so the two entry points cannot drift.
+const WINDOWS_TARGET: &str = voxel_core::win_toolchain::TARGET;
 /// True when the Windows build is a cross-build (Unix host). On Windows the
 /// "Windows build" is just the host build, with no mingw-w64 toolchain.
 const CROSS_BUILD: bool = cfg!(unix);
-/// Tools shipped by mingw-w64. `gcc` reaches for the others by name, so a
-/// partial install fails late; the launcher checks the whole set up front.
-const WINDOWS_TOOLS: &[&str] = &[
-    "x86_64-w64-mingw32-gcc",
-    "x86_64-w64-mingw32-ld",
-    "x86_64-w64-mingw32-ar",
-    "x86_64-w64-mingw32-dlltool",
-    "x86_64-w64-mingw32-windres",
-];
 const WINDOWS_SETUP: &str = "Windows toolchain";
 const LINUX_BUILD: &str = "Linux build";
 const WINDOWS_BUILD: &str = "Windows build";
@@ -191,10 +182,9 @@ impl LauncherApp {
         }
         let (label, args): (&str, Vec<&str>) = if windows {
             if CROSS_BUILD {
-                (
-                    WINDOWS_BUILD,
-                    vec!["build", "--workspace", "--target", WINDOWS_TARGET],
-                )
+                // `build-win` runs the same preflight as the CLI, so the
+                // launcher and `cargo build-win` cannot drift.
+                (WINDOWS_BUILD, vec!["build-win"])
             } else {
                 (WINDOWS_BUILD, vec!["build", "--workspace"])
             }
@@ -235,12 +225,8 @@ impl LauncherApp {
         if self.job_running(self.windows_setup_job) {
             return;
         }
-        let spec = CommandSpec::new(
-            WINDOWS_SETUP,
-            "cargo",
-            &["run", "--quiet", "-p", "xtask", "--", "doctor", "--install"],
-        )
-        .note("installs mingw-w64 and the x86_64-pc-windows-gnu target when missing");
+        let spec = CommandSpec::new(WINDOWS_SETUP, "cargo", &["setup-win"])
+            .note("installs mingw-w64 and the x86_64-pc-windows-gnu target when missing");
         match self.runner.start(spec) {
             Ok(id) => {
                 self.selected = Some(id);
@@ -341,7 +327,7 @@ impl LauncherApp {
     /// Command line shown in tooltips for the Windows build.
     fn windows_build_command(&self) -> String {
         if CROSS_BUILD {
-            format!("cargo build --workspace --target {WINDOWS_TARGET}")
+            "cargo build-win".to_owned()
         } else {
             "cargo build --workspace".to_owned()
         }
@@ -1002,36 +988,10 @@ fn log_text_size_for(width: f32, height: f32) -> f32 {
 }
 
 /// True when both the Rust target and every mingw-w64 tool are installed.
+///
+/// The probe itself lives in `voxel_core::win_toolchain`, shared with `xtask`.
 fn windows_toolchain_ready() -> bool {
-    target_installed() && WINDOWS_TOOLS.iter().all(|tool| program_on_path(tool))
-}
-
-/// True when `rustc` has the standard library for the cross target.
-fn target_installed() -> bool {
-    let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
-    let Ok(output) = std::process::Command::new(rustc)
-        .args(["--print", "sysroot"])
-        .stderr(std::process::Stdio::null())
-        .output()
-    else {
-        return false;
-    };
-    if !output.status.success() {
-        return false;
-    }
-    let sysroot = String::from_utf8_lossy(&output.stdout);
-    Path::new(sysroot.trim())
-        .join("lib/rustlib")
-        .join(WINDOWS_TARGET)
-        .join("lib")
-        .is_dir()
-}
-
-/// True when `name` resolves to an executable on `PATH`.
-fn program_on_path(name: &str) -> bool {
-    std::env::var_os("PATH").is_some_and(|paths| {
-        std::env::split_paths(&paths).any(|dir| is_executable(&dir.join(name)))
-    })
+    voxel_core::win_toolchain::missing().is_empty()
 }
 
 /// True when `path` is a file with an execute bit.

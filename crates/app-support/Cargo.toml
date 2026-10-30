@@ -1,0 +1,10 @@
+[package]
+name = "voxel-app-support"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "Shared eframe/winit policy for the Voxel-Stuff desktop binaries"
+
+[dependencies]
+eframe = { version = "0.32", default-features = false }
+winit = "0.30"

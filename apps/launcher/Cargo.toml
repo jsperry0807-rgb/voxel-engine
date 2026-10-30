@@ -12,6 +12,8 @@ path = "src/main.rs"
 [dependencies]
 eframe = { version = "0.32", default-features = false, features = ["glow", "default_fonts", "wayland", "x11"] }
 winit = "0.30"
+voxel-app-support = { path = "../../crates/app-support" }
+voxel-core = { path = "../../crates/core" }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
