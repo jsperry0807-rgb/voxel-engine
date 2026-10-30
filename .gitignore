@@ -1,5 +1,7 @@
 /target
 visual
+/site
+/.docs-build
 /assets
 .temp/
 __archive__/
