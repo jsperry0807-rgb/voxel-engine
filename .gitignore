@@ -6,3 +6,4 @@ __archive__/
 __sandbox__/
 __ai-session-history__/
 /mutants.out
+/mutants.out.old

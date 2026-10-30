@@ -59,7 +59,7 @@ use super::residency::{self, ResidencyConfig, ResidencyReport};
 use super::stat::{format_duration, format_signed_duration, grouped};
 
 /// Schema version of the scale-up report itself.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// Bytes in one MiB.
 const MIB: u64 = 1024 * 1024;
@@ -231,7 +231,7 @@ pub struct MeasuredMemory {
     pub probe_bytes: u64,
     /// Count-only greedy mesh estimate per chunk.
     pub mesh_bytes: u64,
-    /// Measured p95 of the five-component total.
+    /// Measured p95 of the six-component total.
     pub total_bytes: u64,
     /// Banded internal nodes per chunk at p95.
     pub dag_nodes: u64,
@@ -409,7 +409,7 @@ pub struct MemoryProjection {
     pub probe_bytes_per_chunk: u64,
     /// Projected mesh bytes per chunk.
     pub mesh_bytes_per_chunk: u64,
-    /// Sum of the five projected components per chunk.
+    /// Sum of the six projected components per chunk.
     pub total_bytes_per_chunk: u64,
     /// Projected banded internal nodes per chunk.
     pub dag_nodes_per_chunk: u64,

@@ -3,7 +3,7 @@
 #
 # The script runs the in-repo gates first, then the optional external analysis
 # tools, and finishes with a one-screen PASS/FAIL/WARN/SKIP summary. Every
-# command's raw output is kept under target/health (or HEALTH_LOG_DIR).
+# command's raw output is kept under the cargo target dir's health/ (or HEALTH_LOG_DIR).
 #
 # Usage:
 #   scripts/health.sh                       # everything
@@ -12,7 +12,7 @@
 #   HEALTH_BENCH=0 HEALTH_MUTANTS=0 ...     # skip selected long checks
 #
 # Environment:
-#   HEALTH_LOG_DIR       output directory (default: target/health)
+#   HEALTH_LOG_DIR       output directory (default: <target>/health)
 #   HEALTH_QUIET         "1" prints only the final summary
 #   HEALTH_INREPO        "0" skips the in-repo checks (external tools only)
 #   HEALTH_STRICT        "1" makes WARN count as a failed result

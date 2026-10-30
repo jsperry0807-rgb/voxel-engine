@@ -15,7 +15,8 @@ The benchmark loads a target chunk and its six face neighbours, then measures
 two ways of getting the padded neighbourhood:
 
 - **apron**: `World::apron_into`, the mesher's path, into a reused `Apron`;
-- **dense**: resolve each of the 27 chunks once via `World::chunk`, then copy
+- **dense**: resolve each resident chunk once via `World::chunk` (the centre
+  and six face neighbours; the other 20 read as air in both paths), then copy
   every padded voxel out of that chunk.
 
 The earlier version called `World::get` once per padded voxel and reallocated
@@ -29,6 +30,10 @@ timed dense path does not repeat a chunk lookup per voxel.
 |---|---:|---:|---:|---:|
 | 64³ | 49,152 B / 445 µs | 574,992 B / 4.90 ms | **8.5%** | **9.1%** |
 | 128³ | 196,608 B / 1.57 ms | 4,394,000 B / 27.4 ms | **4.5%** | **5.7%** |
+
+The headline times are the `Instant` averages over 200 apron and 10 dense
+iterations; the criterion medians below are the steadier estimate, and the
+quoted ratio uses the headline figures.
 
 Criterion ranges from the same run:
 
