@@ -66,7 +66,6 @@ fn production_edges_escalate_every_removal() {
     for edge in [4usize, 8] {
         let mut grid = Grid::new(edge);
         grid.set([0, 0, 0], BlockLight::emitter(15));
-
         let mut state = LightState::new(
             edge,
             |x, y, z| grid.block_at(x, y, z),
@@ -83,6 +82,45 @@ fn production_edges_escalate_every_removal() {
         );
         assert_matches_full(&state, &grid, edge);
     }
+}
+
+/// The third removal trigger — a cell losing sky exposure — must relight the
+/// affected region, and must escalate when it sits on a face.
+#[test]
+fn sky_removal_relights_the_region() {
+    let mut grid = Grid::new(SYNTHETIC_EDGE);
+    grid.set_sky(20, 20, 20, true);
+    let mut state = LightState::new(
+        SYNTHETIC_EDGE,
+        |x, y, z| grid.block_at(x, y, z),
+        |x, y, z| grid.sky_at(x, y, z),
+    );
+    assert_eq!(state.full_relights(), 0);
+
+    grid.set_sky(20, 20, 20, false);
+    state.apply_edit(CellEdit::new(20, 20, 20, BlockLight::AIR, false));
+    assert_eq!(
+        state.full_relights(),
+        0,
+        "an interior sky removal stays on the clipped-window path"
+    );
+    assert_matches_full(&state, &grid, SYNTHETIC_EDGE);
+
+    let mut grid = Grid::new(SYNTHETIC_EDGE);
+    grid.set_sky(0, 20, 20, true);
+    let mut state = LightState::new(
+        SYNTHETIC_EDGE,
+        |x, y, z| grid.block_at(x, y, z),
+        |x, y, z| grid.sky_at(x, y, z),
+    );
+    grid.set_sky(0, 20, 20, false);
+    state.apply_edit(CellEdit::new(0, 20, 20, BlockLight::AIR, false));
+    assert_eq!(
+        state.full_relights(),
+        1,
+        "a sky removal at a face must escalate"
+    );
+    assert_matches_full(&state, &grid, SYNTHETIC_EDGE);
 }
 
 fn assert_matches_full(state: &LightState, grid: &Grid, edge: usize) {
@@ -127,6 +165,11 @@ impl Grid {
     fn set(&mut self, [x, y, z]: [i32; 3], block: BlockLight) {
         let index = self.index(x, y, z);
         self.blocks[index] = block;
+    }
+
+    fn set_sky(&mut self, x: i32, y: i32, z: i32, sky: bool) {
+        let index = self.index(x, y, z);
+        self.sky[index] = sky;
     }
 
     fn block_at(&self, x: i32, y: i32, z: i32) -> BlockLight {

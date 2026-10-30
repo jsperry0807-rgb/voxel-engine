@@ -53,20 +53,8 @@ fn light_apron_matches_union_reference() {
         },
     ] {
         let union = full_pass_at(EDGE * 2, [0, 0, 0], &world);
-        let a = full_pass_at_seeded(EDGE, [0, 0, 0], &world, |x, y, z| {
-            if is_apron([0, 0, 0], x, y, z) {
-                union.with_apron(x, y, z)
-            } else {
-                LightCell::DARK
-            }
-        });
-        let b = full_pass_at_seeded(EDGE, [EDGE as i32, 0, 0], &world, |x, y, z| {
-            if is_apron([EDGE as i32, 0, 0], x, y, z) {
-                union.with_apron(x, y, z)
-            } else {
-                LightCell::DARK
-            }
-        });
+        let a = seeded(&world, &union, [0, 0, 0]);
+        let b = seeded(&world, &union, [EDGE as i32, 0, 0]);
         assert_chunk_matches(&a, &union, [0, 0, 0]);
         assert_chunk_matches(&b, &union, [EDGE as i32, 0, 0]);
 
@@ -79,6 +67,37 @@ fn light_apron_matches_union_reference() {
             }
         }
     }
+}
+
+/// The apron seed is copied plane by plane, and the four Y/Z faces use a
+/// different `(u, v)` order than ±X. Shift the second half along each axis so a
+/// transposed or ignored origin shows up.
+#[test]
+fn apron_seeding_shifts_every_axis() {
+    let world = World {
+        wall_x: None,
+        torch: Some([2, 1, 2]),
+        open_sky: true,
+    };
+    let union = full_pass_at(EDGE * 2, [0, 0, 0], &world);
+    for axis in 0..3 {
+        let mut far = [0; 3];
+        far[axis] = EDGE as i32;
+        for origin in [[0, 0, 0], far] {
+            let chunk = seeded(&world, &union, origin);
+            assert_chunk_matches(&chunk, &union, origin);
+        }
+    }
+}
+
+fn seeded(world: &World, union: &LightFill, origin: [i32; 3]) -> LightFill {
+    full_pass_at_seeded(EDGE, origin, world, |x, y, z| {
+        if is_apron(origin, x, y, z) {
+            union.with_apron(x, y, z)
+        } else {
+            LightCell::DARK
+        }
+    })
 }
 
 fn is_apron(origin: [i32; 3], x: i32, y: i32, z: i32) -> bool {
