@@ -251,7 +251,9 @@ impl ChunkDag {
     /// quiescent.
     pub fn compact_if_needed(&mut self) -> Option<CompactionStats> {
         // The reachability walk is the expensive part, so share it between the
-        // threshold check and the compaction instead of walking twice.
+        // threshold check and the compaction instead of walking twice. The
+        // quiescence guarantee must not be lost with the wrapper calls.
+        self.assert_quiescent();
         let reachable = self.reachable();
         match self.compaction_candidate_with(&reachable)? {
             CompactBand::Leaves => Some(self.compact_leaves_with(&reachable)),
@@ -953,6 +955,23 @@ mod tests {
         drop(frame);
         let _frame = dag.retain_frame();
         dag.compact_band(ROOT_LEVEL);
+    }
+
+    /// The per-edit entry point must uphold the same guarantee as `compact`.
+    #[test]
+    #[should_panic(expected = "live root")]
+    fn compact_if_needed_panics_with_a_live_root() {
+        let mut dag = ChunkDag::from_dense(&vec![1u16; CHUNK_VOLUME]);
+        let _root = dag.retain_root();
+        dag.compact_if_needed();
+    }
+
+    #[test]
+    #[should_panic(expected = "in-flight frame")]
+    fn compact_if_needed_panics_with_an_in_flight_frame() {
+        let mut dag = ChunkDag::from_dense(&vec![1u16; CHUNK_VOLUME]);
+        let _frame = dag.retain_frame();
+        dag.compact_if_needed();
     }
 
     /// Releasing the guards re-enables compaction.

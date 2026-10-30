@@ -149,7 +149,9 @@ fn resync<R: Read + Seek>(r: &mut R, from: u64, total: u64) -> io::Result<Option
     const BLOCK: usize = 64 * 1024;
     // A corrupt payload can hold thousands of accidental magic values, and each
     // verification CRC-reads a record of up to MAX_RECORD_BYTES. Give up after a
-    // bounded number of misses instead of grinding through a 16 MiB blob.
+    // bounded number of misses instead of grinding through a 16 MiB blob; the
+    // unrecovered tail is counted in `recovered_bytes`, so the truncation is
+    // reported rather than silent.
     const MAX_FAILED: u32 = 256;
     let magic = MAGIC.to_le_bytes();
     let mut buf = vec![0u8; BLOCK + 3];
@@ -191,7 +193,15 @@ fn resync<R: Read + Seek>(r: &mut R, from: u64, total: u64) -> io::Result<Option
     Ok(None)
 }
 
-fn scan(file: &mut File) -> io::Result<(u64, FxMap<u16, Entry>, u64)> {
+struct Scan {
+    len: u64,
+    index: FxMap<u16, Entry>,
+    recovered: u64,
+    /// The file had a corrupt tail that `scan` truncated.
+    truncated: bool,
+}
+
+fn scan(file: &mut File) -> io::Result<Scan> {
     let total = file.metadata()?.len();
     let mut index: FxMap<u16, Entry> = FxMap::default();
     let mut pos = 0u64;
@@ -230,7 +240,12 @@ fn scan(file: &mut File) -> io::Result<(u64, FxMap<u16, Entry>, u64)> {
         file.set_len(good_end)?;
     }
     let recovered = skipped + (total - good_end);
-    Ok((good_end, index, recovered))
+    Ok(Scan {
+        len: good_end,
+        index,
+        recovered,
+        truncated: good_end < total,
+    })
 }
 
 impl RegionStore {
@@ -266,16 +281,20 @@ impl RegionStore {
                 .create(true)
                 .truncate(false)
                 .open(&path)?;
-            let (len, index, recovered) = scan(&mut file)?;
-            self.recovered_bytes += recovered;
+            // Record the directory entry as soon as the file exists: if `scan`
+            // fails, the empty file is still there and must be persisted.
             self.dir_dirty |= created;
+            let scan = scan(&mut file)?;
+            self.recovered_bytes += scan.recovered;
             self.regions.insert(
                 rp,
                 Region {
                     file,
-                    len,
-                    index,
-                    dirty: false,
+                    len: scan.len,
+                    index: scan.index,
+                    // A truncated tail is a metadata write; sync it with the
+                    // region's contents.
+                    dirty: scan.truncated,
                 },
             );
         }
@@ -383,11 +402,11 @@ impl RegionStore {
 
     /// Rewrite a region keeping only live records (latest dag + latest diff per cell).
     pub fn compact(&mut self, rp: RegionPos) -> io::Result<()> {
-        let Some(mut reg) = self.regions.remove(&rp) else {
-            return Ok(());
-        };
         let path = self.path(rp);
         let tmp = path.with_extension("tmp");
+        let Some(reg) = self.regions.get_mut(&rp) else {
+            return Ok(());
+        };
         let result = (|| -> io::Result<()> {
             let mut out = File::create(&tmp)?;
             let mut cells: Vec<u16> = reg.index.keys().copied().collect();
@@ -405,8 +424,25 @@ impl RegionStore {
             drop(out);
             fs::rename(&tmp, &path)
         })();
-        // Renaming changes the directory entry, so persist the directory too.
+        // On failure the region stays in the map with its dirty bit, so unsynced
+        // appends are not forgotten and a retry re-attempts the rewrite.
         let result = result.and_then(|()| {
+            // The old handle points at the replaced inode; drop it before
+            // reopening so a later append cannot write to the unlinked file.
+            self.regions.remove(&rp);
+            let mut file = OpenOptions::new().read(true).write(true).open(&path)?;
+            let scan = scan(&mut file)?;
+            self.recovered_bytes += scan.recovered;
+            self.regions.insert(
+                rp,
+                Region {
+                    file,
+                    len: scan.len,
+                    index: scan.index,
+                    dirty: false,
+                },
+            );
+            // Renaming changes the directory entry, so persist the directory too.
             self.dir_file.sync_all()?;
             #[cfg(test)]
             {

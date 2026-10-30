@@ -75,7 +75,9 @@ fn load_around(world: &mut World<MemSink>) {
 }
 
 /// Materialises the full padded volume the way a dense mesher would: resolve
-/// each of the 27 chunks once, then copy its voxels into the padded buffer.
+/// each resident chunk once (the centre and six face neighbours; the other 20
+/// read as air, exactly as the apron does), then copy its voxels into the
+/// padded buffer.
 ///
 /// The earlier version called `World::get` per padded voxel, which measured
 /// 287 k hash lookups instead of the copy the apron is meant to avoid.
@@ -120,7 +122,7 @@ fn face_plane_bytes() -> u64 {
 
 fn dense_bytes() -> u64 {
     let edge = CHUNK_DIM as u64 + 2;
-    edge * edge * edge * 2
+    edge * edge * edge * size_of::<u16>() as u64
 }
 
 fn measure_ratio(world: &World<MemSink>) -> (Duration, Duration) {

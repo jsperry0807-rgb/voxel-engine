@@ -489,7 +489,20 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), PipelineError> {
         fs::rename(&temp, path).map_err(|source| PipelineError::Io {
             path: path.to_owned(),
             source,
-        })
+        })?;
+        // The rename must itself be durable: without a directory fsync a crash
+        // can resurrect the old file (or lose the new one) even though the
+        // bytes were synced.
+        #[cfg(unix)]
+        {
+            fs::File::open(parent)
+                .and_then(|dir| dir.sync_all())
+                .map_err(|source| PipelineError::Io {
+                    path: parent.to_owned(),
+                    source,
+                })?;
+        }
+        Ok(())
     })();
     if result.is_err() {
         // A failed write must not leave `.{name}.tmp-{pid}-{n}` behind.

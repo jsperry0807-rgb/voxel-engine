@@ -96,6 +96,15 @@ impl Error for BakeError {
     }
 }
 
+impl From<pipeline::PipelineError> for BakeError {
+    fn from(error: pipeline::PipelineError) -> Self {
+        match error {
+            pipeline::PipelineError::Io { path, source } => Self::Io { path, source },
+            other => Self::Invalid(other.to_string()),
+        }
+    }
+}
+
 /// Builds the atlas from the committed manifest and sources, without writing.
 pub fn build_atlas(workspace: &pipeline::Workspace) -> Result<AtlasBuild, BakeError> {
     let manifest_path = workspace.manifest_path();
@@ -217,10 +226,8 @@ pub fn bake_atlas(workspace: &pipeline::Workspace, check: bool) -> Result<String
         ));
     }
 
-    pipeline::write_atomic(&png_path, &build.png)
-        .map_err(|error| BakeError::Invalid(error.to_string()))?;
-    pipeline::write_atomic(&hash_path, hash_text.as_bytes())
-        .map_err(|error| BakeError::Invalid(error.to_string()))?;
+    pipeline::write_atomic(&png_path, &build.png)?;
+    pipeline::write_atomic(&hash_path, hash_text.as_bytes())?;
     Ok(format!(
         "baked {} tiles -> {} ({})",
         build.tile_count,
@@ -394,7 +401,8 @@ pub fn preview_tile(
 /// Writes a PNG without going through the atlas layout (used by tests).
 pub fn write_png(path: &Path, width: u32, height: u32, pixels: &[u8]) -> Result<(), BakeError> {
     let bytes = encode_rgba(width, height, pixels).map_err(BakeError::Png)?;
-    pipeline::write_atomic(path, &bytes).map_err(|error| BakeError::Invalid(error.to_string()))
+    pipeline::write_atomic(path, &bytes)?;
+    Ok(())
 }
 
 #[cfg(test)]
