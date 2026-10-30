@@ -1,0 +1,16 @@
+# Mutation testing is a periodic audit, not a per-PR check. The full workspace
+# produces more than 10,000 mutants (bench harnesses, texture tooling, viewers
+# and apps), which takes days; focus on the two crates whose semantics the rest
+# of the engine builds on.
+examine_globs = [
+    "crates/core/src/**/*.rs",
+    "crates/engine/storage/src/**/*.rs",
+]
+
+# The reference modules are deliberately slow, exact oracles used to validate
+# the production passes (see storage/src/reference/mod.rs). Running their full
+# comparisons once per mutant dominates the focused run, so leave them to the
+# normal test suite and mutation-test the production paths instead.
+exclude_globs = [
+    "crates/engine/storage/src/reference/**/*.rs",
+]

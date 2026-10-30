@@ -1645,3 +1645,49 @@ fn human_ns(ns: u64) -> String {
         format!("{:.2} µs", ns / 1e3)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_nanos());
+        std::env::temp_dir().join(format!("voxel-bench-{name}-{}-{nanos}", std::process::id()))
+    }
+
+    #[test]
+    fn human_ns_picks_seconds_milliseconds_and_microseconds() {
+        assert_eq!(human_ns(0), "0.00 µs");
+        assert_eq!(human_ns(1_500), "1.50 µs");
+        assert_eq!(human_ns(999_999), "1000.00 µs");
+        assert_eq!(human_ns(1_000_000), "1.00 ms");
+        assert_eq!(human_ns(1_500_000), "1.50 ms");
+        assert_eq!(human_ns(999_999_999), "1000.00 ms");
+        assert_eq!(human_ns(1_000_000_000), "1.00 s");
+        assert_eq!(human_ns(4_000_000_000), "4.00 s");
+    }
+
+    #[test]
+    fn write_json_report_creates_parents_and_writes_pretty_json() {
+        let out = temp_dir("report").join("nested").join("gate.json");
+        let report = serde_json::json!({
+            "schema": 1,
+            "rows": [{ "id": "edit_latency", "verdict": "pass" }],
+        });
+
+        write_json_report(&out, &report);
+
+        let text = std::fs::read_to_string(&out).expect("report is readable");
+        assert_eq!(
+            text,
+            format!("{}\n", serde_json::to_string_pretty(&report).unwrap())
+        );
+        let parsed: serde_json::Value = serde_json::from_str(&text).expect("report is valid JSON");
+        assert_eq!(parsed, report);
+
+        std::fs::remove_dir_all(out.parent().unwrap().parent().unwrap()).ok();
+    }
+}

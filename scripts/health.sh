@@ -27,11 +27,12 @@
 #                         bloat, flamegraph/samply and tokei
 #   HEALTH_COVERAGE      "0" skips cargo llvm-cov
 #   HEALTH_MUTANTS       "0" skips cargo mutants
-#   HEALTH_MUTANTS_ARGS  extra cargo-mutants args (default: --workspace); use
-#                         a shard, e.g. "--workspace --shard 1/100"
+#   HEALTH_MUTANTS_ARGS  extra cargo-mutants args (default: --workspace; the
+#                         repo config limits the audit to core/storage); use a
+#                         shard, e.g. "--workspace --shard 1/8"
 #   HEALTH_PROFILE       "0" skips flamegraph/samply
-#   HEALTH_DENY_CONFIG   optional cargo-deny config path; without it cargo
-#                         deny falls back to its built-in default policy
+#   HEALTH_DENY_CONFIG   optional cargo-deny config path; defaults to the
+#                         repo's deny.toml
 #
 # The bench step is the literal `LABEL=local scripts/bench.sh`, so it archives
 # the run under benchmarks/ as that script normally does (RECORD=0 keeps it in
