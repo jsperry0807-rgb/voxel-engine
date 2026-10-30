@@ -151,7 +151,8 @@ fn measure_ratio(world: &World<MemSink>) -> (Duration, Duration) {
 }
 
 fn apron_vs_dense(c: &mut Criterion) {
-    let mut world = World::new(tmp(), terrain(), MemSink::default()).unwrap();
+    let dir = tmp();
+    let mut world = World::new(dir.clone(), terrain(), MemSink::default()).unwrap();
     load_around(&mut world);
 
     let (apron, dense) = measure_ratio(&world);
@@ -186,6 +187,11 @@ fn apron_vs_dense(c: &mut Criterion) {
         })
     });
     group.finish();
+
+    // Region files are written under a per-run temp directory; drop the world
+    // (and its handles) before removing it, like `benches/store.rs` does.
+    drop(world);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 criterion_group!(benches, apron_vs_dense);

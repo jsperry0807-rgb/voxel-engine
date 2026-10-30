@@ -371,9 +371,12 @@ impl<S: GpuSink> World<S> {
         self.gpu.reclaim(epoch)
     }
 
-    /// Drop a chunk from RAM + GPU. Edits are persisted as an overlay snapshot (no rebuild).
+    /// Drop a chunk from RAM + GPU. Edits are persisted as an overlay snapshot
+    /// (no rebuild) and synced, so a crash after eviction cannot lose edits that
+    /// were reported as persisted.
     pub fn evict(&mut self, p: ChunkPos) -> io::Result<()> {
         self.persist(p)?;
+        self.disk.sync()?;
         if self.chunks.remove(&p).is_some() {
             self.edited.remove(&p);
             self.gpu.remove_chunk(p);

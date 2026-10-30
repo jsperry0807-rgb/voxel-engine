@@ -470,25 +470,32 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), PipelineError> {
             .unwrap_or_default(),
         std::process::id()
     ));
-    let mut file = fs::File::create(&temp).map_err(|source| PipelineError::Io {
-        path: temp.clone(),
-        source,
-    })?;
-    file.write_all(bytes).map_err(|source| PipelineError::Io {
-        path: temp.clone(),
-        source,
-    })?;
-    // Without this a crash between write and rename can leave a zero-length
-    // file at `path`.
-    file.sync_all().map_err(|source| PipelineError::Io {
-        path: temp.clone(),
-        source,
-    })?;
-    drop(file);
-    fs::rename(&temp, path).map_err(|source| PipelineError::Io {
-        path: path.to_owned(),
-        source,
-    })
+    let result = (|| -> Result<(), PipelineError> {
+        let mut file = fs::File::create(&temp).map_err(|source| PipelineError::Io {
+            path: temp.clone(),
+            source,
+        })?;
+        file.write_all(bytes).map_err(|source| PipelineError::Io {
+            path: temp.clone(),
+            source,
+        })?;
+        // Without this a crash between write and rename can leave a zero-length
+        // file at `path`.
+        file.sync_all().map_err(|source| PipelineError::Io {
+            path: temp.clone(),
+            source,
+        })?;
+        drop(file);
+        fs::rename(&temp, path).map_err(|source| PipelineError::Io {
+            path: path.to_owned(),
+            source,
+        })
+    })();
+    if result.is_err() {
+        // A failed write must not leave `.{name}.tmp-{pid}-{n}` behind.
+        let _ = fs::remove_file(&temp);
+    }
+    result
 }
 
 /// A pipeline failure.

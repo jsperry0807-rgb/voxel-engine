@@ -290,7 +290,9 @@ fn write_grass_sheet(gpu: &Gpu, path: &Path, quads: Vec<Quad>) -> Result<(), Box
         sheet[target..target + panel.len()].copy_from_slice(panel);
     }
     for row in 0..height as usize {
-        let target = row * stride + width as usize * 4 - 2;
+        // One whole pixel at the panel's right edge: starting two bytes early
+        // straddled the boundary and bled into the next panel's first pixel.
+        let target = row * stride + width as usize * 4 - 4;
         sheet[target..target + 4].copy_from_slice(&[24, 26, 30, 255]);
     }
     write_png(path, total_width, height, &sheet)?;
@@ -318,10 +320,11 @@ fn write_chunk_sheet(gpu: &Gpu, path: &Path) -> Result<(), Box<dyn Error>> {
         }
         // A thin divider keeps the three exposures distinct without adding text.
         if index < 2 {
-            let x = (index + 1) * width as usize * 4 - 2;
+            // Same rule as the two-panel sheet: one pixel, inside the panel.
+            let x = (index + 1) * width as usize * 4 - 4;
             for row in 0..height as usize {
                 let start = row * stride + x;
-                sheet[start..start + 8].copy_from_slice(&[24, 26, 30, 255].repeat(2));
+                sheet[start..start + 4].copy_from_slice(&[24, 26, 30, 255]);
             }
         }
     }
@@ -441,13 +444,20 @@ impl Gpu {
         );
         self.queue.submit([encoder.finish()]);
         let slice = readback.slice(..);
-        slice.map_async(wgpu::MapMode::Read, |_| {});
+        let (sender, receiver) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            let _ = sender.send(result);
+        });
         self.device
             .poll(wgpu::PollType::Wait {
                 submission_index: None,
                 timeout: None,
             })
-            .expect("device poll");
+            .map_err(|error| format!("device poll after readback: {error}"))?;
+        receiver
+            .recv()
+            .map_err(|_| "readback map callback did not run")?
+            .map_err(|error| format!("map the readback buffer: {error}"))?;
         let mapped = slice.get_mapped_range()?;
         let pixels = mapped.to_vec();
         drop(mapped);
@@ -599,5 +609,8 @@ fn write_png(path: &Path, width: u32, height: u32, pixels: &[u8]) -> Result<(), 
     encoder.set_compression(png::Compression::Fast);
     let mut writer = encoder.write_header()?;
     writer.write_image_data(pixels)?;
+    // `png::Writer`'s Drop writes IEND with `let _ =`, so a full disk would
+    // report success and leave a truncated file. `finish` surfaces the error.
+    writer.finish()?;
     Ok(())
 }

@@ -40,6 +40,10 @@ fn build_win(args: &[String]) -> ExitCode {
     let mut cargo_args = Vec::new();
     for arg in args {
         match arg.as_str() {
+            "-h" | "--help" => {
+                print_help();
+                return ExitCode::SUCCESS;
+            }
             "--install" => install = true,
             "--no-install" => install = false,
             _ => cargo_args.push(arg.clone()),
@@ -72,6 +76,10 @@ fn doctor(args: &[String]) -> ExitCode {
     let mut install = false;
     for arg in args {
         match arg.as_str() {
+            "-h" | "--help" => {
+                print_help();
+                return ExitCode::SUCCESS;
+            }
             "--install" => install = true,
             "--no-install" | "--check" => install = false,
             other => return usage_error(&format!("unknown doctor argument `{other}`")),

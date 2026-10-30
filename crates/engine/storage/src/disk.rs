@@ -147,8 +147,13 @@ fn read_record<R: Read>(r: &mut R, pos: u64, total: u64) -> io::Result<Option<Re
 /// not desynchronise the log.
 fn resync<R: Read + Seek>(r: &mut R, from: u64, total: u64) -> io::Result<Option<u64>> {
     const BLOCK: usize = 64 * 1024;
+    // A corrupt payload can hold thousands of accidental magic values, and each
+    // verification CRC-reads a record of up to MAX_RECORD_BYTES. Give up after a
+    // bounded number of misses instead of grinding through a 16 MiB blob.
+    const MAX_FAILED: u32 = 256;
     let magic = MAGIC.to_le_bytes();
     let mut buf = vec![0u8; BLOCK + 3];
+    let mut failed = 0u32;
     let mut base = from;
     while base + HDR as u64 <= total {
         r.seek(SeekFrom::Start(base))?;
@@ -171,6 +176,10 @@ fn resync<R: Read + Seek>(r: &mut R, from: u64, total: u64) -> io::Result<Option
             r.seek(SeekFrom::Start(candidate))?;
             if read_record(r, candidate, total)?.is_some() {
                 return Ok(Some(candidate));
+            }
+            failed += 1;
+            if failed == MAX_FAILED {
+                return Ok(None);
             }
         }
         if filled < want {
