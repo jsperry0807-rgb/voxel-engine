@@ -27,6 +27,8 @@
 #                         bloat, flamegraph/samply and tokei
 #   HEALTH_COVERAGE      "0" skips cargo llvm-cov
 #   HEALTH_MUTANTS       "0" skips cargo mutants
+#   HEALTH_MUTANTS_ARGS  extra cargo-mutants args (default: --workspace); use
+#                         a shard, e.g. "--workspace --shard 1/100"
 #   HEALTH_PROFILE       "0" skips flamegraph/samply
 #   HEALTH_DENY_CONFIG   optional cargo-deny config path; without it cargo
 #                         deny falls back to its built-in default policy
@@ -672,7 +674,15 @@ check_mutants() {
     return
   fi
 
-  run_check "external" "$name" cargo mutants --workspace
+  local -a command=(cargo mutants)
+  if [[ -n "${HEALTH_MUTANTS_ARGS:-}" ]]; then
+    # Intentional word splitting: this is a small, documented argument string.
+    read -r -a extra <<<"$HEALTH_MUTANTS_ARGS"
+    command+=("${extra[@]}")
+  else
+    command+=(--workspace)
+  fi
+  run_check "external" "$name" "${command[@]}"
   if [[ "${S_STATUS[LAST_INDEX]}" != "PASS" ]]; then
     local summary
     summary=$(grep -Ei 'mutants tested|caught|missed' "$LAST_LOG" | tail -n 1)
@@ -909,9 +919,15 @@ print_summary() {
 
 # ---- main -----------------------------------------------------------------
 
-if [[ "${HEALTH_INREPO:-1}" != "0" ]]; then
-  run_in_repo_checks
+main() {
+  if [[ "${HEALTH_INREPO:-1}" != "0" ]]; then
+    run_in_repo_checks
+  fi
+  run_external_checks
+  print_summary
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main
+  exit $?
 fi
-run_external_checks
-print_summary
-exit $?

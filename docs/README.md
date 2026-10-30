@@ -86,6 +86,9 @@ where they conflict with the spec.
 - [`../scripts/bench.sh`](../scripts/bench.sh) — benchmark run and archive (`RECORD=0` keeps
   it out of `benchmarks/`)
 - [`../scripts/check-constants.sh`](../scripts/check-constants.sh) — the CI constants gate
+- [`../scripts/build-docs-site.py`](../scripts/build-docs-site.py) — builds the static
+  documentation site (`site/`) from every Markdown file; `.github/workflows/docs.yml`
+  publishes it to GitHub Pages
 
 ## Conventions
 
