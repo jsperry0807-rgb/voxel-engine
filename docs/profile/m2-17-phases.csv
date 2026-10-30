@@ -1,0 +1,6 @@
+phase,p95_us,ratio_p95,note
+Original dirty-region,51.78,127.8,before the increase-only fast path
+Increase-only,11.49,31.6,M2-17 baseline
+Channel-selective,9.90,28.1,skip the untouched channel
+Scratch reuse,7.60,17.3,reuse buckets and seed lists
+Neighbour mask,2.06,5.7,one boundary-mask byte per cell

@@ -163,8 +163,8 @@ widened in either direction.
   mesh compression. Default is not greenlit.
 - **Layout:** 8.0–8.4 B/internal node including padding (limit ≤ 9); COW 258–366 B
   per edited path for one edit and 93–175 B for a 100-edit batch (limit ≤ 512).
-- **Next milestone:** M1.5, then M2. M1.5 is code-complete; only `M1.5-17`
-  remains open. M2 is in progress: `M2-01` (apron) landed on
+- **Next milestone:** M1.5, then M2. M1.5 is complete (M1.5-17 landed
+  2026-10-29). M2 is in progress: `M2-01` (apron) landed on
   2026-10-28. Gate cases remain runnable (`voxel-bench gate report`,
   `gate scaleup --profile minimum`) and are advisory in CI.
 
@@ -179,9 +179,10 @@ gate, the chosen profile or any threshold.
   verifies the committed atlas, draws one generated chunk with the naive
   per-face mesher, and has the camera, mouse look and input layer. The
   `docs/images/m1.5-13-chunk-1080p.png` artifact and viewer README are committed.
-- **M1.5 exit artifact still open:** `M1.5-17` (before/after texel-density
-  screenshots). M1.5-15 is closed by the full D9 set under `docs/images/m1.5-15-*`
-  and the viewer README.
+- **M1.5 exit artifact closed:** `M1.5-17` (before/after texel-density
+  screenshots) landed on 2026-10-29 as
+  `docs/images/m1.5-17-{before-256px,after-16px}-851e3b6e.png`; M1.5-15 is closed
+  by the full D9 set under `docs/images/m1.5-15-*` and the viewer README.
 - **M1.5-16 closed:** `crates/engine/viewer/tests/validation.rs` validates the
   chunk shader with naga and records an offscreen chunk draw inside a wgpu
   validation error scope. CI runs it with `RUST_LOG=wgpu_core=warn` against
@@ -201,7 +202,11 @@ gate, the chosen profile or any threshold.
   the M1-29 reference on five fixtures; `M2-14` seeds the apron across chunk
   borders and matches the union fill; `M2-15` updates 1,000 random edit sets to
   the same values as a full recompute; `M2-16` escalates boundary removals to a
-  full relight. The next task is `M2-17`, the light cost benchmark.
+  full relight. `M2-17` added the border light benchmark and then the
+  channel-selective, scratch-reuse and neighbour-mask changes; the 128³ edit now
+  measures 5.7% of full at p95, under the 20% target. See
+  [`m2-light-cost.md`](m2-light-cost.md) and
+  [`m2-light-20pct.md`](m2-light-20pct.md).
 - **128³ Minimum is still unmeasured.** The M2 gate run after `M2-29` is the
   measurement that confirms or rejects the upgrade; mesh compression remains
   the first lever.

@@ -13,9 +13,9 @@ pass/fail measurement, not a build-out.
 
 M0 and M1 are complete. The M1 gate selected the **128³ Minimum** profile for M2,
 conditional on mesh compression and a measured 128³ run. The M1.5 vertical slice
-is code-complete; only `M1.5-17` (before/after texel-density screenshots) remains
-open. The full M1.5-15 screenshot set and zero-validation CI (M1.5-16) are in
-place. M2 has started: the apron API (M2-01) landed on 2026-10-28.
+is complete: the before/after texel-density pair (M1.5-17), the full M1.5-15
+screenshot set and zero-validation CI (M1.5-16) are in place. M2 has started:
+the apron API (M2-01) landed on 2026-10-28.
 
 Two consequences shape the schedule:
 
@@ -36,7 +36,7 @@ Two consequences shape the schedule:
 | `voxel-core` | Canonical `Face` orientation, neighbour offsets, face planes | Complete |
 | `voxel-block` | Registry, materials, texture slices, material variants, palettes, tags, RON | Complete; atlas-backed material ids in use |
 | `voxel-storage` | Parameterized 64³/128³ 8 B-node SVDAG, COW `apply_edits`, overlays, region log, global deduped GPU pool, consolidation policy, six-face apron | **M1 layout complete; M2-01 apron landed** |
-| `voxel-mesh` | Block-granular driver over 16³ blocks with a reusable 18³ scratch; greedy rectangle core with the `(material, orientation, 4×AO)` merge key, backface culling, four-level AO sampling and chunk-border AO equality; 16 B vertex codec, golden fixtures, thread/order determinism, full-pass two-channel block light, cross-chunk apron seeding, dirty-region incremental light and removal-front escalation | **M2-03…M2-16 landed**; light benchmark and probes pending |
+| `voxel-mesh` | Block-granular driver over 16³ blocks with a reusable 18³ scratch; greedy rectangle core with the `(material, orientation, 4×AO)` merge key, backface culling, four-level AO sampling and chunk-border AO equality; 16 B vertex codec, golden fixtures, thread/order determinism, full-pass two-channel block light, cross-chunk apron seeding, dirty-region incremental light, removal-front escalation and a 5.7%-of-full incremental edit | **M2-03…M2-17 landed**; probes pending |
 | `voxel-render` | `WgpuSink`, `MaterialBuffers`, `GpuWorld`, `svdag.wgsl` | Upload path; the viewer owns the draw loop |
 | `voxel-viewer` | `winit` + `wgpu` window, fly camera, mouse look, atlas sampling, depth pass, naive per-face mesher, input layer | **M1.5 code complete**; production mesh/light/probes pending |
 | `voxel-texgraph` / `voxel-texgen` | Deterministic node-graph evaluator, manifest, material table, atlas bake, editor and MCP tools | Complete for M1.5 |
@@ -194,9 +194,8 @@ provisional pass without the re-run.
 
 ### M1.5 — Vertical slice: one chunk on screen (2 weeks)
 
-**Status:** Code complete — viewer, atlas, naive mesher, full M1.5-15 screenshot
-set and zero-validation CI landed. Only `M1.5-17` (before/after texel-density
-screenshots) remains open.
+**Status:** Complete — viewer, atlas, naive mesher, full M1.5-15 screenshot set,
+zero-validation CI and the M1.5-17 before/after texel-density pair all landed.
 
 At 64³, so the slice is cheap.
 
@@ -218,7 +217,8 @@ drops to 6.25 cm per voxel face; before/after screenshots required.
 ### M2 — Production content pipeline (6 weeks)
 
 **Status:** In progress — M2-16 removal-front escalation passes the adversarial
-test. Next: M2-17 light cost benchmark.
+test. M2-17 now measures 5.7% p95 at 128³, under the 20% target. Next: M2-18
+probes.
 
 Runs at the **128³ Minimum** edge (ADR-002). Default is not greenlit.
 

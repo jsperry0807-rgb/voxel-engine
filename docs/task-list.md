@@ -3,7 +3,7 @@
 **Status:** v1.6 — derived from spec v2.3 and roadmap v3.2
 **Date:** 2026-10-29
 **Owner:** engine
-**Current position:** M1 complete. M1.5 code complete; only `M1.5-17` (texel-density pair) remains open. M2 in progress: `M2-16` done, `M2-17` next.
+**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 in progress: `M2-16` done; `M2-17` done (5.7% p95 at 128³, target ≤20%); `M2-18` next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -174,9 +174,9 @@ The schedule is by milestone, not by calendar. The *Consumed by* column is a har
 
 #### Per-material deadlines
 
-The deadline is the art task in the last column; its output must be ready before the consuming task (M1.5-07, M2.5-11, M3.5-06). "Before M1.5-07" means the 256² source is in the manifest and bakes to the 16² tile; M1.5-15 is the screenshot and reproduction checkpoint (the full set has landed), and M1.5-17 is the remaining visual acceptance comparison. A face may be a marked placeholder earlier, but no milestone may call the set final before its row is done.
+The deadline is the art task in the last column; its output must be ready before the consuming task (M1.5-07, M2.5-11, M3.5-06). "Before M1.5-07" means the 256² source is in the manifest and bakes to the 16² tile; M1.5-15 is the screenshot and reproduction checkpoint (the full set has landed), and M1.5-17 is the visual acceptance comparison (the pair landed 2026-10-29). A face may be a marked placeholder earlier, but no milestone may call the set final before its row is done.
 
-**Slice set.** All 23 faces are authored in **M1.5-14** and must bake before **M1.5-07**; M1.5-17 reviews the final art against the texel-density comparison.
+**Slice set.** All 23 faces are authored in **M1.5-14** and must bake before **M1.5-07**; M1.5-17 records the final art against the texel-density comparison.
 
 | Texture | Applies to | Done in task |
 | --- | --- | --- |
@@ -382,7 +382,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ## 5. M1.5 — Vertical slice
 
 **Goal:** one textured chunk in a window. **Exit:** M1.5-17. **Budget:** 10.5 d code + 4 d art (M1.5-14). **Depends:** M1-15 (layout API), M0-06 (atlas math); M1.5-14 before M1.5-07.
-**Status:** Code complete — M1.5-01…M1.5-16 done. The remaining exit artifact is M1.5-17 (before/after texel-density pair); the full M1.5-15 screenshot set and viewer README have landed. M2 work has started before the final visual checkpoint was closed.
+**Status:** Complete — M1.5-01…M1.5-17 done. The before/after texel-density pair, the full M1.5-15 screenshot set and the viewer README have landed. M2 work has started.
 **Art:** M1.5-14 authors the 23 slice faces; M1.5-17 is the exit art checkpoint.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -403,7 +403,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 | M1.5-13 | Draw one generated chunk end to end | M1.5-11, M1.5-12 | Terrain visible; 60 Hz at 1080p on the reference machine; placeholder tiles are allowed here, M1.5-14 supplies the final art before the M1.5-15 screenshot | run | 0.5 d | [x] |
 | M1.5-15 | Screenshot set in `docs/images/` plus run instructions | M1.5-07, M1.5-13, M1.5-14 | D9 screenshot set committed; README explains how to reproduce | review | 0.25 d | [x] |
 | M1.5-16 | Zero-validation run and naga shader test in CI | M1.5-13 | CI job passes with `RUST_LOG=wgpu_core=warn` | CI | 0.5 d | [x] |
-| M1.5-17 | Before/after texel-density screenshots (old 256² face vs 16×16 tile) so the regression is a decision | M1.5-14, M1.5-07 | Two images in `docs/images/` with a one-paragraph note; art matches M1.5-14 | review | 0.25 d | [ ] |
+| M1.5-17 | Before/after texel-density screenshots (old 256² face vs 16×16 tile) so the regression is a decision | M1.5-14, M1.5-07 | Two images in `docs/images/` with a one-paragraph note; art matches M1.5-14 | review | 0.25 d | [x] |
 
 ---
 
@@ -411,7 +411,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 **Goal:** deterministic mesh + AO + block light + probes, at the 128³ Minimum edge.
 **Exit:** M2-30. **Budget:** 27.0 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
-**Status:** In progress — M2-16 done; M2-17 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
+**Status:** In progress — M2-16 done; M2-17 done (5.7% p95 at 128³, target ≤20%); M2-18 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
 **Art:** none beyond M1.5-14; M2 reuses the slice atlas.
 
 **M1 gate carry-over — blocks M2-30:**
@@ -501,6 +501,17 @@ escalates to a full relight; the `full_relights` counter proves the path. A
 central removal stays incremental. Both results match a fresh full pass. The
 adversarial fixture uses an emitter on the boundary and another at the centre.
 
+**M2-17 measured (2026-10-29):** the border fixture adds a torch in the apron and
+a sky shaft, then measures one centre emitter addition. After the increase-only
+fast path, channel-selective propagation, scratch reuse and a one-byte neighbour
+mask, criterion means are 4.905–4.931 µs full / 256.8–260.8 ns incremental at
+64³ (5.25%) and 28.804–28.912 µs / 2.030–2.044 µs at 128³ (7.06%). The p95 ratio
+is 4.4% / 5.7%; the six-position sweep puts every edit under 10% p95 at 128³,
+including the 570-cell border-side edit. The edit changes 46/216 padded cells at
+64³ and 414/1,000 at 128³. Removals still escalate (M2-16). See
+[`m2-light-cost.md`](m2-light-cost.md) and the measured path in
+[`m2-light-20pct.md`](m2-light-20pct.md).
+
 ### 6.1 Apron and mesher
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -526,7 +537,7 @@ adversarial fixture uses an emitter on the boundary and another at the centre.
 | M2-14 | Cross-chunk seeding from 1-block aprons; light does not leak through opaque blocks | M2-13 | Border fixture matches a single-chunk reference on both sides | `cargo test -p voxel-mesh light_apron` | 1 d | [x] |
 | M2-15 | Incremental light: dirty cells only, seeded from the edit, with a removal pass | M2-14 | Equals full recompute on 1 000 random edit sets, removals included | `cargo test -p voxel-mesh light_incremental` | 2 d | [x] |
 | M2-16 | Escalation rule: relight the chunk when the removal front reaches the dirty expansion boundary | M2-15 | An adversarial test forces escalation and still equals full | `cargo test -p voxel-mesh light_escalation` | 0.5 d | [x] |
-| M2-17 | Light border fixture and benchmark: full vs incremental cost | M2-16 | Incremental p95 ≤ 20% of full on a single edit; recorded | `cargo bench -p voxel-mesh light` | 0.5 d | [ ] |
+| M2-17 | Light border fixture and benchmark: full vs incremental cost | M2-16 | Incremental p95 ≤ 20% of full on a single edit; recorded | `cargo bench -p voxel-mesh light` | 0.5 d | [x] |
 
 ### 6.3 Probes
 

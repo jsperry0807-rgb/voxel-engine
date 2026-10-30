@@ -276,11 +276,13 @@ impl CellEdit {
 /// Persistent light state for one chunk, updated by dirty-region edits.
 ///
 /// A light change cannot travel more than [`MAX_LEVEL`] cells because every
-/// step costs at least one level. Each edit batch therefore recomputes only the
-/// edited cells expanded by that radius, using the unchanged cells outside the
-/// region as fixed seeds. At the 4³/8³ chunk-cell edges the region often covers
-/// the whole chunk; the API is still chunk-local and allocation-free after
-/// construction.
+/// step costs at least one level. A batch that only adds light or transparency
+/// propagates the new increases from the changed cells and their neighbours
+/// without clearing the region; a batch with a removal reseeds the edited cells
+/// expanded by that radius, using the unchanged cells outside the region as
+/// fixed seeds. At the 4³/8³ chunk-cell edges the region often covers the whole
+/// chunk; the API is chunk-local and reuses its propagation scratch after the
+/// first edit.
 pub struct LightState {
     edge: usize,
     padded_edge: usize,
@@ -289,6 +291,57 @@ pub struct LightState {
     sky: Vec<u8>,
     block: Vec<u8>,
     full_relights: usize,
+    sky_buckets: [Vec<usize>; LEVELS],
+    block_buckets: [Vec<usize>; LEVELS],
+    sky_seed_scratch: Vec<usize>,
+    block_seed_scratch: Vec<usize>,
+    /// One bit per neighbour direction: set when that neighbour is inside the
+    /// padded grid. Built once per state so the incremental inner loop has no
+    /// coordinate math or bounds checks. One byte per padded cell.
+    neighbour_mask: Vec<u8>,
+}
+
+impl Clone for LightState {
+    fn clone(&self) -> Self {
+        Self {
+            edge: self.edge,
+            padded_edge: self.padded_edge,
+            blocks: self.blocks.clone(),
+            sky_seeds: self.sky_seeds.clone(),
+            sky: self.sky.clone(),
+            block: self.block.clone(),
+            full_relights: self.full_relights,
+            sky_buckets: array::from_fn(|level| self.sky_buckets[level].clone()),
+            block_buckets: array::from_fn(|level| self.block_buckets[level].clone()),
+            sky_seed_scratch: self.sky_seed_scratch.clone(),
+            block_seed_scratch: self.block_seed_scratch.clone(),
+            neighbour_mask: self.neighbour_mask.clone(),
+        }
+    }
+
+    /// Restores a snapshot without dropping the propagation scratch capacity.
+    fn clone_from(&mut self, source: &Self) {
+        let same_grid = self.padded_edge == source.padded_edge;
+        self.edge = source.edge;
+        self.padded_edge = source.padded_edge;
+        self.blocks.clone_from(&source.blocks);
+        self.sky_seeds.clone_from(&source.sky_seeds);
+        self.sky.clone_from(&source.sky);
+        self.block.clone_from(&source.block);
+        self.full_relights = source.full_relights;
+        for (target, source) in self.sky_buckets.iter_mut().zip(&source.sky_buckets) {
+            target.clone_from(source);
+        }
+        for (target, source) in self.block_buckets.iter_mut().zip(&source.block_buckets) {
+            target.clone_from(source);
+        }
+        self.sky_seed_scratch.clone_from(&source.sky_seed_scratch);
+        self.block_seed_scratch
+            .clone_from(&source.block_seed_scratch);
+        if !same_grid {
+            self.neighbour_mask.clone_from(&source.neighbour_mask);
+        }
+    }
 }
 
 impl LightState {
@@ -325,6 +378,31 @@ impl LightState {
         propagate(&blocks, &mut sky, padded_edge);
         propagate(&blocks, &mut block, padded_edge);
 
+        let mut neighbour_mask = Vec::with_capacity(volume);
+        for z in lower..=upper {
+            for y in lower..=upper {
+                for x in lower..=upper {
+                    let mut bits = 0u8;
+                    for (slot, (dx, dy, dz)) in NEIGHBOURS.iter().copied().enumerate() {
+                        let nx = x + dx;
+                        let ny = y + dy;
+                        let nz = z + dz;
+                        if nx < lower
+                            || nx > upper
+                            || ny < lower
+                            || ny > upper
+                            || nz < lower
+                            || nz > upper
+                        {
+                            continue;
+                        }
+                        bits |= 1 << slot;
+                    }
+                    neighbour_mask.push(bits);
+                }
+            }
+        }
+
         Self {
             edge: edge_cells,
             padded_edge,
@@ -333,6 +411,11 @@ impl LightState {
             sky,
             block,
             full_relights: 0,
+            sky_buckets: array::from_fn(|_| Vec::new()),
+            block_buckets: array::from_fn(|_| Vec::new()),
+            sky_seed_scratch: Vec::new(),
+            block_seed_scratch: Vec::new(),
+            neighbour_mask,
         }
     }
 
@@ -352,6 +435,9 @@ impl LightState {
         let last = self.edge as i32 - 1;
         let mut removal = false;
         let mut crosses_boundary = false;
+        let mut block_increase = false;
+        let mut sky_increase = false;
+        let mut needs_neighbour_seed = false;
 
         for edit in edits {
             let index = self.checked_index(edit.x, edit.y, edit.z);
@@ -363,6 +449,16 @@ impl LightState {
             let new = BlockLight::new(edit.block.emission, edit.block.opacity);
             if new.emission < old.emission || new.opacity > old.opacity || (old_sky && !edit.sky) {
                 removal = true;
+            }
+            let opacity_dropped = new.opacity < old.opacity;
+            if new.emission > old.emission || opacity_dropped {
+                block_increase = true;
+            }
+            if opacity_dropped || (edit.sky && !old_sky && !new.is_fully_opaque()) {
+                sky_increase = true;
+            }
+            if opacity_dropped {
+                needs_neighbour_seed = true;
             }
             self.blocks[index] = new;
             self.sky_seeds[index] = edit.sky;
@@ -383,6 +479,18 @@ impl LightState {
         // rather than trusting a clipped dirty window.
         if removal && crosses_boundary {
             self.full_relight();
+            return;
+        }
+
+        if !removal {
+            // Every source only got brighter or more transparent. The existing
+            // levels are a fixed point of the old world and monotone relaxation
+            // from the changed cells converges on the new one, so there is no
+            // need to clear and refill the dirty region. Propagate only the
+            // channels this batch actually touched.
+            if block_increase || sky_increase {
+                self.recompute_increases(edits, block_increase, sky_increase, needs_neighbour_seed);
+            }
             return;
         }
 
@@ -434,6 +542,80 @@ impl LightState {
             "light cell ({x}, {y}, {z}) is outside the padded chunk"
         );
         index_at(x, y, z, self.padded_edge)
+    }
+
+    /// Propagates the increases from a batch that only adds light or
+    /// transparency. Only the channels the batch touched are propagated.
+    fn recompute_increases(
+        &mut self,
+        edits: &[CellEdit],
+        block: bool,
+        sky: bool,
+        neighbours: bool,
+    ) {
+        let first = -APRON_CELLS;
+        let last = self.edge as i32;
+        self.sky_seed_scratch.clear();
+        self.block_seed_scratch.clear();
+
+        for edit in edits {
+            let index = self.checked_index(edit.x, edit.y, edit.z);
+            let material = self.blocks[index];
+            if sky
+                && !material.is_fully_opaque()
+                && self.sky_seeds[index]
+                && self.sky[index] < MAX_LEVEL
+            {
+                self.sky[index] = MAX_LEVEL;
+            }
+            if block && self.block[index] < material.emission {
+                self.block[index] = material.emission;
+            }
+
+            // An opacity decrease changes the step cost for light entering the
+            // cell, so the neighbours must re-propagate even when the cell's
+            // own level did not move. A pure emission or sky gain only needs the
+            // edited cell as a seed; its increases travel outward from there.
+            let neighbourhood = if neighbours { 6 } else { 0 };
+            for (dx, dy, dz) in
+                std::iter::once((0, 0, 0)).chain(NEIGHBOURS.into_iter().take(neighbourhood))
+            {
+                let x = edit.x + dx;
+                let y = edit.y + dy;
+                let z = edit.z + dz;
+                if x < first || x > last || y < first || y > last || z < first || z > last {
+                    continue;
+                }
+                let index = index_at(x, y, z, self.padded_edge);
+                if sky && self.sky[index] > 0 {
+                    self.sky_seed_scratch.push(index);
+                }
+                if block && self.block[index] > 0 {
+                    self.block_seed_scratch.push(index);
+                }
+            }
+        }
+
+        if sky {
+            propagate_seeded_into(
+                &self.blocks,
+                &mut self.sky,
+                self.padded_edge,
+                self.sky_seed_scratch.iter().copied(),
+                &mut self.sky_buckets,
+                Some(&self.neighbour_mask),
+            );
+        }
+        if block {
+            propagate_seeded_into(
+                &self.blocks,
+                &mut self.block,
+                self.padded_edge,
+                self.block_seed_scratch.iter().copied(),
+                &mut self.block_buckets,
+                Some(&self.neighbour_mask),
+            );
+        }
     }
 
     fn recompute_region(&mut self, min: [i32; 3], max: [i32; 3]) {
@@ -615,8 +797,32 @@ where
 }
 
 fn propagate(blocks: &[BlockLight], levels: &mut [u8], padded_edge: usize) {
+    propagate_seeded(blocks, levels, padded_edge, 0..levels.len());
+}
+
+fn propagate_seeded<I>(blocks: &[BlockLight], levels: &mut [u8], padded_edge: usize, seeds: I)
+where
+    I: IntoIterator<Item = usize>,
+{
     let mut buckets: [Vec<usize>; LEVELS] = array::from_fn(|_| Vec::new());
-    for (index, level) in levels.iter().copied().enumerate() {
+    propagate_seeded_into(blocks, levels, padded_edge, seeds, &mut buckets, None);
+}
+
+fn propagate_seeded_into<I>(
+    blocks: &[BlockLight],
+    levels: &mut [u8],
+    padded_edge: usize,
+    seeds: I,
+    buckets: &mut [Vec<usize>; LEVELS],
+    mask: Option<&[u8]>,
+) where
+    I: IntoIterator<Item = usize>,
+{
+    for bucket in buckets.iter_mut() {
+        bucket.clear();
+    }
+    for index in seeds {
+        let level = levels[index];
         if level > 0 {
             buckets[level as usize].push(index);
         }
@@ -624,6 +830,9 @@ fn propagate(blocks: &[BlockLight], levels: &mut [u8], padded_edge: usize) {
 
     let lower = -APRON_CELLS;
     let upper = padded_edge as i32 - APRON_CELLS - 1;
+    let stride_y = padded_edge as isize;
+    let stride_z = (padded_edge * padded_edge) as isize;
+    let offsets = [1isize, -1, stride_y, -stride_y, stride_z, -stride_z];
 
     for level in (1..=MAX_LEVEL).rev() {
         let mut cursor = 0;
@@ -631,6 +840,25 @@ fn propagate(blocks: &[BlockLight], levels: &mut [u8], padded_edge: usize) {
             let index = buckets[level as usize][cursor];
             cursor += 1;
             if levels[index] != level {
+                continue;
+            }
+
+            if let Some(mask) = mask {
+                let bits = mask[index];
+                for (slot, &offset) in offsets.iter().enumerate() {
+                    if bits & (1 << slot) == 0 {
+                        continue;
+                    }
+                    let neighbour = (index as isize + offset) as usize;
+                    let next = level.saturating_sub(1 + blocks[neighbour].opacity);
+                    if next == 0 {
+                        continue;
+                    }
+                    if next > levels[neighbour] {
+                        levels[neighbour] = next;
+                        buckets[next as usize].push(neighbour);
+                    }
+                }
                 continue;
             }
 

@@ -74,4 +74,12 @@ Regenerate them with:
 cargo run -p voxel-viewer --example m1_5_screenshots
 ```
 
-The M1.5-17 before/after texel-density pair is still open.
+The same command writes the M1.5-17 texel-density pair: the 256² M1.5-14
+sources at the historical per-face density (`m1.5-17-before-256px-<hash>.png`)
+and the committed 16×16-tile atlas (`m1.5-17-after-16px-<hash>.png`). Both sides
+sample level 0 with nearest filtering so the pair isolates density from the
+runtime mip path. `<hash>` is the first eight hex characters of
+`atlas_png_blake3`. The current pair is
+[`m1.5-17-before-256px-851e3b6e.png`](../../../docs/images/m1.5-17-before-256px-851e3b6e.png)
+and
+[`m1.5-17-after-16px-851e3b6e.png`](../../../docs/images/m1.5-17-after-16px-851e3b6e.png).
