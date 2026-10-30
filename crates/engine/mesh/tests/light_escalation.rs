@@ -64,23 +64,30 @@ fn light_escalation() {
 #[test]
 fn production_edges_escalate_every_removal() {
     for edge in [4usize, 8] {
-        let mut grid = Grid::new(edge);
-        grid.set([0, 0, 0], BlockLight::emitter(15));
-        let mut state = LightState::new(
-            edge,
-            |x, y, z| grid.block_at(x, y, z),
-            |x, y, z| grid.sky_at(x, y, z),
-        );
-        assert_eq!(state.full_relights(), 0, "edge {edge}");
+        for z in 0..edge as i32 {
+            for y in 0..edge as i32 {
+                for x in 0..edge as i32 {
+                    let cell = [x, y, z];
+                    let mut grid = Grid::new(edge);
+                    grid.set(cell, BlockLight::emitter(15));
+                    let mut state = LightState::new(
+                        edge,
+                        |x, y, z| grid.block_at(x, y, z),
+                        |x, y, z| grid.sky_at(x, y, z),
+                    );
+                    assert_eq!(state.full_relights(), 0, "edge {edge} cell {cell:?}");
 
-        grid.set([0, 0, 0], BlockLight::AIR);
-        state.apply_edit(CellEdit::new(0, 0, 0, BlockLight::AIR, false));
-        assert_eq!(
-            state.full_relights(),
-            1,
-            "edge {edge}: a removal is always within MAX_LEVEL of a face"
-        );
-        assert_matches_full(&state, &grid, edge);
+                    grid.set(cell, BlockLight::AIR);
+                    state.apply_edit(CellEdit::new(x, y, z, BlockLight::AIR, false));
+                    assert_eq!(
+                        state.full_relights(),
+                        1,
+                        "edge {edge} cell {cell:?}: a removal is always within MAX_LEVEL of a face"
+                    );
+                    assert_matches_full(&state, &grid, edge);
+                }
+            }
+        }
     }
 }
 

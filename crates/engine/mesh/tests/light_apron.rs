@@ -69,9 +69,9 @@ fn light_apron_matches_union_reference() {
     }
 }
 
-/// The apron seed is copied plane by plane, and the four Y/Z faces use a
-/// different `(u, v)` order than ±X. Shift the second half along each axis so a
-/// transposed or ignored origin shows up.
+/// `full_pass_at_seeded` shifts the world read by the chunk origin. Run the
+/// same comparison with the second half along each axis so an ignored or
+/// transposed origin component shows up.
 #[test]
 fn apron_seeding_shifts_every_axis() {
     let world = World {
