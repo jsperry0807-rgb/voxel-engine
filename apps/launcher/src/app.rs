@@ -14,6 +14,9 @@ use crate::jobs::{CommandSpec, Job, Runner, Status};
 
 /// The Windows target used for the background build.
 const WINDOWS_TARGET: &str = "x86_64-pc-windows-gnu";
+/// True when the Windows build is a cross-build (Unix host). On Windows the
+/// "Windows build" is just the host build, with no mingw-w64 toolchain.
+const CROSS_BUILD: bool = cfg!(unix);
 /// Tools shipped by mingw-w64. `gcc` reaches for the others by name, so a
 /// partial install fails late; the launcher checks the whole set up front.
 const WINDOWS_TOOLS: &[&str] = &[
@@ -134,7 +137,7 @@ impl LauncherApp {
             windows_job: None,
             linux_job: None,
             windows_setup_job: None,
-            windows_ready: windows_toolchain_ready(),
+            windows_ready: !CROSS_BUILD || windows_toolchain_ready(),
             build_after_setup: false,
             notice: None,
         }
@@ -174,6 +177,11 @@ impl LauncherApp {
     }
 
     fn start_build(&mut self, windows: bool) {
+        if windows && CROSS_BUILD && !self.job_running(self.windows_setup_job) {
+            // The toolchain can appear after startup (`cargo setup-win` in a
+            // terminal), so re-check instead of trusting the cached preflight.
+            self.windows_ready = windows_toolchain_ready();
+        }
         if windows && !self.windows_ready {
             // Make the build button do the setup too, then continue the build
             // automatically when the installer job passes.
@@ -182,10 +190,14 @@ impl LauncherApp {
             return;
         }
         let (label, args): (&str, Vec<&str>) = if windows {
-            (
-                WINDOWS_BUILD,
-                vec!["build", "--workspace", "--target", WINDOWS_TARGET],
-            )
+            if CROSS_BUILD {
+                (
+                    WINDOWS_BUILD,
+                    vec!["build", "--workspace", "--target", WINDOWS_TARGET],
+                )
+            } else {
+                (WINDOWS_BUILD, vec!["build", "--workspace"])
+            }
         } else {
             (LINUX_BUILD, vec!["build", "--workspace"])
         };
@@ -318,10 +330,21 @@ impl LauncherApp {
 
     /// The Windows viewer produced by the background build.
     fn windows_exe(&self) -> PathBuf {
-        self.target_dir()
-            .join(WINDOWS_TARGET)
-            .join("debug")
-            .join("voxel-viewer.exe")
+        let directory = if CROSS_BUILD {
+            self.target_dir().join(WINDOWS_TARGET)
+        } else {
+            self.target_dir()
+        };
+        directory.join("debug").join("voxel-viewer.exe")
+    }
+
+    /// Command line shown in tooltips for the Windows build.
+    fn windows_build_command(&self) -> String {
+        if CROSS_BUILD {
+            format!("cargo build --workspace --target {WINDOWS_TARGET}")
+        } else {
+            "cargo build --workspace".to_owned()
+        }
     }
 
     fn target_dir(&self) -> PathBuf {
@@ -383,7 +406,7 @@ impl LauncherApp {
                     if ui
                         .add_enabled(!building, egui::Button::new("Build Windows"))
                         .on_hover_text(if self.windows_ready {
-                            format!("cargo build --workspace --target {WINDOWS_TARGET}")
+                            self.windows_build_command()
                         } else {
                             "Installs mingw-w64 and the Rust target first, then builds".to_owned()
                         })
@@ -424,7 +447,16 @@ impl LauncherApp {
                     ui.colored_label(FAIL, notice);
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(RichText::new(WINDOWS_TARGET).weak().monospace().small());
+                    ui.label(
+                        RichText::new(if CROSS_BUILD {
+                            WINDOWS_TARGET
+                        } else {
+                            "native"
+                        })
+                        .weak()
+                        .monospace()
+                        .small(),
+                    );
                     let linux = self
                         .linux_job
                         .and_then(|id| self.runner.job(id))
@@ -659,7 +691,7 @@ impl LauncherApp {
             ui,
             "Build Windows (background)",
             if self.windows_ready {
-                format!("cargo build --workspace --target {WINDOWS_TARGET}")
+                self.windows_build_command()
             } else {
                 "Installs mingw-w64 and the Rust target first, then builds".to_owned()
             }

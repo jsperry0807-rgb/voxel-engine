@@ -42,22 +42,25 @@ cargo test           # Linux, exactly as before
 cargo build-win      # Windows cross-build, same as the Build button
 ```
 
-Both targets can build at the same time. Cargo keeps separate locks for
-`target/debug` and `target/x86_64-pc-windows-gnu/debug`, so the target-specific
-work overlaps; only shared host build scripts can briefly wait on Cargo's build
-lock. The *Build both* button starts the two jobs together.
+Both targets share one Cargo build-directory lock. The Windows job starts after
+the Linux job finishes (or after it yields the lock), so treat *Build both* as
+"queue both", not "run both in parallel" — the second job waits with
+`Blocking waiting for file lock on build directory` until the first is done.
+The launcher still starts them as two independent jobs, so either can be
+stopped without cancelling the other.
 
 Cargo refuses to let a config alias shadow `build`, so the launcher owns the
 background builds instead of hooking Cargo:
 
-- On launch it starts `cargo build --workspace` and
-  `cargo build --workspace --target x86_64-pc-windows-gnu` as two jobs. The
-  status chip in the header shows the Windows build; the status bar shows
-  Linux.
+- On launch it starts `cargo build --workspace`, and the Windows job only when
+  the cross toolchain is already present (a missing toolchain never triggers a
+  package install at startup). The status chip in the header shows the Windows
+  job; the status bar shows Linux.
 - The Windows cross-build needs mingw-w64 and the `x86_64-pc-windows-gnu` Rust
-  target. `cargo build-win` checks both and installs whatever is missing before
-  it builds; `cargo setup-win` performs only the setup. The launcher does the
-  same from *Build Windows* or *Install Windows toolchain*.
+  target. `cargo build-win` checks both and fails with the `cargo setup-win`
+  instruction; `cargo setup-win` installs. The launcher does the same from
+  *Build Windows* or *Install Windows toolchain*. On a native Windows host the
+  *Windows build* is simply `cargo build --workspace`.
 - The exe lands in `target/x86_64-pc-windows-gnu/debug/`. `Open viewer ·
   Windows` runs it directly (through WSL interop when the launcher is on Linux),
   and `Copy exe path` gives a path to paste into a Windows terminal.

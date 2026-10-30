@@ -371,13 +371,27 @@ fn pump<R: Read + Send + 'static>(stream: R, sender: Sender<Event>) {
     });
 }
 
-/// Kills a child and, on Unix, the process group it leads.
+/// Terminates a child and, on Unix, the process group it leads.
+///
+/// The setup job can be a package manager, so it gets a `SIGTERM` and a short
+/// grace period before the group is killed: killing `dpkg` mid-unpack leaves a
+/// lock and a half-installed package behind.
 fn terminate(child: &mut Child) {
     #[cfg(unix)]
     {
         let pid = child.id() as i32;
         // `process_group(0)` made the child a group leader, so a negative pid
         // reaches Cargo and anything it spawned (for example the viewer).
+        unsafe {
+            libc::kill(-pid, libc::SIGTERM);
+        }
+        for _ in 0..20 {
+            match child.try_wait() {
+                Ok(Some(_)) => return,
+                Ok(None) => std::thread::sleep(Duration::from_millis(25)),
+                Err(_) => break,
+            }
+        }
         unsafe {
             libc::kill(-pid, libc::SIGKILL);
         }
