@@ -141,6 +141,28 @@ fn graph_ron_round_trips_editor_positions() {
 }
 
 #[test]
+fn caps_node_count_and_depth() {
+    // A wide graph: 600 shallow nodes must be rejected on the node count.
+    let mut nodes = vec![node(0, Op::Const { value: 1 }, vec![])];
+    for id in 1..600 {
+        nodes.push(node(id, Op::Invert, vec![0]));
+    }
+    let error = graph(nodes, 0)
+        .compile()
+        .expect_err("more nodes than the cap");
+    assert!(error.to_string().contains("nodes"), "{error}");
+
+    // A deep graph: the evaluator recurses once per node, so the chain must be
+    // rejected before it can overflow the stack.
+    let mut nodes = vec![node(0, Op::Const { value: 1 }, vec![])];
+    for id in 1..200 {
+        nodes.push(node(id, Op::Invert, vec![id - 1]));
+    }
+    let error = graph(nodes, 0).compile().expect_err("deeper than the cap");
+    assert!(error.to_string().contains("deeper"), "{error}");
+}
+
+#[test]
 fn save_reports_io_failures_as_io() {
     let dir = std::env::temp_dir().join(format!(
         "voxel-texgen-save-io-{}-{:?}",
