@@ -14,11 +14,10 @@
 //! | Mesh | M1-31 greedy quads × 76 B; count-only, no vertex/index buffer overhead |
 //! | Total | The five components above, per chunk |
 //!
-//! The DAG is the authoritative banded layout, not the transitional v1
-//! `Svdag` pool. The v1 pool is still resident today for GPU and disk
-//! compatibility, so its distribution is reported separately as
-//! [`MemoryReport::dag_v1_view`] and deliberately excluded from the gate total;
-//! counting it would measure a representation the pre-registration replaces.
+//! The DAG row is the authoritative banded layout. The transitional v1 `Svdag`
+//! pool is still resident for GPU and disk compatibility, so it is its own
+//! [`MemoryComponents::legacy_v1`] component and is included in the total: a
+//! representation that occupies memory must not disappear from the gate.
 //!
 //! The fixture is **provisional until the first real save**. Its provenance and
 //! limitation are copied into the report so a reader cannot see the numbers
@@ -45,7 +44,8 @@ use crate::fixture::{self, FixtureStatus, Manifest};
 use crate::save_scan::Distribution;
 
 /// Schema version of the memory report itself.
-pub const SCHEMA_VERSION: u32 = 1;
+/// Version 2 counts the resident v1 `Svdag` pool in [`MemoryComponents::total`].
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// Bytes per internal DAG node in the banded layout.
 pub const NODE_BYTES: u64 = core::mem::size_of::<Node>() as u64;
@@ -95,6 +95,9 @@ impl ComponentDistribution {
 pub struct MemoryComponents {
     /// Banded DAG bytes: internal nodes (with padding) plus leaf materials.
     pub dag: ComponentDistribution,
+    /// Transitional v1 `Svdag` pool bytes. Resident until the banded disk/GPU
+    /// migration (M6-09a); included in [`Self::total`].
+    pub legacy_v1: ComponentDistribution,
     /// Allocated GPU overlay storage.
     pub overlay: ComponentDistribution,
     /// Fixed block-light volume.
@@ -122,7 +125,7 @@ pub struct ChunkMemory {
     pub dag_node_bytes: u64,
     /// Leaf-arena bytes.
     pub dag_leaf_bytes: u64,
-    /// Transitional v1 `Svdag` pool bytes; excluded from [`Self::total_bytes`].
+    /// Transitional v1 `Svdag` pool bytes; resident and included in [`Self::total_bytes`].
     pub dag_v1_bytes: u64,
     /// Allocated GPU overlay bytes.
     pub overlay_bytes: u64,
@@ -136,7 +139,7 @@ pub struct ChunkMemory {
     pub mesh_quads: u64,
     /// Greedy mesh payload estimate (`mesh_quads × 76`).
     pub mesh_bytes: u64,
-    /// Sum of DAG, overlay, light, probes and mesh.
+    /// Sum of DAG, the v1 pool, overlay, light, probes and mesh.
     pub total_bytes: u64,
 }
 
@@ -180,7 +183,7 @@ pub struct MemoryReport {
     pub fixture: FixtureInfo,
     /// Gate components and their per-chunk distributions.
     pub components: MemoryComponents,
-    /// Transitional v1 DAG pool, reported for audit and excluded from the total.
+    /// Mirror of [`MemoryComponents::legacy_v1`], kept for report consumers.
     pub dag_v1_view: ComponentDistribution,
     /// Every live chunk, sorted by `(x, y, z)`.
     pub chunks: Vec<ChunkMemory>,
@@ -232,7 +235,7 @@ impl MemoryReport {
         writeln!(out, "|---|---:|---:|---:|---:|").unwrap();
         for (name, distribution) in [
             ("DAG", &self.components.dag),
-            ("DAG v1 view (not in total)", &self.dag_v1_view),
+            ("DAG v1 pool (resident)", &self.components.legacy_v1),
             ("Overlay", &self.components.overlay),
             ("Light", &self.components.light),
             ("Probes", &self.components.probes),
@@ -348,7 +351,12 @@ fn measure(
             probe_bytes,
             mesh_quads,
             mesh_bytes,
-            total_bytes: dag_bytes + overlay_bytes + light_bytes + probe_bytes + mesh_bytes,
+            total_bytes: dag_bytes
+                + dag_v1_bytes
+                + overlay_bytes
+                + light_bytes
+                + probe_bytes
+                + mesh_bytes,
         });
     })
     .map_err(|error| format!("failed to scan fixture {}: {error}", save_dir.display()))?;
@@ -382,6 +390,7 @@ fn measure(
 
     let components = MemoryComponents {
         dag: distribution(chunks.iter().map(|chunk| chunk.dag_bytes)),
+        legacy_v1: distribution(chunks.iter().map(|chunk| chunk.dag_v1_bytes)),
         overlay: distribution(chunks.iter().map(|chunk| chunk.overlay_bytes)),
         light: distribution(chunks.iter().map(|chunk| chunk.light_bytes)),
         probes: distribution(chunks.iter().map(|chunk| chunk.probe_bytes)),
@@ -412,8 +421,8 @@ fn measure(
     let notes = vec![
         format!(
             "DAG = {NODE_BYTES} B/internal node (banded layout, full-run padding included) + \
-             {LEAF_BYTES} B/leaf material. The transitional v1 Svdag pool is reported separately \
-             and excluded from the total."
+             {LEAF_BYTES} B/leaf material. The transitional v1 Svdag pool is resident for GPU and \
+             disk compatibility and is included in the total; M6-09a removes it."
         ),
         format!(
             "Overlay = {OVERLAY_BLOCK_TABLE_BYTES} B block table + {OVERLAY_SLOT_BYTES} B per \

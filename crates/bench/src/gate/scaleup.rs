@@ -221,6 +221,8 @@ pub struct MeasuredProbes {
 pub struct MeasuredMemory {
     /// Banded DAG bytes per chunk.
     pub dag_bytes: u64,
+    /// Transitional v1 `Svdag` pool bytes per chunk (resident).
+    pub legacy_v1_bytes: u64,
     /// Allocated overlay bytes per chunk.
     pub overlay_bytes: u64,
     /// Fixed block-light bytes per chunk.
@@ -306,6 +308,7 @@ impl Measured {
             },
             memory: MeasuredMemory {
                 dag_bytes: p95(&memory.components.dag, "DAG")?,
+                legacy_v1_bytes: p95(&memory.components.legacy_v1, "v1 pool")?,
                 overlay_bytes: p95(&memory.components.overlay, "overlay")?,
                 light_bytes: p95(&memory.components.light, "light")?,
                 probe_bytes: p95(&memory.components.probes, "probe")?,
@@ -327,6 +330,7 @@ impl Measured {
             return Err("the probe report has no near grid to project".to_owned());
         }
         if self.memory.dag_bytes == 0
+            && self.memory.legacy_v1_bytes == 0
             && self.memory.overlay_bytes == 0
             && self.memory.light_bytes == 0
             && self.memory.probe_bytes == 0
@@ -395,6 +399,8 @@ pub struct ProbeProjection {
 pub struct MemoryProjection {
     /// Projected DAG bytes per chunk.
     pub dag_bytes_per_chunk: u64,
+    /// Projected v1 `Svdag` pool bytes per chunk (resident).
+    pub legacy_v1_bytes_per_chunk: u64,
     /// Projected overlay bytes per chunk.
     pub overlay_bytes_per_chunk: u64,
     /// Projected light bytes per chunk.
@@ -564,6 +570,10 @@ impl ScaleupReport {
             (
                 "Probe update",
                 format_duration(self.measured.probes.update_ns),
+            ),
+            (
+                "Memory v1 pool/chunk",
+                human_bytes(self.measured.memory.legacy_v1_bytes),
             ),
             (
                 "Memory total/chunk",
@@ -998,16 +1008,19 @@ pub fn project(
         within_budget: probe_margin >= 0,
     };
 
-    let (dag_ratio, overlay_ratio, light_ratio, probe_bytes_ratio, mesh_ratio) = match mode {
-        ProjectionMode::Optimistic => (volume, volume, volume, volume, area),
-        ProjectionMode::Pessimistic => (volume, volume, volume, volume, volume),
-    };
+    let (dag_ratio, v1_ratio, overlay_ratio, light_ratio, probe_bytes_ratio, mesh_ratio) =
+        match mode {
+            ProjectionMode::Optimistic => (volume, volume, volume, volume, volume, area),
+            ProjectionMode::Pessimistic => (volume, volume, volume, volume, volume, volume),
+        };
     let dag_bytes_per_chunk = dag_ratio.apply(measured.memory.dag_bytes);
+    let legacy_v1_bytes_per_chunk = v1_ratio.apply(measured.memory.legacy_v1_bytes);
     let overlay_bytes_per_chunk = overlay_ratio.apply(measured.memory.overlay_bytes);
     let light_bytes_per_chunk = light_ratio.apply(measured.memory.light_bytes);
     let probe_bytes_per_chunk = probe_bytes_ratio.apply(measured.memory.probe_bytes);
     let mesh_bytes_per_chunk = mesh_ratio.apply(measured.memory.mesh_bytes);
     let total_bytes_per_chunk = dag_bytes_per_chunk
+        + legacy_v1_bytes_per_chunk
         + overlay_bytes_per_chunk
         + light_bytes_per_chunk
         + probe_bytes_per_chunk
@@ -1018,6 +1031,7 @@ pub fn project(
     let dag_nodes_per_chunk = volume.apply(measured.memory.dag_nodes);
     let memory = MemoryProjection {
         dag_bytes_per_chunk,
+        legacy_v1_bytes_per_chunk,
         overlay_bytes_per_chunk,
         light_bytes_per_chunk,
         probe_bytes_per_chunk,
@@ -1082,6 +1096,7 @@ fn measured_projection(
     let fail_bytes = VOXEL_FAIL_MIB * MIB;
     let memory = MemoryProjection {
         dag_bytes_per_chunk: measured.memory.dag_bytes,
+        legacy_v1_bytes_per_chunk: measured.memory.legacy_v1_bytes,
         overlay_bytes_per_chunk: measured.memory.overlay_bytes,
         light_bytes_per_chunk: measured.memory.light_bytes,
         probe_bytes_per_chunk: measured.memory.probe_bytes,
@@ -1153,11 +1168,12 @@ mod tests {
             },
             memory: MeasuredMemory {
                 dag_bytes: 1_000,
+                legacy_v1_bytes: 10_000,
                 overlay_bytes: 100,
                 light_bytes: 1_024,
                 probe_bytes: 768,
                 mesh_bytes: 100_000,
-                total_bytes: 102_892,
+                total_bytes: 112_892,
                 dag_nodes: 10_000,
             },
         }
@@ -1335,16 +1351,17 @@ mod tests {
         );
 
         assert_eq!(optimistic.memory.dag_bytes_per_chunk, 8_000);
+        assert_eq!(optimistic.memory.legacy_v1_bytes_per_chunk, 80_000);
         assert_eq!(optimistic.memory.overlay_bytes_per_chunk, 800);
         assert_eq!(optimistic.memory.light_bytes_per_chunk, 8_192);
         assert_eq!(optimistic.memory.probe_bytes_per_chunk, 6_144);
         assert_eq!(optimistic.memory.mesh_bytes_per_chunk, 400_000);
-        assert_eq!(optimistic.memory.total_bytes_per_chunk, 423_136);
-        assert_eq!(optimistic.memory.projected_bytes, 423_136 * 3_217);
+        assert_eq!(optimistic.memory.total_bytes_per_chunk, 503_136);
+        assert_eq!(optimistic.memory.projected_bytes, 503_136 * 3_217);
 
         assert_eq!(pessimistic.memory.mesh_bytes_per_chunk, 800_000);
-        assert_eq!(pessimistic.memory.total_bytes_per_chunk, 823_136);
-        assert_eq!(pessimistic.memory.projected_bytes, 823_136 * 3_217);
+        assert_eq!(pessimistic.memory.total_bytes_per_chunk, 903_136);
+        assert_eq!(pessimistic.memory.projected_bytes, 903_136 * 3_217);
         assert!(
             pessimistic.memory.projected_bytes > optimistic.memory.projected_bytes,
             "the dirty-span projection cannot be cheaper than the local one"

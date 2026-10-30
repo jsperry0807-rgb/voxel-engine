@@ -71,6 +71,13 @@ exceeds 4.80 GiB, the upgrade is rejected and rule 3 applies.
 
 No frozen row and no budget was changed, and this ADR's decision is not amended.
 
+**Amendment (2026-10-29).** The memory model above excluded the resident
+transitional v1 `Svdag` pool. Counted as a component, the **128³ Minimum
+optimistic projection is 4.89 GiB**, above the 4.80 GiB hard-fail line
+(pessimistic 7.20 GiB). The M2 greenlight therefore carries a second condition
+alongside mesh compression: remove the pool (M6-09a, banded disk records and GPU
+import) before the 128³ edge is confirmed. Thresholds are unchanged.
+
 ## Consequences
 
 - **Positive:** one measured edge, one content path and one set of tuning targets in

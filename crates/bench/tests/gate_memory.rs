@@ -62,6 +62,7 @@ fn report_covers_every_fixture_chunk_and_components_sum_to_total() {
         assert_eq!(
             chunk.total_bytes,
             chunk.dag_bytes
+                + chunk.dag_v1_bytes
                 + chunk.overlay_bytes
                 + chunk.light_bytes
                 + chunk.probe_bytes
@@ -108,14 +109,16 @@ fn report_covers_every_fixture_chunk_and_components_sum_to_total() {
     assert!(report.components.mesh.p95.unwrap() > 0);
 
     let component_sum = report.components.dag.total
+        + report.components.legacy_v1.total
         + report.components.overlay.total
         + report.components.light.total
         + report.components.probes.total
         + report.components.mesh.total;
     assert_eq!(component_sum, report.components.total.total);
 
-    // The v1 view is the transitional pool, not the gate DAG; it must still
-    // match the fixture's recorded node-byte distribution.
+    // The v1 pool is resident until M6-09a and must be counted, so the mirror
+    // matches the component distribution and the fixture's recorded bytes.
+    assert_eq!(report.dag_v1_view, report.components.legacy_v1);
     assert_eq!(report.dag_v1_view.p50, manifest.observed.node_bytes.p50);
     assert_eq!(report.dag_v1_view.p95, manifest.observed.node_bytes.p95);
     assert_eq!(report.dag_v1_view.max, manifest.observed.node_bytes.max);

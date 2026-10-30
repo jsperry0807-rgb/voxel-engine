@@ -10,6 +10,25 @@
 
 ---
 
+## Amendment — 2026-10-29: the v1 pool is resident and now counted
+
+The M1 memory model excluded the transitional v1 `Svdag` pool because it is a
+representation the banded layout replaces. It is still allocated for every
+resident chunk (disk and GPU compatibility), so the gate now counts it as a
+`legacy_v1` component.
+
+- 64³ p95 total: **1,199,068 B/chunk** (was 1,033,124 B); the pool is 167,968 B,
+  **14.0%** of the corrected total.
+- **128³ Minimum optimistic: 4.89 GiB**, above the **4.80 GiB** hard-fail line
+  (pessimistic 7.20 GiB).
+- The 3.88 GiB figure in §1/§2 and ADR-002 is the model **without** the pool.
+
+No threshold, row or budget changed. The M2 greenlight now carries an extra
+condition: the pool must be removed by **M6-09a** (banded disk records and GPU
+import) before the 128³ edge is confirmed, in addition to mesh compression.
+
+---
+
 ## 1. Decision
 
 **The 64³ Default gate fails. M2 is greenlit to implement and measure the 128³

@@ -750,6 +750,7 @@ adversarial fixture uses an emitter on the boundary and another at the centre.
 | M6-07 | Per-frame streaming budget and backlog accounting | M6-05 | Backlog drains; p99 frame ≤ 16.6 ms | run | 0.5 d | [ ] |
 | M6-08 | Disk header v2: magic, version, `CHUNK_BITS`, level table, compression flag, CRC | M1-13 | Old files rejected with a clear error; new round-trip | `cargo test -p voxel-storage header_v2` | 1 d | [ ] |
 | M6-09 | Band serialization with level lengths and leaf arena; zstd optional | M6-08 | Round-trip on 5 fixtures; sizes recorded | `cargo test -p voxel-storage band_serde` | 1.5 d | [ ] |
+| M6-09a | Retire the transitional v1 `Svdag` pool: disk records and GPU import read bands; delete `pool`/`root`/`LegacyPool` | M6-09, M4-09 | `Svdag` holds only `ChunkDag`; no v1 bytes resident; save round-trip and the shader mirror tests pass | `cargo test -p voxel-storage band_only` + `cargo run -p voxel-bench -- gate memory` | 3 d | [ ] |
 | M6-10 | Persist block light cells with the chunk | M6-09 | Reload equals the pre-save light on 5 fixtures | `cargo test -p voxel-storage light_persist` | 1 d | [ ] |
 | M6-11 | Persist probes at the current LOD with the chunk | M6-09 | Reload equals pre-save bytes; LOD tag stored | `cargo test -p voxel-storage probe_persist` | 1 d | [ ] |
 | M6-12 | Dirty-region journal: record edited block cells so reopen can skip full relight | M6-10 | Journal replay equals a full relight on 20 random edit sets | `cargo test -p voxel-storage journal_light` | 2 d | [ ] |
@@ -761,6 +762,8 @@ adversarial fixture uses an emitter on the boundary and another at the centre.
 | M6-18 | Streaming hitch p99 ≤ 4 ms over a 2 000-frame flight | M6-07 | Measured; no > 16.6 ms frame | `cargo run -p voxel-bench -- hitch` | 1 d | [ ] |
 | M6-19 | Reopen benchmark and recorded history | M6-13 | ≤ 50 ms/chunk p95; recorded | `scripts/bench.sh LABEL=m6-reopen` | 0.5 d | [ ] |
 | M6-20 | M6 exit: tag `m6`, update the roadmap and the rings table | M6-19 | Tag; spec/roadmap updated; atlas bake hash equals the M3.5-16 freeze | `git tag -n m6` | 0.25 d | [ ] |
+
+**M6-09a is a prerequisite for confirming the 128³ edge:** the v1 pool is 14% of the measured per-chunk p95 memory (168 KiB of 1,199 KiB) and scales with volume. Counted, the 128³ Minimum optimistic projection is **4.89 GiB**, above the 4.80 GiB hard-fail line (3.88 GiB without the pool). Removing it — or finding equivalent savings — is required before the edge is declared; thresholds are unchanged.
 
 ---
 

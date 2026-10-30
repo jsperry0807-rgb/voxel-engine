@@ -141,8 +141,11 @@ M1-24; ADR-006 states the escalation path if flood-fill under-culls.
 
 **Status:** Complete — tagged `m1` on 2026-10-27. The 64³ Default gate failed on
 memory; the 128³ Default projection also missed, but the **128³ Minimum** projection
-clears the hard-fail line (3.88 GiB optimistic). M2 is greenlit to implement and
-measure 128³ Minimum: [`m1-gate-decision.md`](m1-gate-decision.md).
+was projected to clear the hard-fail line at 3.88 GiB optimistic, but the model
+excluded the resident v1 pool: counted, it projects **4.89 GiB**, above the line.
+M2 is greenlit to implement and measure 128³ Minimum conditional on mesh
+compression and removing the v1 pool (M6-09a):
+[`m1-gate-decision.md`](m1-gate-decision.md).
 
 **Goal:** the layout is the spec's, and the pre-registered table has real numbers.
 
