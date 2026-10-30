@@ -26,6 +26,14 @@ pub(crate) const HDR: usize = 16;
 /// from driving a multi-gigabyte allocation before the CRC rejects it.
 pub(crate) const MAX_RECORD_BYTES: u32 = 16 << 20;
 
+/// Verification budget for one region open.
+///
+/// Corrupt payloads can contain many magic-like headers, each declaring a
+/// near-[`MAX_RECORD_BYTES`] payload. Charging reads that fail verification
+/// against this budget bounds the total recovery work; a successful record
+/// refunds its cost, so a large but valid region is not truncated.
+const MAX_RECOVERY_BYTES: u64 = 64 << 20;
+
 /// A decoded record header, shared by the live store and the read-only scanner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct RecordHeader {
@@ -116,55 +124,51 @@ fn encode_header(kind: u8, cell: u16, len: u32) -> [u8; HDR] {
     h
 }
 
-/// Reads one record at `pos`, or `None` when the header, declared length, or
-/// CRC is bad. Returns an I/O error only for a real read failure.
-fn read_record<R: Read>(r: &mut R, pos: u64, total: u64) -> io::Result<Option<RecordHeader>> {
-    let mut budget = u64::MAX;
-    read_record_with_budget(r, pos, total, &mut budget)
-}
-
 /// Reads and verifies one record, charging its bytes to `budget`.
 ///
-/// A corrupt payload can contain many magic-like headers that each declare a
-/// near-`MAX_RECORD_BYTES` payload. The caller's budget bounds the total CRC
-/// work, not just the number of candidates, so a damaged save cannot stall
-/// recovery.
+/// Returns the record and the bytes actually read, so a caller that accepts a
+/// record can refund the charge. A corrupt payload can contain many magic-like
+/// headers that each declare a near-`MAX_RECORD_BYTES` payload; the budget
+/// bounds the total CRC work, not just the number of candidates, so a damaged
+/// save cannot stall recovery.
 fn read_record_with_budget<R: Read>(
     r: &mut R,
     pos: u64,
     total: u64,
     budget: &mut u64,
-) -> io::Result<Option<RecordHeader>> {
+) -> io::Result<(Option<RecordHeader>, u64)> {
     if *budget < HDR as u64 {
         *budget = 0;
-        return Ok(None);
+        return Ok((None, 0));
     }
     *budget -= HDR as u64;
+    let mut cost = HDR as u64;
     let mut h = [0u8; HDR];
     match r.read_exact(&mut h) {
         Ok(()) => {}
-        Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => return Ok(None),
+        Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => return Ok((None, cost)),
         Err(error) => return Err(error),
     }
     let Some(record) = parse_header(&h) else {
-        return Ok(None);
+        return Ok((None, cost));
     };
     if record.len > MAX_RECORD_BYTES || pos + HDR as u64 + record.len as u64 > total {
-        return Ok(None);
+        return Ok((None, cost));
     }
-    let cost = u64::from(record.len);
-    if cost > *budget {
+    let payload_cost = u64::from(record.len);
+    if payload_cost > *budget {
         *budget = 0;
-        return Ok(None);
+        return Ok((None, cost));
     }
-    *budget -= cost;
+    *budget -= payload_cost;
+    cost += payload_cost;
     let mut payload = vec![0u8; record.len as usize];
     match r.read_exact(&mut payload) {
         Ok(()) => {}
-        Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => return Ok(None),
+        Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => return Ok((None, cost)),
         Err(error) => return Err(error),
     }
-    Ok((crc32(&payload) == record.crc).then_some(record))
+    Ok(((crc32(&payload) == record.crc).then_some(record), cost))
 }
 
 /// Searches `from..total` for the next CRC-valid record start.
@@ -172,19 +176,22 @@ fn read_record_with_budget<R: Read>(
 /// Scans block by block for [`MAGIC`], verifying each candidate in full before
 /// accepting it, so bytes that merely look like a header inside a payload do
 /// not desynchronise the log.
-fn resync<R: Read + Seek>(r: &mut R, from: u64, total: u64) -> io::Result<Option<u64>> {
+fn resync<R: Read + Seek>(
+    r: &mut R,
+    from: u64,
+    total: u64,
+    budget: &mut u64,
+) -> io::Result<Option<u64>> {
     const BLOCK: usize = 64 * 1024;
     // A corrupt payload can hold thousands of accidental magic values, and each
     // verification CRC-reads a record of up to MAX_RECORD_BYTES. Bound both the
-    // number of misses and the bytes spent verifying them, so a 17 MiB region
-    // cannot cause gigabytes of CRC work; the unrecovered tail is counted in
+    // number of misses and the shared byte budget, so a 17 MiB region cannot
+    // cause gigabytes of CRC work; the unrecovered tail is counted in
     // `recovered_bytes`, so the truncation is reported rather than silent.
     const MAX_FAILED: u32 = 256;
-    const MAX_BYTES: u64 = 64 << 20;
     let magic = MAGIC.to_le_bytes();
     let mut buf = vec![0u8; BLOCK + 3];
     let mut failed = 0u32;
-    let mut budget = MAX_BYTES;
     let mut base = from;
     while base + HDR as u64 <= total {
         r.seek(SeekFrom::Start(base))?;
@@ -205,11 +212,16 @@ fn resync<R: Read + Seek>(r: &mut R, from: u64, total: u64) -> io::Result<Option
             }
             let candidate = base + i as u64;
             r.seek(SeekFrom::Start(candidate))?;
-            if read_record_with_budget(r, candidate, total, &mut budget)?.is_some() {
+            let (record, cost) = read_record_with_budget(r, candidate, total, budget)?;
+            if record.is_some() {
+                // The caller re-reads this record to decode it; refund the
+                // verification so a large valid record after corruption does
+                // not exhaust the recovery budget.
+                *budget = budget.saturating_add(cost);
                 return Ok(Some(candidate));
             }
             failed += 1;
-            if failed == MAX_FAILED || budget == 0 {
+            if failed == MAX_FAILED || *budget == 0 {
                 return Ok(None);
             }
         }
@@ -238,11 +250,13 @@ fn scan(file: &mut File) -> io::Result<Scan> {
     let mut skipped = 0u64;
     {
         let mut r = BufReader::new(&*file);
+        let mut budget = MAX_RECOVERY_BYTES;
         while pos < total {
-            let Some(record) = read_record(&mut r, pos, total)? else {
+            let (record, cost) = read_record_with_budget(&mut r, pos, total, &mut budget)?;
+            let Some(record) = record else {
                 // A corrupt record does not end the log: keep every record
                 // after it instead of truncating them away.
-                let Some(next) = resync(&mut r, pos + 1, total)? else {
+                let Some(next) = resync(&mut r, pos + 1, total, &mut budget)? else {
                     break;
                 };
                 skipped += next - pos;
@@ -252,6 +266,9 @@ fn scan(file: &mut File) -> io::Result<Scan> {
                 r.seek(SeekFrom::Start(pos))?;
                 continue;
             };
+            // This record verified, so scanning it is real work rather than
+            // adversarial recovery; refund it and keep the budget for failures.
+            budget = budget.saturating_add(cost);
             let e = index.entry(record.cell).or_default();
             match record.kind {
                 KIND_DAG => {
@@ -531,7 +548,13 @@ mod tests {
             header,
             served: false,
         };
-        assert!(read_record(&mut reader, 0, total).unwrap().is_none());
+        let mut budget = u64::MAX;
+        assert!(
+            read_record_with_budget(&mut reader, 0, total, &mut budget)
+                .unwrap()
+                .0
+                .is_none()
+        );
     }
 
     #[test]
@@ -545,11 +568,9 @@ mod tests {
         // One byte short of the header plus payload: the payload must not be
         // read, and the budget is reported as exhausted.
         let mut budget = HDR as u64 + 31;
-        assert!(
-            read_record_with_budget(&mut reader, 0, total, &mut budget)
-                .unwrap()
-                .is_none()
-        );
+        let (record, cost) = read_record_with_budget(&mut reader, 0, total, &mut budget).unwrap();
+        assert!(record.is_none());
+        assert_eq!(cost, HDR as u64, "only the header was read");
         assert_eq!(budget, 0, "an unaffordable payload exhausts the budget");
     }
 
