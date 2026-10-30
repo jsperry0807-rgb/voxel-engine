@@ -5,13 +5,14 @@
 //! measures both on the same resident neighbourhood and reports the byte ratio
 //! that the task's 25% limit is written against.
 
+use std::mem::size_of;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 use voxel_storage::gpu::MemSink;
 use voxel_storage::world::World;
-use voxel_storage::{AIR, CHUNK_DIM, ChunkPos, local_index};
+use voxel_storage::{AIR, Apron, CHUNK_DIM, ChunkPos, local_index};
 
 type FillFn = Box<dyn FnMut(ChunkPos, &mut [u16]) + Send>;
 
@@ -73,49 +74,78 @@ fn load_around(world: &mut World<MemSink>) {
     world.load(POS).unwrap();
 }
 
-/// Reads the full padded volume one voxel at a time.
-fn dense_read(world: &World<MemSink>, out: &mut [u16]) {
+/// Materialises the full padded volume the way a dense mesher would: resolve
+/// each resident chunk once (the centre and six face neighbours; the other 20
+/// read as air, exactly as the apron does), then copy its voxels into the
+/// padded buffer.
+///
+/// The earlier version called `World::get` per padded voxel, which measured
+/// 287 k hash lookups instead of the copy the apron is meant to avoid.
+fn dense_copy(world: &World<MemSink>, out: &mut [u16]) {
     let edge = CHUNK_DIM as i32;
     let padded = CHUNK_DIM + 2;
-    let origin = (POS.x * edge, POS.y * edge, POS.z * edge);
-    for z in -1..=edge {
-        for y in -1..=edge {
-            for x in -1..=edge {
-                let value = world
-                    .get(origin.0 + x, origin.1 + y, origin.2 + z)
-                    .map(|material| material.as_raw())
-                    .unwrap_or(AIR);
-                let index = (x + 1) as usize
-                    + (y + 1) as usize * padded
-                    + (z + 1) as usize * padded * padded;
-                out[index] = value;
+    let limit = padded as i32;
+    out.fill(AIR);
+
+    for dz in -1..=1 {
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                let pos = ChunkPos::new(POS.x + dx, POS.y + dy, POS.z + dz);
+                let Some(chunk) = world.chunk(pos) else {
+                    continue;
+                };
+                // Chunk-local 0 maps to padded coordinate `d * edge + 1`.
+                let base = [dx * edge + 1, dy * edge + 1, dz * edge + 1];
+                for pz in base[2].max(0)..(base[2] + edge).min(limit) {
+                    for py in base[1].max(0)..(base[1] + edge).min(limit) {
+                        for px in base[0].max(0)..(base[0] + edge).min(limit) {
+                            let local = local_index(
+                                (px - base[0]) as u32,
+                                (py - base[1]) as u32,
+                                (pz - base[2]) as u32,
+                            );
+                            let index =
+                                px as usize + py as usize * padded + pz as usize * padded * padded;
+                            out[index] = chunk.material(local);
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 fn face_plane_bytes() -> u64 {
-    6 * CHUNK_DIM as u64 * CHUNK_DIM as u64 * 2
+    // Derived from the type, so a plane-geometry change moves the ratio.
+    6 * Apron::PLANE as u64 * size_of::<u16>() as u64
 }
 
 fn dense_bytes() -> u64 {
     let edge = CHUNK_DIM as u64 + 2;
-    edge * edge * edge * 2
+    edge * edge * edge * size_of::<u16>() as u64
 }
 
 fn measure_ratio(world: &World<MemSink>) -> (Duration, Duration) {
+    // Warm both buffers and the allocator before timing.
+    let mut apron = Apron::new();
+    world.apron_into(POS, &mut apron);
+    let mut dense = vec![0u16; (CHUNK_DIM + 2).pow(3)];
+    dense_copy(world, &mut dense);
+
     let apron_iterations = 200;
     let start = Instant::now();
     for _ in 0..apron_iterations {
-        black_box(world.apron(POS));
+        world.apron_into(POS, &mut apron);
+        black_box(&apron);
     }
     let apron = start.elapsed() / apron_iterations;
 
-    let mut dense = vec![0u16; (CHUNK_DIM + 2).pow(3)];
-    let dense_iterations = 3;
+    // The dense copy is two orders of magnitude slower; ten iterations are
+    // enough to average out page faults without stalling the bench.
+    let dense_iterations = 10;
     let start = Instant::now();
     for _ in 0..dense_iterations {
-        dense_read(world, &mut dense);
+        dense_copy(world, &mut dense);
         black_box(&dense);
     }
     let dense = start.elapsed() / dense_iterations;
@@ -123,7 +153,8 @@ fn measure_ratio(world: &World<MemSink>) -> (Duration, Duration) {
 }
 
 fn apron_vs_dense(c: &mut Criterion) {
-    let mut world = World::new(tmp(), terrain(), MemSink::default()).unwrap();
+    let dir = tmp();
+    let mut world = World::new(dir.clone(), terrain(), MemSink::default()).unwrap();
     load_around(&mut world);
 
     let (apron, dense) = measure_ratio(&world);
@@ -142,16 +173,27 @@ fn apron_vs_dense(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("apron");
     group.throughput(Throughput::Bytes(face_plane_bytes()));
-    group.bench_function("face_planes", |b| b.iter(|| black_box(world.apron(POS))));
+    let mut apron = Apron::new();
+    group.bench_function("face_planes", |b| {
+        b.iter(|| {
+            world.apron_into(POS, &mut apron);
+            black_box(&apron);
+        })
+    });
     group.throughput(Throughput::Bytes(dense_bytes()));
     let mut dense = vec![0u16; (CHUNK_DIM + 2).pow(3)];
     group.bench_function("dense_padded", |b| {
         b.iter(|| {
-            dense_read(&world, &mut dense);
+            dense_copy(&world, &mut dense);
             black_box(&dense);
         })
     });
     group.finish();
+
+    // Region files are written under a per-run temp directory; drop the world
+    // (and its handles) before removing it, like `benches/store.rs` does.
+    drop(world);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 criterion_group!(benches, apron_vs_dense);

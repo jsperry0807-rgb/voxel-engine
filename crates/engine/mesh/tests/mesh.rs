@@ -24,15 +24,24 @@ fn mesh_block_single_voxel_uses_outward_corners() {
     assert_eq!(mesh.indices.len(), 36);
     assert_eq!(mesh.byte_len(), 6 * 76);
 
-    let top = mesh
+    let mut top: Vec<_> = mesh
         .vertices
         .iter()
-        .find(|vertex| vertex.face == 2 && vertex.local[1] == 9)
-        .expect("top face vertices at y = 9");
-    assert_eq!(top.material, 1);
-    assert_eq!(top.ao, [255; 4]);
-    assert!(top.local[0] == 8 || top.local[0] == 9);
-    assert!(top.local[2] == 8 || top.local[2] == 9);
+        .filter(|vertex| vertex.face == 2 && vertex.local[1] == 9)
+        .collect();
+    assert_eq!(top.len(), 4, "the top face is one quad");
+    for vertex in &top {
+        assert_eq!(vertex.material, 1);
+        assert_eq!(vertex.ao, [255; 4]);
+    }
+    top.sort_unstable_by_key(|vertex| (vertex.local[0], vertex.local[2]));
+    assert_eq!(
+        top.iter()
+            .map(|vertex| (vertex.local[0], vertex.local[2]))
+            .collect::<Vec<_>>(),
+        vec![(8, 8), (8, 9), (9, 8), (9, 9)],
+        "the top quad covers all four corners of voxel (8, 8, 8)"
+    );
 
     let bottom = mesh
         .vertices

@@ -126,7 +126,7 @@ fn run_gui(workspace: Workspace) -> ExitCode {
             .with_min_inner_size([1080.0, 720.0]),
         ..Default::default()
     };
-    prefer_x11(&mut options);
+    voxel_app_support::prefer_x11_event_loop(&mut options);
     let result = eframe::run_native(
         "Voxel Texgen",
         options,
@@ -139,31 +139,6 @@ fn run_gui(workspace: Workspace) -> ExitCode {
             ExitCode::FAILURE
         }
     }
-}
-
-/// Prefers X11 through XWayland, the same rule the launcher and viewer follow.
-///
-/// eframe takes Wayland whenever `WAYLAND_DISPLAY` is set. On WSLg the
-/// Wayland/EGL path can fail to create a usable surface, while XWayland works.
-/// Set `VOXEL_VIEWER_WAYLAND=1` to keep the native backend.
-fn prefer_x11(options: &mut eframe::NativeOptions) {
-    #[cfg(all(
-        unix,
-        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
-    ))]
-    {
-        use winit::platform::x11::EventLoopBuilderExtX11;
-
-        if std::env::var_os("VOXEL_VIEWER_WAYLAND").is_none()
-            && std::env::var_os("DISPLAY").is_some()
-        {
-            options.event_loop_builder = Some(Box::new(|builder| {
-                builder.with_x11();
-            }));
-        }
-    }
-    // The parameter is unused on hosts where the block above is compiled out.
-    let _ = options;
 }
 
 fn print_help() {

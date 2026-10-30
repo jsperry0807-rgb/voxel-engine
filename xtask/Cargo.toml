@@ -8,3 +8,6 @@ description = "Preflight helpers for the workspace, including the Windows cross-
 [[bin]]
 name = "xtask"
 path = "src/main.rs"
+
+[dependencies]
+voxel-core = { path = "../crates/core" }

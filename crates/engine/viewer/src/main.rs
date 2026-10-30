@@ -187,9 +187,7 @@ fn build_event_loop() -> Result<EventLoop<()>, winit::error::EventLoopError> {
     {
         use winit::platform::x11::EventLoopBuilderExtX11;
 
-        if std::env::var_os("VOXEL_VIEWER_WAYLAND").is_none()
-            && std::env::var_os("DISPLAY").is_some()
-        {
+        if voxel_app_support::prefer_x11() {
             builder.with_x11();
             log::info!("using X11/XWayland (set VOXEL_VIEWER_WAYLAND=1 for Wayland)");
         }

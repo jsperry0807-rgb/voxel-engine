@@ -7,21 +7,10 @@
 //! is an explicit step: `cargo setup-win` (or `doctor --install`).
 
 use std::io::{self, IsTerminal};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
 
-/// The target the Windows cross-build produces.
-const TARGET: &str = "x86_64-pc-windows-gnu";
-/// Tools provided by mingw-w64. `gcc` drives the link and reaches for the
-/// others by name, so a partial install fails late and confusingly; check all
-/// of them up front.
-const TOOLS: &[&str] = &[
-    "x86_64-w64-mingw32-gcc",
-    "x86_64-w64-mingw32-ld",
-    "x86_64-w64-mingw32-ar",
-    "x86_64-w64-mingw32-dlltool",
-    "x86_64-w64-mingw32-windres",
-];
+use voxel_core::win_toolchain::{self, Missing, TARGET};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -51,8 +40,17 @@ fn build_win(args: &[String]) -> ExitCode {
     let mut cargo_args = Vec::new();
     for arg in args {
         match arg.as_str() {
+            "-h" | "--help" => {
+                print_help();
+                return ExitCode::SUCCESS;
+            }
             "--install" => install = true,
             "--no-install" => install = false,
+            other if other == "--target" || other.starts_with("--target=") => {
+                return usage_error(
+                    "build-win fixes --target; run `cargo build --target …` directly",
+                );
+            }
             _ => cargo_args.push(arg.clone()),
         }
     }
@@ -83,19 +81,25 @@ fn doctor(args: &[String]) -> ExitCode {
     let mut install = false;
     for arg in args {
         match arg.as_str() {
+            "-h" | "--help" => {
+                print_help();
+                return ExitCode::SUCCESS;
+            }
             "--install" => install = true,
             "--no-install" | "--check" => install = false,
             other => return usage_error(&format!("unknown doctor argument `{other}`")),
         }
     }
 
-    let missing = missing_toolchain();
+    let missing = win_toolchain::missing();
     if missing.is_empty() {
         println!("Windows cross-build toolchain is ready ({TARGET}).");
         return ExitCode::SUCCESS;
     }
     if !install {
-        missing.report();
+        if let Some(summary) = missing.summary() {
+            eprintln!("{summary}");
+        }
         eprintln!("xtask: run `cargo setup-win` to install the missing pieces.");
         return ExitCode::FAILURE;
     }
@@ -108,11 +112,13 @@ fn doctor(args: &[String]) -> ExitCode {
 }
 
 fn ensure_toolchain(install: bool) -> Result<(), String> {
-    let missing = missing_toolchain();
+    let missing = win_toolchain::missing();
     if missing.is_empty() {
         return Ok(());
     }
-    missing.report();
+    if let Some(summary) = missing.summary() {
+        eprintln!("{summary}");
+    }
 
     if !install {
         return Err(
@@ -129,67 +135,15 @@ fn ensure_toolchain(install: bool) -> Result<(), String> {
 
     install_missing(&missing)?;
 
-    let missing = missing_toolchain();
+    let missing = win_toolchain::missing();
     if missing.is_empty() {
         Ok(())
     } else {
-        missing.report();
+        if let Some(summary) = missing.summary() {
+            eprintln!("{summary}");
+        }
         Err("the installer finished, but the toolchain is still incomplete".to_owned())
     }
-}
-
-/// What the Windows cross-build is missing right now.
-struct Missing {
-    target: bool,
-    tools: Vec<&'static str>,
-}
-
-impl Missing {
-    fn is_empty(&self) -> bool {
-        !self.target && self.tools.is_empty()
-    }
-
-    fn report(&self) {
-        eprintln!("Windows cross-build prerequisites are missing:");
-        if self.target {
-            eprintln!("  - Rust target {TARGET} (rustup target add {TARGET})");
-        }
-        if !self.tools.is_empty() {
-            eprintln!("  - mingw-w64: {}", self.tools.join(", "));
-        }
-    }
-}
-
-fn missing_toolchain() -> Missing {
-    Missing {
-        target: !target_installed(),
-        tools: TOOLS
-            .iter()
-            .copied()
-            .filter(|tool| !program_on_path(tool))
-            .collect(),
-    }
-}
-
-/// True when `rustc` has the standard library for the cross target.
-fn target_installed() -> bool {
-    let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
-    let Ok(output) = Command::new(rustc)
-        .args(["--print", "sysroot"])
-        .stderr(Stdio::null())
-        .output()
-    else {
-        return false;
-    };
-    if !output.status.success() {
-        return false;
-    }
-    let sysroot = String::from_utf8_lossy(&output.stdout);
-    Path::new(sysroot.trim())
-        .join("lib/rustlib")
-        .join(TARGET)
-        .join("lib")
-        .is_dir()
 }
 
 fn install_missing(missing: &Missing) -> Result<(), String> {
@@ -203,7 +157,7 @@ fn install_missing(missing: &Missing) -> Result<(), String> {
 }
 
 fn install_target() -> Result<(), String> {
-    if !program_on_path("rustup") {
+    if !win_toolchain::program_on_path("rustup") {
         return Err(format!(
             "the Rust target is missing and rustup is not on PATH; \
              install {TARGET} with your Rust distribution"
@@ -233,28 +187,28 @@ fn install_mingw() -> Result<(), String> {
 }
 
 fn mingw_install_command() -> Result<(&'static str, Vec<&'static str>), String> {
-    if program_on_path("apt-get") {
+    if win_toolchain::program_on_path("apt-get") {
         return Ok(("apt-get", vec!["install", "-y", "mingw-w64"]));
     }
-    if program_on_path("dnf") {
+    if win_toolchain::program_on_path("dnf") {
         return Ok((
             "dnf",
             vec!["install", "-y", "mingw64-gcc", "mingw64-binutils"],
         ));
     }
-    if program_on_path("yum") {
+    if win_toolchain::program_on_path("yum") {
         return Ok((
             "yum",
             vec!["install", "-y", "mingw64-gcc", "mingw64-binutils"],
         ));
     }
-    if program_on_path("pacman") {
+    if win_toolchain::program_on_path("pacman") {
         return Ok((
             "pacman",
             vec!["-S", "--needed", "--noconfirm", "mingw-w64-gcc"],
         ));
     }
-    if program_on_path("brew") {
+    if win_toolchain::program_on_path("brew") {
         return Ok(("brew", vec!["install", "mingw-w64"]));
     }
     Err("no supported package manager found; install mingw-w64 \
@@ -268,7 +222,7 @@ fn run_privileged(program: &str, args: &[&str]) -> Result<(), String> {
         return run(with_args(program, args), program);
     }
 
-    if program_on_path("sudo") {
+    if win_toolchain::program_on_path("sudo") {
         let passwordless = passwordless_sudo();
         // Passwordless sudo works from the launcher's no-terminal job too.
         if passwordless || io::stdin().is_terminal() {
@@ -279,7 +233,7 @@ fn run_privileged(program: &str, args: &[&str]) -> Result<(), String> {
             command.arg(program).args(args);
             return run(command, program);
         }
-        if program_on_path("pkexec") {
+        if win_toolchain::program_on_path("pkexec") {
             let mut command = Command::new("pkexec");
             command.arg(program).args(args);
             return run(command, program);
@@ -291,7 +245,7 @@ fn run_privileged(program: &str, args: &[&str]) -> Result<(), String> {
         );
     }
 
-    if program_on_path("pkexec") {
+    if win_toolchain::program_on_path("pkexec") {
         let mut command = Command::new("pkexec");
         command.arg(program).args(args);
         return run(command, program);
@@ -309,11 +263,15 @@ fn with_args(program: &str, args: &[&str]) -> Command {
 }
 
 /// True when the toolchain can be installed without an interactive terminal.
+///
+/// This mirrors [`run_privileged`]: if `pkexec` exists it is a usable path even
+/// when `sudo` also exists but needs a password, which is exactly the launcher's
+/// no-terminal case.
 fn can_install() -> bool {
     is_root()
         || io::stdin().is_terminal()
         || passwordless_sudo()
-        || (!program_on_path("sudo") && program_on_path("pkexec"))
+        || win_toolchain::program_on_path("pkexec")
 }
 
 fn run(mut command: Command, what: &str) -> Result<(), String> {
@@ -324,29 +282,6 @@ fn run(mut command: Command, what: &str) -> Result<(), String> {
         Ok(())
     } else {
         Err(format!("`{what}` failed with {status}"))
-    }
-}
-
-/// True when `name` resolves to an executable on `PATH`.
-fn program_on_path(name: &str) -> bool {
-    std::env::var_os("PATH").is_some_and(|paths| {
-        std::env::split_paths(&paths).any(|dir| {
-            let path = dir.join(name);
-            path.is_file() && is_executable(&path)
-        })
-    })
-}
-
-fn is_executable(path: &Path) -> bool {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        path.metadata()
-            .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
-    }
-    #[cfg(not(unix))]
-    {
-        path.is_file()
     }
 }
 
@@ -361,7 +296,7 @@ fn is_root() -> bool {
 }
 
 fn passwordless_sudo() -> bool {
-    program_on_path("sudo")
+    win_toolchain::program_on_path("sudo")
         && Command::new("sudo")
             .args(["-n", "true"])
             .stdin(Stdio::null())

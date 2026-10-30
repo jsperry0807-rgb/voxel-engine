@@ -6,8 +6,8 @@ use voxel_block::texture_manifest::AlphaClass;
 use voxel_block::texture_manifest::Tiling;
 use voxel_texgraph::bake;
 use voxel_texgraph::eval;
-use voxel_texgraph::graph::{AlphaSource, Graph, Node, Op, Output, UiPosition};
-use voxel_texgraph::pipeline::{self, Workspace};
+use voxel_texgraph::graph::{AlphaSource, Graph, GraphError, Node, Op, Output, UiPosition};
+use voxel_texgraph::pipeline::{self, PipelineError, Workspace};
 
 fn workspace() -> Workspace {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -138,6 +138,60 @@ fn graph_ron_round_trips_editor_positions() {
     let loaded = Graph::load(&temp).expect("load");
     let _ = std::fs::remove_file(&temp);
     assert_eq!(loaded, graph);
+}
+
+#[test]
+fn save_reports_io_failures_as_io() {
+    let dir = std::env::temp_dir().join(format!(
+        "voxel-texgen-save-io-{}-{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    // A file cannot be a parent, so `create_dir_all` fails with ENOTDIR.
+    let parent = dir.join("not-a-directory");
+    std::fs::write(&parent, b"x").expect("write file");
+    let graph = graph(vec![node(0, Op::Const { value: 1 }, vec![])], 0);
+    let error = graph
+        .save(&parent.join("graph.ron"))
+        .expect_err("saving under a file must fail");
+    assert!(
+        matches!(error, GraphError::Io { .. }),
+        "the io kind must survive: {error:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn failed_atomic_write_leaves_no_temp_file() {
+    let dir = std::env::temp_dir().join(format!(
+        "voxel-texgen-atomic-{}-{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    // Renaming a file onto an existing directory fails, after the temp file
+    // has been written and synced.
+    let target = dir.join("target.ron");
+    std::fs::create_dir(&target).expect("target directory");
+    let error = pipeline::write_atomic(&target, b"data").expect_err("rename must fail");
+    assert!(
+        matches!(error, PipelineError::Io { .. }),
+        "expected an io error: {error:?}"
+    );
+    let leftovers: Vec<String> = std::fs::read_dir(&dir)
+        .expect("read temp dir")
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.contains(".tmp-"))
+        .collect();
+    assert!(
+        leftovers.is_empty(),
+        "a failed write left temp files behind: {leftovers:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

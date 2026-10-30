@@ -100,7 +100,14 @@ impl BlockScratch {
     }
 
     /// The material at scratch-local `(x, y, z)`.
+    ///
+    /// Coordinates are the full scratch, `0..18`; out-of-range values would
+    /// silently read a neighbouring cell, so debug builds reject them.
     pub fn get(&self, x: u32, y: u32, z: u32) -> u16 {
+        debug_assert!(
+            x < SCRATCH_EDGE as u32 && y < SCRATCH_EDGE as u32 && z < SCRATCH_EDGE as u32,
+            "scratch read ({x}, {y}, {z}) is outside {SCRATCH_EDGE}³"
+        );
         self.voxels[index(x, y, z)]
     }
 

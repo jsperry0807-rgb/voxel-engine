@@ -15,6 +15,16 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 OUT="${OUT:-target/bench}"
 mkdir -p "$OUT"
 
+# The perf lens runs the binary directly, so resolve Cargo's target directory
+# instead of assuming ./target.
+TARGET_DIR="${CARGO_TARGET_DIR:-}"
+if [[ -z "$TARGET_DIR" ]]; then
+  TARGET_DIR=$(cargo metadata --no-deps --format-version 1 2>/dev/null \
+    | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')
+fi
+TARGET_DIR="${TARGET_DIR:-target}"
+[[ "$TARGET_DIR" = /* ]] || TARGET_DIR="$PWD/$TARGET_DIR"
+
 echo "== software lenses: memory, CPU, latency =="
 cargo run --release -p voxel-bench -- all --out "$OUT"
 
@@ -34,7 +44,7 @@ if command -v perf >/dev/null 2>&1; then
   echo "== perf stat: whole CPU-lens process =="
   if perf stat \
       -e task-clock,cycles,instructions,cache-references,cache-misses,branch-instructions,branch-misses,page-faults \
-      ./target/release/voxel-bench cpu --out "$OUT/perf-run" \
+      "$TARGET_DIR/release/voxel-bench" cpu --out "$OUT/perf-run" \
       2> "$OUT/perf.txt"; then
     echo "perf counters -> $OUT/perf.txt"
   else

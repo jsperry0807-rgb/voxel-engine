@@ -78,6 +78,9 @@ const _: () = {
     assert!(SLOT_ROOT == SLOT_Z + 1);
     assert!(SLOT_TABLE == SLOT_ROOT + 1);
     assert!(SLOT_WORDS == SLOT_TABLE + 1);
+    // An `EMPTY` slot must probe as a miss, which requires the block-table word
+    // to be `NO_TABLE`; a zeroed table would read as a valid root instead.
+    assert!(EMPTY == NO_TABLE);
     assert!(INITIAL_SLOTS.is_power_of_two());
 };
 

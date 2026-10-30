@@ -34,9 +34,10 @@ impl Mesh {
 
 /// Builds the mesh for one block's greedy rectangles.
 ///
-/// `block` supplies the chunk-local origin. A full block emits at most 11,520
-/// quads (16 × 16 faces × 6 orientations), which is 46,080 vertices and still
-/// fits the meshlet-local `u16` index range.
+/// `block` supplies the chunk-local origin. The greedy core emits at most one
+/// quad per exposed voxel face; the worst case is a 16³ checkerboard, 12,288
+/// faces, so 49,152 vertices, still inside the meshlet-local `u16` range. Hand
+/// built input beyond that trips the vertex-range assert below.
 ///
 /// # Panics
 ///
@@ -58,13 +59,20 @@ pub fn mesh_block(quads: &[GreedyQuad], block: BlockPos) -> Mesh {
             quad.origin
         );
         assert!(
-            quad.extent.iter().all(|&extent| extent > 0),
-            "quad extent {:?} is empty",
+            quad.extent
+                .iter()
+                .all(|&extent| (1..=BLOCK_EDGE as u32).contains(&extent)),
+            "quad extent {:?} is empty or larger than the block",
             quad.extent
         );
         for axis in 0..3 {
+            // `extent` is unbounded above, so a plain add can wrap in release
+            // and let a hand-built quad through.
+            let end = quad.origin[axis]
+                .checked_add(quad.extent[axis])
+                .filter(|&end| end <= BLOCK_EDGE as u32 + 1);
             assert!(
-                quad.origin[axis] + quad.extent[axis] <= BLOCK_EDGE as u32 + 1,
+                end.is_some(),
                 "quad origin {:?} extent {:?} runs past the block",
                 quad.origin,
                 quad.extent

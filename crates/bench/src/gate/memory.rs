@@ -12,7 +12,7 @@
 //! | Light | [`LIGHT_BYTES_PER_CHUNK`] (1 KiB at 64³, 8 KiB at 128³) |
 //! | Probes | [`PROBE_BYTES_PER_CHUNK`] (768 B at 64³, 6 KiB at 128³) |
 //! | Mesh | M1-31 greedy quads × 76 B; count-only, no vertex/index buffer overhead |
-//! | Total | The five components above, per chunk |
+//! | Total | The six components above, per chunk |
 //!
 //! The DAG row is the authoritative banded layout. The transitional v1 `Svdag`
 //! pool is still resident for GPU and disk compatibility, so it is its own
@@ -106,7 +106,7 @@ pub struct MemoryComponents {
     pub probes: ComponentDistribution,
     /// M1-31 count-only greedy mesh estimate.
     pub mesh: ComponentDistribution,
-    /// Sum of the five components above, per chunk.
+    /// Sum of the six components above, per chunk.
     pub total: ComponentDistribution,
 }
 

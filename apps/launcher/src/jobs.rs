@@ -302,7 +302,7 @@ impl Runner {
             return;
         }
         if let Some(mut child) = job.child.take() {
-            terminate(&mut child);
+            terminate(&mut child, STOP_GRACE);
         }
         job.status = Status::Stopped;
         job.finished = Some(Instant::now());
@@ -341,7 +341,9 @@ impl Drop for Runner {
                 continue;
             }
             if let Some(mut child) = job.child.take() {
-                terminate(&mut child);
+                // Closing the window must not freeze the UI while every job
+                // waits out the grace period; go straight to the group kill.
+                terminate(&mut child, Duration::ZERO);
             }
             job.status = Status::Stopped;
             job.finished = Some(Instant::now());
@@ -371,15 +373,44 @@ fn pump<R: Read + Send + 'static>(stream: R, sender: Sender<Event>) {
     });
 }
 
-/// Kills a child and, on Unix, the process group it leads.
-fn terminate(child: &mut Child) {
+/// How long an interactive Stop lets a job exit before the group is killed.
+const STOP_GRACE: Duration = Duration::from_millis(500);
+
+/// Terminates a child and, on Unix, the process group it leads.
+///
+/// The setup job can be a package manager, so an interactive stop gets a
+/// `SIGTERM` and a grace period before the group is killed: killing `dpkg`
+/// mid-unpack leaves a lock and a half-installed package behind. The group is
+/// killed even when the leader exited, because a member that ignores `SIGTERM`
+/// (a linker, a package manager) would otherwise keep running.
+fn terminate(child: &mut Child, grace: Duration) {
     #[cfg(unix)]
     {
         let pid = child.id() as i32;
         // `process_group(0)` made the child a group leader, so a negative pid
         // reaches Cargo and anything it spawned (for example the viewer).
         unsafe {
-            libc::kill(-pid, libc::SIGKILL);
+            libc::kill(-pid, libc::SIGTERM);
+        }
+        let mut reaped = false;
+        let steps = (grace.as_millis() / 25) as usize;
+        for _ in 0..steps {
+            match child.try_wait() {
+                Ok(Some(_)) => {
+                    reaped = true;
+                    break;
+                }
+                Ok(None) => std::thread::sleep(Duration::from_millis(25)),
+                Err(_) => break,
+            }
+        }
+        // `kill(-pid, 0)` probes the group: the leader can be gone while a
+        // member that ignores SIGTERM is still alive.
+        let group_alive = unsafe { libc::kill(-pid, 0) == 0 };
+        if !reaped || group_alive {
+            unsafe {
+                libc::kill(-pid, libc::SIGKILL);
+            }
         }
     }
     let _ = child.kill();
