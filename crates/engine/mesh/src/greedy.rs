@@ -26,7 +26,8 @@ use crate::{BLOCK_EDGE, BlockScratch};
 pub struct MergeKey {
     /// Outward face orientation.
     pub face: Face,
-    /// Atlas material id.
+    /// Block material id from the chunk volume (resolved to an atlas slot
+    /// before upload).
     pub material: u16,
     /// Four corner AO values in `0..=255`.
     pub ao: [u8; 4],
@@ -44,7 +45,7 @@ impl MergeKey {
 pub struct GreedyQuad {
     /// Outward face orientation.
     pub face: Face,
-    /// Atlas material id of the exposed faces.
+    /// Block material id of the exposed faces.
     pub material: u16,
     /// Four corner AO values copied from the merge key.
     pub ao: [u8; 4],

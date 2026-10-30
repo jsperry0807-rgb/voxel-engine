@@ -25,7 +25,7 @@ pub use light::{
 };
 
 mod mesh;
-pub use mesh::{Mesh, mesh_block, mesh_face};
+pub use mesh::{Mesh, face_from_code, mesh_block, mesh_face};
 
 mod vertex;
 pub use vertex::Vertex;

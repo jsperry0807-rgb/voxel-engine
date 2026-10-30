@@ -21,6 +21,30 @@ pub struct Mesh {
 }
 
 impl Mesh {
+    /// Rewrites every vertex's block material id into the atlas slot for its
+    /// face.
+    ///
+    /// ADR-010's vertex carries an atlas id; [`mesh_block`] emits the chunk's
+    /// block id because the mesh crate does not own the material registry.
+    /// Call this once before upload:
+    ///
+    /// ```ignore
+    /// mesh.resolve_materials(|block, face| {
+    ///     registry.face_materials(MaterialId::from_raw(block))
+    ///         .map(|faces| faces.get(face).raw())
+    ///         .unwrap_or(block)
+    /// });
+    /// ```
+    pub fn resolve_materials<F>(&mut self, mut resolve: F)
+    where
+        F: FnMut(u16, Face) -> u16,
+    {
+        for vertex in &mut self.vertices {
+            let face = face_from_code(vertex.face);
+            vertex.material = resolve(vertex.material, face);
+        }
+    }
+
     /// Number of quads in the mesh.
     pub fn quad_count(&self) -> usize {
         self.indices.len() / 6
@@ -112,6 +136,18 @@ fn quad_vertices(quad: &GreedyQuad, block_origin: [u32; 3]) -> [Vertex; 4] {
             (block_origin[v_axis] + v0 + if v_sign < 0 { 0 } else { quad.extent[v_axis] }) as u16;
         Vertex::new(local, quad.material, face, quad.ao)
     })
+}
+
+/// Inverse of [`mesh_face`]: the ADR-010 face code for a vertex.
+pub const fn face_from_code(code: u8) -> Face {
+    match code {
+        0 => Face::East,
+        1 => Face::West,
+        2 => Face::Top,
+        3 => Face::Bottom,
+        4 => Face::South,
+        _ => Face::North,
+    }
 }
 
 /// ADR-010 face code: `0..5 = +X, -X, +Y, -Y, +Z, -Z`.
