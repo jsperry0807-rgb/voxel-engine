@@ -427,9 +427,9 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
   fallback: 64³ Minimum, then mesh compression, near radius, vertical shell.
 
 **M2-02 measured (2026-10-29, development host):** the face planes used 49,152 B
-and 694 µs versus 574,992 B and 10.52 ms for the dense padded read at 64³
-(8.5% / 6.6%); at 128³ they used 196,608 B and 2.70 ms versus 4,394,000 B and
-63.0 ms (4.5% / 4.3%). Apron wins; method and caveats are in
+and 445 µs versus 574,992 B and 4.90 ms for a dense padded copy at 64³
+(8.5% / 9.1%); at 128³ they used 196,608 B and 1.57 ms versus 4,394,000 B and
+27.4 ms (4.5% / 5.7%). Apron wins; method and caveats are in
 [`m2-apron-cost.md`](m2-apron-cost.md).
 
 **M2-03 measured (2026-10-29):** `BlockScratch` is `18³ × 2 B = 11,664 B` per

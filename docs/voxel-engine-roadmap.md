@@ -40,17 +40,17 @@ Two consequences shape the schedule:
 | `voxel-render` | `WgpuSink`, `MaterialBuffers`, `GpuWorld`, `svdag.wgsl` | Upload path; the viewer owns the draw loop |
 | `voxel-viewer` | `winit` + `wgpu` window, fly camera, mouse look, atlas sampling, depth pass, naive per-face mesher, input layer | **M1.5 code complete**; production mesh/light/probes pending |
 | `voxel-texgraph` / `voxel-texgen` | Deterministic node-graph evaluator, manifest, material table, atlas bake, editor and MCP tools | Complete for M1.5 |
-| `voxel-launcher` / `xtask` | Desktop launcher, Linux/Windows builds, toolchain preflight and on-demand install | Complete |
+| `voxel-launcher` / `xtask` | Desktop launcher, Linux/Windows builds, toolchain preflight plus an explicit `setup-win` | Complete |
 | `voxel-bench` | Memory/CPU/latency/counter suites, archived history, `iai` counters | Complete; the gate depends on it |
 
 The M1 layout is in place at both edges; the 128³ variant compiles in CI. M1.5
 added the window, camera, atlas and naive mesher. M2-01 added the apron. The
 production content path is now the work in front of the project.
 
-Still missing: AO, production block light and probes, sparse-set ECS, culling,
-LOD, streaming, persistence, and the measured 128³ gate run. CI, the
-window/camera app, the naive mesher, the apron/driver/greedy core and the
-launcher are in place.
+Still missing: probes, sparse-set ECS, culling, LOD, streaming, persistence,
+and the measured 128³ gate run. AO, production block light, the greedy core,
+the apron and the 16 B vertex stream landed with M2; CI, the window/camera
+app, the naive mesher and the launcher are in place.
 
 ---
 

@@ -79,6 +79,14 @@ where they conflict with the spec.
 - [`../benchmarks/HISTORY.md`](../benchmarks/HISTORY.md) — every recorded run with deltas
 - [`../crates/bench/README.md`](../crates/bench/README.md) — harness internals
 
+## Tooling
+
+- [`../scripts/health.sh`](../scripts/health.sh) — one-shot health check: in-repo gates,
+  external tools (coverage, mutants, deny, audit) and a PASS/FAIL/SKIP summary
+- [`../scripts/bench.sh`](../scripts/bench.sh) — benchmark run and archive (`RECORD=0` keeps
+  it out of `benchmarks/`)
+- [`../scripts/check-constants.sh`](../scripts/check-constants.sh) — the CI constants gate
+
 ## Conventions
 
 - Task IDs (`M1-07`) are stable. Use them in commit messages.

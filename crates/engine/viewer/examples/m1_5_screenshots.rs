@@ -32,100 +32,16 @@ use voxel_viewer::atlas::Atlas;
 use voxel_viewer::atlas_texture::AtlasTexture;
 use voxel_viewer::camera::{Camera, CameraUniform};
 use voxel_viewer::chunk_mesh::ChunkMesh;
+use voxel_viewer::chunk_render::VERTEX_LAYOUT;
 use voxel_viewer::depth::{DEPTH_FORMAT, DepthTarget};
 use voxel_viewer::naive_mesh::{Mesh, Quad, Vertex, mesh_face, naive_mesh};
 
-const SHADER_TEMPLATE: &str = r#"
-struct Camera {
-    view_proj: mat4x4<f32>,
-    view: mat4x4<f32>,
-    proj: mat4x4<f32>,
-    position: vec4<f32>,
-};
+/// The screenshot shader is a template: the atlas tile size and edge are
+/// runtime parameters (16³ runtime atlas vs the 2048² legacy source sheet).
+/// It lives with the runtime shaders so the naga test validates the same
+/// text this example compiles.
+const SHADER_TEMPLATE: &str = include_str!("../src/shaders/screenshot.wgsl");
 
-@group(0) @binding(0)
-var<uniform> camera: Camera;
-
-@group(1) @binding(0)
-var atlas: texture_2d<f32>;
-
-@group(1) @binding(1)
-var atlas_sampler: sampler;
-
-// Width of one atlas tile in texels: 16 for the runtime atlas, 256 for the
-// legacy per-face sources.
-const TILE: f32 = {{TILE}};
-// Tiles per atlas edge: 16 for the 256² atlas, 8 for the 2048² source sheet.
-const EDGE: u32 = {{EDGE}};
-// Atlas edge in texels.
-const ATLAS: f32 = {{ATLAS}};
-
-struct VertexInput {
-    @location(0) local_material: vec4<u32>,
-    @location(1) face_ao0: vec4<u32>,
-    @location(2) ao3_reserved: vec4<u32>,
-};
-
-struct VertexOutput {
-    @builtin(position) clip_position: vec4<f32>,
-    @location(0) local: vec3<f32>,
-    @location(1) @interpolate(flat) material: u32,
-    @location(2) @interpolate(flat) face: u32,
-};
-
-@vertex
-fn vs_main(input: VertexInput) -> VertexOutput {
-    let local = vec3<f32>(
-        f32(input.local_material.x),
-        f32(input.local_material.y),
-        f32(input.local_material.z),
-    );
-    var output: VertexOutput;
-    output.clip_position = camera.view_proj * vec4<f32>(local * 0.0625, 1.0);
-    output.local = local;
-    output.material = input.local_material.w;
-    output.face = input.face_ao0.x;
-    return output;
-}
-
-const FACE_SHADE: array<f32, 6> = array<f32, 6>(0.62, 0.62, 1.0, 0.5, 0.82, 0.72);
-
-@fragment
-fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    let block = floor(input.local / 16.0) * 16.0;
-    let rel = input.local - block;
-    // A 1 m face is 16 voxels wide; the full tile spans that whole face.
-    let scale = TILE / 16.0;
-
-    var face_uv = vec2<f32>(rel.x, rel.y) * scale;
-    if input.face == 0u {
-        face_uv = vec2<f32>(16.0 - rel.z, 16.0 - rel.y) * scale;
-    } else if input.face == 1u {
-        face_uv = vec2<f32>(rel.z, 16.0 - rel.y) * scale;
-    } else if input.face == 2u {
-        face_uv = vec2<f32>(rel.x, 16.0 - rel.z) * scale;
-    } else if input.face == 3u {
-        face_uv = vec2<f32>(rel.x, rel.z) * scale;
-    } else if input.face == 4u {
-        face_uv = vec2<f32>(rel.x, 16.0 - rel.y) * scale;
-    } else {
-        face_uv = vec2<f32>(16.0 - rel.x, 16.0 - rel.y) * scale;
-    }
-
-    let texel = clamp(face_uv, vec2<f32>(0.5), vec2<f32>(TILE - 0.5));
-    let tile_origin =
-        vec2<f32>(f32(input.material % EDGE), f32(input.material / EDGE)) * TILE;
-    let uv = (tile_origin + texel) / ATLAS;
-    let color = textureSample(atlas, atlas_sampler, uv);
-    if color.a < 0.5 {
-        discard;
-    }
-    return vec4<f32>(color.rgb * FACE_SHADE[input.face], color.a);
-}
-"#;
-
-/// One atlas layout: tile width, tiles per edge and atlas edge, in texels.
-#[derive(Clone, Copy)]
 struct AtlasVariant {
     tile_px: u32,
     tiles_per_edge: u32,
@@ -153,30 +69,6 @@ impl AtlasVariant {
             .replace("{{ATLAS}}", &format!("{}.0", self.atlas_px))
     }
 }
-
-const VERTEX_ATTRIBUTES: [wgpu::VertexAttribute; 3] = [
-    wgpu::VertexAttribute {
-        format: wgpu::VertexFormat::Uint16x4,
-        offset: 0,
-        shader_location: 0,
-    },
-    wgpu::VertexAttribute {
-        format: wgpu::VertexFormat::Uint8x4,
-        offset: 8,
-        shader_location: 1,
-    },
-    wgpu::VertexAttribute {
-        format: wgpu::VertexFormat::Uint8x4,
-        offset: 12,
-        shader_location: 2,
-    },
-];
-
-const VERTEX_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
-    array_stride: 16,
-    step_mode: wgpu::VertexStepMode::Vertex,
-    attributes: &VERTEX_ATTRIBUTES,
-};
 
 #[derive(Deserialize)]
 struct Manifest {
@@ -598,7 +490,9 @@ fn write_grass_sheet(gpu: &Gpu, path: &Path, quads: Vec<Quad>) -> Result<(), Box
         sheet[target..target + panel.len()].copy_from_slice(panel);
     }
     for row in 0..height as usize {
-        let target = row * stride + width as usize * 4 - 2;
+        // One whole pixel at the panel's right edge: starting two bytes early
+        // straddled the boundary and bled into the next panel's first pixel.
+        let target = row * stride + width as usize * 4 - 4;
         sheet[target..target + 4].copy_from_slice(&[24, 26, 30, 255]);
     }
     write_png(path, total_width, height, &sheet)?;
@@ -626,10 +520,11 @@ fn write_chunk_sheet(gpu: &Gpu, path: &Path) -> Result<(), Box<dyn Error>> {
         }
         // A thin divider keeps the three exposures distinct without adding text.
         if index < 2 {
-            let x = (index + 1) * width as usize * 4 - 2;
+            // Same rule as the two-panel sheet: one pixel, inside the panel.
+            let x = (index + 1) * width as usize * 4 - 4;
             for row in 0..height as usize {
                 let start = row * stride + x;
-                sheet[start..start + 8].copy_from_slice(&[24, 26, 30, 255].repeat(2));
+                sheet[start..start + 4].copy_from_slice(&[24, 26, 30, 255]);
             }
         }
     }
@@ -801,13 +696,20 @@ impl Gpu {
         );
         self.queue.submit([encoder.finish()]);
         let slice = readback.slice(..);
-        slice.map_async(wgpu::MapMode::Read, |_| {});
+        let (sender, receiver) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            let _ = sender.send(result);
+        });
         self.device
             .poll(wgpu::PollType::Wait {
                 submission_index: None,
                 timeout: None,
             })
-            .expect("device poll");
+            .map_err(|error| format!("device poll after readback: {error}"))?;
+        receiver
+            .recv()
+            .map_err(|_| "readback map callback did not run")?
+            .map_err(|error| format!("map the readback buffer: {error}"))?;
         let mapped = slice.get_mapped_range()?;
         let pixels = mapped.to_vec();
         drop(mapped);
@@ -959,5 +861,8 @@ fn write_png(path: &Path, width: u32, height: u32, pixels: &[u8]) -> Result<(), 
     encoder.set_compression(png::Compression::Fast);
     let mut writer = encoder.write_header()?;
     writer.write_image_data(pixels)?;
+    // `png::Writer`'s Drop writes IEND with `let _ =`, so a full disk would
+    // report success and leave a truncated file. `finish` surfaces the error.
+    writer.finish()?;
     Ok(())
 }

@@ -8,6 +8,8 @@
 
 use std::sync::OnceLock;
 
+use glam::Vec3;
+
 use voxel_core::constants::{CHUNK_BITS, CHUNK_VOLUME};
 use voxel_viewer::atlas::{AtlasBuilder, TILE_BYTES};
 use voxel_viewer::atlas_texture::AtlasTexture;
@@ -67,16 +69,38 @@ fn test_gpu() -> Option<&'static TestGpu> {
 
 #[test]
 fn chunk_shader_is_valid_wgsl() {
-    let source = include_str!("../src/shaders/chunk.wgsl");
+    validate_wgsl("chunk.wgsl", include_str!("../src/shaders/chunk.wgsl"));
+}
+
+#[test]
+fn screenshot_shader_is_valid_wgsl() {
+    // The file is a template; the example substitutes the runtime atlas
+    // dimensions. Validate a concrete instance and that every placeholder the
+    // example replaces still exists.
+    let template = include_str!("../src/shaders/screenshot.wgsl");
+    for token in ["{{TILE}}", "{{EDGE}}", "{{ATLAS}}"] {
+        assert!(
+            template.contains(token),
+            "screenshot.wgsl no longer contains {token}, which the example substitutes"
+        );
+    }
+    let source = template
+        .replace("{{TILE}}", "16.0")
+        .replace("{{EDGE}}", "16u")
+        .replace("{{ATLAS}}", "256.0");
+    validate_wgsl("screenshot.wgsl", &source);
+}
+
+fn validate_wgsl(name: &str, source: &str) {
     let module = naga::front::wgsl::parse_str(source)
-        .unwrap_or_else(|error| panic!("chunk.wgsl does not parse:\n{error}"));
+        .unwrap_or_else(|error| panic!("{name} does not parse:\n{error}"));
     let mut validator = naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
         naga::valid::Capabilities::all(),
     );
     validator
         .validate(&module)
-        .unwrap_or_else(|error| panic!("chunk.wgsl does not validate: {error:?}"));
+        .unwrap_or_else(|error| panic!("{name} does not validate: {error:?}"));
 }
 
 #[test]
@@ -90,7 +114,9 @@ fn chunk_pipeline_draws_without_validation_errors() {
     // Capture every validation error from pipeline creation through submit.
     let error_scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
 
-    let camera = Camera::default();
+    // Frame the single voxel at chunk-local (1, 1, 1), i.e. world
+    // (0.0625, 0.0625, 0.0625) at the ADR-010 6.25 cm scale.
+    let camera = Camera::looking_at(Vec3::new(0.6, 0.5, 0.6), Vec3::splat(0.093_75), 1.0);
     let camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("validation camera uniform"),
         size: std::mem::size_of::<CameraUniform>() as u64,
@@ -144,7 +170,7 @@ fn chunk_pipeline_draws_without_validation_errors() {
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
     });
     let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
@@ -184,10 +210,67 @@ fn chunk_pipeline_draws_without_validation_errors() {
         );
     }
     queue.submit([encoder.finish()]);
-    let _ = device.poll(wgpu::PollType::Wait {
-        submission_index: None,
-        timeout: None,
+
+    // A pipeline that draws nothing (empty index range, a depth regression, a
+    // shader that discards every fragment) still passes validation, so read the
+    // target back and require at least one lit pixel.
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("validation readback"),
+        size: (64 * 64 * 4) as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
     });
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("validation readback"),
+    });
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &target,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(64 * 4),
+                rows_per_image: Some(64),
+            },
+        },
+        wgpu::Extent3d {
+            width: 64,
+            height: 64,
+            depth_or_array_layers: 1,
+        },
+    );
+    queue.submit([encoder.finish()]);
+
+    let slice = readback.slice(..);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    slice.map_async(wgpu::MapMode::Read, move |result| {
+        let _ = sender.send(result);
+    });
+    device
+        .poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: None,
+        })
+        .expect("device poll");
+    receiver
+        .recv()
+        .expect("map callback ran")
+        .expect("map the readback");
+
+    let pixels = slice.get_mapped_range().expect("mapped range");
+    let lit = pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .any(|pixel| pixel[0] > 0 || pixel[1] > 0 || pixel[2] > 0);
+    drop(pixels);
+    readback.unmap();
+    assert!(lit, "the chunk draw wrote no pixels");
 
     let error = pollster::block_on(error_scope.pop());
     assert!(

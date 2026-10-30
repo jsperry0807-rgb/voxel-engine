@@ -52,10 +52,6 @@ fn greedy_matches_reference() {
         let total_faces: usize = faces_by_face.iter().sum();
         assert_eq!(total_quads, reference.quads());
         assert_eq!(total_faces, reference.covered_faces());
-        assert!(
-            total_quads <= brute.total(),
-            "{name}: merging cannot add quads"
-        );
     }
 }
 

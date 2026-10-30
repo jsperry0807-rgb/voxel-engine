@@ -3424,6 +3424,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
+name = "voxel-app-support"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "winit",
+]
+
+[[package]]
 name = "voxel-bench"
 version = "0.1.0"
 dependencies = [
@@ -3463,6 +3471,8 @@ version = "0.1.0"
 dependencies = [
  "eframe",
  "libc",
+ "voxel-app-support",
+ "voxel-core",
  "winit",
 ]
 
@@ -3502,6 +3512,7 @@ name = "voxel-texgen"
 version = "0.1.0"
 dependencies = [
  "eframe",
+ "voxel-app-support",
  "voxel-block",
  "voxel-texgraph",
  "winit",
@@ -3535,6 +3546,7 @@ dependencies = [
  "pollster",
  "ron",
  "serde",
+ "voxel-app-support",
  "voxel-core",
  "voxel-texgraph",
  "wgpu 30.0.1",
@@ -4434,6 +4446,9 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 [[package]]
 name = "xtask"
 version = "0.1.0"
+dependencies = [
+ "voxel-core",
+]
 
 [[package]]
 name = "yoke"

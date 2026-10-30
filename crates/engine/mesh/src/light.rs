@@ -175,6 +175,10 @@ impl LightFill {
     }
 
     /// Reads a cell including the apron.
+    ///
+    /// # Panics
+    ///
+    /// Panics when any coordinate falls outside `-1..=edge`.
     pub fn with_apron(&self, x: i32, y: i32, z: i32) -> LightCell {
         let last = self.edge as i32;
         assert!(
@@ -299,6 +303,8 @@ pub struct LightState {
     /// padded grid. Built once per state so the incremental inner loop has no
     /// coordinate math or bounds checks. One byte per padded cell.
     neighbour_mask: Vec<u8>,
+    /// Cells the last edit batch recomputed; see [`Self::last_recomputed_cells`].
+    recomputed_cells: usize,
 }
 
 impl Clone for LightState {
@@ -316,6 +322,7 @@ impl Clone for LightState {
             sky_seed_scratch: self.sky_seed_scratch.clone(),
             block_seed_scratch: self.block_seed_scratch.clone(),
             neighbour_mask: self.neighbour_mask.clone(),
+            recomputed_cells: self.recomputed_cells,
         }
     }
 
@@ -341,6 +348,7 @@ impl Clone for LightState {
         if !same_grid {
             self.neighbour_mask.clone_from(&source.neighbour_mask);
         }
+        self.recomputed_cells = source.recomputed_cells;
     }
 }
 
@@ -416,6 +424,7 @@ impl LightState {
             sky_seed_scratch: Vec::new(),
             block_seed_scratch: Vec::new(),
             neighbour_mask,
+            recomputed_cells: 0,
         }
     }
 
@@ -424,11 +433,29 @@ impl LightState {
         self.full_relights
     }
 
+    /// Cells the last edit batch recomputed, including a full relight.
+    ///
+    /// Zero before the first edit. A test uses this to prove the dirty window
+    /// is really clipped instead of a whole-chunk pass in disguise.
+    pub fn last_recomputed_cells(&self) -> usize {
+        self.recomputed_cells
+    }
+
     /// Applies a batch of edits and recomputes only the dirty region.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any coordinate falls outside `-1..=edge`. The whole batch is
+    /// validated before the first edit is applied, so a rejected batch leaves
+    /// the state untouched.
     pub fn apply_edits(&mut self, edits: &[CellEdit]) {
         if edits.is_empty() {
             return;
         }
+        let indices: Vec<usize> = edits
+            .iter()
+            .map(|edit| self.checked_index(edit.x, edit.y, edit.z))
+            .collect();
         let mut min = [i32::MAX; 3];
         let mut max = [i32::MIN; 3];
         let radius = i32::from(MAX_LEVEL);
@@ -439,8 +466,7 @@ impl LightState {
         let mut sky_increase = false;
         let mut needs_neighbour_seed = false;
 
-        for edit in edits {
-            let index = self.checked_index(edit.x, edit.y, edit.z);
+        for (edit, index) in edits.iter().zip(indices) {
             let old = self.blocks[index];
             let old_sky = self.sky_seeds[index];
             // Clamp at ingest: `BlockLight`'s fields are public, and an
@@ -616,12 +642,20 @@ impl LightState {
                 Some(&self.neighbour_mask),
             );
         }
+        // Increase-only batches seed a handful of cells instead of clearing a
+        // region; report what was touched, not the padded volume.
+        self.recomputed_cells = self
+            .sky_seed_scratch
+            .len()
+            .max(self.block_seed_scratch.len());
     }
 
     fn recompute_region(&mut self, min: [i32; 3], max: [i32; 3]) {
+        let mut cells = 0usize;
         for z in min[2]..=max[2] {
             for y in min[1]..=max[1] {
                 for x in min[0]..=max[0] {
+                    cells += 1;
                     let index = index_at(x, y, z, self.padded_edge);
                     let block = self.blocks[index];
                     self.sky[index] = if !block.is_fully_opaque() && self.sky_seeds[index] {
@@ -635,6 +669,7 @@ impl LightState {
         }
         propagate_region(&self.blocks, &mut self.sky, self.padded_edge, min, max);
         propagate_region(&self.blocks, &mut self.block, self.padded_edge, min, max);
+        self.recomputed_cells = cells;
     }
 
     fn full_relight(&mut self) {
@@ -647,6 +682,7 @@ impl LightState {
         propagate(&self.blocks, &mut self.sky, self.padded_edge);
         propagate(&self.blocks, &mut self.block, self.padded_edge);
         self.full_relights += 1;
+        self.recomputed_cells = self.blocks.len();
     }
 }
 

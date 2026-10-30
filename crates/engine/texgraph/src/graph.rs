@@ -723,8 +723,10 @@ impl Graph {
         let text = self
             .to_ron()
             .map_err(|error| GraphError::Invalid(format!("could not serialize graph: {error}")))?;
-        crate::pipeline::write_atomic(path, text.as_bytes())
-            .map_err(|error| GraphError::Invalid(error.to_string()))
+        crate::pipeline::write_atomic(path, text.as_bytes()).map_err(|error| match error {
+            crate::pipeline::PipelineError::Io { path, source } => GraphError::Io { path, source },
+            other => GraphError::Invalid(other.to_string()),
+        })
     }
 
     /// The effective seed: the explicit override, or BLAKE3(key) per section

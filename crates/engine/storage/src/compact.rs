@@ -230,11 +230,15 @@ impl ChunkDag {
     /// level order. `None` means every arena is below the compaction threshold.
     pub fn compaction_candidate(&self) -> Option<CompactBand> {
         let reachable = self.reachable();
-        if self.leaf_waste_with(&reachable).exceeds_quarter() {
+        self.compaction_candidate_with(&reachable)
+    }
+
+    fn compaction_candidate_with(&self, reachable: &Reachable) -> Option<CompactBand> {
+        if self.leaf_waste_with(reachable).exceeds_quarter() {
             return Some(CompactBand::Leaves);
         }
         for level in 1..=ROOT_LEVEL {
-            if self.band_waste_with(level, &reachable).exceeds_quarter() {
+            if self.band_waste_with(level, reachable).exceeds_quarter() {
                 return Some(CompactBand::Level(level));
             }
         }
@@ -246,9 +250,14 @@ impl ChunkDag {
     /// This is the production entry point; call it only while the chunk is
     /// quiescent.
     pub fn compact_if_needed(&mut self) -> Option<CompactionStats> {
-        match self.compaction_candidate()? {
-            CompactBand::Leaves => Some(self.compact_leaves()),
-            CompactBand::Level(level) => Some(self.compact_band(level)),
+        // The reachability walk is the expensive part, so share it between the
+        // threshold check and the compaction instead of walking twice. The
+        // quiescence guarantee must not be lost with the wrapper calls.
+        self.assert_quiescent();
+        let reachable = self.reachable();
+        match self.compaction_candidate_with(&reachable)? {
+            CompactBand::Leaves => Some(self.compact_leaves_with(&reachable)),
+            CompactBand::Level(level) => Some(self.compact_band_with(level, &reachable)),
         }
     }
 
@@ -310,8 +319,12 @@ impl ChunkDag {
     }
 
     fn compact_band_inner(&mut self, level: u32) -> CompactionStats {
-        let old_slots = self.bands().len(level);
         let reachable = self.reachable();
+        self.compact_band_with(level, &reachable)
+    }
+
+    fn compact_band_with(&mut self, level: u32, reachable: &Reachable) -> CompactionStats {
+        let old_slots = self.bands().len(level);
 
         if level == ROOT_LEVEL {
             let new_root = self
@@ -339,7 +352,7 @@ impl ChunkDag {
             };
         }
 
-        let runs = self.live_internal_runs(level, &reachable);
+        let runs = self.live_internal_runs(level, reachable);
         let old_band = self.bands().band(level).to_vec();
         let mut allocator = RunAllocator::new();
         let mut new_nodes = Vec::with_capacity(old_band.len());
@@ -376,7 +389,7 @@ impl ChunkDag {
         debug_assert_eq!(new_nodes.len() as u64, allocator.next_slot());
         let new_slots = new_nodes.len() as u64;
         self.bands_mut().replace_band(level, new_nodes);
-        self.remap_parent_bases(level, &remap, &reachable);
+        self.remap_parent_bases(level, &remap, reachable);
 
         CompactionStats {
             bands: 1,
@@ -387,9 +400,13 @@ impl ChunkDag {
     }
 
     fn compact_leaves_inner(&mut self) -> CompactionStats {
-        let old_slots = self.bands().leaf_len();
         let reachable = self.reachable();
-        let runs = self.live_leaf_runs(&reachable);
+        self.compact_leaves_with(&reachable)
+    }
+
+    fn compact_leaves_with(&mut self, reachable: &Reachable) -> CompactionStats {
+        let old_slots = self.bands().leaf_len();
+        let runs = self.live_leaf_runs(reachable);
         let old_leaves = self.bands().leaves().to_vec();
         let mut new_leaves = Vec::with_capacity(old_leaves.len());
         let mut remap = BTreeMap::new();
@@ -409,7 +426,7 @@ impl ChunkDag {
 
         let new_slots = new_leaves.len() as u64;
         self.bands_mut().replace_leaves(new_leaves);
-        self.remap_leaf_parents(&remap, &reachable);
+        self.remap_leaf_parents(&remap, reachable);
 
         CompactionStats {
             bands: 1,
@@ -938,6 +955,23 @@ mod tests {
         drop(frame);
         let _frame = dag.retain_frame();
         dag.compact_band(ROOT_LEVEL);
+    }
+
+    /// The per-edit entry point must uphold the same guarantee as `compact`.
+    #[test]
+    #[should_panic(expected = "live root")]
+    fn compact_if_needed_panics_with_a_live_root() {
+        let mut dag = ChunkDag::from_dense(&vec![1u16; CHUNK_VOLUME]);
+        let _root = dag.retain_root();
+        dag.compact_if_needed();
+    }
+
+    #[test]
+    #[should_panic(expected = "in-flight frame")]
+    fn compact_if_needed_panics_with_an_in_flight_frame() {
+        let mut dag = ChunkDag::from_dense(&vec![1u16; CHUNK_VOLUME]);
+        let _frame = dag.retain_frame();
+        dag.compact_if_needed();
     }
 
     /// Releasing the guards re-enables compaction.

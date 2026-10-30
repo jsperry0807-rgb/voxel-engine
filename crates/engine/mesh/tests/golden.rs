@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use voxel_mesh::{
     BLOCK_EDGE, BlockPos, GreedyQuad, Mesh, for_each_block, greedy_block, mesh_block,
 };
-use voxel_storage::{Apron, CHUNK_DIM, CHUNK_VOLUME, Face as ApronFace, local_index};
+use voxel_storage::{AIR, Apron, CHUNK_DIM, CHUNK_VOLUME, Face as ApronFace, local_index};
 
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
@@ -295,7 +295,20 @@ fn fixtures() -> Vec<Fixture> {
     for (slot, face) in ApronFace::ALL.into_iter().enumerate() {
         for v in 0..Apron::SIDE {
             for u in 0..Apron::SIDE {
-                apron.set(face, u, v, 2 + (slot as u16) * 2 + ((u + v) % 2) as u16);
+                // Deterministic air holes: a uniformly solid apron makes the
+                // per-face material and its orientation invisible to the
+                // mesher, which only tests material `== 0`.
+                let material = 2 + (slot as u16) * 2 + ((u + v) % 2) as u16;
+                apron.set(
+                    face,
+                    u,
+                    v,
+                    if (u * 7 + v * 3).is_multiple_of(5) {
+                        AIR
+                    } else {
+                        material
+                    },
+                );
             }
         }
     }

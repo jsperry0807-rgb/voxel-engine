@@ -188,8 +188,9 @@ gate, the chosen profile or any threshold.
   validation error scope. CI runs it with `RUST_LOG=wgpu_core=warn` against
   Lavapipe.
 - **M2 started:** `M2-01` six-face apron landed. `M2-02` measured the apron at
-  8.5% of the dense path's bytes and 6.6% of its time at 64³ (4.5%/4.3% at
-  128³); see [`m2-apron-cost.md`](m2-apron-cost.md). `M2-03` added the
+  8.5% of the dense path's bytes and 9.1% of its time at 64³ (4.5%/5.7% at
+  128³, re-measured after the benchmark was changed to resolve chunks once);
+  see [`m2-apron-cost.md`](m2-apron-cost.md). `M2-03` added the
   block-granular driver with an 11,664 B reusable scratch; `M2-04` added the
   greedy rectangle core and matched the M1-31 reference on five fixtures;
   `M2-05` added the `(material, orientation, 4×AO)` merge key; `M2-06` culls

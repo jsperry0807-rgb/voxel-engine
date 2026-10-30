@@ -22,6 +22,15 @@ const WORD: u64 = 4;
 /// [`EMPTY`], which reads as a miss (`root == EMPTY && blocks == NO_TABLE`).
 const INITIAL_TABLE_WORDS: usize = INITIAL_SLOTS * SLOT_WORDS;
 
+/// The initial chunk-table contents, one `EMPTY` word per slot word.
+///
+/// Extracted so the seeding test can assert on the bytes the buffer actually
+/// receives; a local `[EMPTY; SLOT_WORDS]` in the test would only compare a
+/// constant with itself.
+fn seed_words() -> Vec<u32> {
+    vec![EMPTY; INITIAL_TABLE_WORDS]
+}
+
 /// GPU-resident node pool, chunk table, block tables and edit-overlay pool.
 ///
 /// Implements [`GpuSink`], so it plugs directly into
@@ -48,7 +57,7 @@ impl WgpuSink {
         let table = storage_buffer(device, "voxel-chunk-table", INITIAL_TABLE_WORDS);
         // Seed the probe table before the first `flush`: an uninitialised
         // (zeroed) or undersized table would make `chunk_slot` loop forever.
-        let empty = vec![EMPTY; INITIAL_TABLE_WORDS];
+        let empty = seed_words();
         queue.write_buffer(&table, 0, cast_slice(&empty));
         Self {
             device: device.clone(),
@@ -280,19 +289,30 @@ pub(crate) fn storage_bind_group_layout(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use voxel_storage::gpu::{NO_TABLE, SLOT_ROOT, SLOT_TABLE};
+    use voxel_storage::gpu::NO_TABLE;
 
     /// The shader treats `root == EMPTY && blocks == NO_TABLE` as a miss, so an
     /// all-`EMPTY` slot must satisfy that predicate or the probe walks past it.
+    ///
+    /// The seeding itself can only be observed on a device, so this pins the
+    /// words the buffer receives: `EMPTY` is not zero (a zeroed table reads as a
+    /// valid root) and a whole slot is `SLOT_WORDS` wide.
     #[test]
     fn initial_table_has_whole_slots_that_probe_as_empty() {
         assert_eq!(INITIAL_TABLE_WORDS % SLOT_WORDS, 0);
         assert_eq!(INITIAL_TABLE_WORDS / SLOT_WORDS, INITIAL_SLOTS);
         assert!(INITIAL_SLOTS.is_power_of_two());
 
-        let slot = [EMPTY; SLOT_WORDS];
-        assert_eq!(slot[SLOT_ROOT], EMPTY);
-        assert_eq!(slot[SLOT_TABLE], NO_TABLE);
+        let words = seed_words();
+        assert_eq!(words.len(), INITIAL_TABLE_WORDS);
+        assert!(
+            words.iter().all(|&word| word != 0),
+            "a zero word probes as a valid root"
+        );
+        assert_eq!(
+            EMPTY, NO_TABLE,
+            "an EMPTY slot must also be a NO_TABLE slot"
+        );
     }
 
     /// The capacity the shader derives must be a power of two; the probe masks

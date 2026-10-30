@@ -255,6 +255,9 @@ impl TexgenApp {
     pub(crate) fn invalidate_preview(&mut self) {
         self.preview_due = Some(Instant::now() + PREVIEW_DEBOUNCE);
         self.revision = self.revision.wrapping_add(1);
+        // The old error belongs to the old graph; do not show it over the
+        // render that is about to run.
+        self.preview_error = None;
     }
 
     pub(crate) fn undo(&mut self) {

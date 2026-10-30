@@ -55,7 +55,7 @@ fn backface_two_adjacent_voxels_merge_the_shared_face_away() {
 #[test]
 fn backface_enclosed_block_has_no_quads() {
     // A solid chunk: an interior block has solid neighbours on all six sides,
-    // so every one of its 1,536 faces is interior.
+    // so every one of its 24,576 faces (16³ × 6) is interior.
     let voxels = vec![1u16; CHUNK_VOLUME];
     let apron = Apron::new();
     let mut enclosed = Vec::new();
