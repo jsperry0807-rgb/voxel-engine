@@ -119,6 +119,27 @@ fn encode_header(kind: u8, cell: u16, len: u32) -> [u8; HDR] {
 /// Reads one record at `pos`, or `None` when the header, declared length, or
 /// CRC is bad. Returns an I/O error only for a real read failure.
 fn read_record<R: Read>(r: &mut R, pos: u64, total: u64) -> io::Result<Option<RecordHeader>> {
+    let mut budget = u64::MAX;
+    read_record_with_budget(r, pos, total, &mut budget)
+}
+
+/// Reads and verifies one record, charging its bytes to `budget`.
+///
+/// A corrupt payload can contain many magic-like headers that each declare a
+/// near-`MAX_RECORD_BYTES` payload. The caller's budget bounds the total CRC
+/// work, not just the number of candidates, so a damaged save cannot stall
+/// recovery.
+fn read_record_with_budget<R: Read>(
+    r: &mut R,
+    pos: u64,
+    total: u64,
+    budget: &mut u64,
+) -> io::Result<Option<RecordHeader>> {
+    if *budget < HDR as u64 {
+        *budget = 0;
+        return Ok(None);
+    }
+    *budget -= HDR as u64;
     let mut h = [0u8; HDR];
     match r.read_exact(&mut h) {
         Ok(()) => {}
@@ -131,6 +152,12 @@ fn read_record<R: Read>(r: &mut R, pos: u64, total: u64) -> io::Result<Option<Re
     if record.len > MAX_RECORD_BYTES || pos + HDR as u64 + record.len as u64 > total {
         return Ok(None);
     }
+    let cost = u64::from(record.len);
+    if cost > *budget {
+        *budget = 0;
+        return Ok(None);
+    }
+    *budget -= cost;
     let mut payload = vec![0u8; record.len as usize];
     match r.read_exact(&mut payload) {
         Ok(()) => {}
@@ -148,14 +175,16 @@ fn read_record<R: Read>(r: &mut R, pos: u64, total: u64) -> io::Result<Option<Re
 fn resync<R: Read + Seek>(r: &mut R, from: u64, total: u64) -> io::Result<Option<u64>> {
     const BLOCK: usize = 64 * 1024;
     // A corrupt payload can hold thousands of accidental magic values, and each
-    // verification CRC-reads a record of up to MAX_RECORD_BYTES. Give up after a
-    // bounded number of misses instead of grinding through a 16 MiB blob; the
-    // unrecovered tail is counted in `recovered_bytes`, so the truncation is
-    // reported rather than silent.
+    // verification CRC-reads a record of up to MAX_RECORD_BYTES. Bound both the
+    // number of misses and the bytes spent verifying them, so a 17 MiB region
+    // cannot cause gigabytes of CRC work; the unrecovered tail is counted in
+    // `recovered_bytes`, so the truncation is reported rather than silent.
     const MAX_FAILED: u32 = 256;
+    const MAX_BYTES: u64 = 64 << 20;
     let magic = MAGIC.to_le_bytes();
     let mut buf = vec![0u8; BLOCK + 3];
     let mut failed = 0u32;
+    let mut budget = MAX_BYTES;
     let mut base = from;
     while base + HDR as u64 <= total {
         r.seek(SeekFrom::Start(base))?;
@@ -176,11 +205,11 @@ fn resync<R: Read + Seek>(r: &mut R, from: u64, total: u64) -> io::Result<Option
             }
             let candidate = base + i as u64;
             r.seek(SeekFrom::Start(candidate))?;
-            if read_record(r, candidate, total)?.is_some() {
+            if read_record_with_budget(r, candidate, total, &mut budget)?.is_some() {
                 return Ok(Some(candidate));
             }
             failed += 1;
-            if failed == MAX_FAILED {
+            if failed == MAX_FAILED || budget == 0 {
                 return Ok(None);
             }
         }
@@ -503,6 +532,25 @@ mod tests {
             served: false,
         };
         assert!(read_record(&mut reader, 0, total).unwrap().is_none());
+    }
+
+    #[test]
+    fn budgeted_read_rejects_a_payload_it_cannot_afford() {
+        let header = encode_header(KIND_DAG, 0, 32);
+        let total = HDR as u64 + 32;
+        let mut reader = HeaderOnly {
+            header,
+            served: false,
+        };
+        // One byte short of the header plus payload: the payload must not be
+        // read, and the budget is reported as exhausted.
+        let mut budget = HDR as u64 + 31;
+        assert!(
+            read_record_with_budget(&mut reader, 0, total, &mut budget)
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(budget, 0, "an unaffordable payload exhausts the budget");
     }
 
     #[test]
