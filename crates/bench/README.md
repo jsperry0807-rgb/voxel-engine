@@ -270,8 +270,9 @@ the twelve frozen rows from `docs/pre-registration.md` §3, in table order:
 | 11 | Measurement dataset | memory fixture |
 | 12 | Fallback trigger | pre-registration §4 |
 
-Every verdict is computed from a measured value and a frozen limit; the report
-does not type `PASS`. Each row carries the measured value, the limit, a signed
+Every verdict is computed from a measured value, from an invariant the
+measurement already asserts, or is reported as `not_measured`; the report never
+types `PASS` by hand. Each row carries the measured value, the limit, a signed
 margin and a machine-readable `numbers` block. The header names the reference
 machine from `docs/reference-machine.md` and the actual host CPU/OS/architecture;
 the headless gate does not open a wgpu adapter, so the GPU is named but not
