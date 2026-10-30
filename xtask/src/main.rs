@@ -2,8 +2,9 @@
 //!
 //! Cargo aliases cannot run a check first, so `.cargo/config.toml` routes
 //! `cargo build-win` through this binary. It verifies the
-//! `x86_64-pc-windows-gnu` standard library and the mingw-w64 tools, installs
-//! whatever is missing on demand, and only then starts the real cross-build.
+//! `x86_64-pc-windows-gnu` standard library and the mingw-w64 tools, reports
+//! whatever is missing, and only then starts the real cross-build. Installing
+//! is an explicit step: `cargo setup-win` (or `doctor --install`).
 
 use std::io::{self, IsTerminal};
 use std::path::{Path, PathBuf};
@@ -21,8 +22,6 @@ const TOOLS: &[&str] = &[
     "x86_64-w64-mingw32-dlltool",
     "x86_64-w64-mingw32-windres",
 ];
-/// Set to any value to make `build-win` fail instead of installing.
-const NO_INSTALL_ENV: &str = "VOXEL_WIN_TOOLCHAIN_NO_INSTALL";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -44,8 +43,11 @@ fn main() -> ExitCode {
 }
 
 /// `cargo build-win`: ensure the toolchain, then run the cross-build.
+///
+/// A build never installs packages on its own; a missing prerequisite fails
+/// with the `cargo setup-win` instruction instead.
 fn build_win(args: &[String]) -> ExitCode {
-    let mut install = std::env::var_os(NO_INSTALL_ENV).is_none();
+    let mut install = false;
     let mut cargo_args = Vec::new();
     for arg in args {
         match arg.as_str() {
@@ -392,12 +394,12 @@ fn print_help() {
         "xtask: workspace preflight tasks\n\
          \n\
          usage:\n\
-           cargo build-win [--no-install] [cargo build args...]  cross-build Windows\n\
-           cargo setup-win                                      install the cross toolchain\n\
+           cargo build-win [--install] [cargo build args...]     cross-build Windows\n\
+           cargo setup-win                                       install the cross toolchain\n\
            cargo xtask doctor [--install]                        check the cross toolchain\n\
          \n\
-         `cargo build-win` installs mingw-w64 and the {TARGET}\n\
-         Rust target when they are missing. Set {NO_INSTALL_ENV}=1\n\
-         (or pass --no-install) to fail instead of installing."
+         `cargo build-win` checks mingw-w64 and the {TARGET}\n\
+         Rust target and fails with instructions when something is missing.\n\
+         Nothing is installed unless you pass --install or run `cargo setup-win`."
     );
 }

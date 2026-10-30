@@ -5,7 +5,8 @@
 [alias]
 launcher = "run -p voxel-launcher"
 xtask = "run --quiet -p xtask --"
-# Routed through xtask so the mingw-w64 / target preflight runs first and can
-# install missing pieces on demand. Plain `build` remains the Linux build.
+# Routed through xtask so the mingw-w64 / target preflight runs first. The
+# preflight only reports what is missing; `setup-win` installs it. Plain
+# `build` remains the Linux build.
 build-win = "run --quiet -p xtask -- build-win"
 setup-win = "run --quiet -p xtask -- doctor --install"

@@ -142,9 +142,9 @@ impl LauncherApp {
 
     /// Starts the Linux and Windows builds once, on the first frame.
     ///
-    /// They are separate jobs and separate target directories, so they
-    /// overlap. A missing Windows toolchain is installed first and the
-    /// cross-build continues when that job passes. Set
+    /// They are separate jobs. The Windows build starts only when its
+    /// toolchain is already present: autostart never installs packages, it
+    /// points at the *Build Windows* button instead. Set
     /// `VOXEL_LAUNCHER_NO_AUTOBUILD` to keep both manual.
     fn autostart(&mut self) {
         if self.autostart_done {
@@ -205,12 +205,17 @@ impl LauncherApp {
 
     /// Starts the Linux and Windows builds as independent jobs.
     ///
-    /// Cargo keeps separate locks for `target/debug` and the cross target, so
-    /// the target-specific work overlaps; only shared host build scripts can
-    /// briefly serialise the two jobs.
+    /// A Windows build is only started when the toolchain is already in place.
+    /// Installing is a deliberate action, so autostart leaves that to the
+    /// *Build Windows* button rather than running a package manager.
     fn start_both_builds(&mut self) {
         self.start_build(false);
-        self.start_build(true);
+        if self.windows_ready {
+            self.start_build(true);
+        } else {
+            self.notice =
+                Some("Windows toolchain missing; press Build Windows to install it".to_owned());
+        }
     }
 
     /// Installs mingw-w64 and the Rust target through `xtask`.
@@ -674,7 +679,7 @@ impl LauncherApp {
             }
             ui.label(
                 RichText::new(
-                    "The first Windows build installs these automatically; CI checks the same preflight.",
+                    "Build Windows installs these first; autostart never installs packages. CI checks the same preflight.",
                 )
                 .weak()
                 .small(),

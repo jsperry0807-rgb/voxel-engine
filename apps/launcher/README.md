@@ -75,14 +75,16 @@ Rust target. Both are handled by the preflight:
 
 ```sh
 cargo setup-win      # install what is missing, then stop
-cargo build-win      # same preflight, then the cross-build
+cargo build-win      # preflight and cross-build; never installs by itself
 cargo xtask doctor   # report only; exits 1 if something is missing
 ```
 
-`build-win` asks for sudo only when it actually has to install something. Set
-`VOXEL_WIN_TOOLCHAIN_NO_INSTALL=1` (or pass `--no-install`) to make it fail
-instead. CI installs the same packages and runs `cargo build-win`, so a broken
-cross-build cannot merge unnoticed.
+`build-win` checks the prerequisites and fails with the `cargo setup-win`
+instruction when something is missing; it only installs when you pass
+`--install`. The launcher's *Build Windows* button runs `setup-win` first and
+continues with the build once the toolchain is present, but the launcher's
+autostart never installs packages. CI installs the same packages and runs
+`cargo build-win`, so a broken cross-build cannot merge unnoticed.
 
 If the installer cannot run (for example sudo needs a terminal the launcher
 does not have), the launcher reports it and the Windows buttons are enabled
