@@ -62,6 +62,8 @@ struct Region {
     file: File,
     len: u64,
     index: FxMap<u16, Entry>,
+    /// Appended since the last [`RegionStore::sync`].
+    dirty: bool,
 }
 
 impl Region {
@@ -83,10 +85,12 @@ pub struct RegionStore {
     /// fsync the file's very existence can be lost on power failure.
     dir_file: File,
     regions: FxMap<RegionPos, Region>,
-    dirty: bool,
     /// A region file was created since the last [`RegionStore::sync`].
     dir_dirty: bool,
     recovered_bytes: u64,
+    /// Directory fsyncs performed, so tests can pin the durability call.
+    #[cfg(test)]
+    dir_syncs: usize,
 }
 
 fn bad(msg: &str) -> io::Error {
@@ -229,9 +233,10 @@ impl RegionStore {
             dir,
             dir_file,
             regions: FxMap::default(),
-            dirty: false,
             dir_dirty: false,
             recovered_bytes: 0,
+            #[cfg(test)]
+            dir_syncs: 0,
         })
     }
 
@@ -255,7 +260,15 @@ impl RegionStore {
             let (len, index, recovered) = scan(&mut file)?;
             self.recovered_bytes += recovered;
             self.dir_dirty |= created;
-            self.regions.insert(rp, Region { file, len, index });
+            self.regions.insert(
+                rp,
+                Region {
+                    file,
+                    len,
+                    index,
+                    dirty: false,
+                },
+            );
         }
         Ok(self.regions.get_mut(&rp))
     }
@@ -286,7 +299,7 @@ impl RegionStore {
         } else {
             e.diff = loc;
         }
-        self.dirty = true;
+        reg.dirty = true;
         Ok(())
     }
 
@@ -333,16 +346,27 @@ impl RegionStore {
         Ok(Some((dag, ov)))
     }
 
+    /// Flushes appended records and any new directory entry.
+    ///
+    /// Only regions that were appended to since the last sync are fsynced: the
+    /// world ticks consolidation every frame, and syncing every open region
+    /// would turn a one-region edit into one fsync per file. A failed sync
+    /// leaves the dirty bits set so the next attempt retries.
     pub fn sync(&mut self) -> io::Result<()> {
-        if self.dirty {
-            for r in self.regions.values() {
-                r.file.sync_data()?;
+        for region in self.regions.values_mut() {
+            if region.dirty {
+                region.file.sync_data()?;
+                region.dirty = false;
             }
-            self.dirty = false;
-            // A region file created since the last sync must also have its
-            // directory entry persisted, or it can vanish after power loss.
-            if std::mem::take(&mut self.dir_dirty) {
-                self.dir_file.sync_all()?;
+        }
+        // A region file created since the last sync must also have its
+        // directory entry persisted, or it can vanish after power loss.
+        if self.dir_dirty {
+            self.dir_file.sync_all()?;
+            self.dir_dirty = false;
+            #[cfg(test)]
+            {
+                self.dir_syncs += 1;
             }
         }
         Ok(())
@@ -373,7 +397,17 @@ impl RegionStore {
             fs::rename(&tmp, &path)
         })();
         // Renaming changes the directory entry, so persist the directory too.
-        let result = result.and_then(|()| self.dir_file.sync_all());
+        let result = result.and_then(|()| {
+            self.dir_file.sync_all()?;
+            #[cfg(test)]
+            {
+                self.dir_syncs += 1;
+            }
+            // The directory fsync above also covers any other region created
+            // since the last sync.
+            self.dir_dirty = false;
+            Ok(())
+        });
         if result.is_err() {
             let _ = fs::remove_file(&tmp);
         }
@@ -462,6 +496,15 @@ mod tests {
                 .put_diff(pos, &Overlay::default())
                 .expect("write diff");
             store.sync().expect("sync");
+            // The reopen below only proves the page cache has the file; this
+            // proves the durability path ran. Before the fix the test passed
+            // with no directory fsync at all.
+            assert_eq!(store.dir_syncs, 1, "a new region must fsync the directory");
+            store.sync().expect("second sync");
+            assert_eq!(
+                store.dir_syncs, 1,
+                "an unchanged directory must not fsync again"
+            );
         }
         assert!(dir.join("r.0.0.0.vxr").exists());
         let mut reopened = RegionStore::open(&dir).expect("reopen store");
@@ -469,6 +512,41 @@ mod tests {
             reopened.region((0, 0, 0), false).expect("scan").is_some(),
             "the synced region file must be discoverable after reopen"
         );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Appending to one region must not fsync the others on every tick.
+    #[test]
+    fn sync_only_flushes_regions_that_changed() {
+        let dir = std::env::temp_dir().join(format!(
+            "voxel-disk-region-dirty-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        let mut store = RegionStore::open(&dir).expect("open store");
+        store
+            .put_diff(ChunkPos::new(0, 0, 0), &Overlay::default())
+            .expect("write first region");
+        store
+            .put_diff(ChunkPos::new(8, 0, 0), &Overlay::default())
+            .expect("write second region");
+        store.sync().expect("sync");
+        let regions: Vec<_> = store.regions.keys().copied().collect();
+        assert_eq!(regions.len(), 2, "chunks 0 and 8 are in different regions");
+
+        store
+            .put_diff(ChunkPos::new(0, 0, 0), &Overlay::default())
+            .expect("append to the first region");
+        let dirty: Vec<_> = store
+            .regions
+            .iter()
+            .filter(|(_, region)| region.dirty)
+            .map(|(pos, _)| *pos)
+            .collect();
+        assert_eq!(dirty, vec![(0, 0, 0)], "only the appended region is dirty");
+        store.sync().expect("sync");
+        assert!(store.regions.values().all(|region| !region.dirty));
         let _ = fs::remove_dir_all(&dir);
     }
 }
