@@ -9,6 +9,14 @@ description = "Block-granular content pipeline for the voxel engine"
 voxel-core = { path = "../../core" }
 voxel-storage = { path = "../storage" }
 
+[dev-dependencies]
+criterion = "0.5"
+pprof = { version = "0.15.0", features = ["flamegraph", "criterion"] }
+
 [features]
 # Forward the pre-registered 128³ chunk edge to the storage crate.
 chunk128 = ["voxel-storage/chunk128"]
+
+[[bench]]
+name = "light"
+harness = false

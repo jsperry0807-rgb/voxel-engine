@@ -394,14 +394,28 @@ Future art-set acceptance screenshots include the first 8 hex of
 6. `translucent`: water and ice over a dark background.
 7. `chunk-1080p`: one chunk, three camera distances (near, mid, far) to show mips.
 
-M1.5-17: before/after texel-density screenshots. Proposed: before = same chunk with level-0 only and nearest, after = trilinear with full mip chain. Needs your confirmation (12.4).
+M1.5-17: before/after texel-density screenshots. The committed pair is
+`docs/images/m1.5-17-before-256px-851e3b6e.png` and
+`docs/images/m1.5-17-after-16px-851e3b6e.png`; the suffix is the first eight hex
+of `atlas_png_blake3`. Both images render the same generated chunk from the same
+camera with the same 16 B vertex format. **Before** packs the 256² M1.5-14
+sources into a 2048² sheet indexed by slot: one 1 m face carries 256 texels,
+3.9 mm per texel. **After** is the committed 16×16-tile atlas: one tile per 1 m
+face, so one voxel face reads one texel (6.25 cm). Both sides sample level 0 with
+nearest filtering and no mip chain, so the only difference is texel density; the
+runtime sampler adds linear minification and the five-level chain, which the
+M1.5-15 chunk sheet already shows. The pair records the 16× linear-density trade
+accepted by ADR-003. Regenerate both with
+`cargo run -p voxel-viewer --example m1_5_screenshots`.
 
 ## 12. Open items for you
 
 1. **Tiling vs "all four edges".** Brief says every source tiles on all four edges; that is impossible for `grass_block_side`, `sandstone_side` (vertical), and plants. This SPEC uses the `tiling` field (section 3). Confirm.
 2. **Face enum naming.** Section 7.1 assumes names `top/bottom/north/south/east/west`; match to the real `Face` enum.
 3. **Cutout mip alpha.** `AtlasBuilder` averages alpha at mips (assumed). Alpha-tested leaves will thin out at distance; options: alpha-coverage rescale in the mip filter (changes M1.5-06 code) or accept. Not decided here.
-4. **M1.5-17 definition** (11) is a guess.
+4. **M1.5-17 definition** (11). **Resolved 2026-10-29:** the committed pair uses
+   the task-list definition — the 256² M1.5-14 sources at full density against
+   the 16×16-tile runtime atlas — not the filtering-only guess in earlier drafts.
 5. **Crate names/paths** for `voxel-texgraph` and `gen-materials` are proposals.
 6. **Palette/recipes** (8.5) are my art direction; tweak freely before the generator is written.
 
@@ -420,4 +434,4 @@ The generator is implemented and runnable:
 - The bake filter is `box16-linear-premul-v1` and the PNG encoder is `png =0.17.16` with the section 5.4 settings.
 - The material table is now consumable at runtime: `BlockRegistryBuilder::load_ron_with_materials` parses `materials.gen.ron`, `BlockRegistry::face_materials(block)` returns the six atlas slots, and `BlockRecord` carries them. `cargo test -p voxel-block cap_256`, `material_registry` and `fixture_64_blocks_freeze_after_m1_5_08` cover the cap, typed errors and the 64-block freeze. The legacy `TextureSetId` path remains only for the unused texture-array renderer; M1.5-12 switched the chunk shader to atlas slots.
 - `texgen-mcp` exposes the pipeline to OpenCode over MCP stdio (`list_faces`, `read_graph`, `validate_graph`, `render_preview`, `render_tile`, `render_atlas`, `list_materials`, `read_manifest`, `check`, `generate`, `bake_atlas`). It never writes graph RON.
-- The full M1.5-15 screenshot set is committed under `docs/images/m1.5-15-*.png` and can be regenerated with `cargo run -p voxel-viewer --example m1_5_screenshots`. The M1.5-17 before/after texel-density pair remains open.
+- The full M1.5-15 screenshot set is committed under `docs/images/m1.5-15-*.png` and can be regenerated with `cargo run -p voxel-viewer --example m1_5_screenshots`. That command also writes the M1.5-17 pair: `docs/images/m1.5-17-before-256px-851e3b6e.png` (256² sources at the historical per-face density) and `docs/images/m1.5-17-after-16px-851e3b6e.png` (the committed 16×16-tile runtime atlas), where the suffix is the first eight hex of `atlas_png_blake3`.

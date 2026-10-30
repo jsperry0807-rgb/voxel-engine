@@ -7,5 +7,7 @@ visual
 __archive__/
 __sandbox__/
 __ai-session-history__/
+perf.data
+perf.data.old
 /mutants.out
 /mutants.out.old

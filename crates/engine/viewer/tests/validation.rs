@@ -74,10 +74,21 @@ fn chunk_shader_is_valid_wgsl() {
 
 #[test]
 fn screenshot_shader_is_valid_wgsl() {
-    validate_wgsl(
-        "screenshot.wgsl",
-        include_str!("../src/shaders/screenshot.wgsl"),
-    );
+    // The file is a template; the example substitutes the runtime atlas
+    // dimensions. Validate a concrete instance and that every placeholder the
+    // example replaces still exists.
+    let template = include_str!("../src/shaders/screenshot.wgsl");
+    for token in ["{{TILE}}", "{{EDGE}}", "{{ATLAS}}"] {
+        assert!(
+            template.contains(token),
+            "screenshot.wgsl no longer contains {token}, which the example substitutes"
+        );
+    }
+    let source = template
+        .replace("{{TILE}}", "16.0")
+        .replace("{{EDGE}}", "16u")
+        .replace("{{ATLAS}}", "256.0");
+    validate_wgsl("screenshot.wgsl", &source);
 }
 
 fn validate_wgsl(name: &str, source: &str) {

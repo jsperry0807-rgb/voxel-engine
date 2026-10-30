@@ -248,7 +248,9 @@ impl ChunkDag {
     /// Compacts one arena if it exceeds the 25% dead-or-padding threshold.
     ///
     /// This is the production entry point; call it only while the chunk is
-    /// quiescent.
+    /// quiescent. Its only in-tree caller is [`ChunkDag::apply_edits`], which
+    /// the world runs once per consolidated chunk, so the reachability walk
+    /// sits beside a full DAG rebuild rather than on the per-frame edit path.
     pub fn compact_if_needed(&mut self) -> Option<CompactionStats> {
         // The reachability walk is the expensive part, so share it between the
         // threshold check and the compaction instead of walking twice. The

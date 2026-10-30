@@ -20,9 +20,9 @@ binding number is made in the spec and the pre-registration, never only in a tas
 
 - **M0 and M1 are complete.** The M1 gate selected the **128³ Minimum** profile for
   M2, conditional on mesh compression and a measured 128³ run.
-- **M1.5 is code-complete.** The viewer, atlas, naive mesher and full M1.5-15
-  screenshot set landed; only `M1.5-17` (before/after texel-density pair) remains
-  open. The zero-validation CI job (`M1.5-16`) is also in place.
+- **M1.5 is complete.** The viewer, atlas, naive mesher, full M1.5-15
+  screenshot set and the M1.5-17 before/after texel-density pair landed. The
+  zero-validation CI job (`M1.5-16`) is also in place.
 - **M2 is in progress.** The apron API (`M2-01`), its cost benchmark (`M2-02`),
   the block-granular driver (`M2-03`), the greedy core (`M2-04`), the merge key
   (`M2-05`), backface culling (`M2-06`), AO sampling (`M2-07`), the AO
@@ -30,8 +30,9 @@ binding number is made in the spec and the pre-registration, never only in a tas
   16 B vertex codec (`M2-10`), the five golden fixtures (`M2-11`), thread/order
   determinism (`M2-12`), the production full-pass block light (`M2-13`),
   cross-chunk apron seeding (`M2-14`), dirty-region incremental light (`M2-15`)
-  and removal-front escalation (`M2-16`) landed; `M2-17` light cost benchmark is
-  next. Probes are still to come.
+  and removal-front escalation (`M2-16`) landed. The `M2-17` light cost
+  benchmark landed and the optimized path now measures 5.7% p95 at 128³, under
+  the 20% target. Probes are next.
 
 ## Tools
 
