@@ -186,10 +186,15 @@ const AO_LEVELS: [u8; 4] = [0, 85, 170, 255];
 
 /// The `(u, v)` signs of a face's four quad corners, matching the vertex order
 /// used by the M1.5 mesher (`voxel_viewer::naive_mesh::face_corners`).
+///
+/// The order is counter-clockwise seen from outside the face, which is what the
+/// renderer's back-face culling expects (`cull_mode: Back`, CCW front). The
+/// vertex emitter and the AO sampler both index this table, so a wrong entry
+/// would flip a face inward and move its occlusion at the same time.
 pub(crate) fn corner_signs(face: Face) -> [(i32, i32); 4] {
     match face {
-        Face::East | Face::Bottom | Face::North => [(-1, -1), (-1, 1), (1, 1), (1, -1)],
-        Face::West | Face::Top | Face::South => [(-1, -1), (1, -1), (1, 1), (-1, 1)],
+        Face::West | Face::Bottom | Face::North => [(-1, -1), (-1, 1), (1, 1), (1, -1)],
+        Face::East | Face::Top | Face::South => [(-1, -1), (1, -1), (1, 1), (-1, 1)],
     }
 }
 

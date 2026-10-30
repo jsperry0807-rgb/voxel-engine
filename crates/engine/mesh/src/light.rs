@@ -350,10 +350,13 @@ impl LightState {
         let mut crosses_boundary = false;
 
         for edit in edits {
-            let index = index_at(edit.x, edit.y, edit.z, self.padded_edge);
+            let index = self.checked_index(edit.x, edit.y, edit.z);
             let old = self.blocks[index];
             let old_sky = self.sky_seeds[index];
-            let new = edit.block;
+            // Clamp at ingest: `BlockLight`'s fields are public, and an
+            // out-of-range value would index `buckets[level]` out of bounds or
+            // overflow the `1 + opacity` step inside propagation.
+            let new = BlockLight::new(edit.block.emission, edit.block.opacity);
             if new.emission < old.emission || new.opacity > old.opacity || (old_sky && !edit.sky) {
                 removal = true;
             }
@@ -364,7 +367,8 @@ impl LightState {
             for axis in 0..3 {
                 min[axis] = min[axis].min(cell[axis]);
                 max[axis] = max[axis].max(cell[axis]);
-                if cell[axis] - radius < 0 || cell[axis] + radius > last {
+                if cell[axis].saturating_sub(radius) < 0 || cell[axis].saturating_add(radius) > last
+                {
                     crosses_boundary = true;
                 }
             }
@@ -379,8 +383,8 @@ impl LightState {
         }
 
         for axis in 0..3 {
-            min[axis] = (min[axis] - radius).max(-APRON_CELLS);
-            max[axis] = (max[axis] + radius).min(self.edge as i32);
+            min[axis] = min[axis].saturating_sub(radius).max(-APRON_CELLS);
+            max[axis] = max[axis].saturating_add(radius).min(self.edge as i32);
         }
         self.recompute_region(min, max);
     }
@@ -397,16 +401,35 @@ impl LightState {
     }
 
     /// Reads a cell including the apron.
+    ///
+    /// Panics when any coordinate falls outside `-1..=edge`, the padded grid.
     pub fn with_apron(&self, x: i32, y: i32, z: i32) -> LightCell {
         self.cell(x, y, z)
     }
 
     fn cell(&self, x: i32, y: i32, z: i32) -> LightCell {
-        let index = index_at(x, y, z, self.padded_edge);
+        let index = self.checked_index(x, y, z);
         LightCell {
             sky: Channel::from_level(self.sky[index]),
             block: Channel::from_level(self.block[index]),
         }
+    }
+
+    /// Padded-grid index, rejecting coordinates outside the one-cell apron.
+    ///
+    /// The apron is the only place a caller legitimately reaches outside the
+    /// chunk, so anything further out is a caller bug that would otherwise
+    /// alias onto a different cell (and, past the second cell, panic on the
+    /// `Vec` index).
+    fn checked_index(&self, x: i32, y: i32, z: i32) -> usize {
+        let last = self.edge as i32;
+        assert!(
+            (-APRON_CELLS..=last).contains(&x)
+                && (-APRON_CELLS..=last).contains(&y)
+                && (-APRON_CELLS..=last).contains(&z),
+            "light cell ({x}, {y}, {z}) is outside the padded chunk"
+        );
+        index_at(x, y, z, self.padded_edge)
     }
 
     fn recompute_region(&mut self, min: [i32; 3], max: [i32; 3]) {
