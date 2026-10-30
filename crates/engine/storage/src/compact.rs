@@ -104,28 +104,37 @@ pub struct BandWaste {
     pub slots: u64,
     /// Slots belonging to live runs.
     pub live_slots: u64,
-    /// Slots that are retired or padding.
+    /// Retired slots: dead, and reclaimable by a compaction.
     pub dead_slots: u64,
+    /// Alignment padding, which a compaction reproduces and cannot reclaim.
+    pub padding_slots: u64,
     /// Total slot bytes in the arena.
     pub bytes: u64,
-    /// Bytes held by retired slots and padding.
+    /// Bytes held by retired slots (padding excluded).
     pub dead_bytes: u64,
 }
 
 impl BandWaste {
-    fn new(slots: u64, live_slots: u64, slot_bytes: u64) -> Self {
+    fn new(slots: u64, live_slots: u64, padding_slots: u64, slot_bytes: u64) -> Self {
         let live_slots = live_slots.min(slots);
-        let dead_slots = slots - live_slots;
+        // Padding can only live in the dead region.
+        let padding_slots = padding_slots.min(slots - live_slots);
+        let dead_slots = slots - live_slots - padding_slots;
         Self {
             slots,
             live_slots,
             dead_slots,
+            padding_slots,
             bytes: slots * slot_bytes,
             dead_bytes: dead_slots * slot_bytes,
         }
     }
 
-    /// True when dead or padding bytes are strictly more than 25% of the arena.
+    /// True when retired bytes are strictly more than 25% of the arena.
+    ///
+    /// Padding is excluded: `compact_band_with` re-allocates the live runs with
+    /// the same allocator and reproduces the same alignment padding, so counting
+    /// it made a padding-dominated band a permanent compaction candidate.
     pub fn exceeds_quarter(&self) -> bool {
         self.dead_bytes > 0 && self.dead_bytes * 4 > self.bytes
     }
@@ -491,7 +500,18 @@ impl ChunkDag {
                 .map(|&mask| u64::from(mask.count_ones()))
                 .sum()
         };
-        BandWaste::new(slots, live_slots, NODE_BYTES)
+        // A live node always has at least one child, so a zero-mask word in an
+        // internal band is alignment padding (or a retired padding word).
+        let padding_slots = if level == 0 || level == ROOT_LEVEL {
+            0
+        } else {
+            self.bands()
+                .band(level)
+                .iter()
+                .filter(|node| node.mask() == 0)
+                .count() as u64
+        };
+        BandWaste::new(slots, live_slots, padding_slots, NODE_BYTES)
     }
 
     fn leaf_waste_with(&self, reachable: &Reachable) -> BandWaste {
@@ -501,7 +521,8 @@ impl ChunkDag {
             .values()
             .copied()
             .sum::<u64>();
-        BandWaste::new(slots, live_slots, LEAF_MATERIAL_BYTES)
+        // Leaf runs are packed; the arena has no alignment padding.
+        BandWaste::new(slots, live_slots, 0, LEAF_MATERIAL_BYTES)
     }
 
     /// Unique internal runs in `level`'s band, keyed by old base.
@@ -989,5 +1010,17 @@ mod tests {
         assert_eq!(dag.live_root_count(), 0);
         assert_eq!(dag.in_flight_frame_count(), 0);
         dag.compact();
+    }
+
+    /// Padding alone must not make a band a permanent compaction candidate:
+    /// the rewrite reproduces the same alignment padding.
+    #[test]
+    fn padding_alone_does_not_trigger_compaction() {
+        let padded = BandWaste::new(16, 1, 15, NODE_BYTES);
+        assert_eq!(padded.dead_slots, 0);
+        assert!(!padded.exceeds_quarter());
+
+        let retired = BandWaste::new(16, 1, 0, NODE_BYTES);
+        assert!(retired.exceeds_quarter());
     }
 }

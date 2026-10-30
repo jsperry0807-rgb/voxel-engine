@@ -176,19 +176,33 @@ fn read_record_with_budget<R: Read>(
 /// Scans block by block for [`MAGIC`], verifying each candidate in full before
 /// accepting it, so bytes that merely look like a header inside a payload do
 /// not desynchronise the log.
+/// Candidates `resync` verifies before it gives up on a corrupt run.
+const MAX_RESYNC_FAILED: u32 = 256;
+
+/// Outcome of searching a region for the next valid record.
+enum Resync {
+    /// A CRC-valid record starts at this offset.
+    Found(u64),
+    /// The scan reached the end of the file without finding another record.
+    EndOfFile,
+    /// The candidate or byte budget ran out; the rest of the file is unscanned.
+    ///
+    /// This is *not* a torn tail: the bytes after the damage may be intact and
+    /// must not be truncated.
+    Abandoned,
+}
+
 fn resync<R: Read + Seek>(
     r: &mut R,
     from: u64,
     total: u64,
     budget: &mut u64,
-) -> io::Result<Option<u64>> {
+) -> io::Result<Resync> {
     const BLOCK: usize = 64 * 1024;
     // A corrupt payload can hold thousands of accidental magic values, and each
     // verification CRC-reads a record of up to MAX_RECORD_BYTES. Bound both the
     // number of misses and the shared byte budget, so a 17 MiB region cannot
-    // cause gigabytes of CRC work; the unrecovered tail is counted in
-    // `recovered_bytes`, so the truncation is reported rather than silent.
-    const MAX_FAILED: u32 = 256;
+    // cause gigabytes of CRC work.
     let magic = MAGIC.to_le_bytes();
     let mut buf = vec![0u8; BLOCK + 3];
     let mut failed = 0u32;
@@ -218,11 +232,11 @@ fn resync<R: Read + Seek>(
                 // verification so a large valid record after corruption does
                 // not exhaust the recovery budget.
                 *budget = budget.saturating_add(cost);
-                return Ok(Some(candidate));
+                return Ok(Resync::Found(candidate));
             }
             failed += 1;
-            if failed == MAX_FAILED || *budget == 0 {
-                return Ok(None);
+            if failed == MAX_RESYNC_FAILED || *budget == 0 {
+                return Ok(Resync::Abandoned);
             }
         }
         if filled < want {
@@ -231,7 +245,7 @@ fn resync<R: Read + Seek>(
         // Overlap three bytes so a magic split across blocks is found.
         base += (filled - 3) as u64;
     }
-    Ok(None)
+    Ok(Resync::EndOfFile)
 }
 
 struct Scan {
@@ -248,23 +262,33 @@ fn scan(file: &mut File) -> io::Result<Scan> {
     let mut pos = 0u64;
     let mut good_end = 0u64;
     let mut skipped = 0u64;
+    let mut abandoned = false;
     {
         let mut r = BufReader::new(&*file);
         let mut budget = MAX_RECOVERY_BYTES;
         while pos < total {
             let (record, cost) = read_record_with_budget(&mut r, pos, total, &mut budget)?;
             let Some(record) = record else {
-                // A corrupt record does not end the log: keep every record
-                // after it instead of truncating them away.
-                let Some(next) = resync(&mut r, pos + 1, total, &mut budget)? else {
-                    break;
-                };
-                skipped += next - pos;
-                pos = next;
-                // `resync` left the reader at the end of the record it
-                // validated; rewind so the next iteration decodes it.
-                r.seek(SeekFrom::Start(pos))?;
-                continue;
+                // A corrupt record does not end the log: look for the next
+                // valid one instead of truncating everything after it.
+                match resync(&mut r, pos + 1, total, &mut budget)? {
+                    Resync::Found(next) => {
+                        skipped += next - pos;
+                        pos = next;
+                        // `resync` left the reader at the end of the record it
+                        // validated; rewind so the next iteration decodes it.
+                        r.seek(SeekFrom::Start(pos))?;
+                        continue;
+                    }
+                    Resync::EndOfFile => break,
+                    Resync::Abandoned => {
+                        // Recovery stopped looking, not the file. Keeping the
+                        // tail means a read can never destroy intact records;
+                        // the unscanned bytes are still counted as recovered.
+                        abandoned = true;
+                        break;
+                    }
+                }
             };
             // This record verified, so scanning it is real work rather than
             // adversarial recovery; refund it and keep the budget for failures.
@@ -282,15 +306,18 @@ fn scan(file: &mut File) -> io::Result<Scan> {
             good_end = pos;
         }
     }
-    if good_end < total {
+    if !abandoned && good_end < total {
+        // Only a genuine torn tail is safe to drop. Truncating when recovery
+        // gave up would delete records that were never examined.
         file.set_len(good_end)?;
     }
     let recovered = skipped + (total - good_end);
     Ok(Scan {
-        len: good_end,
+        // Appends land after the unscanned tail rather than over it.
+        len: if abandoned { total } else { good_end },
         index,
         recovered,
-        truncated: good_end < total,
+        truncated: !abandoned && good_end < total,
     })
 }
 
@@ -395,29 +422,55 @@ impl RegionStore {
 
     pub fn load(&mut self, p: ChunkPos) -> io::Result<Option<(Svdag, Overlay)>> {
         let cell = p.cell();
-        let Some(reg) = self.region(p.region(), false)? else {
-            return Ok(None);
-        };
-        let Some(e) = reg.index.get(&cell).copied() else {
-            return Ok(None);
-        };
-        let Some((off, len)) = e.dag else {
-            return Ok(None);
-        };
-        let dag =
-            Svdag::from_bytes(&reg.read(off, len)?).ok_or_else(|| bad("corrupt dag record"))?;
-        // `from_bytes` checks framing only; parent bases and band tails are
-        // validated here so a CRC-valid but semantically invalid record cannot
-        // panic later in the chunk accessors.
-        dag.check()
-            .map_err(|error| bad(&format!("invalid dag record: {error}")))?;
-        let ov = match e.diff {
-            Some((o, l)) => {
-                Overlay::from_bytes(&reg.read(o, l)?).ok_or_else(|| bad("corrupt diff record"))?
+        let rp = p.region();
+        let mut lost = 0u64;
+        let loaded = {
+            let Some(reg) = self.region(rp, false)? else {
+                return Ok(None);
+            };
+            let Some(e) = reg.index.get(&cell).copied() else {
+                return Ok(None);
+            };
+            let Some((off, len)) = e.dag else {
+                return Ok(None);
+            };
+            let bytes = reg.read(off, len)?;
+            // `from_bytes` checks framing only; parent bases and band tails are
+            // validated here. A CRC-valid but semantically invalid record is
+            // dropped rather than returned as a permanent error: the caller can
+            // regenerate the chunk, but it could never un-stick an `Err`.
+            let dag = match Svdag::from_bytes(&bytes) {
+                Some(dag) if dag.check().is_ok() => Some(dag),
+                _ => {
+                    reg.index.remove(&cell);
+                    lost = len as u64;
+                    None
+                }
+            };
+            match dag {
+                None => None,
+                Some(dag) => {
+                    let mut ov = Overlay::default();
+                    if let Some((o, l)) = e.diff {
+                        match Overlay::from_bytes(&reg.read(o, l)?) {
+                            Some(parsed) => ov = parsed,
+                            None => {
+                                // The diff is an edit snapshot on top of the DAG;
+                                // losing it costs the chunk's unsaved edits, not
+                                // the chunk itself.
+                                lost = l as u64;
+                                if let Some(entry) = reg.index.get_mut(&cell) {
+                                    entry.diff = None;
+                                }
+                            }
+                        }
+                    }
+                    Some((dag, ov))
+                }
             }
-            None => Overlay::default(),
         };
-        Ok(Some((dag, ov)))
+        self.recovered_bytes += lost;
+        Ok(loaded)
     }
 
     /// Flushes appended records and any new directory entry.
@@ -453,6 +506,10 @@ impl RegionStore {
         let Some(reg) = self.regions.get_mut(&rp) else {
             return Ok(());
         };
+        // The rename below changes a directory entry. Mark it before trying,
+        // so a failed (or unsupported) directory fsync is retried rather than
+        // leaving the new inode's link unpersisted.
+        self.dir_dirty = true;
         let result = (|| -> io::Result<()> {
             let mut out = File::create(&tmp)?;
             let mut cells: Vec<u16> = reg.index.keys().copied().collect();
@@ -661,6 +718,109 @@ mod tests {
         assert_eq!(dirty, vec![(0, 0, 0)], "only the appended region is dirty");
         store.sync().expect("sync");
         assert!(store.regions.values().all(|region| !region.dirty));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A corrupt run that exhausts the recovery budget must not take the bytes
+    /// after it with it. The old scan truncated at the last good record, so a
+    /// read could delete intact chunks that simply had not been examined yet.
+    #[test]
+    fn abandoned_recovery_keeps_the_unscanned_tail() {
+        let dir = std::env::temp_dir().join(format!(
+            "voxel-disk-abandoned-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        {
+            let mut store = RegionStore::open(&dir).expect("open store");
+            store
+                .put_diff(ChunkPos::new(0, 0, 0), &Overlay::default())
+                .expect("write the first record");
+            store.sync().expect("sync");
+        }
+        let path = dir.join("r.0.0.0.vxr");
+        {
+            let mut file = OpenOptions::new()
+                .append(true)
+                .open(&path)
+                .expect("open the region");
+            // `MAX_RESYNC_FAILED` headers with valid framing and a bad CRC.
+            for _ in 0..MAX_RESYNC_FAILED {
+                let mut header = encode_header(KIND_DIFF, 1, 1);
+                header[12..16].copy_from_slice(&0u32.to_le_bytes());
+                file.write_all(&header).expect("write header");
+                file.write_all(&[0]).expect("write payload");
+            }
+            // An intact record after the damage.
+            file.write_all(&encode(KIND_DIFF, 1, &[0u8; 8]))
+                .expect("write trailing record");
+        }
+        let before = fs::metadata(&path).expect("metadata").len();
+        let mut store = RegionStore::open(&dir).expect("reopen store");
+        // Regions are scanned lazily; touching one runs recovery.
+        store
+            .load(ChunkPos::new(0, 0, 0))
+            .expect("load the first chunk");
+        assert_eq!(
+            fs::metadata(&path).expect("metadata").len(),
+            before,
+            "recovery must not truncate records it never examined"
+        );
+        assert!(store.recovered_bytes() > 0);
+
+        // Appends land after the unscanned tail, not over it.
+        store
+            .put_diff(ChunkPos::new(1, 0, 0), &Overlay::default())
+            .expect("append after the abandoned tail");
+        assert!(fs::metadata(&path).expect("metadata").len() > before);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A CRC-valid diff whose payload cannot be decoded must not make the chunk
+    /// unloadable: the DAG is still good, so only the edits are lost.
+    #[test]
+    fn a_bad_diff_falls_back_to_the_dag() {
+        let dir = std::env::temp_dir().join(format!(
+            "voxel-disk-bad-diff-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        let pos = ChunkPos::new(0, 0, 0);
+        let dag = Svdag::from_dense(&vec![1u16; crate::CHUNK_VOLUME]);
+        {
+            let mut store = RegionStore::open(&dir).expect("open store");
+            store.put_dag(pos, &dag).expect("write dag");
+            store
+                .put_diff(pos, &Overlay::default())
+                .expect("write diff");
+            store.sync().expect("sync");
+        }
+        let path = dir.join("r.0.0.0.vxr");
+        {
+            let mut file = OpenOptions::new()
+                .append(true)
+                .open(&path)
+                .expect("open the region");
+            // A plausible entry count with no entry bytes: framing and CRC are
+            // valid, the overlay payload is not.
+            file.write_all(&encode(KIND_DIFF, pos.cell(), &[1, 0, 0, 0]))
+                .expect("append a bad diff");
+        }
+
+        let mut store = RegionStore::open(&dir).expect("reopen store");
+        let (loaded, overlay) = store
+            .load(pos)
+            .expect("a bad diff is not fatal")
+            .expect("the committed DAG still loads");
+        let mut expected = vec![0u16; crate::CHUNK_VOLUME];
+        dag.expand(&mut expected);
+        let mut actual = vec![0u16; crate::CHUNK_VOLUME];
+        loaded.expand(&mut actual);
+        assert_eq!(actual, expected, "the DAG content must survive");
+        assert!(overlay.is_empty(), "the undecodable diff is dropped");
+        assert!(store.recovered_bytes() >= 4);
         let _ = fs::remove_dir_all(&dir);
     }
 }
