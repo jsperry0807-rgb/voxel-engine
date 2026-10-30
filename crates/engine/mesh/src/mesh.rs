@@ -6,6 +6,7 @@
 
 use voxel_core::Face;
 
+use crate::BLOCK_EDGE;
 use crate::BlockPos;
 use crate::greedy::{GreedyQuad, corner_signs, face_axis};
 use crate::vertex::Vertex;
@@ -33,9 +34,15 @@ impl Mesh {
 
 /// Builds the mesh for one block's greedy rectangles.
 ///
-/// `block` supplies the chunk-local origin. A block emits at most 4,096 quads
-/// (16 × 16 faces × 6 orientations), which is 16,384 vertices and fits the
-/// meshlet-local `u16` index range.
+/// `block` supplies the chunk-local origin. A full block emits at most 11,520
+/// quads (16 × 16 faces × 6 orientations), which is 46,080 vertices and still
+/// fits the meshlet-local `u16` index range.
+///
+/// # Panics
+///
+/// Panics when a quad is outside the block or has a zero or out-of-range
+/// extent: `GreedyQuad` has public fields, so a hand-built quad can violate the
+/// contract that [`greedy_block`] and [`crate::greedy_block_with_ao`] maintain.
 pub fn mesh_block(quads: &[GreedyQuad], block: BlockPos) -> Mesh {
     let mut mesh = Mesh::default();
     mesh.vertices.reserve(quads.len() * 4);
@@ -43,6 +50,27 @@ pub fn mesh_block(quads: &[GreedyQuad], block: BlockPos) -> Mesh {
     let block_origin = block.origin();
 
     for quad in quads {
+        assert!(
+            quad.origin
+                .iter()
+                .all(|&corner| (1..=BLOCK_EDGE as u32).contains(&corner)),
+            "quad origin {:?} is outside the 16³ block interior",
+            quad.origin
+        );
+        assert!(
+            quad.extent.iter().all(|&extent| extent > 0),
+            "quad extent {:?} is empty",
+            quad.extent
+        );
+        for axis in 0..3 {
+            assert!(
+                quad.origin[axis] + quad.extent[axis] <= BLOCK_EDGE as u32 + 1,
+                "quad origin {:?} extent {:?} runs past the block",
+                quad.origin,
+                quad.extent
+            );
+        }
+
         let base = mesh.vertices.len();
         assert!(
             base + 4 <= u16::MAX as usize + 1,

@@ -16,7 +16,9 @@ const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 #[test]
 fn determinism() {
     let volumes = {
-        let edge = if CHUNK_DIM == 64 { 2 } else { 1 };
+        // Four chunks at both chunk edges: the aggregate hash and the reversed
+        // order must be meaningful at 64³ and at 128³.
+        let edge = 2;
         let mut volumes = Vec::new();
         for cz in 0..edge {
             for cx in 0..edge {
@@ -28,8 +30,11 @@ fn determinism() {
     let order: Vec<usize> = (0..volumes.len()).collect();
     let baseline = hash_with_order(&volumes, &order, 1);
 
+    // 128³ volumes are eight times the work; keep the repeat count meaningful
+    // without making the chunk128 job a multi-minute test.
+    let repeats = if CHUNK_DIM == 64 { 10 } else { 2 };
     for workers in [1, 2, 4, 8] {
-        for repeat in 0..10 {
+        for repeat in 0..repeats {
             let hash = hash_with_order(&volumes, &order, workers);
             assert_eq!(
                 hash, baseline,
@@ -41,6 +46,16 @@ fn determinism() {
     let reverse: Vec<usize> = (0..volumes.len()).rev().collect();
     assert_eq!(hash_with_order(&volumes, &reverse, 1), baseline);
     assert_eq!(hash_with_order(&volumes, &reverse, 4), baseline);
+
+    // The hash must react to content, not just to how the work is split.
+    let mut changed = volumes.clone();
+    let top = height(1, 1) as usize;
+    changed[0][local_index(1, top as u32, 1) as usize] = 1;
+    assert_ne!(
+        hash_with_order(&changed, &order, 1),
+        baseline,
+        "one added voxel must change the aggregate hash"
+    );
 }
 
 fn hash_with_order(volumes: &[Vec<u16>], order: &[usize], workers: usize) -> u64 {

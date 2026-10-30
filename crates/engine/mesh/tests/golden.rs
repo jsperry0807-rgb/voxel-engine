@@ -13,35 +13,38 @@
 
 use std::path::{Path, PathBuf};
 
-use voxel_core::Face;
 use voxel_mesh::{
     BLOCK_EDGE, BlockPos, GreedyQuad, Mesh, for_each_block, greedy_block, mesh_block,
 };
-use voxel_storage::{Apron, CHUNK_DIM, CHUNK_VOLUME, local_index};
+use voxel_storage::{Apron, CHUNK_DIM, CHUNK_VOLUME, Face as ApronFace, local_index};
 
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 
 #[test]
 fn golden() {
-    for (name, voxels) in fixtures() {
-        let built = build(&voxels);
-        let path = golden_path(name);
-        if std::env::var_os("UPDATE_GOLDEN").is_some() {
+    for fixture in fixtures() {
+        let built = build(&fixture.voxels, &fixture.apron);
+        let path = golden_path(fixture.name);
+        if update_requested() {
             write_golden(&path, &built);
             continue;
         }
         let expected = read_golden(&path);
         if expected.mesh != built.mesh || expected.quads != built.quads {
             let index = first_difference(&expected.quads, &built.quads);
-            let (block, quad) = built
+            let at = built
                 .records
                 .get(index)
-                .map(|record| (record.block, record.quad))
-                .unwrap_or((BlockPos::new(0, 0, 0), placeholder()));
+                .map(|record| format!("block {:?}, quad {:?}", record.block, record.quad))
+                .unwrap_or_else(|| "beyond the last emitted quad".to_owned());
             panic!(
-                "golden mismatch in {name} at quad {index}: block {block:?}, quad {quad:?}; \
-                 expected {} quads, got {}; regenerate with UPDATE_GOLDEN=1 if intentional",
+                "golden mismatch in {} at quad {index}: {at}; \
+                 mesh {:016x} != {:016x}; expected {} quads, got {}; \
+                 regenerate with UPDATE_GOLDEN=1 if intentional",
+                fixture.name,
+                expected.mesh,
+                built.mesh,
                 expected.quads.len(),
                 built.quads.len()
             );
@@ -65,13 +68,12 @@ struct Golden {
     quads: Vec<u64>,
 }
 
-fn build(voxels: &[u16]) -> Built {
-    let apron = Apron::new();
+fn build(voxels: &[u16], apron: &Apron) -> Built {
     let mut mesh_hash = FNV_OFFSET;
     let mut quad_hashes = Vec::new();
     let mut records = Vec::new();
 
-    for_each_block(voxels, &apron, |block, scratch| {
+    for_each_block(voxels, apron, |block, scratch| {
         let mut quads = Vec::new();
         greedy_block(scratch, &mut quads);
         let mesh = mesh_block(&quads, block);
@@ -139,11 +141,38 @@ fn write_golden(path: &Path, built: &Built) {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).expect("create golden directory");
     }
+    let previous = std::fs::read_to_string(path)
+        .ok()
+        .map(|text| parse_golden(path, &text));
     let mut text = format!("mesh {:016x}\n", built.mesh);
     for hash in &built.quads {
         text.push_str(&format!("quad {hash:016x}\n"));
     }
     std::fs::write(path, text).expect("write golden file");
+    match previous {
+        Some(old) if old.mesh == built.mesh && old.quads == built.quads => {
+            println!(
+                "golden {}: unchanged (mesh {:016x}, {} quads)",
+                path.display(),
+                built.mesh,
+                built.quads.len()
+            );
+        }
+        Some(old) => println!(
+            "golden {}: mesh {:016x} -> {:016x}, {} -> {} quads",
+            path.display(),
+            old.mesh,
+            built.mesh,
+            old.quads.len(),
+            built.quads.len()
+        ),
+        None => println!(
+            "golden {}: created (mesh {:016x}, {} quads)",
+            path.display(),
+            built.mesh,
+            built.quads.len()
+        ),
+    }
 }
 
 fn read_golden(path: &Path) -> Golden {
@@ -153,6 +182,10 @@ fn read_golden(path: &Path) -> Golden {
             path.display()
         )
     });
+    parse_golden(path, &text)
+}
+
+fn parse_golden(path: &Path, text: &str) -> Golden {
     let mut mesh = None;
     let mut quads = Vec::new();
     for line in text.lines() {
@@ -176,17 +209,13 @@ fn read_golden(path: &Path) -> Golden {
     }
 }
 
-fn placeholder() -> GreedyQuad {
-    GreedyQuad {
-        face: Face::Top,
-        material: 0,
-        ao: [0; 4],
-        origin: [0; 3],
-        extent: [0; 3],
-    }
+/// Regeneration is opt-in with `UPDATE_GOLDEN=1`. Any other value (including
+/// `0`) checks the committed fixture, so a stray variable cannot rewrite it.
+fn update_requested() -> bool {
+    matches!(std::env::var("UPDATE_GOLDEN"), Ok(value) if value == "1")
 }
 
-fn fixtures() -> Vec<(&'static str, Vec<u16>)> {
+fn fixtures() -> Vec<Fixture> {
     let mut flat = vec![0u16; CHUNK_VOLUME];
     for z in 0..CHUNK_DIM {
         for x in 0..CHUNK_DIM {
@@ -260,13 +289,55 @@ fn fixtures() -> Vec<(&'static str, Vec<u16>)> {
         }
     }
 
+    // A populated apron: every face plane carries a distinct two-material
+    // checkerboard, so the border reads contribute to the mesh hash.
+    let mut apron = Apron::new();
+    for (slot, face) in ApronFace::ALL.into_iter().enumerate() {
+        for v in 0..Apron::SIDE {
+            for u in 0..Apron::SIDE {
+                apron.set(face, u, v, 2 + (slot as u16) * 2 + ((u + v) % 2) as u16);
+            }
+        }
+    }
+
     vec![
-        ("flat", flat),
-        ("cave", cave),
-        ("overhang", overhang),
-        ("mixed_material", mixed),
-        ("chunk_border", border),
+        Fixture {
+            name: "flat",
+            voxels: flat,
+            apron: Apron::new(),
+        },
+        Fixture {
+            name: "cave",
+            voxels: cave,
+            apron: Apron::new(),
+        },
+        Fixture {
+            name: "overhang",
+            voxels: overhang,
+            apron: Apron::new(),
+        },
+        Fixture {
+            name: "mixed_material",
+            voxels: mixed,
+            apron: Apron::new(),
+        },
+        Fixture {
+            name: "chunk_border",
+            voxels: border.clone(),
+            apron: Apron::new(),
+        },
+        Fixture {
+            name: "apron_border",
+            voxels: border,
+            apron,
+        },
     ]
+}
+
+struct Fixture {
+    name: &'static str,
+    voxels: Vec<u16>,
+    apron: Apron,
 }
 
 fn set(voxels: &mut [u16], x: usize, y: usize, z: usize, material: u16) {

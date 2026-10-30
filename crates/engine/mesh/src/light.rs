@@ -309,7 +309,11 @@ impl LightState {
         for z in lower..=upper {
             for y in lower..=upper {
                 for x in lower..=upper {
-                    blocks.push(block_at(x, y, z));
+                    let sample = block_at(x, y, z);
+                    // Normalise at ingest: `LightSource` implementations can
+                    // return any `u8`, and an opacity above 15 would overflow
+                    // the `1 + opacity` step inside propagation.
+                    blocks.push(BlockLight::new(sample.emission, sample.opacity));
                     sky_seeds.push(sky_at(x, y, z));
                 }
             }
@@ -574,7 +578,8 @@ where
     for z in lower..=upper {
         for y in lower..=upper {
             for x in lower..=upper {
-                let sample = block_at(x, y, z);
+                let raw = block_at(x, y, z);
+                let sample = BlockLight::new(raw.emission, raw.opacity);
                 let index = index_at(x, y, z, padded_edge);
                 if sample.emission > 0 {
                     block[index] = sample.emission.min(MAX_LEVEL);

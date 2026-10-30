@@ -17,21 +17,23 @@ fn ao_merge_ratio() {
 
     assert_eq!(ao_faces, plain_faces, "AO must not change covered faces");
     assert!(
-        ao_quads >= plain_quads,
-        "AO can split quads but never merge more"
-    );
-    assert!(
         ao_quads > plain_quads,
         "the fixture must contain at least one AO split"
     );
 
     let ao_ratio = ao_quads as f64 / ao_faces as f64;
     let plain_ratio = plain_quads as f64 / plain_faces as f64;
+    let cost = ao_ratio / plain_ratio;
     println!(
         "ao_merge_ratio: faces={ao_faces} quads_ao={ao_quads} ratio_ao={ao_ratio:.4} \
-         quads_plain={plain_quads} ratio_plain={plain_ratio:.4} \
-         cost={:.2}x",
-        ao_ratio / plain_ratio,
+         quads_plain={plain_quads} ratio_plain={plain_ratio:.4} cost={cost:.2}x"
+    );
+    // M2-08 asks for the cost, not for a limit, but an unguarded ratio would
+    // let a merge regression through: the fixture measures ~1.65x, so 2x is
+    // headroom without accepting a real regression.
+    assert!(
+        cost <= 2.0,
+        "AO-safe quads cost {cost:.2}x the merge ratio, above the 2x budget"
     );
 }
 
