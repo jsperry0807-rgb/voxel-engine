@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>M2-17 — incremental light below 20%</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 24px 30px 60px; background: #17191d; color: #e6e8eb;
+         font: 14px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  h1 { font-size: 23px; margin: 0 0 6px; }
+  h2 { font-size: 17px; margin: 30px 0 10px; }
+  p, li { color: #c7ccd4; max-width: 1100px; }
+  code { color: #f0d8a8; background: #23262c; padding: 1px 5px; border-radius: 4px; }
+  .meta { color: #8f97a3; margin: 0 0 16px; }
+  .note { border-left: 3px solid #2e9e5b; background: #1c261f; padding: 10px 14px; margin: 16px 0; max-width: 1100px; }
+  table { border-collapse: collapse; margin: 8px 0 18px; }
+  th, td { text-align: right; padding: 5px 16px; border-bottom: 1px solid #2c313a; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: #8f97a3; font-weight: 600; }
+  .chart { width: 100%; max-width: 1100px; height: 600px; border: 1px solid #323844;
+           border-radius: 6px; background: #fff; margin: 8px 0 18px; }
+  .flame { width: 100%; height: 470px; border: 1px solid #323844; border-radius: 6px;
+           background: #eee; margin: 8px 0 20px; }
+  a { color: #8fb8ff; }
+  .small { color: #8f97a3; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>M2-17 — incremental light below 20%</h1>
+<p class="meta">128³ production edge, 8³ light cells. 2026-10-29, AMD Ryzen 5 7600,
+4 vCPU visible (WSL2).</p>
+
+<div class="note">
+  <strong>Result:</strong> the centre edit is <strong>5.7% of a full pass at
+  p95</strong> (7.06% by criterion mean), down from 31.6%. The 20% target is met
+  with a 3.5× margin; every edit in the six-position sweep is under 10% p95.
+</div>
+
+<table>
+  <tr><th>Edge</th><th>Full p50 / p95</th><th>Incremental p50 / p95</th><th>Ratio p50 / p95</th><th>Changed cells</th></tr>
+  <tr><td>64³ (4³ cells)</td><td>4.88 / 6.39 µs</td><td>0.261 / 0.280 µs</td><td>5.3% / 4.4%</td><td>46 / 216</td></tr>
+  <tr><td>128³ (8³ cells)</td><td>28.81 / 36.12 µs</td><td>2.00 / 2.06 µs</td><td>7.0% / 5.7%</td><td>414 / 1,000</td></tr>
+</table>
+
+<h2>Changed cells vs cost</h2>
+<p>Each point is one single edit. The red series is the increase-only baseline
+that still missed 20%; the green series is the final code. The gap between the
+series is the optimization, not a different fixture.</p>
+<object class="chart" type="image/svg+xml" data="m2-17-changed-cells.svg">
+  <a href="m2-17-changed-cells.svg">m2-17-changed-cells.svg</a>
+</object>
+
+<h2>Optimization path</h2>
+<p>Top: p95 edit cost. Bottom: the same number as a share of the full pass, with
+the 20% task line. The jump from 17.3% to 5.7% is the neighbour mask replacing
+per-cell coordinate division and bounds checks.</p>
+<object class="chart" type="image/svg+xml" data="m2-17-phases.svg">
+  <a href="m2-17-phases.svg">m2-17-phases.svg</a>
+</object>
+
+<h2>The four changes</h2>
+<ol>
+  <li><strong>Increase-only fast path</strong> — skip the dirty-region reseed
+    when no edit removes light. 51.8 → 11.5 µs p95 (127.8% → 31.6%).</li>
+  <li><strong>Channel-selective propagation</strong> — an emitter edit no longer
+    runs the sky pass, and a pure gain seeds only the edited cell. → 9.9 µs (28.1%).</li>
+  <li><strong>Scratch reuse</strong> — buckets and seed lists live on the state;
+    capacity-preserving <code>clone_from</code>. → 7.6 µs (17.3%).</li>
+  <li><strong>Neighbour mask</strong> — one byte per cell with six direction bits
+    and constant index offsets; no division or bounds checks in the inner loop.
+    → 2.06 µs (5.7%).</li>
+</ol>
+
+<h2>Flamegraphs</h2>
+<p>Hover for the symbol and sample count; click to zoom; use Search to highlight
+a function. The final graph has no allocator hotspot.</p>
+<p><a href="m2-17-light-incremental.svg">Open the final incremental SVG</a> ·
+   <a href="m2-17-light-incremental-before-table.svg">before the neighbour mask</a> ·
+   <a href="m2-17-light-full.svg">full pass</a></p>
+<object class="flame" type="image/svg+xml" data="m2-17-light-incremental.svg">
+  <a href="m2-17-light-incremental.svg">flamegraph</a>
+</object>
+
+<h2>Correctness</h2>
+<p>
+  <code>tests/light_increase.rs</code> pins emitter, opacity, sky and apron
+  increases to a full pass with <code>full_relights() == 0</code>.
+  <code>light_incremental</code> still matches a full recompute over 1,000 random
+  edit sets, and <code>light_escalation</code> still proves boundary removals
+  escalate. The benchmark asserts equality before and after every measured edit.
+</p>
+
+<h2>Data and reproduction</h2>
+<p><a href="m2-17-matrix-before.csv">matrix-before.csv</a> ·
+   <a href="m2-17-matrix-after.csv">matrix-after.csv</a> ·
+   <a href="m2-17-phases.csv">phases.csv</a></p>
+<pre><code>cargo bench -p voxel-mesh --bench light
+LIGHT_MATRIX=1 cargo bench -p voxel-mesh --bench light -- --quick
+LIGHT_SKIP_P95=1 LIGHT_PROFILE=1 \
+  cargo bench -p voxel-mesh --bench light -- \
+  "light/edge_8/incremental_edit" --profile-time 10
+python3 scripts/m2_17_charts.py</code></pre>
+<p class="small">The full-pass p95 varies 35–44 µs on this host; ratios are
+against the full pass measured in the same run, and the criterion means are the
+stable comparison. Re-run on the reference machine before quoting a gate number.</p>
+</body>
+</html>

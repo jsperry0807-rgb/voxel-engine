@@ -11,6 +11,13 @@
 //! viewer, with a local screenshot shader that preserves cutout and translucent
 //! alpha so leaves, water and ice can be judged. It does not change the runtime
 //! shader.
+//!
+//! It also writes the M1.5-17 texel-density pair: the same chunk rendered from
+//! the 256² M1.5-14 sources (the historical per-face density) and from the
+//! committed 16×16-tile atlas. Both sides sample level 0 with nearest filtering,
+//! so the pair isolates density from the runtime mip path. Both filenames carry
+//! the first eight hex characters of `atlas_png_blake3`, as generator.spec §11
+//! asks.
 
 use std::error::Error;
 use std::fs::File;
@@ -28,7 +35,7 @@ use voxel_viewer::chunk_mesh::ChunkMesh;
 use voxel_viewer::depth::{DEPTH_FORMAT, DepthTarget};
 use voxel_viewer::naive_mesh::{Mesh, Quad, Vertex, mesh_face, naive_mesh};
 
-const SHADER: &str = r#"
+const SHADER_TEMPLATE: &str = r#"
 struct Camera {
     view_proj: mat4x4<f32>,
     view: mat4x4<f32>,
@@ -44,6 +51,14 @@ var atlas: texture_2d<f32>;
 
 @group(1) @binding(1)
 var atlas_sampler: sampler;
+
+// Width of one atlas tile in texels: 16 for the runtime atlas, 256 for the
+// legacy per-face sources.
+const TILE: f32 = {{TILE}};
+// Tiles per atlas edge: 16 for the 256² atlas, 8 for the 2048² source sheet.
+const EDGE: u32 = {{EDGE}};
+// Atlas edge in texels.
+const ATLAS: f32 = {{ATLAS}};
 
 struct VertexInput {
     @location(0) local_material: vec4<u32>,
@@ -79,26 +94,28 @@ const FACE_SHADE: array<f32, 6> = array<f32, 6>(0.62, 0.62, 1.0, 0.5, 0.82, 0.72
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let block = floor(input.local / 16.0) * 16.0;
     let rel = input.local - block;
+    // A 1 m face is 16 voxels wide; the full tile spans that whole face.
+    let scale = TILE / 16.0;
 
-    var face_uv = vec2<f32>(rel.x, rel.y);
+    var face_uv = vec2<f32>(rel.x, rel.y) * scale;
     if input.face == 0u {
-        face_uv = vec2<f32>(16.0 - rel.z, 16.0 - rel.y);
+        face_uv = vec2<f32>(16.0 - rel.z, 16.0 - rel.y) * scale;
     } else if input.face == 1u {
-        face_uv = vec2<f32>(rel.z, 16.0 - rel.y);
+        face_uv = vec2<f32>(rel.z, 16.0 - rel.y) * scale;
     } else if input.face == 2u {
-        face_uv = vec2<f32>(rel.x, 16.0 - rel.z);
+        face_uv = vec2<f32>(rel.x, 16.0 - rel.z) * scale;
     } else if input.face == 3u {
-        face_uv = vec2<f32>(rel.x, rel.z);
+        face_uv = vec2<f32>(rel.x, rel.z) * scale;
     } else if input.face == 4u {
-        face_uv = vec2<f32>(rel.x, 16.0 - rel.y);
+        face_uv = vec2<f32>(rel.x, 16.0 - rel.y) * scale;
     } else {
-        face_uv = vec2<f32>(16.0 - rel.x, 16.0 - rel.y);
+        face_uv = vec2<f32>(16.0 - rel.x, 16.0 - rel.y) * scale;
     }
 
-    let texel = clamp(face_uv, vec2<f32>(0.5), vec2<f32>(15.5));
+    let texel = clamp(face_uv, vec2<f32>(0.5), vec2<f32>(TILE - 0.5));
     let tile_origin =
-        vec2<f32>(f32(input.material % 16u), f32(input.material / 16u)) * 16.0;
-    let uv = (tile_origin + texel) / 256.0;
+        vec2<f32>(f32(input.material % EDGE), f32(input.material / EDGE)) * TILE;
+    let uv = (tile_origin + texel) / ATLAS;
     let color = textureSample(atlas, atlas_sampler, uv);
     if color.a < 0.5 {
         discard;
@@ -106,6 +123,36 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(color.rgb * FACE_SHADE[input.face], color.a);
 }
 "#;
+
+/// One atlas layout: tile width, tiles per edge and atlas edge, in texels.
+#[derive(Clone, Copy)]
+struct AtlasVariant {
+    tile_px: u32,
+    tiles_per_edge: u32,
+    atlas_px: u32,
+}
+
+impl AtlasVariant {
+    /// The committed runtime atlas: 16×16 tiles in a 256² image.
+    const RUNTIME: Self = Self {
+        tile_px: 16,
+        tiles_per_edge: 16,
+        atlas_px: 256,
+    };
+    /// The historical per-face density: 256² sources in an 8×8 sheet (2048²).
+    const LEGACY: Self = Self {
+        tile_px: 256,
+        tiles_per_edge: 8,
+        atlas_px: 2048,
+    };
+
+    fn shader(self) -> String {
+        SHADER_TEMPLATE
+            .replace("{{TILE}}", &format!("{}.0", self.tile_px))
+            .replace("{{EDGE}}", &format!("{}u", self.tiles_per_edge))
+            .replace("{{ATLAS}}", &format!("{}.0", self.atlas_px))
+    }
+}
 
 const VERTEX_ATTRIBUTES: [wgpu::VertexAttribute; 3] = [
     wgpu::VertexAttribute {
@@ -142,6 +189,11 @@ struct TextureEntry {
     source: String,
 }
 
+#[derive(Deserialize)]
+struct AtlasHash {
+    atlas_png_blake3: String,
+}
+
 struct Gpu {
     _instance: wgpu::Instance,
     _adapter: wgpu::Adapter,
@@ -149,6 +201,119 @@ struct Gpu {
     queue: wgpu::Queue,
     atlas: AtlasTexture,
     camera_layout: wgpu::BindGroupLayout,
+}
+
+/// The historical per-face sheet: every 256² M1.5-14 source in an 8×8 grid,
+/// indexed by material slot, with no mip chain. This is the "before" side of
+/// M1.5-17.
+struct LegacyAtlas {
+    _texture: wgpu::Texture,
+    bind_group: wgpu::BindGroup,
+}
+
+impl LegacyAtlas {
+    fn new(gpu: &Gpu, root: &Path) -> Result<Self, Box<dyn Error>> {
+        let manifest: Manifest = ron::from_str(&std::fs::read_to_string(
+            root.join("crates/engine/block/data/textures.ron"),
+        )?)?;
+        let variant = AtlasVariant::LEGACY;
+        let size = variant.atlas_px;
+        let mut pixels = vec![0u8; (size * size * 4) as usize];
+        for texture in &manifest.textures {
+            let source = root.join("crates/engine/block").join(&texture.source);
+            let (width, height, rgba) = load_rgba(&source)?;
+            assert_eq!(
+                (width, height),
+                (variant.tile_px, variant.tile_px),
+                "{} is not {}²",
+                source.display(),
+                variant.tile_px
+            );
+            let slot = u32::from(texture.slot);
+            assert!(
+                slot < variant.tiles_per_edge * variant.tiles_per_edge,
+                "material slot {slot} does not fit the legacy {}×{} sheet",
+                variant.tiles_per_edge,
+                variant.tiles_per_edge
+            );
+            let x0 = (slot % variant.tiles_per_edge) * variant.tile_px;
+            let y0 = (slot / variant.tiles_per_edge) * variant.tile_px;
+            let row_bytes = (variant.tile_px * 4) as usize;
+            for row in 0..variant.tile_px {
+                let source_start = (row * variant.tile_px * 4) as usize;
+                let target_start = (((y0 + row) * size + x0) * 4) as usize;
+                pixels[target_start..target_start + row_bytes]
+                    .copy_from_slice(&rgba[source_start..source_start + row_bytes]);
+            }
+        }
+
+        let texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("legacy 256px face sheet"),
+            size: wgpu::Extent3d {
+                width: size,
+                height: size,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        gpu.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &pixels,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(size * 4),
+                rows_per_image: Some(size),
+            },
+            wgpu::Extent3d {
+                width: size,
+                height: size,
+                depth_or_array_layers: 1,
+            },
+        );
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let sampler = gpu.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("legacy 256px sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 0.0,
+            compare: None,
+            anisotropy_clamp: 1,
+            border_color: None,
+        });
+        let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("legacy 256px atlas"),
+            layout: &gpu.atlas.layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+        });
+        Ok(Self {
+            _texture: texture,
+            bind_group,
+        })
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -165,6 +330,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     write_face_sheet(&root, &out.join("m1.5-15-face-sheet.png"))?;
 
     let gpu = Gpu::new(&root)?;
+    let legacy = LegacyAtlas::new(&gpu, &root)?;
+    let atlas_hash: AtlasHash = ron::from_str(&std::fs::read_to_string(
+        root.join("crates/engine/viewer/assets/atlas/atlas.hash.ron"),
+    )?)?;
+    let hash = &atlas_hash.atlas_png_blake3[..8];
     let block_size = (1024, 768);
     write_grass_sheet(
         &gpu,
@@ -235,7 +405,47 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
 
     write_chunk_sheet(&gpu, &out.join("m1.5-15-chunk-1080p.png"))?;
-    println!("wrote M1.5-15 screenshots to {}", out.display());
+    write_texel_density_pair(&gpu, &legacy, &out, hash)?;
+    println!("wrote M1.5-15 and M1.5-17 screenshots to {}", out.display());
+    Ok(())
+}
+
+/// Writes the M1.5-17 pair from one camera: the 256² sources at full density,
+/// then the committed 16×16-tile atlas. Both sides sample level 0 with nearest
+/// filtering, so the pair isolates texel density from the runtime mip path.
+fn write_texel_density_pair(
+    gpu: &Gpu,
+    legacy: &LegacyAtlas,
+    out: &Path,
+    hash: &str,
+) -> Result<(), Box<dyn Error>> {
+    let (width, height) = (1920u32, 1080u32);
+    let mesh = chunk_mesh();
+    let camera = Camera::looking_at(
+        Vec3::new(3.85, 1.2, 3.75),
+        Vec3::new(2.55, 0.8, 2.55),
+        width as f32 / height as f32,
+    );
+    let before = out.join(format!("m1.5-17-before-256px-{hash}.png"));
+    let after = out.join(format!("m1.5-17-after-16px-{hash}.png"));
+    let pixels = gpu.render_with(
+        &mesh,
+        &camera,
+        width,
+        height,
+        AtlasVariant::LEGACY,
+        &legacy.bind_group,
+    )?;
+    write_png(&before, width, height, &pixels)?;
+    let pixels = gpu.render_with(
+        &mesh,
+        &camera,
+        width,
+        height,
+        AtlasVariant::RUNTIME,
+        &gpu.lod0_atlas(),
+    )?;
+    write_png(&after, width, height, &pixels)?;
     Ok(())
 }
 
@@ -428,12 +638,64 @@ fn write_chunk_sheet(gpu: &Gpu, path: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 impl Gpu {
+    /// Binds the committed atlas with a nearest, level-0-only sampler. M1.5-17
+    /// uses this on the after image so both sides differ only in texel density.
+    fn lod0_atlas(&self) -> wgpu::BindGroup {
+        let sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("lod0 atlas sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 0.0,
+            compare: None,
+            anisotropy_clamp: 1,
+            border_color: None,
+        });
+        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("lod0 atlas"),
+            layout: &self.atlas.layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.atlas.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+        })
+    }
+
     fn render(
         &self,
         mesh: &Mesh,
         camera: &Camera,
         width: u32,
         height: u32,
+    ) -> Result<Vec<u8>, Box<dyn Error>> {
+        self.render_with(
+            mesh,
+            camera,
+            width,
+            height,
+            AtlasVariant::RUNTIME,
+            &self.atlas.bind_group,
+        )
+    }
+
+    fn render_with(
+        &self,
+        mesh: &Mesh,
+        camera: &Camera,
+        width: u32,
+        height: u32,
+        variant: AtlasVariant,
+        atlas: &wgpu::BindGroup,
     ) -> Result<Vec<u8>, Box<dyn Error>> {
         let chunk = ChunkMesh::new(&self.device, &self.queue, mesh).ok_or("empty mesh")?;
         let camera_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
@@ -452,7 +714,7 @@ impl Gpu {
                 resource: camera_buffer.as_entire_binding(),
             }],
         });
-        let pipeline = self.pipeline();
+        let pipeline = self.pipeline(variant);
         let format = wgpu::TextureFormat::Rgba8UnormSrgb;
         let target = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("screenshot target"),
@@ -504,7 +766,7 @@ impl Gpu {
             });
             pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &camera_bind_group, &[]);
-            pass.set_bind_group(1, &self.atlas.bind_group, &[]);
+            pass.set_bind_group(1, atlas, &[]);
             pass.set_vertex_buffer(0, chunk.vertices.slice(..));
             pass.set_index_buffer(chunk.indices.slice(..), wgpu::IndexFormat::Uint16);
             pass.draw_indexed(0..chunk.index_count, 0, 0..1);
@@ -553,7 +815,7 @@ impl Gpu {
         Ok(pixels)
     }
 
-    fn pipeline(&self) -> wgpu::RenderPipeline {
+    fn pipeline(&self, variant: AtlasVariant) -> wgpu::RenderPipeline {
         let layout = self
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -565,7 +827,7 @@ impl Gpu {
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("screenshot"),
-                source: wgpu::ShaderSource::Wgsl(SHADER.into()),
+                source: wgpu::ShaderSource::Wgsl(variant.shader().into()),
             });
         self.device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {

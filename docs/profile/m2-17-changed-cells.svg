@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="570" viewBox="0 0 960 570">
+<rect width="960" height="570" fill="#ffffff" />
+<text x="88.0" y="34.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="21" text-anchor="start" fill="#1f2430" font-weight="600">One edit&#x27;s cost vs how much of the chunk it changes</text>
+<text x="88.0" y="56.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" text-anchor="start" fill="#6b7280" font-weight="normal">128³ chunk, 8³ light cells, p95 of 2,000 samples per edit; lower is better</text>
+<line x1="88.0" y1="86.0" x2="88.0" y2="492.0" stroke="#e5e7eb" stroke-width="1" />
+<text x="88.0" y="514.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="middle" fill="#6b7280" font-weight="normal">0%</text>
+<line x1="228.0" y1="86.0" x2="228.0" y2="492.0" stroke="#e5e7eb" stroke-width="1" />
+<text x="228.0" y="514.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="middle" fill="#6b7280" font-weight="normal">10%</text>
+<line x1="368.0" y1="86.0" x2="368.0" y2="492.0" stroke="#e5e7eb" stroke-width="1" />
+<text x="368.0" y="514.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="middle" fill="#6b7280" font-weight="normal">20%</text>
+<line x1="508.0" y1="86.0" x2="508.0" y2="492.0" stroke="#e5e7eb" stroke-width="1" />
+<text x="508.0" y="514.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="middle" fill="#6b7280" font-weight="normal">30%</text>
+<line x1="648.0" y1="86.0" x2="648.0" y2="492.0" stroke="#e5e7eb" stroke-width="1" />
+<text x="648.0" y="514.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="middle" fill="#6b7280" font-weight="normal">40%</text>
+<line x1="788.0" y1="86.0" x2="788.0" y2="492.0" stroke="#e5e7eb" stroke-width="1" />
+<text x="788.0" y="514.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="middle" fill="#6b7280" font-weight="normal">50%</text>
+<line x1="928.0" y1="86.0" x2="928.0" y2="492.0" stroke="#e5e7eb" stroke-width="1" />
+<text x="928.0" y="514.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="middle" fill="#6b7280" font-weight="normal">60%</text>
+<line x1="88.0" y1="492.0" x2="928.0" y2="492.0" stroke="#e5e7eb" stroke-width="1" />
+<text x="76.0" y="496.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="end" fill="#6b7280" font-weight="normal">0%</text>
+<line x1="88.0" y1="434.0" x2="928.0" y2="434.0" stroke="#e5e7eb" stroke-width="1" />
+<text x="76.0" y="438.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="end" fill="#6b7280" font-weight="normal">5%</text>
+<line x1="88.0" y1="376.0" x2="928.0" y2="376.0" stroke="#e5e7eb" stroke-width="1" />
+<text x="76.0" y="380.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="end" fill="#6b7280" font-weight="normal">10%</text>
+<line x1="88.0" y1="318.0" x2="928.0" y2="318.0" stroke="#e5e7eb" stroke-width="1" />
+<text x="76.0" y="322.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="end" fill="#6b7280" font-weight="normal">15%</text>
+<line x1="88.0" y1="260.0" x2="928.0" y2="260.0" stroke="#e5e7eb" stroke-width="1" />
+<text x="76.0" y="264.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="end" fill="#6b7280" font-weight="normal">20%</text>
+<line x1="88.0" y1="202.0" x2="928.0" y2="202.0" stroke="#e5e7eb" stroke-width="1" />
+<text x="76.0" y="206.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="end" fill="#6b7280" font-weight="normal">25%</text>
+<line x1="88.0" y1="144.0" x2="928.0" y2="144.0" stroke="#e5e7eb" stroke-width="1" />
+<text x="76.0" y="148.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="end" fill="#6b7280" font-weight="normal">30%</text>
+<line x1="88.0" y1="86.0" x2="928.0" y2="86.0" stroke="#e5e7eb" stroke-width="1" />
+<text x="76.0" y="90.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="end" fill="#6b7280" font-weight="normal">35%</text>
+<line x1="88.0" y1="492.0" x2="928.0" y2="492.0" stroke="#1f2430" stroke-width="1.2" />
+<line x1="88.0" y1="86.0" x2="88.0" y2="492.0" stroke="#1f2430" stroke-width="1.2" />
+<text x="508.0" y="540.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" text-anchor="middle" fill="#6b7280" font-weight="normal">padded cells changed by the edit</text>
+<text x="22" y="289.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" text-anchor="middle" fill="#6b7280" transform="rotate(-90 22 289.0)">incremental p95 / full p95</text>
+<line x1="88.0" y1="260.0" x2="928.0" y2="260.0" stroke="#d97706" stroke-width="2" stroke-dasharray="7 5" />
+<text x="920.0" y="252.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="end" fill="#d97706" font-weight="600">M2-17 target: 20%</text>
+<polyline points="89.4,480.4 110.4,475.8 419.8,282.0 579.4,240.3 667.6,190.4 886.0,118.5" fill="none" stroke="#d9534f" stroke-width="2" opacity="0.35" />
+<polyline points="89.4,488.5 110.4,487.4 419.8,456.0 579.4,439.8 667.6,407.3 886.0,405.0" fill="none" stroke="#2e9e5b" stroke-width="2" opacity="0.35" />
+<circle cx="667.6" cy="190.4" r="5.5" fill="#d9534f" stroke="#ffffff" stroke-width="2" />
+<text x="677.6" y="180.4" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" text-anchor="start" fill="#d9534f" font-weight="normal">centre</text>
+<circle cx="419.8" cy="282.0" r="5.5" fill="#d9534f" stroke="#ffffff" stroke-width="2" />
+<text x="411.8" y="270.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" text-anchor="start" fill="#d9534f" font-weight="normal">corner</text>
+<circle cx="886.0" cy="118.5" r="5.5" fill="#d9534f" stroke="#ffffff" stroke-width="2" />
+<text x="878.0" y="136.5" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" text-anchor="start" fill="#d9534f" font-weight="normal">border side</text>
+<circle cx="579.4" cy="240.3" r="5.5" fill="#d9534f" stroke="#ffffff" stroke-width="2" />
+<text x="589.4" y="232.3" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" text-anchor="start" fill="#d9534f" font-weight="normal">behind pillar</text>
+<circle cx="110.4" cy="475.8" r="5.5" fill="#d9534f" stroke="#ffffff" stroke-width="2" />
+<text x="120.4" y="479.8" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" text-anchor="start" fill="#d9534f" font-weight="normal">sky gain</text>
+<circle cx="89.4" cy="480.4" r="5.5" fill="#d9534f" stroke="#ffffff" stroke-width="2" />
+<text x="99.4" y="472.4" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" text-anchor="start" fill="#d9534f" font-weight="normal">opacity drop</text>
+<circle cx="667.6" cy="407.3" r="5.5" fill="#2e9e5b" stroke="#ffffff" stroke-width="2" />
+<text x="677.6" y="397.3" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" text-anchor="start" fill="#2e9e5b" font-weight="normal">centre</text>
+<circle cx="419.8" cy="456.0" r="5.5" fill="#2e9e5b" stroke="#ffffff" stroke-width="2" />
+<text x="411.8" y="444.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" text-anchor="start" fill="#2e9e5b" font-weight="normal">corner</text>
+<circle cx="886.0" cy="405.0" r="5.5" fill="#2e9e5b" stroke="#ffffff" stroke-width="2" />
+<text x="878.0" y="423.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" text-anchor="start" fill="#2e9e5b" font-weight="normal">border side</text>
+<circle cx="579.4" cy="439.8" r="5.5" fill="#2e9e5b" stroke="#ffffff" stroke-width="2" />
+<text x="589.4" y="431.8" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" text-anchor="start" fill="#2e9e5b" font-weight="normal">behind pillar</text>
+<circle cx="110.4" cy="487.4" r="5.5" fill="#2e9e5b" stroke="#ffffff" stroke-width="2" />
+<text x="120.4" y="491.4" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" text-anchor="start" fill="#2e9e5b" font-weight="normal">sky gain</text>
+<circle cx="89.4" cy="488.5" r="5.5" fill="#2e9e5b" stroke="#ffffff" stroke-width="2" />
+<text x="99.4" y="480.5" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" text-anchor="start" fill="#2e9e5b" font-weight="normal">opacity drop</text>
+<circle cx="660.0" cy="70.0" r="5" fill="#d9534f" stroke="#ffffff" stroke-width="2" />
+<text x="672.0" y="74.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="start" fill="#6b7280" font-weight="normal">increase-only baseline</text>
+<circle cx="810.0" cy="70.0" r="5" fill="#2e9e5b" stroke="#ffffff" stroke-width="2" />
+<text x="822.0" y="74.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="start" fill="#6b7280" font-weight="normal">final</text>
+</svg>

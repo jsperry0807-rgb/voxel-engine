@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="700" viewBox="0 0 960 700">
+<rect width="960" height="700" fill="#ffffff" />
+<text x="56.0" y="34.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="21" text-anchor="start" fill="#1f2430" font-weight="600">M2-17 optimization path</text>
+<text x="56.0" y="56.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" text-anchor="start" fill="#6b7280" font-weight="normal">p95 edit cost and the same value as a share of the full pass</text>
+<text x="56.0" y="76.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14" text-anchor="start" fill="#1f2430" font-weight="600">p95 edit cost (µs)</text>
+<text x="194.0" y="109.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" text-anchor="end" fill="#1f2430" font-weight="normal">Original dirty-region</text>
+<rect x="210.0" y="94.0" width="610.3" height="24.0" rx="4" fill="#8b929c" />
+<text x="828.3" y="111.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="start" fill="#1f2430" font-weight="normal">51.78 µs</text>
+<text x="194.0" y="147.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" text-anchor="end" fill="#1f2430" font-weight="normal">Increase-only</text>
+<rect x="210.0" y="132.0" width="135.4" height="24.0" rx="4" fill="#4f7cff" />
+<text x="353.4" y="149.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="start" fill="#1f2430" font-weight="normal">11.49 µs</text>
+<text x="194.0" y="185.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" text-anchor="end" fill="#1f2430" font-weight="normal">Channel-selective</text>
+<rect x="210.0" y="170.0" width="116.7" height="24.0" rx="4" fill="#3d8bfd" />
+<text x="334.7" y="187.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="start" fill="#1f2430" font-weight="normal">9.90 µs</text>
+<text x="194.0" y="223.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" text-anchor="end" fill="#1f2430" font-weight="normal">Scratch reuse</text>
+<rect x="210.0" y="208.0" width="89.6" height="24.0" rx="4" fill="#3aa0a0" />
+<text x="307.6" y="225.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="start" fill="#1f2430" font-weight="normal">7.60 µs</text>
+<text x="194.0" y="261.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" text-anchor="end" fill="#1f2430" font-weight="normal">Neighbour mask</text>
+<rect x="210.0" y="246.0" width="24.3" height="24.0" rx="4" fill="#2e9e5b" />
+<text x="242.3" y="263.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="start" fill="#1f2430" font-weight="normal">2.06 µs</text>
+<text x="56.0" y="398.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14" text-anchor="start" fill="#1f2430" font-weight="600">share of a full pass (p95)</text>
+<text x="194.0" y="449.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" text-anchor="end" fill="#1f2430" font-weight="normal">Original dirty-region</text>
+<rect x="210.0" y="434.0" width="624.8" height="24.0" rx="4" fill="#8b929c" />
+<text x="842.8" y="451.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="start" fill="#1f2430" font-weight="normal">127.8%</text>
+<text x="194.0" y="487.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" text-anchor="end" fill="#1f2430" font-weight="normal">Increase-only</text>
+<rect x="210.0" y="472.0" width="154.5" height="24.0" rx="4" fill="#4f7cff" />
+<text x="372.5" y="489.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="start" fill="#1f2430" font-weight="normal">31.6%</text>
+<text x="194.0" y="525.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" text-anchor="end" fill="#1f2430" font-weight="normal">Channel-selective</text>
+<rect x="210.0" y="510.0" width="137.4" height="24.0" rx="4" fill="#3d8bfd" />
+<text x="355.4" y="527.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="start" fill="#1f2430" font-weight="normal">28.1%</text>
+<text x="194.0" y="563.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" text-anchor="end" fill="#1f2430" font-weight="normal">Scratch reuse</text>
+<rect x="210.0" y="548.0" width="84.6" height="24.0" rx="4" fill="#3aa0a0" />
+<text x="302.6" y="565.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="start" fill="#1f2430" font-weight="normal">17.3%</text>
+<text x="194.0" y="601.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" text-anchor="end" fill="#1f2430" font-weight="normal">Neighbour mask</text>
+<rect x="210.0" y="586.0" width="27.9" height="24.0" rx="4" fill="#2e9e5b" />
+<text x="245.9" y="603.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="start" fill="#1f2430" font-weight="normal">5.7%</text>
+<line x1="307.8" y1="424.0" x2="307.8" y2="626.0" stroke="#d97706" stroke-width="2" stroke-dasharray="7 5" />
+<text x="315.8" y="418.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="start" fill="#d97706" font-weight="600">M2-17 target 20%</text>
+<text x="56.0" y="672.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="start" fill="#6b7280" font-weight="normal">p95 from the 10,000-sample bench loop; ratios use the full pass measured in the same run.</text>
+<text x="56.0" y="690.0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" text-anchor="start" fill="#6b7280" font-weight="normal">The full-pass p95 varies 35–44 µs on this host, so the last two ratios are conservative.</text>
+</svg>
