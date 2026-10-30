@@ -3446,6 +3446,7 @@ dependencies = [
  "voxel-block",
  "voxel-core",
  "voxel-mesh",
+ "voxel-profiling",
  "voxel-render",
  "voxel-storage",
  "voxel-viewer",
@@ -3488,6 +3489,10 @@ dependencies = [
  "voxel-core",
  "voxel-storage",
 ]
+
+[[package]]
+name = "voxel-profiling"
+version = "0.1.0"
 
 [[package]]
 name = "voxel-render"
@@ -3554,6 +3559,7 @@ dependencies = [
  "voxel-core",
  "voxel-mesh",
  "voxel-storage",
+ "voxel-profiling",
  "voxel-texgraph",
  "wgpu 30.0.1",
  "winit",

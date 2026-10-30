@@ -6,6 +6,8 @@
 #   RECORD=0 scripts/bench.sh            # local report only, do not archive
 #   VOXEL_GPU_BENCH=1 scripts/bench.sh   # also wgpu upload benchmarks
 #   OUT=target/my-bench scripts/bench.sh # custom output directory
+#   FRAMES=target/frames.csv scripts/bench.sh
+#                                        # attach a viewer frame trace to the report
 #
 # Gate knobs. The gate refuses to measure across chunk edges, so a 128³ build
 # needs a fixture frozen at 7-bit chunks; the default (m1-representative) is 64³.
@@ -26,6 +28,7 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 OUT="${OUT:-target/bench}"
+FRAME_WARMUP="${FRAME_WARMUP:-0}"
 mkdir -p "$OUT"
 
 FEATURES_ARGS=()
@@ -60,7 +63,12 @@ TARGET_DIR="${TARGET_DIR:-target}"
 [[ "$TARGET_DIR" = /* ]] || TARGET_DIR="$PWD/$TARGET_DIR"
 
 echo "== software lenses: memory, CPU, latency =="
-"${BENCH[@]}" -- all --out "$OUT"
+frame_args=()
+if [[ -n "${FRAMES:-}" ]]; then
+  echo "   frame trace: $FRAMES (warm-up $FRAME_WARMUP frames)"
+  frame_args+=(--frames "$FRAMES" --frame-warmup "$FRAME_WARMUP")
+fi
+"${BENCH[@]}" -- all --out "$OUT" "${frame_args[@]}"
 
 if [[ "${GATE:-0}" == "1" ]]; then
   echo "== gate: twelve-row report and per-profile 128³ projection =="
@@ -131,6 +139,7 @@ if [[ "${RECORD:-1}" == "1" ]]; then
   for raw in "$OUT"/gate/scaleup-*.md "$OUT"/gate/scaleup-*.json; do
     [[ -f "$raw" ]] && record_args+=(--attach "$raw")
   done
+  [[ -n "${FRAMES:-}" && -f "$FRAMES" ]] && record_args+=(--attach "$FRAMES")
   cargo run --release -p voxel-bench -- record "${record_args[@]}"
   echo "history: benchmarks/HISTORY.md"
 else
@@ -141,3 +150,6 @@ echo
 echo "report:  $OUT/report.md"
 echo "json:    $OUT/report.json"
 echo "raw:     $OUT/criterion.txt, $OUT/iai.txt, $OUT/perf.txt"
+if [[ -n "${FRAMES:-}" ]]; then
+  echo "frame:   $FRAMES (section in $OUT/report.md)"
+fi

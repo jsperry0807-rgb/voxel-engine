@@ -106,6 +106,9 @@ Never sacrifice: the 8 km floor, determinism, the save format, or the 1 m block 
 
 - Every milestone records a run through `scripts/bench.sh` with the profile name in
   the label: `LABEL=m1-gate-default`.
+- A 60 Hz claim carries a viewer frame trace (`VOXEL_FRAME_PROFILE=<path>`) and the
+  bench frame report, not just an FPS line. The lens fails on the average, the 1% low
+  or a single frame above 33 ms.
 - CI is **advisory until the machine has 10 stable runs**, then hard on:
   - memory over the pre-registered budget,
   - p99 hitch over 33 ms,

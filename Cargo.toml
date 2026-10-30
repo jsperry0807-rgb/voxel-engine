@@ -5,6 +5,7 @@ members = [
     "crates/app-support",
     "crates/bench",
     "crates/core",
+    "crates/profiling",
     "crates/engine/block",
     "crates/engine/mesh",
     "crates/engine/render",

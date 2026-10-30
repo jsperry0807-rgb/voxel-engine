@@ -18,6 +18,7 @@ serde_json = "1"
 voxel-app-support = { path = "../../app-support" }
 voxel-core = { path = "../../core" }
 voxel-mesh = { path = "../mesh" }
+voxel-profiling = { path = "../../profiling" }
 voxel-storage = { path = "../storage" }
 voxel-texgraph = { path = "../texgraph" }
 wgpu = "30"

@@ -1,13 +1,14 @@
 # voxel-bench
 
-Four lenses over the same workloads, because one number cannot describe a
-voxel engine:
+Five software lenses plus two hardware views, because one number cannot
+describe a voxel engine:
 
 | Lens | Answers | Output |
 |---|---|---|
 | **Memory** | How many bytes does a registry, chunk, world, overlay or disk record keep alive? What is the peak? | `target/bench/report.md`, `report.json` |
 | **CPU** | How much user+system CPU time, wall time, CPU utilization and allocation churn does an operation cost? | same |
 | **Latency** | What are p50/p95/p99/max for the interactive paths? | same |
+| **Frame time** | What are the average, 1% low, p99 and maximum hitch over a real viewer trace? | same, or `target/frame/frame.md` |
 | **Wall clock** | Statistically stable ns/op and throughput for hot loops (Criterion). | `target/criterion` |
 | **Hardware** | Deterministic instructions, cache misses and branch misses (iai-callgrind over Valgrind). | `target/criterion` |
 | **Hardware counters** | Cycles, instructions, cache misses, branch misses, page faults (perf). | `target/bench/perf.txt` |
@@ -22,6 +23,10 @@ cargo run --release -p voxel-bench -- all
 cargo run --release -p voxel-bench -- memory
 cargo run --release -p voxel-bench -- cpu --print
 cargo run --release -p voxel-bench -- latency --out target/bench
+
+# Frame-time lens over a trace written by the viewer
+cargo run --release -p voxel-bench -- frame --input target/frames.csv
+cargo run --release -p voxel-bench -- all --frames target/frames.csv
 
 # Criterion (storage, block hot/cold, render packing)
 cargo bench --workspace
@@ -154,6 +159,25 @@ percentiles, which is the honest way to check the 60 Hz edit requirement:
 a mean of 100 µs is irrelevant if p99 is 20 ms. The policy path is measured
 separately: `latency/world_tick_idle` is the trigger check, and
 `latency/world_consolidate_1` pays one edit, the DAG rebuild and the disk sync.
+
+**Frame time** (`frame`, M3-09/M3-10) reads a trace written by the viewer with
+`VOXEL_FRAME_PROFILE=<path>`. One row per presented frame carries the interval,
+so the report can show what an FPS average hides: the average rate, the 1% low,
+p50/p95/p99, the longest frame, the number of frames over the 16.7 ms budget and
+the number of hitches over 33.3 ms. The three decision rows use the frozen
+reference-machine rule: average ≥ 60 fps, 1% low ≥ 45 fps, and no frame above
+33.3 ms. A trace from a fast but stuttering run fails on the 1% low or the
+maximum; a trace that is uniformly slow fails the average.
+
+The viewer logs an average / 1%-low / max-hitch summary at `info` when it exits;
+`VOXEL_FRAME_PROFILE=1` also promotes the one-second FPS line from `debug` to
+`info`, and a path writes the trace the lens reads. `--warmup` drops startup samples,
+`--target-fps`, `--one-percent-fps` and `--hitch-ms` override the thresholds,
+and `--out DIR` writes `frame.md` plus `frame.json`. Passing `--frames FILE` to
+`all` embeds the section in the main `report.md`/`report.json`; the history
+index then records the average, 1% low and maximum. The lens measures frame
+presentations, not a synthetic loop: run it on the reference machine with the
+gated profile, over the scripted flight the target names.
 
 **Save scan** (`save-scan`, M1-27) is a reference reader, not a benchmark. It
 walks every `r.<x>.<y>.<z>.vxr` region log, resolves the live record per cell
@@ -345,5 +369,7 @@ report from being a green gate; the fallback preview is for M1-42.
   sees the same workload.
 - Add memory/CPU/latency cases in `src/suite.rs`; the report tables update
   automatically.
+- Frame-time thresholds and report rows live in `src/frame.rs`; the trace CSV
+  contract is shared with the viewer through `voxel-profiling`.
 - Add statistical or hardware benchmarks in `benches/`; keep the benchmark
   body free of setup work.

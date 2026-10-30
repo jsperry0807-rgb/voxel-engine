@@ -1,0 +1,6 @@
+[package]
+name = "voxel-profiling"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "Frame-time sampling shared by the viewer and the benchmark harness"

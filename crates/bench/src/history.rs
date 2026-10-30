@@ -251,7 +251,8 @@ fn suite_fingerprint(report: &Report) -> String {
         .map(|record| record.case.as_str())
         .chain(report.cpu.iter().map(|record| record.case.as_str()))
         .chain(report.latency.iter().map(|record| record.case.as_str()))
-        .chain(report.layout.iter().map(|record| record.fixture.as_str()));
+        .chain(report.layout.iter().map(|record| record.fixture.as_str()))
+        .chain(report.frames.iter().map(|_| "frame"));
     suite_key(
         cases,
         report.memory.len(),
@@ -339,6 +340,16 @@ pub fn summarize(report: &Report) -> BTreeMap<String, f64> {
         if let Some(record) = report.latency.iter().find(|record| record.case == case) {
             metrics.insert(key.into(), record.p99_us);
         }
+    }
+
+    if let Some(frame) = &report.frames {
+        metrics.insert("frame_avg_fps".into(), frame.avg_fps);
+        metrics.insert(
+            "frame_one_percent_low_fps".into(),
+            frame.one_percent_low_fps,
+        );
+        metrics.insert("frame_max_ns".into(), frame.max_ns as f64);
+        metrics.insert("frame_hitches".into(), frame.hitches as f64);
     }
 
     metrics
@@ -519,6 +530,10 @@ const TREND: &[(&str, &str, &str)] = &[
     ("world_set_p99_us", "World set p99", "us"),
     ("world_tick_idle_p99_us", "World tick p99", "us"),
     ("world_consolidate_p99_us", "World consolidate p99", "us"),
+    ("frame_avg_fps", "Frame average", "fps"),
+    ("frame_one_percent_low_fps", "Frame 1% low", "fps"),
+    ("frame_max_ns", "Frame max", "ns"),
+    ("frame_hitches", "Frame hitches", "count"),
 ];
 
 fn order(a: &RunSummary, b: &RunSummary) -> std::cmp::Ordering {
@@ -553,6 +568,8 @@ fn format_unit(value: f64, unit: &str) -> String {
                 format!("{value:.1} ns")
             }
         }
+        "fps" => format!("{value:.1} fps"),
+        "count" => format!("{value:.0}"),
         _ => format!("{value:.1}"),
     }
 }

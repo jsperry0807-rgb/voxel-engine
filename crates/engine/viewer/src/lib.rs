@@ -15,6 +15,7 @@ pub mod chunk_render;
 pub mod cull;
 pub mod depth;
 pub mod error;
+pub mod frame_profile;
 pub mod frametime;
 pub mod gpu;
 pub mod hitch;

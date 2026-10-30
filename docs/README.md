@@ -164,6 +164,7 @@ where they conflict with the spec.
 - [`m3-mesh-compression.md`](m3-mesh-compression.md) — proposed instanced-quad (8 B/quad) plan, with an 8 B vertex fallback, for the 128³ mesh cap
 - [`m3-packed-8b.md`](m3-packed-8b.md) — landed 44 B/quad packed-vertex fallback and its 128³/64³ gate numbers
 - [`m3-01-streaming.md`](m3-01-streaming.md) — 256-chunk streaming ring: three-stage pipeline, origin uniform and the 0.09 ms pump measurement
+- [`reference-machine.md`](reference-machine.md) — the 60 Hz frame-time target and the viewer trace command
 - [`../benchmarks/README.md`](../benchmarks/README.md) — run archive, lenses, caveats
 - [`../benchmarks/HISTORY.md`](../benchmarks/HISTORY.md) — every recorded run with deltas
 - [`../crates/bench/README.md`](../crates/bench/README.md) — harness internals
