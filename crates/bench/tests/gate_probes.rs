@@ -65,6 +65,7 @@ fn report_measures_an_incremental_update_for_every_fixture_edit() {
         ("select", &report.terms.select),
         ("rebake", &report.terms.rebake),
         ("upload", &report.terms.upload),
+        ("compact", &report.terms.compact),
         ("update", &report.terms.update),
     ] {
         assert!(term.p50_ns <= term.p95_ns, "{name}: p50 <= p95");

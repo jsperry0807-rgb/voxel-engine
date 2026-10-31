@@ -565,6 +565,64 @@ impl ProbeVolume {
         best.map(|(_, index)| index)
     }
 
+    /// Rebakes the selected probes in place from a solidity predicate (M2-21).
+    ///
+    /// This is the production update path: the caller supplies the probes an
+    /// edit can reach ([`probes_reaching`] computes that set), so the cost is
+    /// proportional to the affected probes rather than to the grid. Each probe
+    /// casts its full [`PROBE_RAYS`] fan through the same accumulation path as
+    /// [`ProbeBake`], so an incremental update is byte-identical to a full bake.
+    ///
+    /// Validity is written for every selected probe, including the transition
+    /// from invalid to valid (and back) when the edited voxel holds a probe
+    /// centre. `indices` is expected to be unique and in range, as returned by
+    /// [`probes_reaching`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if an index is outside the volume.
+    pub fn rebake<F>(&mut self, chunk: ChunkPos, indices: &[usize], mut solid_at: F) -> RebakeStats
+    where
+        F: FnMut(u32, u32, u32) -> bool,
+    {
+        assert!(
+            indices.iter().all(|&index| index < self.probes.len()),
+            "a probe index is outside the volume"
+        );
+        let scene_edge = self.grid.scene_edge_voxels();
+        let mut stats = RebakeStats::default();
+
+        for &index in indices {
+            let centre = self.grid.centre(index);
+            let centre_voxel = [
+                centre[0].floor() as u32,
+                centre[1].floor() as u32,
+                centre[2].floor() as u32,
+            ];
+            if solid_at(centre_voxel[0], centre_voxel[1], centre_voxel[2]) {
+                self.validity[index / 8] &= !(1 << (index % 8));
+                self.probes[index] = Sh4Probe::ZERO;
+                stats.probes += 1;
+                continue;
+            }
+
+            let rotation = probe_rotation(probe_seed(chunk, self.grid.lod(), index as u32));
+            let mut pending = PendingProbe::new(index, centre, rotation);
+            let record = loop {
+                stats.rays += 1;
+                if let Some(record) = pending.cast(scene_edge, &mut solid_at) {
+                    break record;
+                }
+            };
+            self.probes[index] = record;
+            self.validity[index / 8] |= 1 << (index % 8);
+            stats.valid += 1;
+            stats.probes += 1;
+        }
+
+        stats
+    }
+
     /// The cell whose corners are the probe centres around `position`, plus the
     /// position inside that cell.
     ///
@@ -593,6 +651,29 @@ impl ProbeVolume {
 
         (cell, fraction)
     }
+}
+
+/// Work performed by one incremental probe rebake.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RebakeStats {
+    /// Probes written, including invalid ones whose record is neutral.
+    pub probes: usize,
+    /// Selected probes whose centre is air after the edit.
+    pub valid: usize,
+    /// Rays cast; `valid · PROBE_RAYS`.
+    pub rays: usize,
+}
+
+/// Result of selecting the probes affected by one dirty voxel.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ProbeReach {
+    /// Probes that must be rebaked: validity changed or at least one ray
+    /// reaches the dirty voxel before terminating.
+    pub affected: usize,
+    /// Rays cast while selecting (valid probes only).
+    pub rays_tested: usize,
+    /// Rays that reach the dirty voxel before a solid.
+    pub rays_reaching: usize,
 }
 
 /// How [`ProbeVolume::sample`] produced its coefficients.
@@ -864,6 +945,46 @@ struct PendingProbe {
     accumulated: [[f64; PROBE_CHANNELS]; SH_COEFFICIENTS],
 }
 
+impl PendingProbe {
+    fn new(index: usize, centre: [f64; 3], rotation: f64) -> Self {
+        Self {
+            index,
+            centre,
+            rotation,
+            ray: 0,
+            accumulated: [[0.0; PROBE_CHANNELS]; SH_COEFFICIENTS],
+        }
+    }
+
+    /// Casts the next ray and returns the finished record on the last one.
+    ///
+    /// This is the single accumulation path shared by the frame-budgeted bake
+    /// and the incremental rebake, so both produce identical bytes.
+    fn cast<F>(&mut self, scene_edge: usize, solid_at: &mut F) -> Option<Sh4Probe>
+    where
+        F: FnMut(u32, u32, u32) -> bool,
+    {
+        let direction = hemisphere_ray(self.ray, self.rotation);
+        if !trace(solid_at, scene_edge, self.centre, direction) {
+            let basis = sh_basis(direction);
+            for (coefficient, value) in self.accumulated.iter_mut().zip(basis) {
+                for channel in coefficient.iter_mut() {
+                    *channel += value;
+                }
+            }
+        }
+        self.ray += 1;
+
+        if self.ray < PROBE_RAYS {
+            return None;
+        }
+        let coefficients = self
+            .accumulated
+            .map(|basis| basis.map(|value| value * SH_SCALE));
+        Some(Sh4Probe::from_coefficients(coefficients))
+    }
+}
+
 /// A resumable near/mid/far-grid bake for one chunk (M2-18).
 ///
 /// The state machine is single-threaded and owns its output buffers, so a
@@ -997,13 +1118,7 @@ where
             return true;
         }
         let rotation = probe_rotation(probe_seed(self.chunk, self.grid.lod(), index as u32));
-        self.pending = Some(PendingProbe {
-            index,
-            centre,
-            rotation,
-            ray: 0,
-            accumulated: [[0.0; PROBE_CHANNELS]; SH_COEFFICIENTS],
-        });
+        self.pending = Some(PendingProbe::new(index, centre, rotation));
         true
     }
 
@@ -1023,28 +1138,15 @@ where
             return;
         };
 
-        let direction = hemisphere_ray(probe.ray, probe.rotation);
-        if !trace(solid_at, grid.scene_edge_voxels(), probe.centre, direction) {
-            let basis = sh_basis(direction);
-            for (coefficient, value) in probe.accumulated.iter_mut().zip(basis) {
-                for channel in coefficient.iter_mut() {
-                    *channel += value;
-                }
-            }
-        }
-        probe.ray += 1;
+        let record = probe.cast(grid.scene_edge_voxels(), solid_at);
         *rays_cast += 1;
 
-        if probe.ray < PROBE_RAYS {
+        let Some(record) = record else {
             return;
-        }
-
-        let coefficients = probe
-            .accumulated
-            .map(|basis| basis.map(|value| value * SH_SCALE));
+        };
         let index = probe.index;
         *pending = None;
-        probes[index] = Sh4Probe::from_coefficients(coefficients);
+        probes[index] = record;
         validity[index / 8] |= 1 << (index % 8);
     }
 }
@@ -1128,6 +1230,260 @@ fn decode_coefficient(value: u8) -> f64 {
 
 fn sh_basis([x, y, z]: [f64; 3]) -> [f64; SH_COEFFICIENTS] {
     [SH_L0, SH_L1 * y, SH_L1 * z, SH_L1 * x]
+}
+
+/// Collects the probes whose rays reach `target` before entering a solid.
+///
+/// `solid_at(x, y, z)` is the scene **before** the edit. A ray that passes
+/// through the target cell is affected even when the target is solid: it stops
+/// there today and will continue after a solid→air edit. A probe whose centre
+/// cell is the target is always selected, because the edit may flip its
+/// validity without any ray being cast. Probes whose centre is solid are
+/// otherwise skipped — they cast no rays.
+///
+/// `out` is cleared first and reused by the caller; it receives the affected
+/// probe indices in ascending order.
+///
+/// Selection visits every probe once, so its cost grows with the grid; only the
+/// per-probe ray loop stops early. This is the term that dominates the update
+/// p95 in the gate.
+///
+/// # Panics
+///
+/// Panics if the grid is non-empty and `target` is outside the scene.
+pub fn probes_reaching<F>(
+    chunk: ChunkPos,
+    grid: ProbeGrid,
+    target: [u32; 3],
+    mut solid_at: F,
+    out: &mut Vec<usize>,
+) -> ProbeReach
+where
+    F: FnMut(u32, u32, u32) -> bool,
+{
+    out.clear();
+    let count = grid.len();
+    if count == 0 {
+        return ProbeReach::default();
+    }
+
+    let scene_edge = grid.scene_edge_voxels();
+    let target_usize = [target[0] as usize, target[1] as usize, target[2] as usize];
+    assert!(
+        target_usize.iter().all(|&axis| axis < scene_edge),
+        "dirty voxel {target:?} is outside the {scene_edge}³ probe scene"
+    );
+    let mut stats = ProbeReach::default();
+
+    for index in 0..count {
+        let centre = grid.centre(index);
+        let centre_cell = [
+            centre[0].floor() as u32,
+            centre[1].floor() as u32,
+            centre[2].floor() as u32,
+        ];
+        if centre_cell == target {
+            // The edit may flip this probe's validity even if it casts no ray.
+            out.push(index);
+            stats.affected += 1;
+            continue;
+        }
+        if solid_at(centre_cell[0], centre_cell[1], centre_cell[2]) {
+            continue;
+        }
+
+        let rotation = probe_rotation(probe_seed(chunk, grid.lod(), index as u32));
+        for ray in 0..PROBE_RAYS {
+            stats.rays_tested += 1;
+            let direction = hemisphere_ray(ray, rotation);
+            if ray_reaches_cell(scene_edge, centre, direction, target_usize, &mut solid_at) {
+                stats.rays_reaching += 1;
+                out.push(index);
+                stats.affected += 1;
+                break;
+            }
+        }
+    }
+
+    stats
+}
+
+/// Returns the first solid voxel a ray enters, or `None` on leaving the scene.
+///
+/// The origin cell is tested first. Probe rays start in air by construction, so
+/// this only matters for callers using the helper directly. A ray that leaves
+/// the scene is open sky.
+pub fn first_solid_on_ray<F>(
+    scene_edge: usize,
+    origin: [f64; 3],
+    direction: [f64; 3],
+    mut solid_at: F,
+) -> Option<[u32; 3]>
+where
+    F: FnMut(u32, u32, u32) -> bool,
+{
+    let edge = scene_edge as i32;
+    let mut cell = [
+        origin[0].floor() as i32,
+        origin[1].floor() as i32,
+        origin[2].floor() as i32,
+    ];
+
+    if cell
+        .iter()
+        .all(|&coordinate| coordinate >= 0 && coordinate < edge)
+        && solid_at(cell[0] as u32, cell[1] as u32, cell[2] as u32)
+    {
+        return Some([cell[0] as u32, cell[1] as u32, cell[2] as u32]);
+    }
+
+    let mut step = [0i32; 3];
+    let mut t_max = [f64::INFINITY; 3];
+    let mut t_delta = [f64::INFINITY; 3];
+
+    for axis in 0..3 {
+        let component = direction[axis];
+        if component > 0.0 {
+            step[axis] = 1;
+            t_max[axis] = (cell[axis] as f64 + 1.0 - origin[axis]) / component;
+            t_delta[axis] = 1.0 / component;
+        } else if component < 0.0 {
+            step[axis] = -1;
+            t_max[axis] = (cell[axis] as f64 - origin[axis]) / component;
+            t_delta[axis] = -1.0 / component;
+        }
+    }
+
+    loop {
+        // Fixed axis tie-break: x, then y, then z, matching `trace`.
+        let axis = if t_max[0] <= t_max[1] && t_max[0] <= t_max[2] {
+            0
+        } else if t_max[1] <= t_max[2] {
+            1
+        } else {
+            2
+        };
+        cell[axis] += step[axis];
+        t_max[axis] += t_delta[axis];
+
+        if cell
+            .iter()
+            .any(|&coordinate| coordinate < 0 || coordinate >= edge)
+        {
+            return None;
+        }
+
+        if solid_at(cell[0] as u32, cell[1] as u32, cell[2] as u32) {
+            return Some([cell[0] as u32, cell[1] as u32, cell[2] as u32]);
+        }
+    }
+}
+
+/// True when `direction` reaches `target` before entering a solid voxel.
+///
+/// The AABB test rejects rays that cannot touch the cell before the DDA runs;
+/// it is only an accelerator. The tie-break is fixed in x, then y, then z, the
+/// same as [`trace`].
+fn ray_reaches_cell<F>(
+    scene_edge: usize,
+    origin: [f64; 3],
+    direction: [f64; 3],
+    target: [usize; 3],
+    solid_at: &mut F,
+) -> bool
+where
+    F: FnMut(u32, u32, u32) -> bool,
+{
+    if !ray_hits_cell(origin, direction, target) {
+        return false;
+    }
+
+    let edge = scene_edge as i32;
+    let target = [target[0] as i32, target[1] as i32, target[2] as i32];
+    let mut cell = [
+        origin[0].floor() as i32,
+        origin[1].floor() as i32,
+        origin[2].floor() as i32,
+    ];
+    if cell == target {
+        return true;
+    }
+
+    let mut step = [0i32; 3];
+    let mut t_max = [f64::INFINITY; 3];
+    let mut t_delta = [f64::INFINITY; 3];
+    for axis in 0..3 {
+        let component = direction[axis];
+        if component > 0.0 {
+            step[axis] = 1;
+            t_max[axis] = (cell[axis] as f64 + 1.0 - origin[axis]) / component;
+            t_delta[axis] = 1.0 / component;
+        } else if component < 0.0 {
+            step[axis] = -1;
+            t_max[axis] = (cell[axis] as f64 - origin[axis]) / component;
+            t_delta[axis] = -1.0 / component;
+        }
+    }
+
+    loop {
+        let axis = if t_max[0] <= t_max[1] && t_max[0] <= t_max[2] {
+            0
+        } else if t_max[1] <= t_max[2] {
+            1
+        } else {
+            2
+        };
+        cell[axis] += step[axis];
+        t_max[axis] += t_delta[axis];
+
+        if cell
+            .iter()
+            .any(|&coordinate| coordinate < 0 || coordinate >= edge)
+        {
+            return false;
+        }
+        if cell == target {
+            return true;
+        }
+        if solid_at(cell[0] as u32, cell[1] as u32, cell[2] as u32) {
+            return false;
+        }
+    }
+}
+
+/// Slab test for a ray against one voxel, expanded by a small epsilon so a ray
+/// that grazes an edge still reaches the DDA. A false positive only costs a
+/// traversal; a false negative would drop a probe, so the test errs outward.
+fn ray_hits_cell(origin: [f64; 3], direction: [f64; 3], target: [usize; 3]) -> bool {
+    const EPSILON: f64 = 1e-9;
+    let mut t_enter = f64::NEG_INFINITY;
+    let mut t_exit = f64::INFINITY;
+
+    for axis in 0..3 {
+        let min = target[axis] as f64 - EPSILON;
+        let max = target[axis] as f64 + 1.0 + EPSILON;
+        let component = direction[axis];
+        if component.abs() < 1e-15 {
+            if origin[axis] < min || origin[axis] > max {
+                return false;
+            }
+            continue;
+        }
+
+        let inverse = component.recip();
+        let mut first = (min - origin[axis]) * inverse;
+        let mut second = (max - origin[axis]) * inverse;
+        if first > second {
+            core::mem::swap(&mut first, &mut second);
+        }
+        t_enter = t_enter.max(first);
+        t_exit = t_exit.min(second);
+        if t_enter > t_exit {
+            return false;
+        }
+    }
+
+    t_exit >= 0.0
 }
 
 /// Traverses one ray through the scene with an Amanatides–Woo DDA.
@@ -1248,6 +1604,28 @@ mod tests {
             assert!(volume.is_valid(index));
             for channel in volume.probe(index).coefficients()[0] {
                 assert!((channel - expected).abs() < 0.03);
+            }
+        }
+    }
+
+    #[test]
+    fn probe_bake_trace_matches_first_solid_on_ray_for_air_origins() {
+        let scene_edge = 48;
+        let solid = |x: u32, y: u32, z: u32| (x / 16 + y / 16 + z / 16) % 4 == 1;
+        let origins = [[8.0, 8.0, 8.0], [24.0, 40.0, 16.0], [40.0, 8.0, 40.0]];
+
+        for origin in origins {
+            let cell = [origin[0] as u32, origin[1] as u32, origin[2] as u32];
+            assert!(!solid(cell[0], cell[1], cell[2]), "origin must be air");
+            for ray in 0..PROBE_RAYS {
+                let direction = hemisphere_ray(ray, 0.37);
+                let mut traced = solid;
+                let mut first = solid;
+                assert_eq!(
+                    trace(&mut traced, scene_edge, origin, direction),
+                    first_solid_on_ray(scene_edge, origin, direction, &mut first).is_some(),
+                    "origin {origin:?} ray {ray}"
+                );
             }
         }
     }

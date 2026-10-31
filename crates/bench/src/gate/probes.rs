@@ -1,4 +1,4 @@
-//! Probe-update latency on the frozen fixture (M1-38).
+//! Probe-update latency on the frozen fixture (M1-38, production path M2-21).
 //!
 //! The pre-registered probe budget is `p95 <= 4 ms` per edited chunk
 //! (`pre-registration.md` §3). ADR-005 fixes the update rule: an edit rebakes
@@ -30,10 +30,12 @@
 //!
 //! # What is real and what is a model
 //!
-//! The bake and selection are the M1-30 reference implementation, shared with
-//! the test oracle. The upload is a CPU-side staging copy of exactly the changed
-//! records and validity bytes; the headless gate has no GPU, so device transfer
-//! and the M4 fence/flip are excluded, just as the edit gate excludes GPU time.
+//! The bake, selection and rebake are the production `voxel-mesh::probe` port
+//! (M2-18/M2-21); `tests/probe_update.rs` pins selection and rebake byte
+//! equality with the M1-30 oracle across edits, thread counts and index order.
+//! The upload is a CPU-side staging copy of exactly the changed records and
+//! validity bytes; the headless gate has no GPU, so device transfer and the M4
+//! fence/flip are excluded, just as the edit gate excludes GPU time.
 //! The fixture is **provisional until the first real save**; the report carries
 //! that limitation verbatim.
 
@@ -46,7 +48,7 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 
 use voxel_core::content_constants::PROBE_BYTES;
-use voxel_storage::reference::probe::{
+use voxel_mesh::probe::{
     PROBE_RAYS, ProbeGrid, ProbeLod, ProbeVolume, bake, first_solid_on_ray, hemisphere_ray,
     probe_rotation, probe_seed, probes_reaching,
 };
@@ -65,7 +67,9 @@ use super::stat::{
 };
 
 /// Schema version of the probe-update report itself.
-pub const SCHEMA_VERSION: u32 = 2;
+///
+/// Version 3 adds the `compact` term (M2-21).
+pub const SCHEMA_VERSION: u32 = 3;
 
 /// Measured edits. The gate reports a distribution over edited chunks, not a
 /// microbenchmark with a mutable sample count.
@@ -80,7 +84,7 @@ pub const BUDGET_NS: u64 = 4_000_000;
 /// Candidate edits per fixture chunk.
 const CANDIDATES_PER_CHUNK: usize = 16;
 
-/// The three timed components and the aggregate update term.
+/// The timed components and the aggregate update term.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProbeTerms {
     /// Find the probes whose rays reach the dirty voxel.
@@ -89,7 +93,9 @@ pub struct ProbeTerms {
     pub rebake: Term,
     /// Stage the changed records and validity bytes.
     pub upload: Term,
-    /// `select + rebake + upload`.
+    /// Periodic DAG compaction charged to this update (0 for 63 of 64 edits).
+    pub compact: Term,
+    /// `select + rebake + upload + compact`.
     pub update: Term,
 }
 
@@ -118,7 +124,7 @@ pub struct ProbeSample {
     pub rays_reaching: u32,
     /// Rays cast by the rebake; `valid_probes × 64`.
     pub rays_baked: u32,
-    /// SH bytes staged for changed probes (`affected_probes × 12`).
+    /// SH bytes staged for affected probes (`affected_probes × 12`).
     pub probe_bytes: u64,
     /// Validity bytes staged, one per affected probe.
     pub validity_bytes: u64,
@@ -292,7 +298,11 @@ impl ProbesReport {
             ("Select", &self.terms.select),
             ("Rebake", &self.terms.rebake),
             ("Upload", &self.terms.upload),
-            ("**Select + rebake + upload**", &self.terms.update),
+            ("Compaction", &self.terms.compact),
+            (
+                "**Select + rebake + upload + compaction**",
+                &self.terms.update,
+            ),
         ] {
             writeln!(
                 out,
@@ -605,6 +615,7 @@ fn measure(
         select: term(&updates, |sample| sample.select_ns),
         rebake: term(&updates, |sample| sample.bake_ns),
         upload: term(&updates, |sample| sample.upload_ns),
+        compact: term(&updates, |sample| sample.compact_ns),
         update: term(&updates, |sample| sample.update_ns),
     };
     let counts = ProbeCounts {
@@ -665,19 +676,21 @@ fn measure(
     };
 
     let notes = vec![
-        "Update = select + rebake + upload. Every component is timed on its own and the \
-         aggregate is the per-edit sum, so sub-timer overhead is charged to the aggregate and \
-         the rows reconcile."
+        "Update = select + rebake + upload + compaction. Every component is timed on its own \
+         and the aggregate is the per-edit sum, so sub-timer overhead is charged to the \
+         aggregate and the rows reconcile. Compaction runs on 16 of 1,000 edits (one per 64) \
+         and is charged to the update that triggered it, matching the edit gate."
             .to_owned(),
         "Select tests valid probes ray by ray, stopping at the first ray that reaches the dirty \
          voxel, and traces only rays whose AABB intersects it. It uses the pre-edit DAG, so a ray \
          that terminates at the edited voxel is selected before a solid→air edit and a ray that \
          passes through it is selected before air→solid. A probe whose centre is the edited voxel \
-         is selected even though it casts no ray while invalid. This is the M1 reference; \
-         M2-18/M2-21 replace it with the production bake and budget check."
+         is selected even though it casts no ray while invalid. This is the production \
+         M2-21 port; `tests/probe_update.rs` pins it byte-equal to the M1-30 oracle."
             .to_owned(),
         format!(
-            "Rebake is the M1-30 reference shared with the test oracle: only affected probes are \
+            "Rebake is the production M2-21 port (byte-equal to the M1-30 oracle, pinned by \
+             tests/probe_update.rs): only affected probes are \
              recast, {PROBE_RAYS} rays each, then projected to SH4 RGB8. A full near-grid rebake \
              would be {} rays; the measured mean is {} rays/edit because the edit is bounded to \
              the probes its voxel can reach.",

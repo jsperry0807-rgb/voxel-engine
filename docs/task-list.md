@@ -3,7 +3,7 @@
 **Status:** v1.6 — derived from spec v2.3 and roadmap v3.2
 **Date:** 2026-10-30
 **Owner:** engine
-**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 in progress: `M2-16` done; `M2-17` done (5.7% p95 at 128³, target ≤20%); `M2-18` done; `M2-19` done; `M2-20` done; `M2-21` next.
+**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 in progress: `M2-16` done; `M2-17` done (5.7% p95 at 128³, target ≤20%); `M2-18` done; `M2-19` done; `M2-20` done; `M2-21` done; `M2-22` next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -411,7 +411,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 **Goal:** deterministic mesh + AO + block light + probes, at the 128³ Minimum edge.
 **Exit:** M2-30. **Budget:** 27.0 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
-**Status:** In progress — M2-16 done; M2-17 done (5.7% p95 at 128³, target ≤20%); M2-18 done; M2-19 done; M2-20 done; M2-21 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
+**Status:** In progress — M2-16 done; M2-17 done (5.7% p95 at 128³, target ≤20%); M2-18 done; M2-19 done; M2-20 done; M2-21 done; M2-22 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
 **Art:** none beyond M1.5-14; M2 reuses the slice atlas.
 
 **M1 gate carry-over — blocks M2-30:**
@@ -556,6 +556,20 @@ second block), now documented on `ProbeGrid::mid`; ADR-005's "2 m cell centres"
 wording is unchanged and still needs a decision. See
 `cargo test -p voxel-mesh probe_lod`.
 
+**M2-21 measured (2026-10-30):** `voxel-bench gate probes` now drives the
+production `voxel-mesh::probe` path — selection, incremental rebake and the
+first-solid ray helper ported from `voxel_storage::reference::probe` — and the
+report lists compaction as its own term. On the frozen `m1-representative`
+fixture (1,000 edits, 35 chunks), release p95 is **143.052 µs** (p50
+50.586 µs) against the 4 ms budget, a 3.86 ms margin, split into select
+106.392 µs, rebake 37.361 µs, upload 50 ns and compaction 20 ns p95. The debug
+verify path is 550.265 µs p95. The recorded max, 710.910 µs (8.88 ms in debug),
+is one periodic DAG compaction (every 64th edit; 655.354 µs of it); probe work
+stays under 104 µs. An edit affects 1 probe (max 3 of 64), tests 1,220 selection
+rays, rebakes 67 rays and stages 13 B. `tests/probe_update.rs` pins selection,
+rebake and first-solid to the M1-30 oracle byte-for-byte across edits,
+direction, centre flips, index order, threads and the compiled chunk edge.
+
 ### 6.1 Apron and mesher
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -590,7 +604,7 @@ wording is unchanged and still needs a decision. See
 | M2-18 | Production SH4 bake at block centres, deterministic, budgeted across frames | M1-30 | Byte-equal to the reference on 3 fixtures | `cargo test -p voxel-mesh probe_bake` | 1.5 d | [x] |
 | M2-19 | Invalid-in-solid flag and 3×3×3 nearest-valid fallback | M2-18 | Sampling inside a wall returns the nearest valid probe; no NaNs | `cargo test -p voxel-mesh probe_fallback` | 0.5 d | [x] |
 | M2-20 | Probe LOD: near per block, mid half-res, far none; transition is a content event | M2-19 | Ring transition rebuilds once; counts match 512/64/0 per chunk | `cargo test -p voxel-mesh probe_lod` | 1.5 d | [x] |
-| M2-21 | Probe determinism and update budget: p95 ≤ 4 ms per edited chunk | M2-18 | Measured on the fixture; recorded | `cargo run -p voxel-bench -- gate probes` | 0.5 d | [ ] |
+| M2-21 | Probe determinism and update budget: p95 ≤ 4 ms per edited chunk | M2-18 | Measured on the fixture; recorded | `cargo run -p voxel-bench -- gate probes` | 0.5 d | [x] |
 
 ### 6.4 Integration, ray-test, and exit
 

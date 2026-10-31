@@ -8,6 +8,7 @@ publish.workspace = true
 voxel-block = { path = "../engine/block" }
 voxel-core = { path = "../core" }
 voxel-storage = { path = "../engine/storage" }
+voxel-mesh = { path = "../engine/mesh" }
 blake3 = "1"
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
@@ -23,7 +24,7 @@ iai-callgrind = "0.16"
 [features]
 # Forward the pre-registered 128³ chunk edge to the crates this benchmark
 # drives.
-chunk128 = ["voxel-storage/chunk128", "voxel-render/chunk128"]
+chunk128 = ["voxel-storage/chunk128", "voxel-mesh/chunk128", "voxel-render/chunk128"]
 # Gates the iai-callgrind bench target; the dependency itself is a dev-dep.
 iai = []
 
