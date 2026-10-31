@@ -255,3 +255,20 @@ by `gate memory` through `mesh_block`; the runs are
 and row 1 is **4.16 GiB**. The 64³ production row 6 is **925 KiB** (325.5 KiB
 over the 600 KiB cap) and row 1 is **34.51 GiB**. The M2 verdict (FAIL) is
 unchanged; the severity is not.
+
+## 9. M3-00 mesh compression — 2026-10-31
+
+The M2 exit measured the production AO mesh at 3,650 KiB p95 (1,250 KiB over
+the 2.4 MiB cap). M3-00 evaluated two formats:
+
+- **Instanced 8 B quad records** passed Gates A/B1/B2/D but failed Gate C:
+  1.311× (RTX 4060) and 1.381× (Radeon iGPU) the indexed full-frame time,
+  above the 10% threshold. Rejected on performance.
+- **44 B packed 8 B vertex** (4 vertices + six `u16` indices) landed. 128³
+  Minimum: row 6 **2,115 KiB PASS**, row 1 **2.98 GiB PASS**. 64³ Default:
+  row 6 536 KiB PASS, row 1 24.84 GiB FAIL. 64³ Minimum: row 6 PASS, row 1
+  **6.22 GiB FAIL** (5.11/5.21 after M6-09a).
+
+**64³ is abandoned.** The 32 B/quad 4-vertex strip is deferred; it is the only
+variant that clears the 4.80 hard fail after the M6-09a pool removal (~4.22 GiB)
+but its draw mechanism is unmeasured. No threshold or frozen row changed.

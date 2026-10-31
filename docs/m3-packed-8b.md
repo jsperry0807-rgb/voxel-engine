@@ -1,7 +1,6 @@
 # M3-00 packed 8 B vertex fallback
 
-**Status:** landed 2026-10-31. Gate C rejected the instanced-record path; this
-is the indexed 44 B/quad fallback.
+**Status:** landed and closed 2026-10-31. Gate C rejected the instanced-record path; this is the indexed 44 B/quad fallback. 64³ is abandoned; the 32 B strip is deferred.
 
 ## Format
 

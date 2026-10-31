@@ -1,7 +1,7 @@
 # Mesh compression plan (M3-00)
 
-**Status:** Proposed — 2026-10-31
-**Trigger:** M2 exit, gate row 6. The production AO mesh exceeds the 128³ cap.
+**Status:** Closed (M3-00, 2026-10-31) — 44 B packed fallback landed; 64³ abandoned
+**Trigger:** M2 exit, gate row 6. The production AO mesh exceeded the 128³ cap; closed by the 44 B packed path.
 **Goal:** bring the measured 128³ mesh p95 under the 2,400 KiB cap, restore the
 128³ Minimum memory projection, and preserve the current visual contract.
 

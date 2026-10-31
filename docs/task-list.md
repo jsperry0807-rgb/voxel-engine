@@ -1,9 +1,9 @@
 # Roadmap Task List
 
-**Status:** v1.7 — derived from spec v2.3 and roadmap v3.3
+**Status:** v1.8 — derived from spec v2.3 and roadmap v3.4
 **Date:** 2026-10-31
 **Owner:** engine
-**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 complete — `M2-30` (measured exit) landed 2026-10-31; the 128³ Minimum run is recorded, the mesh row is 1,250 KiB over the cap (production AO 3,650 KiB) and mesh compression is the first M3 item, gate row 9 is measured and row 11 is carried. M3 is next.
+**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 complete — `M2-30` (measured exit) landed 2026-10-31; the 128³ Minimum run is recorded, the mesh row is 1,250 KiB over the cap (production AO 3,650 KiB) and mesh compression is the first M3 item, gate row 9 is measured and row 11 is carried. M3-00 (mesh compression) is complete: the 44 B packed path passes 128³ and 64³ is abandoned; M3-01 is next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -829,18 +829,19 @@ and uploads them as a 90-day artifact.
 
 ## 8. M3 — Raster scale-up
 
-**Goal:** a real world at real distance without GPU culling. **Exit:** M3-13. **Budget:** 9 d raw. **Depends:** M2.
+**Goal:** a real world at real distance without GPU culling. **Exit:** M3-13. **Budget:** 17 d raw (9 d original + M3-00 ~6.75–8 d + M3-02 paging 1.0–1.5 d). **Depends:** M2.
 
-**M3-00 mesh compression (in progress):** Gate A/B1/B2/D pass on the RTX 4060
-and Radeon iGPU; **Gate C fails** for instanced quads (1.311×/1.381× indexed,
-over the 10% threshold). The **44 B packed 8 B vertex fallback is landed**:
-128³ row 6 **2,115 KiB PASS**, row 1 **2.98 GiB PASS**; 64³ row 6 **536 KiB
-PASS**, 64³ Minimum row 1 **6.22 GiB FAIL** (5.11/5.21 GiB after M6-09a).
-The 32 B 4-vertex strip is deferred to a separate spike.
+**M3-00 mesh compression (closed 2026-10-31):** Gate A/B1/B2/D pass on the
+RTX 4060 and Radeon iGPU; **Gate C fails** for instanced quads (1.311×/1.381×
+indexed). The **44 B packed 8 B vertex fallback is landed**: 128³ row 6
+**2,115 KiB PASS**, row 1 **2.98 GiB PASS**; 64³ row 6 **536 KiB PASS**, 64³
+Minimum row 1 **6.22 GiB FAIL** (5.11/5.21 GiB after M6-09a). **64³ is
+abandoned**; the 32 B 4-vertex strip is deferred to a separate spike.
 **Art:** none; M3 reuses M1.5-14 and, if M2.5 ran, M2.5-31.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
+| M3-00 | Mesh compression: 44 B packed 8 B vertex, Gate C comparison, 64³ decision | M2-29 | 128³ row 6 ≤2,400 KiB and row 1 ≤3.20 GiB PASS; 64³ abandoned; 32 B deferred | `cargo test -p voxel-viewer --test validation`; gate report | 7 d | [x] |
 | M3-01 | Streaming shell in the viewer: load ring, evict ring, budgeted per frame | M2-27 | 256 chunks load without a hitch > 4 ms | run + log | 1.5 d | [ ] |
 | M3-02 | Mesh buffer pool: one arena with suballocation, or per-chunk buffers; document the choice | M3-01 | No per-frame allocation after warm-up; fragmentation reported | `cargo test -p voxel-viewer pool` | 1.5 d | [ ] |
 | M3-03 | Upload queue with a per-frame byte budget | M3-02 | A 10 MB backlog drains without exceeding the budget | `cargo test -p voxel-viewer upload_budget` | 0.5 d | [ ] |

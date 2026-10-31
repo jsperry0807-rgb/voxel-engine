@@ -1,6 +1,6 @@
 # Voxel Engine Roadmap
 
-**Status:** v3.3 — M1 gate decided, M1.5 slice landed, M2 measured exit recorded
+**Status:** v3.4 — M2 measured exit; M3-00 mesh compression closed
 **Companion to:** [`voxel-engine-architecture-spec.md`](voxel-engine-architecture-spec.md), [`worldgen-design.md`](worldgen-design.md)
 **Date:** 2026-10-31
 **Scope:** storage, content pipeline, worldgen, renderer, far field, water, GPU sync, culling, LOD, streaming
@@ -18,7 +18,8 @@ at **4.16 GiB**, edit/probe/light/probe-grid rows pass, and the **production
 mesh row misses the 2.4 MiB cap by 1,250 KiB**. Mesh compression is therefore
 the first M3 item and 128³ Minimum remains a measured candidate, not a confirmed
 profile. Gate row 9 is measured (0.00% reference granularity); row 11 is carried
-until a real save.
+until a real save. **M3-00 is closed:** the 44 B packed vertex passes 128³
+(row 6 2,115 KiB, row 1 2.98 GiB); 64³ is abandoned; the 32 B strip is deferred.
 The M1.5 vertical slice and zero-validation CI remain in place.
 
 Two consequences shape the schedule:
@@ -261,8 +262,9 @@ Runs at the **128³ Minimum** edge (ADR-002). Default is not greenlit.
 
 ### M3 — Raster scale-up (3 weeks)
 
-- Mesh compression: bring the 128³ mesh p95 under the 2.4 MiB cap (the first
-  rule-3 lever; the production M2 re-measure is 3,650 KiB).
+- Mesh compression **done (M3-00):** 44 B packed 8 B vertex; 128³ row 6
+  2,115 KiB and row 1 2.98 GiB pass. 64³ is abandoned; the 32 B strip is a
+  deferred contingency.
 - Viewer lifecycle: stream in, mesh, upload, draw.
 - CPU frustum cull of chunk AABBs — the stopgap and the M5 production cull's
   correctness reference (the M1 reference traversal is the granularity oracle).
