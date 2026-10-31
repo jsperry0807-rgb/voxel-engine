@@ -59,7 +59,7 @@ fn dag_roundtrip() {
     assert_eq!(Svdag::from_bytes(&dag.to_bytes()).unwrap(), dag);
     // A solid chunk collapses to one node per internal level.
     let solid = Svdag::from_dense(&vec![3u16; CHUNK_VOLUME]);
-    assert!(solid.pool.len() <= ROOT_LEVEL as usize * 9);
+    assert!(solid.pool().len() <= ROOT_LEVEL as usize * 9);
 }
 
 #[test]
@@ -150,6 +150,22 @@ fn overlay_only_chunk_survives_and_folds() {
     assert_eq!(w.gpu().lookup(p, 4, 5, 6), 3);
     w.reclaim(r.epoch);
 
+    std::fs::remove_dir_all(dir).ok();
+}
+
+/// A stream-only session (load, evict, never edit) must still be able to free
+/// the pool: `tick` ends no batch when nothing is dirty, so the eviction has to.
+#[test]
+fn eviction_advances_the_gpu_epoch() {
+    let dir = tmp("evict-epoch");
+    let p = ChunkPos::new(0, 0, 0);
+    let mut w = World::new(&dir, flat(), MemSink::default()).unwrap();
+    w.load(p).unwrap();
+    let before = w.gpu().next_epoch();
+    let tag = w.evict(p).unwrap();
+    assert_eq!(tag, before, "the eviction retires under the current tag");
+    assert_eq!(w.gpu().next_epoch(), before + 1);
+    w.reclaim(tag);
     std::fs::remove_dir_all(dir).ok();
 }
 
@@ -320,8 +336,8 @@ fn apply_edits_matches_dense_rebuild() {
         fast.expand(&mut out);
         assert_eq!(out, dd, "{n_edits} edits: content");
         assert_eq!(
-            fast.pool.len(),
-            slow.pool.len(),
+            fast.pool().len(),
+            slow.pool().len(),
             "{n_edits} edits: same canonical node count"
         );
     }
@@ -331,8 +347,8 @@ fn apply_edits_matches_dense_rebuild() {
     assert!(solid.apply_edits(all).is_empty());
     let filled = Svdag::empty().apply_edits((0..CHUNK_VOLUME as u32).map(|i| (i, 5)));
     assert_eq!(
-        filled.pool.len(),
-        Svdag::from_dense(&vec![5u16; CHUNK_VOLUME]).pool.len()
+        filled.pool().len(),
+        Svdag::from_dense(&vec![5u16; CHUNK_VOLUME]).pool().len()
     );
 }
 

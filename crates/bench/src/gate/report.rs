@@ -9,11 +9,11 @@
 //! | [`edits`] (M1-37) | edit p95 |
 //! | [`probes`] (M1-38) | probe-update p95 |
 //!
-//! The rows are the twelve frozen rows in `docs/pre-registration.md` §3. Every
-//! verdict is computed from a measured value and a frozen limit; no row is
-//! typed `PASS` by hand. A row that the M1-35…M1-38 harnesses do not measure is
-//! reported as `not_measured` with the evidence that still has to be attached,
-//! not silently passed.
+//! The rows are the twelve frozen rows in `docs/pre-registration.md` §3. A
+//! verdict is computed from a measured value, from an invariant the measurement
+//! already asserts (the loaded-count identity, the fixed light/probe volume), or
+//! is `not_measured` with the evidence that still has to be attached. No row is
+//! typed `PASS` by hand.
 //!
 //! # What is a gate run
 //!
@@ -510,7 +510,7 @@ impl GateReport {
         let summary = summarize(&rows);
         let notes = vec![
             "The twelve rows are the frozen table in docs/pre-registration.md §3. Every verdict is \
-             computed from a measured value and its limit; no row is typed PASS. A row the M1-35…\
+             computed from a measured value, a checked invariant, or is not_measured; no row is typed PASS. A row the M1-35…\
              M1-38 harnesses do not measure is NOT MEASURED, not green."
                 .to_owned(),
             "The memory projection is the measured p95 per-chunk total multiplied by the loaded \
@@ -679,8 +679,14 @@ fn vram_row(memory: &MemoryReport, residency: &ResidencyReport) -> Result<GateRo
     let limit = VOXEL_FAIL_MIB * MIB;
     let target = VOXEL_TARGET_MIB * MIB;
     let verdict = at_most(projected, limit);
-    let margin = limit as i64 - projected as i64;
-    let target_margin = target as i64 - projected as i64;
+    // `u64` values above `i64::MAX` would wrap a plain subtraction and print a
+    // wrong signed margin in the decision artifact.
+    let signed_delta = |limit: u64, value: u64| -> i64 {
+        (i128::from(limit) - i128::from(value)).clamp(i128::from(i64::MIN), i128::from(i64::MAX))
+            as i64
+    };
+    let margin = signed_delta(limit, projected);
+    let target_margin = signed_delta(target, projected);
 
     Ok(gate_row!(
         RowId::VramBudget,
@@ -787,12 +793,10 @@ fn loaded_chunks_row(residency: &ResidencyReport) -> Result<GateRow, String> {
             signed_count(n64 as i64 - expected.n64 as i64),
             signed_count(n128 as i64 - expected.n128 as i64),
         ),
-        Some(GateNumber {
-            measured: n64 as f64,
-            limit: n64 as f64,
-            margin: margin as f64,
-            unit: "chunks".to_owned(),
-        }),
+        // The identity is asserted by `residency::report`, which refuses to
+        // produce a report when it fails, so this row is an invariant rather
+        // than a measurement. The model deltas are reported in the prose.
+        None,
     ))
 }
 
@@ -883,13 +887,10 @@ fn light_row(memory: &MemoryReport) -> Result<GateRow, String> {
         verdict,
         "gate memory (M1-35); ADR-004",
         "One 16 B cell per block, fixed by the compiled chunk edge. The 128³ value is the frozen \
-         pre-registration target and is not built in M1.",
-        Some(GateNumber {
-            measured: max as f64,
-            limit: expected as f64,
-            margin: margin as f64,
-            unit: "bytes".to_owned(),
-        }),
+         pre-registration target and is not built in M1. This is an invariant of the memory model, \
+         which charges exactly this volume; a resident `LightState` also allocates propagation \
+         scratch, which this gate does not measure.",
+        None,
     ))
 }
 
@@ -929,14 +930,10 @@ fn probe_grid_row(memory: &MemoryReport, probes: &ProbesReport) -> Result<GateRo
         verdict,
         "gate probes (M1-38) + gate memory (M1-35); ADR-005",
         "One 12 B SH4 RGB probe per block at the near LOD. The update row measures the latency; \
-         this row checks both the fixed grid and the byte volume. The 128³ value is pre-registered, \
-         not built in M1.",
-        Some(GateNumber {
-            measured: bytes as f64,
-            limit: expected_bytes as f64,
-            margin: margin as f64,
-            unit: "bytes".to_owned(),
-        }),
+         this row checks the fixed grid and the byte volume the model charges, which is an \
+         invariant rather than a resident allocation. The 128³ value is pre-registered, not built \
+         in M1.",
+        None,
     ))
 }
 
@@ -1162,7 +1159,13 @@ fn fallback_row(fallback: &Fallback) -> GateRow {
         },
         "pre-registration §4 fallback order".to_owned(),
         "n/a".to_owned(),
-        Verdict::Pass,
+        // A triggered rule is a consequence of a failed row, not a passing
+        // measurement; counting it in `summary.pass` overstated the gate.
+        if fallback.triggered {
+            Verdict::NotMeasured
+        } else {
+            Verdict::Pass
+        },
         "pre-registration §4",
         fallback.action.clone(),
         None,

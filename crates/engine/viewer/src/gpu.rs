@@ -35,6 +35,9 @@ use crate::chunk_mesh::ChunkMesh;
 use crate::chunk_render::ChunkPipeline;
 use crate::depth::DepthTarget;
 use crate::error::ViewerError;
+
+/// Consecutive `Lost` surfaces tolerated before the viewer gives up.
+const MAX_SURFACE_RECREATIONS: u32 = 3;
 use crate::naive_mesh::{Mesh, naive_mesh};
 use voxel_core::constants::{CHUNK_BITS, CHUNK_VOLUME};
 
@@ -53,6 +56,8 @@ pub struct Gpu {
     pub surface: Surface<'static>,
     /// The active surface configuration; rewritten on resize.
     pub config: SurfaceConfiguration,
+    /// Consecutive `Lost` acquisitions since the last presented frame.
+    lost_retries: u32,
     /// The camera uniform, rewritten every frame.
     pub camera_buffer: Buffer,
     /// Binding for [`Gpu::camera_buffer`].
@@ -131,8 +136,15 @@ impl Gpu {
         });
 
         let size = window.inner_size();
+        // The adapter's limit applies to the first configure too; a HiDPI window
+        // larger than it otherwise fails validation before the first frame.
+        let max = device.limits().max_texture_dimension_2d;
         let config = surface
-            .get_default_config(&adapter, size.width.max(1), size.height.max(1))
+            .get_default_config(
+                &adapter,
+                size.width.max(1).min(max),
+                size.height.max(1).min(max),
+            )
             .ok_or(ViewerError::UnsupportedSurface)?;
         log::debug!("surface: {config:?}");
         surface.configure(&device, &config);
@@ -157,6 +169,7 @@ impl Gpu {
             queue,
             surface,
             config,
+            lost_retries: 0,
             camera_buffer,
             camera_bind_group,
             depth,
@@ -223,8 +236,18 @@ impl Gpu {
             }
             CurrentSurfaceTexture::Lost => {
                 // `Lost` means the surface itself is dead; reconfiguring it is
-                // not enough. Rebuild it from the window and keep the device.
-                log::warn!("surface lost; recreating");
+                // not enough. Rebuild it from the window and keep the device,
+                // but bound the retries: a persistent loss would otherwise
+                // livelock at the redraw cadence, rebuilding the surface (and
+                // depth texture) forever.
+                self.lost_retries += 1;
+                if self.lost_retries > MAX_SURFACE_RECREATIONS {
+                    return Err(ViewerError::SurfaceLost);
+                }
+                log::warn!(
+                    "surface lost; recreating ({}/{MAX_SURFACE_RECREATIONS})",
+                    self.lost_retries
+                );
                 self.recreate_surface()?;
                 return Ok(false);
             }
@@ -276,6 +299,7 @@ impl Gpu {
         }
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
+        self.lost_retries = 0;
         Ok(true)
     }
 }

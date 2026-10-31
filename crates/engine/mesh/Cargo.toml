@@ -11,6 +11,10 @@ voxel-storage = { path = "../storage" }
 
 [dev-dependencies]
 criterion = "0.5"
+
+# `pprof` is Unix-only (it uses `nix`/`libc` unconditionally), so keeping it as
+# a plain dev-dependency made every Windows test target uncompilable.
+[target.'cfg(unix)'.dev-dependencies]
 pprof = { version = "0.15.0", features = ["flamegraph", "criterion"] }
 
 [features]

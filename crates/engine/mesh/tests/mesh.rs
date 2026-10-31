@@ -1,7 +1,9 @@
 //! M2-11 emitter sanity: the vertex stream uses the expected block corners.
 
 use voxel_core::Face;
-use voxel_mesh::{Mesh, Vertex, for_each_block, greedy_block, mesh_block, mesh_face};
+use voxel_mesh::{
+    Mesh, Vertex, face_from_code, for_each_block, greedy_block, mesh_block, mesh_face,
+};
 use voxel_storage::{Apron, CHUNK_VOLUME, local_index};
 
 #[test]
@@ -126,4 +128,29 @@ fn cross(a: [i64; 3], b: [i64; 3]) -> [i64; 3] {
         a[2] * b[0] - a[0] * b[2],
         a[0] * b[1] - a[1] * b[0],
     ]
+}
+
+/// `resolve_materials` must convert the block id per face, not globally.
+#[test]
+fn resolve_materials_maps_each_face() {
+    let mut mesh = single_voxel_mesh();
+    // Grass-like mapping: top 10, bottom 11, sides 12.
+    mesh.resolve_materials(|block, face| {
+        assert_eq!(block, 1, "the fixture uses block 1");
+        match face {
+            Face::Top => 10,
+            Face::Bottom => 11,
+            _ => 12,
+        }
+    });
+    for vertex in &mesh.vertices {
+        let expected = match face_from_code(vertex.face) {
+            Face::Top => 10,
+            Face::Bottom => 11,
+            _ => 12,
+        };
+        assert_eq!(vertex.material, expected, "face code {}", vertex.face);
+    }
+    assert!(mesh.vertices.iter().any(|vertex| vertex.material == 10));
+    assert!(mesh.vertices.iter().any(|vertex| vertex.material == 11));
 }

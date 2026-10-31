@@ -84,11 +84,15 @@ fn screenshot_shader_is_valid_wgsl() {
             "screenshot.wgsl no longer contains {token}, which the example substitutes"
         );
     }
-    let source = template
-        .replace("{{TILE}}", "16.0")
-        .replace("{{EDGE}}", "16u")
-        .replace("{{ATLAS}}", "256.0");
-    validate_wgsl("screenshot.wgsl", &source);
+    // Both instances the example builds: the 256² runtime atlas and the
+    // legacy 2048² per-face source sheet.
+    for (tile, edge, atlas) in [("16.0", "16u", "256.0"), ("256.0", "8u", "2048.0")] {
+        let source = template
+            .replace("{{TILE}}", tile)
+            .replace("{{EDGE}}", edge)
+            .replace("{{ATLAS}}", atlas);
+        validate_wgsl("screenshot.wgsl", &source);
+    }
 }
 
 fn validate_wgsl(name: &str, source: &str) {

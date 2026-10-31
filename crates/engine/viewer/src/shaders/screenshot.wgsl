@@ -1,3 +1,9 @@
+// Screenshot shader for the M1.5-15/17 acceptance set.
+//
+// A template: the example substitutes {{TILE}} (tile edge), {{EDGE}} (tiles per
+// atlas edge) and {{ATLAS}} (atlas edge) for the runtime atlas or the legacy
+// 2048² source sheet. `tests/validation.rs` validates both substitutions.
+//
 
 struct Camera {
     view_proj: mat4x4<f32>,

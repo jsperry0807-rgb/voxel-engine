@@ -26,7 +26,8 @@ use crate::{BLOCK_EDGE, BlockScratch};
 pub struct MergeKey {
     /// Outward face orientation.
     pub face: Face,
-    /// Atlas material id.
+    /// Block material id from the chunk volume (resolved to an atlas slot
+    /// before upload).
     pub material: u16,
     /// Four corner AO values in `0..=255`.
     pub ao: [u8; 4],
@@ -44,7 +45,7 @@ impl MergeKey {
 pub struct GreedyQuad {
     /// Outward face orientation.
     pub face: Face,
-    /// Atlas material id of the exposed faces.
+    /// Block material id of the exposed faces.
     pub material: u16,
     /// Four corner AO values copied from the merge key.
     pub ao: [u8; 4],
@@ -205,7 +206,18 @@ pub(crate) fn corner_signs(face: Face) -> [(i32, i32); 4] {
 /// diagonal in the plane one voxel outward; two solid edges mean full occlusion,
 /// otherwise the count of solid samples reduces the four-level value. The
 /// result is in [`AO_LEVELS`], with `255` fully open.
+/// # Panics
+///
+/// Panics if `cell` is outside the block interior (`1..=16`) or `corner` is
+/// not `0..4`. A coordinate of `0` with a negative corner sign would wrap the
+/// `i32` sample to `u32` and read out of bounds.
 pub fn corner_ao(scratch: &BlockScratch, face: Face, cell: [u32; 3], corner: usize) -> u8 {
+    assert!(
+        cell.iter()
+            .all(|&coordinate| (1..=BLOCK_EDGE as u32).contains(&coordinate)),
+        "AO cell {cell:?} is outside the block interior"
+    );
+    assert!(corner < 4, "AO corner index {corner} is out of range");
     let (axis, sign) = face_axis(face);
     let u_axis = (axis + 1) % 3;
     let v_axis = (axis + 2) % 3;

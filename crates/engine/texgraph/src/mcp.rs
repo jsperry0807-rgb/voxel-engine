@@ -30,6 +30,7 @@ use std::path::PathBuf;
 use base64::Engine;
 use serde_json::{Value, json};
 use voxel_block::texture_manifest::TextureManifest;
+use voxel_core::atlas::TILE_SIZE;
 
 use crate::bake;
 use crate::eval;
@@ -49,9 +50,25 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     let server = Server { workspace };
     let stdin = io::stdin();
     let mut stdout = BufWriter::new(io::stdout());
+    /// Largest request line the server will buffer (a graph RON is well under).
+    const MAX_REQUEST_BYTES: usize = 4 * 1024 * 1024;
     for line in stdin.lock().lines() {
         let line = line?;
         if line.trim().is_empty() {
+            continue;
+        }
+        if line.len() > MAX_REQUEST_BYTES {
+            let response = error_response(
+                Value::Null,
+                -32600,
+                format!(
+                    "request is {} bytes, above the {MAX_REQUEST_BYTES}-byte limit",
+                    line.len()
+                ),
+            );
+            serde_json::to_writer(&mut stdout, &response)?;
+            stdout.write_all(b"\n")?;
+            stdout.flush()?;
             continue;
         }
         let response = match serde_json::from_str::<Value>(&line) {
@@ -423,7 +440,7 @@ impl Server {
             Ok(tile) => tile,
             Err(error) => return ToolResult::error(error.to_string()),
         };
-        let tile_png = match png::encode_rgba(128, 128, &upscale(&tile, 16, 128)) {
+        let tile_png = match png::encode_rgba(128, 128, &upscale(&tile, TILE_SIZE as usize, 128)) {
             Ok(png) => png,
             Err(error) => return ToolResult::error(error.to_string()),
         };
@@ -473,7 +490,7 @@ impl Server {
             Ok(tile) => tile,
             Err(error) => return ToolResult::error(error.to_string()),
         };
-        let png = match png::encode_rgba(128, 128, &upscale(&tile, 16, 128)) {
+        let png = match png::encode_rgba(128, 128, &upscale(&tile, TILE_SIZE as usize, 128)) {
             Ok(png) => png,
             Err(error) => return ToolResult::error(error.to_string()),
         };

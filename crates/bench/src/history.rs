@@ -48,10 +48,48 @@ pub struct RunSummary {
     pub layout: Vec<LayoutRecord>,
 }
 
+/// Shape version written to `history.json`.
+///
+/// `0` means the file predates the field; it is read as legacy and upgraded on
+/// the next write. Adding fields to [`RunSummary`] without bumping this makes a
+/// future reader guess which shape it has.
+pub const HISTORY_SCHEMA: u32 = 2;
+
 /// The machine-readable index.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct History {
+    /// Shape version; `0` for a file written before the field existed.
+    #[serde(default)]
+    pub schema_version: u32,
     pub runs: Vec<RunSummary>,
+}
+
+impl Default for History {
+    fn default() -> Self {
+        Self {
+            schema_version: HISTORY_SCHEMA,
+            runs: Vec::new(),
+        }
+    }
+}
+
+/// Writes `bytes` to `path` through a temp file in the same directory.
+///
+/// `history.json` is a read-modify-write; a crash mid-write used to leave a
+/// truncated file that blocked every later record.
+fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let temp = parent.join(format!(
+        ".{}.tmp-{}",
+        path.file_name()
+            .map(|name| name.to_string_lossy())
+            .unwrap_or_default(),
+        std::process::id()
+    ));
+    fs::write(&temp, bytes)?;
+    fs::rename(&temp, path).inspect_err(|_| {
+        let _ = fs::remove_file(&temp);
+    })
 }
 
 /// Result of recording one run.
@@ -140,9 +178,10 @@ pub fn record(
         .checked_sub(2)
         .map(|index| history.runs[index].clone());
     fs::create_dir_all(archive)?;
-    fs::write(
-        archive.join("history.json"),
-        serde_json::to_vec_pretty(&history).map_err(|error| io::Error::other(error.to_string()))?,
+    write_atomic(
+        &archive.join("history.json"),
+        &serde_json::to_vec_pretty(&history)
+            .map_err(|error| io::Error::other(error.to_string()))?,
     )?;
     fs::write(archive.join("HISTORY.md"), render(&history))?;
 
@@ -165,6 +204,12 @@ pub fn load(archive: &Path) -> io::Result<History> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => History::default(),
         Err(error) => return Err(error),
     };
+    if history.schema_version == 0 {
+        history.schema_version = HISTORY_SCHEMA;
+    }
+    // A hand-resolved merge can contain the same run twice; keep the first.
+    let mut seen = std::collections::HashSet::new();
+    history.runs.retain(|run| seen.insert(run.id.clone()));
     for run in &mut history.runs {
         if run.suite.is_none() {
             run.suite = archived_suite(archive, run);
@@ -185,9 +230,10 @@ pub fn refresh(archive: &Path) -> io::Result<PathBuf> {
     let history = load(archive)?;
     fs::create_dir_all(archive)?;
     // Persist any backfilled suite fingerprints so the next load is cheap.
-    fs::write(
-        archive.join("history.json"),
-        serde_json::to_vec_pretty(&history).map_err(|error| io::Error::other(error.to_string()))?,
+    write_atomic(
+        &archive.join("history.json"),
+        &serde_json::to_vec_pretty(&history)
+            .map_err(|error| io::Error::other(error.to_string()))?,
     )?;
     let path = archive.join("HISTORY.md");
     fs::write(&path, render(&history))?;
@@ -701,6 +747,7 @@ mod tests {
         let mut latest = run("m1-layout", 2, "m2-c1-l0-bbbb");
         latest.layout = crate::layout::records();
         let history = History {
+            schema_version: HISTORY_SCHEMA,
             runs: vec![run("old", 1, "m1-c1-l0-aaaa"), latest],
         };
         let text = render(&history);
@@ -713,6 +760,7 @@ mod tests {
     #[test]
     fn process_metrics_are_omitted_when_the_suite_changes() {
         let history = History {
+            schema_version: HISTORY_SCHEMA,
             runs: vec![
                 run("old", 1, "m1-c1-l0-aaaa"),
                 run("new", 2, "m2-c1-l0-bbbb"),
@@ -732,6 +780,7 @@ mod tests {
     #[test]
     fn process_metrics_are_kept_for_the_same_suite() {
         let history = History {
+            schema_version: HISTORY_SCHEMA,
             runs: vec![
                 run("old", 1, "m1-c1-l0-aaaa"),
                 run("new", 2, "m1-c1-l0-aaaa"),

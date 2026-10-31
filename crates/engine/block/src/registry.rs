@@ -307,6 +307,10 @@ impl BlockRegistryBuilder {
                 if properties.flags.contains(BlockFlags::OPAQUE) {
                     properties.light_opacity = 15;
                 }
+                // The fields are public authoring values; clamp them so the
+                // cold properties cannot disagree with `hot()`/`resolved()`.
+                properties.light_emission = properties.light_emission.min(15);
+                properties.light_opacity = properties.light_opacity.min(15);
                 properties
             })
             .collect();

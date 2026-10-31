@@ -112,7 +112,13 @@ pub fn build_atlas(workspace: &pipeline::Workspace) -> Result<AtlasBuild, BakeEr
         path: manifest_path.clone(),
         source,
     })?;
-    let manifest = TextureManifest::load(&manifest_path).map_err(BakeError::Manifest)?;
+    // Parse the bytes that were hashed: a second read could pick up an edit
+    // and stamp the atlas with the previous revision's hash.
+    let manifest: TextureManifest = ron::from_str(
+        std::str::from_utf8(&manifest_bytes)
+            .map_err(|error| BakeError::Invalid(format!("manifest is not UTF-8: {error}")))?,
+    )
+    .map_err(|error| BakeError::Invalid(format!("manifest parse error: {error}")))?;
     voxel_block::texture_manifest::validate(&manifest, &workspace.block_crate())
         .map_err(BakeError::Manifest)?;
 

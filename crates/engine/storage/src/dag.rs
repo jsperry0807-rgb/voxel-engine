@@ -62,9 +62,9 @@ pub fn hdr_level(h: u32) -> u32 {
 #[derive(Clone, Debug)]
 pub struct Svdag {
     /// Canonical v1 pool view. Kept for GPU/disk compatibility until M4/M6.
-    pub pool: Vec<u32>,
-    /// Root offset in [`Self::pool`], or [`NONE`] for an all-air chunk.
-    pub root: u32,
+    pool: Vec<u32>,
+    /// Root offset in the pool, or [`NONE`] for an all-air chunk.
+    root: u32,
     /// Authoritative banded representation used by `get`, `expand` and edits.
     chunk: ChunkDag,
 }
@@ -76,6 +76,18 @@ impl PartialEq for Svdag {
 }
 
 impl Svdag {
+    /// The canonical v1 pool words.
+    #[must_use]
+    pub fn pool(&self) -> &[u32] {
+        &self.pool
+    }
+
+    /// Root offset in [`Self::pool`], or [`NONE`] for an all-air chunk.
+    #[must_use]
+    pub fn root(&self) -> u32 {
+        self.root
+    }
+
     /// Creates an empty chunk: no nodes, no root.
     pub fn empty() -> Self {
         Self {

@@ -78,11 +78,19 @@ def is_excluded(rel: Path) -> bool:
 
 
 def collect_markdown() -> list[Path]:
-    return sorted(
-        rel
-        for path in ROOT.rglob("*.md")
-        if not (rel := path.relative_to(ROOT)) or not is_excluded(rel)
-    )
+    found: list[Path] = []
+    # Prune excluded directories instead of walking into them and filtering
+    # afterwards: `target/` alone holds tens of thousands of paths, and on old
+    # Pythons `rglob` follows symlinked directories.
+    for dirpath, dirnames, filenames in os.walk(ROOT, followlinks=False):
+        dirnames[:] = [name for name in dirnames if name not in EXCLUDE_DIRS]
+        for name in filenames:
+            if not name.endswith(".md"):
+                continue
+            rel = Path(dirpath, name).relative_to(ROOT)
+            if not is_excluded(rel):
+                found.append(rel)
+    return sorted(found)
 
 
 def staged_path(rel: Path) -> Path:
@@ -195,7 +203,14 @@ def rewrite_links(
             return match.group(0)
 
         resolved = Path(posixpath.normpath(posixpath.join(rel.parent.as_posix(), path)))
-        if resolved.as_posix().startswith("..") or resolved == Path("."):
+        # `join` discards the base for an absolute target, and `normpath` keeps
+        # the leading "/", so an absolute path survived the `..` check and
+        # reached the asset copy (and the staging tree) as an escape.
+        if (
+            resolved.is_absolute()
+            or resolved.as_posix().startswith("..")
+            or resolved == Path(".")
+        ):
             return match.group(0)
 
         anchor = f"#{fragment}" if fragment else ""
@@ -207,6 +222,14 @@ def rewrite_links(
             new = f"{repo_url}/tree/{branch}/{resolved.as_posix()}"
         elif (ROOT / resolved).is_file():
             if (ROOT / resolved).suffix.lower() in ASSET_SUFFIXES:
+                # Resolve symlinks too: an asset pointing outside the checkout
+                # would otherwise be copied into the published site.
+                try:
+                    contained = (ROOT / resolved).resolve().is_relative_to(ROOT.resolve())
+                except OSError:
+                    contained = False
+                if not contained:
+                    return match.group(0)
                 assets.add(resolved)
                 new = relative_link(staged, resolved)
             elif repo_url:

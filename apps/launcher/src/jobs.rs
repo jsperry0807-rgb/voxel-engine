@@ -359,14 +359,28 @@ fn push_notice(job: &mut Job, line: &str) {
 }
 
 /// Feeds one pipe into the channel, line by line.
+///
+/// Reads bytes rather than `lines()`: a single non-UTF-8 byte (a Latin-1 path,
+/// a raw diagnostic) used to end the pump, hiding the rest of the output —
+/// including the actual error — while the job still reported a failure.
 fn pump<R: Read + Send + 'static>(stream: R, sender: Sender<Event>) {
     std::thread::spawn(move || {
-        for line in BufReader::new(stream).lines() {
-            let Ok(line) = line else {
-                break;
-            };
-            if sender.send(Event::Line(line)).is_err() {
-                return;
+        let mut reader = BufReader::new(stream);
+        let mut buffer = Vec::new();
+        loop {
+            buffer.clear();
+            match reader.read_until(b'\n', &mut buffer) {
+                Ok(0) => break,
+                Ok(_) => {
+                    while matches!(buffer.last(), Some(b'\n' | b'\r')) {
+                        buffer.pop();
+                    }
+                    let line = String::from_utf8_lossy(&buffer).into_owned();
+                    if sender.send(Event::Line(line)).is_err() {
+                        return;
+                    }
+                }
+                Err(_) => break,
             }
         }
         let _ = sender.send(Event::Closed);
@@ -389,6 +403,9 @@ fn terminate(child: &mut Child, grace: Duration) {
         let pid = child.id() as i32;
         // `process_group(0)` made the child a group leader, so a negative pid
         // reaches Cargo and anything it spawned (for example the viewer).
+        // SAFETY: `pid` is the live child's id and `process_group(0)` made it a
+        // group leader, so the negated pid names that group. `kill` takes no
+        // pointers and is safe to call with any integer.
         unsafe {
             libc::kill(-pid, libc::SIGTERM);
         }
@@ -406,12 +423,24 @@ fn terminate(child: &mut Child, grace: Duration) {
         }
         // `kill(-pid, 0)` probes the group: the leader can be gone while a
         // member that ignores SIGTERM is still alive.
+        // SAFETY: as above; signal 0 only probes for a live group.
         let group_alive = unsafe { libc::kill(-pid, 0) == 0 };
         if !reaped || group_alive {
+            // SAFETY: as above.
             unsafe {
                 libc::kill(-pid, libc::SIGKILL);
             }
         }
+    }
+    #[cfg(windows)]
+    {
+        // No process groups on this path; `/T` is what reaches a viewer or
+        // editor that Cargo already handed off to.
+        let _ = Command::new("taskkill")
+            .args(["/T", "/F", "/PID", &child.id().to_string()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
     }
     let _ = child.kill();
     let _ = child.wait();

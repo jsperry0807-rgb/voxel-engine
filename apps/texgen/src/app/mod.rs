@@ -73,6 +73,12 @@ pub(crate) struct BuildJob {
     receiver: Receiver<Result<String, String>>,
 }
 
+/// A background atlas build, so opening the Atlas tab does not freeze the UI
+/// while 40 sources are decoded, filtered and mip-chained.
+pub(crate) struct AtlasJob {
+    receiver: Receiver<Result<bake::AtlasBuild, String>>,
+}
+
 /// Dialog state for saving a selection as a reusable subgraph.
 pub(crate) struct SubgraphDialog {
     pub open: bool,
@@ -94,6 +100,9 @@ pub struct TexgenApp {
     pub(crate) error: Option<String>,
     pub(crate) build_log: Vec<String>,
     pub(crate) build_job: Option<BuildJob>,
+    pub(crate) atlas_job: Option<AtlasJob>,
+    /// A save requested an update-all while another build was running.
+    pub(crate) build_after_save: bool,
 
     pub(crate) history: Vec<Graph>,
     pub(crate) redo: Vec<Graph>,
@@ -159,6 +168,8 @@ impl TexgenApp {
             error: None,
             build_log: Vec::new(),
             build_job: None,
+            atlas_job: None,
+            build_after_save: false,
             history: Vec::new(),
             redo: Vec::new(),
             dirty: false,
@@ -323,8 +334,16 @@ impl TexgenApp {
                 self.error = None;
                 self.library = load_library(&self.workspace);
                 if self.generate_on_save {
-                    let workspace = self.workspace.clone();
-                    self.run_pipeline("update-all", move || pipeline::update_all(&workspace));
+                    if self.build_job.is_some() {
+                        // `run_pipeline` would only set a status; queue the
+                        // render so the saved graph is not left ungenerated.
+                        self.build_after_save = true;
+                        self.status =
+                            "saved; update-all queued behind the running build".to_owned();
+                    } else {
+                        let workspace = self.workspace.clone();
+                        self.run_pipeline("update-all", move || pipeline::update_all(&workspace));
+                    }
                 }
                 true
             }
@@ -345,8 +364,16 @@ impl TexgenApp {
                 self.status = format!("saved {}", path.display());
                 self.library = load_library(&self.workspace);
                 if self.generate_on_save {
-                    let workspace = self.workspace.clone();
-                    self.run_pipeline("update-all", move || pipeline::update_all(&workspace));
+                    if self.build_job.is_some() {
+                        // `run_pipeline` would only set a status; queue the
+                        // render so the saved graph is not left ungenerated.
+                        self.build_after_save = true;
+                        self.status =
+                            "saved; update-all queued behind the running build".to_owned();
+                    } else {
+                        let workspace = self.workspace.clone();
+                        self.run_pipeline("update-all", move || pipeline::update_all(&workspace));
+                    }
                 }
             }
             Err(error) => self.error = Some(format!("save failed: {error}")),
@@ -387,8 +414,14 @@ impl TexgenApp {
                 self.atlas.build = None;
                 self.materials.manifest = None;
                 self.materials.table = None;
+                if self.build_after_save {
+                    self.build_after_save = false;
+                    let workspace = self.workspace.clone();
+                    self.run_pipeline("update-all", move || pipeline::update_all(&workspace));
+                }
             }
             Ok(Err(error)) => {
+                self.build_after_save = false;
                 self.error = Some(format!("{}: {error}", job.label));
                 self.build_log.push(format!("{}: {error}", job.label));
             }
@@ -1092,14 +1125,27 @@ impl TexgenApp {
         self.redo.clear();
     }
 
-    fn ensure_atlas(&mut self, ctx: &egui::Context) {
-        if self.atlas.texture.is_some() {
+    fn ensure_atlas(&mut self, _ctx: &egui::Context) {
+        if self.atlas.texture.is_some() || self.atlas_job.is_some() {
             return;
         }
         self.ensure_materials();
         self.atlas.error = None;
-        match bake::build_atlas(&self.workspace) {
-            Ok(build) => {
+        let workspace = self.workspace.clone();
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = sender.send(bake::build_atlas(&workspace).map_err(|error| error.to_string()));
+        });
+        self.atlas_job = Some(AtlasJob { receiver });
+        self.status = "atlas: building…".to_owned();
+    }
+
+    fn poll_atlas(&mut self, ctx: &egui::Context) {
+        let Some(job) = self.atlas_job.take() else {
+            return;
+        };
+        match job.receiver.try_recv() {
+            Ok(Ok(build)) => {
                 let image = egui::ColorImage::from_rgba_unmultiplied(
                     [
                         build.levels[0].width as usize,
@@ -1110,8 +1156,14 @@ impl TexgenApp {
                 self.atlas.texture =
                     Some(ctx.load_texture("atlas-preview", image, egui::TextureOptions::NEAREST));
                 self.atlas.build = Some(build);
+                self.atlas.error = None;
+                self.status = "atlas: ready".to_owned();
             }
-            Err(error) => self.atlas.error = Some(error.to_string()),
+            Ok(Err(error)) => self.atlas.error = Some(error),
+            Err(TryRecvError::Empty) => self.atlas_job = Some(job),
+            Err(TryRecvError::Disconnected) => {
+                self.atlas.error = Some("atlas worker stopped without a result".to_owned());
+            }
         }
     }
 
@@ -1253,6 +1305,7 @@ impl TexgenApp {
 impl eframe::App for TexgenApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_preview(ctx);
+        self.poll_atlas(ctx);
         self.poll_build();
         self.handle_shortcuts(ctx);
         self.menu_bar(ctx);

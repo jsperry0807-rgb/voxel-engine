@@ -20,6 +20,19 @@ use voxel_block::texture_manifest::{AlphaClass, Tiling};
 /// Required output edge; the box filter and atlas tile sizes assume this.
 pub const GRAPH_SIZE: u32 = 256;
 
+/// Nodes a graph may contain.
+///
+/// The evaluator recurses once per node, so this bounds the stack as well as
+/// the compile work. A hand-written or MCP-supplied graph beyond it is rejected
+/// instead of aborting the process.
+pub const MAX_GRAPH_NODES: usize = 512;
+
+/// Longest input chain the evaluator accepts, for the same reason.
+pub const MAX_GRAPH_DEPTH: u32 = 128;
+
+/// Largest graph file [`Graph::load`] will read.
+pub const MAX_GRAPH_BYTES: usize = 8 * 1024 * 1024;
+
 /// A graph file.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Graph {
@@ -534,6 +547,13 @@ impl Graph {
             path: path.to_owned(),
             source,
         })?;
+        if text.len() > MAX_GRAPH_BYTES {
+            return Err(invalid(format!(
+                "{}: graph file is {} bytes, above the {MAX_GRAPH_BYTES}-byte limit",
+                path.display(),
+                text.len()
+            )));
+        }
         ron::from_str(&text).map_err(GraphError::Parse)
     }
 
@@ -558,7 +578,15 @@ impl Graph {
             )));
         }
 
+        if self.nodes.len() > MAX_GRAPH_NODES {
+            return Err(invalid(format!(
+                "{}: graph has {} nodes, above the {MAX_GRAPH_NODES}-node limit",
+                self.key,
+                self.nodes.len()
+            )));
+        }
         let mut types = Vec::with_capacity(self.nodes.len());
+        let mut depths: Vec<u32> = Vec::with_capacity(self.nodes.len());
         let mut ids = HashMap::with_capacity(self.nodes.len());
         let mut program = Vec::with_capacity(self.nodes.len());
         let mut breaks_h = Vec::with_capacity(self.nodes.len());
@@ -589,6 +617,19 @@ impl Graph {
             }
             let ty = op_type(&node.op);
             check_arity(&self.key, node, &inputs, &types)?;
+            let depth = inputs
+                .iter()
+                .map(|&source| depths[source])
+                .max()
+                .unwrap_or(0)
+                + 1;
+            if depth > MAX_GRAPH_DEPTH {
+                return Err(invalid(format!(
+                    "{}: node {} is nested deeper than {MAX_GRAPH_DEPTH}",
+                    self.key, node.id
+                )));
+            }
+            depths.push(depth);
 
             let mut h = op_breaks_h(&node.op);
             let mut v = op_breaks_v(&node.op);

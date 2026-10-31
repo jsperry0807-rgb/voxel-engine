@@ -1,0 +1,28 @@
+Both/colour/Bevel 65903b53c174a325
+Both/colour/Blur ff84104e9c08e325
+Both/colour/Brightness / Contrast ab438cb8d1b4a325
+Both/colour/Color 0000000000000add
+Both/colour/Color Add 0d65b7532d396325
+Both/colour/Color Subtract 6927fac75e74a325
+Both/colour/Darken ff84104e9c08e325
+Both/colour/Difference 6927fac75e74a325
+Both/colour/Emboss 65903b53c174a325
+Both/colour/Hue Shift ff84104e9c08e325
+Both/colour/Lighten ff84104e9c08e325
+Both/colour/Normal Map c49acb87aaf4c325
+Both/colour/Offset ff84104e9c08e325
+Both/colour/Saturate ff84104e9c08e325
+Both/colour/Screen bf46c3b083882325
+Both/colour/Tile ff84104e9c08e325
+Both/scalar/Bricks e76ee678915fb325
+Both/scalar/Checker fa67091f1fc99d25
+Both/scalar/Radial Gradient a9b84c0b39a2161c
+Both/scalar/Spiral 292fae22af75d2a5
+Both/scalar/Wave 5692fdebf8739325
+Horizontal/colour/Cartesian ff84104e9c08e325
+Horizontal/colour/Polar ff84104e9c08e325
+None/colour/Mirror ff84104e9c08e325
+None/colour/Rotate ff84104e9c08e325
+None/scalar/Circle 342bbbae4d503a0c
+None/scalar/Polygon 0dc42c1958bc162a
+None/scalar/Star afb4c045e3feb310

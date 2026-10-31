@@ -28,6 +28,17 @@ TARGET_DIR="${TARGET_DIR:-target}"
 echo "== software lenses: memory, CPU, latency =="
 cargo run --release -p voxel-bench -- all --out "$OUT"
 
+if [[ "${GATE:-0}" == "1" ]]; then
+  echo "== gate: twelve-row report and 128³ projection =="
+  mkdir -p "$OUT/gate"
+  cargo run --release -p voxel-bench -- gate report --out "$OUT/gate" 2>&1 \
+    | tee "$OUT/gate-report.txt"
+  cargo run --release -p voxel-bench -- gate scaleup --json --out "$OUT/gate/scaleup.json" 2>&1 \
+    | tee "$OUT/gate-scaleup.txt"
+  cargo run --release -p voxel-bench -- gate scaleup >"$OUT/gate/scaleup.md" \
+    2>>"$OUT/gate-scaleup.txt"
+fi
+
 echo "== Criterion: wall clock and throughput =="
 cargo bench --workspace 2>&1 | tee "$OUT/criterion.txt"
 
@@ -67,7 +78,10 @@ if [[ "${RECORD:-1}" == "1" ]]; then
   fi
   record_args=(--from "$OUT" --label "$LABEL")
   [[ -n "${NOTE:-}" ]] && record_args+=(--note "$NOTE")
-  for raw in criterion.txt iai.txt perf.txt gpu.txt; do
+  for raw in criterion.txt iai.txt perf.txt gpu.txt gate-report.txt gate-scaleup.txt; do
+    [[ -f "$OUT/$raw" ]] && record_args+=(--attach "$OUT/$raw")
+  done
+  for raw in gate/gate.md gate/gate.json gate/scaleup.md gate/scaleup.json; do
     [[ -f "$OUT/$raw" ]] && record_args+=(--attach "$OUT/$raw")
   done
   cargo run --release -p voxel-bench -- record "${record_args[@]}"

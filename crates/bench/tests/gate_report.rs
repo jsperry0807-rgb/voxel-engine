@@ -72,7 +72,6 @@ fn cli_writes_one_markdown_and_one_json_with_the_twelve_rows_and_machine() {
         "**Fixture:**",
         "| # | Pre-registered row |",
         "**PASS**",
-        "**FAIL**",
         "**NOT MEASURED**",
         "## Fallback",
         "## Notes",
@@ -81,6 +80,19 @@ fn cli_writes_one_markdown_and_one_json_with_the_twelve_rows_and_machine() {
     }
 
     let json = read_json(&json_path);
+    // The renderer must emit the failing label whenever a row fails; requiring
+    // it unconditionally tied this test to a red fixture.
+    let any_fail = json["rows"]
+        .as_array()
+        .expect("rows")
+        .iter()
+        .any(|row| row["verdict"] == "fail");
+    if any_fail {
+        assert!(
+            markdown.contains("**FAIL**"),
+            "a failing row must render FAIL"
+        );
+    }
     assert_eq!(json["schema_version"], 1);
     assert_eq!(json["profile"], "default");
     assert_eq!(json["profile_gated"], true);
@@ -163,7 +175,9 @@ fn cli_writes_one_markdown_and_one_json_with_the_twelve_rows_and_machine() {
     // The synthetic fixture and the missing granularity run are not green.
     assert_eq!(rows[8]["verdict"], "not_measured");
     assert_eq!(rows[10]["verdict"], "not_measured");
-    assert_eq!(rows[11]["verdict"], "pass");
+    // Row 12 reports which fallback rule fired. This fixture fails rows 1/6,
+    // so the rule is triggered and the row is not a passing measurement.
+    assert_eq!(rows[11]["verdict"], "not_measured");
 
     let pass = rows.iter().filter(|row| row["verdict"] == "pass").count();
     let fail = rows.iter().filter(|row| row["verdict"] == "fail").count();

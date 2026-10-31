@@ -209,32 +209,81 @@ impl<S: GpuSink> World<S> {
         Ok(())
     }
 
-    fn persist(&mut self, p: ChunkPos) -> io::Result<()> {
+    /// Writes the chunk's DAG/diff without clearing `unsaved`.
+    ///
+    /// Returns `true` when a record was written. Callers clear `unsaved` only
+    /// after a successful sync, so a failed fsync is retried instead of being
+    /// reported as durable.
+    fn persist(&mut self, p: ChunkPos) -> io::Result<bool> {
         let Some(c) = self.chunks.get_mut(&p) else {
-            return Ok(());
+            return Ok(false);
         };
         if !c.unsaved {
-            return Ok(());
+            return Ok(false);
         }
         if !self.disk.has_dag(p)? {
             self.disk.put_dag(p, &c.dag)?;
         }
         self.disk.put_diff(p, &c.overlay)?;
-        c.unsaved = false;
-        Ok(())
+        Ok(true)
     }
 
     /// Cheap WAL-style durability: write overlay snapshots, no DAG rebuild.
+    ///
+    /// Every edited chunk is attempted even if one write fails, and the store
+    /// is synced regardless, so one bad chunk cannot leave the rest unsaved.
+    /// `unsaved` is cleared only for chunks whose records synced.
     pub fn flush_edits(&mut self) -> io::Result<()> {
         let ps: Vec<ChunkPos> = self.edited.iter().copied().collect();
+        let mut first: Option<io::Error> = None;
+        let mut wrote: Vec<ChunkPos> = Vec::new();
         for p in ps {
-            self.persist(p)?;
-            if self.chunks.get(&p).is_some_and(|c| c.overlay.is_empty()) {
-                self.edited.remove(&p);
+            match self.persist(p) {
+                Ok(true) => {
+                    wrote.push(p);
+                    if self.chunks.get(&p).is_some_and(|c| c.overlay.is_empty()) {
+                        self.edited.remove(&p);
+                    }
+                }
+                Ok(false) => {
+                    if self.chunks.get(&p).is_some_and(|c| c.overlay.is_empty()) {
+                        self.edited.remove(&p);
+                    }
+                }
+                Err(error) => {
+                    first.get_or_insert(error);
+                }
             }
         }
         self.refresh_oversized();
-        self.disk.sync()
+        let synced = self.disk.sync();
+        if synced.is_ok() {
+            for p in &wrote {
+                if let Some(c) = self.chunks.get_mut(p) {
+                    c.unsaved = false;
+                }
+            }
+        }
+        match (first, synced) {
+            (Some(error), _) => Err(error),
+            (None, Err(error)) => Err(error),
+            (None, Ok(())) => Ok(()),
+        }
+    }
+
+    /// Flushes pending edits and syncs the store.
+    ///
+    /// Dropping a [`World`] discards unsaved overlays; call this (or
+    /// [`Self::flush_edits`]) before shutdown.
+    pub fn close(mut self) -> io::Result<()> {
+        self.flush_edits()
+    }
+
+    /// Bytes the recovery pass could not use, for callers that want to warn
+    /// about a damaged save.
+    #[must_use]
+    pub fn recovered_bytes(&self) -> u64 {
+        self.disk.recovered_bytes()
     }
 
     /// Chunks that still hold at least one overlay entry.
@@ -319,6 +368,7 @@ impl<S: GpuSink> World<S> {
         cand.truncate(max_chunks);
 
         let mut done = 0usize;
+        let mut first: Option<io::Error> = None;
         for (_, p) in cand {
             if done > 0 && started.elapsed() >= budget {
                 break;
@@ -331,7 +381,12 @@ impl<S: GpuSink> World<S> {
             // an I/O error the CPU keeps the old DAG + overlay and the GPU is
             // untouched, so the two cannot diverge.
             let new = Arc::new(c.dag.apply_edits(c.overlay.iter())); // CPU tier
-            self.disk.put_dag(p, &new)?; // supersedes the diff record
+            if let Err(error) = self.disk.put_dag(p, &new) {
+                // Leave this chunk's overlay for a retry, but still close the
+                // batch and sync what did land.
+                first = Some(error);
+                break;
+            }
             // Clear the GPU overlay first: the folded DAG writes land in the same flush,
             // so no frame sees a hole between the two updates.
             self.gpu.clear_chunk_overlay(p);
@@ -344,8 +399,12 @@ impl<S: GpuSink> World<S> {
         }
         let epoch = self.gpu.end_batch();
         self.gpu.flush(&mut self.sink);
-        self.disk.sync()?;
+        let synced = self.disk.sync();
         self.refresh_oversized();
+        if let Some(error) = first {
+            return Err(error);
+        }
+        synced?;
         Ok(Consolidated {
             chunks: done,
             epoch,
@@ -374,15 +433,28 @@ impl<S: GpuSink> World<S> {
     /// Drop a chunk from RAM + GPU. Edits are persisted as an overlay snapshot
     /// (no rebuild) and synced, so a crash after eviction cannot lose edits that
     /// were reported as persisted.
-    pub fn evict(&mut self, p: ChunkPos) -> io::Result<()> {
-        self.persist(p)?;
-        self.disk.sync()?;
+    /// Returns the GPU epoch tag for this eviction.
+    ///
+    /// Pass it to [`Self::reclaim`] once every frame submitted before the batch
+    /// was uploaded has finished. Without a new tag the eviction's retirements
+    /// can never be freed: `tick` only ends a batch when there are pending
+    /// edits, so a stream-only session would grow the retire lists forever.
+    pub fn evict(&mut self, p: ChunkPos) -> io::Result<u64> {
+        if self.persist(p)? {
+            self.disk.sync()?;
+            if let Some(c) = self.chunks.get_mut(&p) {
+                c.unsaved = false;
+            }
+        }
         if self.chunks.remove(&p).is_some() {
             self.edited.remove(&p);
             self.gpu.remove_chunk(p);
+            self.disk.close(p.region());
             self.refresh_oversized();
         }
-        Ok(())
+        let tag = self.gpu.end_batch();
+        self.gpu.flush(&mut self.sink);
+        Ok(tag)
     }
 
     pub fn chunk(&self, p: ChunkPos) -> Option<&Chunk> {

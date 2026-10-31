@@ -93,6 +93,14 @@ pub enum BlockLoadError {
     MaterialParse(ron::error::SpannedError),
     Key(KeyError),
     Registry(RegistryError),
+    /// The material table was generated from a different `blocks.ron`.
+    ///
+    /// A stale but internally consistent pair (slots and rows line up) would
+    /// otherwise freeze with atlas slots from the previous generation.
+    StaleMaterials {
+        expected: String,
+        actual: String,
+    },
 }
 
 impl core::fmt::Display for BlockLoadError {
@@ -102,6 +110,11 @@ impl core::fmt::Display for BlockLoadError {
             BlockLoadError::MaterialParse(e) => write!(f, "materials.gen.ron parse error: {e}"),
             BlockLoadError::Key(e) => write!(f, "invalid key: {e}"),
             BlockLoadError::Registry(e) => write!(f, "registry error: {e}"),
+            BlockLoadError::StaleMaterials { expected, actual } => write!(
+                f,
+                "materials.gen.ron was generated from a different blocks.ron \
+                 (table blocks hash {expected}, input {actual})"
+            ),
         }
     }
 }
@@ -122,6 +135,18 @@ impl BlockRegistryBuilder {
     ) -> Result<(), BlockLoadError> {
         let table: MaterialTable =
             ron::from_str(materials).map_err(BlockLoadError::MaterialParse)?;
+        // The table records the `blocks.ron` it was generated from. An empty
+        // hash means an in-memory table (tests/builders), which has no pairing
+        // to check.
+        if !table.blocks_blake3.is_empty() {
+            let actual = blake3::hash(blocks.as_bytes()).to_hex().to_string();
+            if table.blocks_blake3 != actual {
+                return Err(BlockLoadError::StaleMaterials {
+                    expected: table.blocks_blake3.clone(),
+                    actual,
+                });
+            }
+        }
         // Commit the table and the blocks together: a parse or registry error
         // must not leave a half-built builder that a retry then rejects as a
         // duplicate.

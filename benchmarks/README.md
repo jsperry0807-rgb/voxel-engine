@@ -62,6 +62,7 @@ The M1 outcome is recorded in [`../docs/m1-gate-decision.md`](../docs/m1-gate-de
 scripts/bench.sh                 # auto-labeled auto-<short-commit>
 LABEL=baseline scripts/bench.sh  # name it yourself
 RECORD=0 scripts/bench.sh        # report only, keep it out of the archive
+GATE=1 scripts/bench.sh          # also write gate.md/json and the 128³ projection
 ```
 
 or record an already-produced `target/bench` run:

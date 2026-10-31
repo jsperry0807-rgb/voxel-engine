@@ -108,8 +108,8 @@ fn report_splits_every_fixture_edit_into_fixed_and_dirty_terms() {
         );
         assert_eq!(
             sample.total_ns,
-            sample.fixed_ns + sample.dirty_ns,
-            "edit {}: total is fixed + dirty",
+            sample.fixed_ns + sample.dirty_ns + sample.compact_ns,
+            "edit {}: total is fixed + dirty + compaction",
             sample.edit
         );
         assert_eq!(

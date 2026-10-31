@@ -10,7 +10,7 @@
 //!   grows/rehashes -> full re-upload.
 //! * overlay  : per edited 16^3 block, a 4 096-entry override buffer. A chunk's block table
 //!   has [`BLOCKS_PER_CHUNK`] words (64 at 64³, 512 at 128³), one per block, each pointing
-//!   at an 8 KiB overlay slot (2 048 words of packed `u16` material ids followed by 128
+//!   at an 8.5 KiB overlay slot (2 176 words: 128 presence words, 2 048 packed `u16` material ids
 //!   words of presence bits). The slot is sized by the fixed block edge, never by the chunk
 //!   edge. The bit, not the value, means "edited": a carved voxel stores material 0 and
 //!   must shadow the DAG with air. Block tables and overlay slots are allocated lazily,
@@ -749,7 +749,7 @@ impl GpuStore {
         } else {
             let mut memo = std::mem::take(&mut self.import_memo);
             memo.clear();
-            let g = self.import(&dag.pool, dag.root, &mut memo);
+            let g = self.import(dag.pool(), dag.root(), &mut memo);
             self.import_memo = memo;
             self.rc[g as usize] += 1;
             g
@@ -764,7 +764,7 @@ impl GpuStore {
     /// The overlay shadows the DAG, so the edit is visible to the next frame without a
     /// consolidation pass. Material `0` carves the voxel to air; the presence bit, not the
     /// value, marks it as edited. Storage is allocated per 16^3 block, so a single edit costs
-    /// one 8 KiB overlay slot, not one per chunk.
+    /// one 8.5 KiB overlay slot, not one per chunk.
     pub fn set_overlay(&mut self, p: ChunkPos, idx: u32, v: u16) {
         assert!((idx as usize) < CHUNK_VOLUME, "voxel index out of range");
         let (_, table_slot) = self.ensure_block_table(p);
@@ -786,17 +786,21 @@ impl GpuStore {
     }
 
     /// Installs a whole overlay snapshot, e.g. when a chunk is loaded from disk.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any index is outside the chunk. The whole batch is validated
+    /// first, so a rejected batch leaves no half-installed overlay behind.
     pub fn set_chunk_overlay(&mut self, p: ChunkPos, edits: impl IntoIterator<Item = (u32, u16)>) {
-        let mut edits = edits.into_iter();
-        let Some((first_idx, first_value)) = edits.next() else {
+        let edits: Vec<(u32, u16)> = edits.into_iter().collect();
+        if edits.is_empty() {
             return;
-        };
+        }
         assert!(
-            (first_idx as usize) < CHUNK_VOLUME,
+            edits.iter().all(|(idx, _)| (*idx as usize) < CHUNK_VOLUME),
             "voxel index out of range"
         );
         let (_, table_slot) = self.ensure_block_table(p);
-        self.set_in_table(table_slot, first_idx, first_value);
         for (idx, v) in edits {
             self.set_in_table(table_slot, idx, v);
         }
@@ -829,8 +833,19 @@ impl GpuStore {
     /// voxels are rebuilt, untouched subtrees are reused by offset without being walked.
     /// `edits` are (local voxel index, material; 0 = air) applied on top of the chunk's current
     /// GPU DAG (air if the chunk is absent). Cost is O(edits * 6), independent of chunk size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any index is outside the chunk; the CPU tier asserts the same
+    /// thing, and silently masking the index here would corrupt only the GPU.
     pub fn apply_edits(&mut self, p: ChunkPos, edits: impl IntoIterator<Item = (u32, u16)>) {
-        let mut e: Vec<(u32, u16)> = edits.into_iter().map(|(i, v)| (morton(i), v)).collect();
+        let mut e: Vec<(u32, u16)> = edits
+            .into_iter()
+            .map(|(i, v)| {
+                assert!((i as usize) < CHUNK_VOLUME, "voxel index out of range");
+                (morton(i), v)
+            })
+            .collect();
         if e.is_empty() {
             return;
         }
@@ -1027,7 +1042,13 @@ impl GpuStore {
     pub fn contains(&self, p: ChunkPos) -> bool {
         self.probe(p).is_ok()
     }
-    pub fn epoch(&self) -> u64 {
+    /// The tag the *next* batch will receive.
+    ///
+    /// Do not pass this to [`Self::reclaim`]: that would free the batch that was
+    /// just ended, which frames submitted before the following flush may still
+    /// read. Reclaim the tag returned by [`Self::end_batch`] or
+    /// [`Self::consolidate`].
+    pub fn next_epoch(&self) -> u64 {
         self.epoch
     }
     pub fn pool(&self) -> &[u32] {
@@ -1358,6 +1379,32 @@ mod tests {
         }
     }
 
+    /// `reclaim(tag)` must leave a newer batch alone: a frame submitted before
+    /// the following flush may still read it.
+    #[test]
+    fn reclaim_defers_a_newer_batch() {
+        let p = ChunkPos::new(0, 0, 0);
+        let first_dag = Svdag::from_dense(&vec![1u16; CHUNK_VOLUME]);
+        let second_dag = Svdag::from_dense(&vec![2u16; CHUNK_VOLUME]);
+        let mut g = GpuStore::new();
+        let first = g.consolidate([(p, &first_dag)]);
+        let second = g.consolidate([(p, &second_dag)]);
+        assert_eq!(second, first + 1);
+
+        let before = g.unique_nodes();
+        g.reclaim(first);
+        assert_eq!(
+            g.unique_nodes(),
+            before,
+            "reclaiming an older tag must not free the newer batch"
+        );
+        g.reclaim(second);
+        assert!(
+            g.unique_nodes() < before,
+            "the older batch is freed by its own tag"
+        );
+    }
+
     /// A single chunk inserted and removed repeatedly must keep reusing its one
     /// vacated slot. Otherwise every edit churn would grow the GPU table.
     #[test]
@@ -1377,6 +1424,42 @@ mod tests {
         assert_eq!(g.table_slots(), capacity);
         assert_eq!(g.tombs, 1, "the single vacated slot was reused");
         assert_eq!(g.chunk_count(), 0);
+
+        // Without a batch the retirements accumulate forever; ending one and
+        // reclaiming it must return the pool to its single-DAG size.
+        let tag = g.end_batch();
+        g.reclaim(tag);
+        assert!(
+            g.unique_nodes() <= 1,
+            "{} unused node(s) survived reclaim",
+            g.unique_nodes()
+        );
+    }
+
+    /// Freeing the primary must promote a colliding sibling, not lose it.
+    #[test]
+    fn freeing_a_primary_promotes_the_colliding_sibling() {
+        let mut g = GpuStore::new();
+        // A consistent primary: one zero word has mask 0, so freeing it decrefs
+        // no children and its hash is the hash of its own content.
+        let words = [0u32];
+        let h = hash_words(&words);
+        let primary = g.alloc(&words);
+        g.dedup.insert(h, primary);
+        let sibling = g.alloc(&words);
+        g.dedup_more.entry(h).or_default().push(sibling);
+
+        g.free_node(primary as usize);
+
+        assert_eq!(
+            g.dedup.get(&h),
+            Some(&sibling),
+            "the sibling must be promoted to the primary slot"
+        );
+        assert!(
+            g.dedup_more.get(&h).is_none_or(|extras| extras.is_empty()),
+            "the promoted sibling must leave the extra bucket"
+        );
     }
 
     /// A hash collision must not make the colliding content private: the second

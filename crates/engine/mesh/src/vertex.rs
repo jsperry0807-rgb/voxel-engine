@@ -15,7 +15,12 @@ use std::mem::{align_of, size_of};
 pub struct Vertex {
     /// Chunk-local voxel coordinate, `0..=CHUNK_DIM`.
     pub local: [u16; 3],
-    /// Atlas material id; air is never emitted.
+    /// Block material id from the chunk volume; air is never emitted.
+    ///
+    /// ADR-010's meshlet stream carries an *atlas* id here. Call
+    /// [`Mesh::resolve_materials`] with the registry before upload to convert
+    /// this value per face (`MaterialRegistry::face_materials`); the `face`
+    /// field selects the slot.
     pub material: u16,
     /// Mesh face code, `0..5` = `+X, -X, +Y, -Y, +Z, -Z`.
     pub face: u8,

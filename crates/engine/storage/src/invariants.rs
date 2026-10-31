@@ -21,11 +21,12 @@
 //! - **Parent reachability.** Every node reached from the root resolves, every
 //!   present child is inside its band, and every reachable node is accounted
 //!   for by a parent run or by the root itself.
-//! - **Refcounts.** The checker derives a reference count for every reachable
-//!   node and every live run. A run's nodes are referenced at least as many
-//!   times as the run itself, and no reachable node has a zero count. The live
-//!   root and in-flight-frame counters are reported and must be internally
-//!   consistent.
+//! - **Parent edges.** While walking, the checker counts the parent edges that
+//!   reach each node and each live run, and verifies the two counts agree. This
+//!   is a consistency check on the traversal, not an independent refcount: a
+//!   stale word that nothing reaches is invisible here (that would need a scan
+//!   of every band word, including retired ones). The live root and
+//!   in-flight-frame counters are reported as measured.
 //!
 //! The checker never mutates the chunk. It returns the first violation as an
 //! [`InvariantError`]; [`ChunkDag::assert_invariants`] is the panicking form
@@ -192,16 +193,28 @@ impl RunSlot {
 
 /// The content a live base must denote. Two parents may share a base only when
 /// their content compares equal.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum RunContent {
-    Leaf { materials: Vec<u16> },
-    Internal { mask: u8, children: Vec<Node> },
+    // Fixed-size arrays: a run has at most eight children, so the checker does
+    // not allocate one heap vector per node. Unused slots stay zero and are
+    // part of the key, so equal content compares equal.
+    Leaf {
+        // The mask is deliberately not part of a leaf run's key: two parents
+        // may share a base with different masks as long as the stored
+        // materials agree (air is never stored, so the used prefix is exactly
+        // the non-zero entries).
+        materials: [u16; CHILD_SLOTS as usize],
+    },
+    Internal {
+        mask: u8,
+        children: [Node; CHILD_SLOTS as usize],
+    },
 }
 
 impl RunContent {
     fn slots(&self) -> u64 {
         match self {
-            Self::Leaf { materials } => materials.len() as u64,
+            Self::Leaf { materials } => materials.iter().filter(|&&m| m != AIR).count() as u64,
             Self::Internal { mask, .. } => u64::from(mask.count_ones()),
         }
     }
@@ -450,7 +463,8 @@ pub fn check_bands(bands: &Bands, root: Option<NodeRef>) -> Result<CheckReport, 
             }
         }
 
-        let mut children = Vec::with_capacity(run_slots as usize);
+        let mut children = [Node::new(0, 0, 0); CHILD_SLOTS as usize];
+        let mut filled = 0usize;
         for c in 0..CHILD_SLOTS {
             let Some(slot) = node.child_slot(c) else {
                 continue;
@@ -489,10 +503,12 @@ pub fn check_bands(bands: &Bands, root: Option<NodeRef>) -> Result<CheckReport, 
                     format!("child {c} of {node_ref:?} is an empty node"),
                 ));
             }
-            children.push(child);
+            children[filled] = child;
+            filled += 1;
             refs.add(child_ref, 1);
             stack.push(child_ref);
         }
+        debug_assert_eq!(filled, run_slots as usize, "run fills its mask slots");
 
         let content = RunContent::Internal {
             mask: node.mask(),
@@ -512,7 +528,10 @@ pub fn check_bands(bands: &Bands, root: Option<NodeRef>) -> Result<CheckReport, 
     }
 
     // Every reachable node must have at least one reference (the root's
-    // external reference or a parent run slot).
+    // external reference or a parent run slot). The traversal incremented those
+    // counts itself, so this catches an inconsistent walk, not stale bytes.
+    // (See the module note: independent refcounts would require scanning every
+    // band word.)
     for level in 0..=ROOT_LEVEL {
         for (index, &live) in visited[level as usize].iter().enumerate() {
             if !live {
@@ -542,9 +561,9 @@ pub fn check_bands(bands: &Bands, root: Option<NodeRef>) -> Result<CheckReport, 
                 // Leaf slots are materials, not internal nodes; the leaf arena
                 // is checked by `check_leaf_parent` and `check_leaf_arena`.
             }
-            RunContent::Internal { children, .. } => {
+            RunContent::Internal { mask, .. } => {
                 let child_level = slot.level();
-                for (offset, _) in children.iter().enumerate() {
+                for offset in 0..mask.count_ones() as usize {
                     let child_ref = NodeRef::new(child_level, slot.base() + offset as u64);
                     if refs.get(child_ref) < run_refs {
                         return Err(InvariantError::new(
@@ -673,7 +692,8 @@ fn check_leaf_parent(
         ));
     }
 
-    let mut materials = Vec::with_capacity(count as usize);
+    let mut materials = [0u16; CHILD_SLOTS as usize];
+    let mut filled = 0usize;
     for c in 0..CHILD_SLOTS {
         let Some(slot) = node.child_slot(c) else {
             continue;
@@ -695,8 +715,10 @@ fn check_leaf_parent(
                 format!("leaf child {c} of {node_ref:?} stores air"),
             ));
         }
-        materials.push(material);
+        materials[filled] = material;
+        filled += 1;
     }
+    debug_assert_eq!(filled as u64, count, "leaf run fills its mask slots");
 
     record_run(
         RunSlot::Leaf(base),
@@ -729,7 +751,7 @@ fn record_run(
         }
         Some(_) => {}
         None => {
-            base_content.insert(slot, content.clone());
+            base_content.insert(slot, content);
             match slot {
                 RunSlot::Leaf(_) => report.leaf_runs += 1,
                 RunSlot::Internal { .. } => report.internal_runs += 1,
@@ -1161,13 +1183,17 @@ mod tests {
         let mut run_refcounts = HashMap::new();
         let mut report = CheckReport::default();
         let slot = RunSlot::Internal { level: 2, base: 0 };
+        let mut children = [Node::new(0, 0, 0); CHILD_SLOTS as usize];
+        children[0] = Node::new(0b1, 2, 0);
         let first = RunContent::Internal {
             mask: 0b1,
-            children: vec![Node::new(0b1, 2, 0)],
+            children,
         };
+        let mut children = [Node::new(0, 0, 0); CHILD_SLOTS as usize];
+        children[0] = Node::new(0b10, 2, 0);
         let second = RunContent::Internal {
             mask: 0b1,
-            children: vec![Node::new(0b10, 2, 0)],
+            children,
         };
 
         record_run(
