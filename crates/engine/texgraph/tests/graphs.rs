@@ -216,6 +216,16 @@ fn failed_atomic_write_leaves_no_temp_file() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The editor mints subgraph keys with a slash; building their path must not
+/// panic (and must stay inside the graph directory).
+#[test]
+fn subgraph_keys_have_a_safe_path() {
+    let workspace = workspace();
+    let path = workspace.graph_path("voxel:block/_subgraph/fractal");
+    assert_eq!(path.file_name().unwrap(), "_subgraph_fractal.ron");
+    assert!(path.starts_with(workspace.graph_dir()));
+}
+
 #[test]
 fn committed_outputs_are_current() {
     let workspace = workspace();

@@ -186,20 +186,28 @@ pub fn name_of(key: &str) -> &str {
     key.strip_prefix("voxel:block/").unwrap_or(key)
 }
 
-/// The file-name component of a key, checked before it is joined to a path.
+/// The file-name component of a key.
 ///
-/// Keys come from users (the editor, MCP arguments), so a separator or `..`
-/// would otherwise escape the texture directory.
-fn path_name(key: &str) -> &str {
-    let name = name_of(key);
-    assert!(
-        !name.is_empty()
-            && name
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'),
-        "face key {key:?} is not a valid file name"
-    );
-    name
+/// Committed keys are already checked by `normalize_key`, but the editor also
+/// mints `voxel:block/_subgraph/{name}` keys for scratch graphs, so this must
+/// be total rather than an assertion in a GUI-reachable path. Anything outside
+/// the allowlist becomes `_`, which also removes separators and `..`.
+fn path_name(key: &str) -> String {
+    let name: String = name_of(key)
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if name.is_empty() {
+        "_".to_owned()
+    } else {
+        name
+    }
 }
 
 /// Slot for a face key.
@@ -454,7 +462,12 @@ pub fn update_all(workspace: &Workspace) -> Result<String, PipelineError> {
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), PipelineError> {
     use std::io::Write as _;
 
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    // `"foo.ron".parent()` is `Some("")`; opening the empty path for the
+    // directory fsync then fails after the rename has already succeeded.
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(parent).map_err(|source| PipelineError::Io {
         path: parent.to_owned(),
         source,

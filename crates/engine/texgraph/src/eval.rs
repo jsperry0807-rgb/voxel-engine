@@ -79,9 +79,14 @@ impl Memo {
     }
 }
 
-/// Counts uncached evaluations so a test can prove the memo is working.
+// Counts uncached evaluations so a test can prove the memo is working.
+// Per-thread: lib tests run in parallel, and the MCP preview test evaluates on
+// another thread, so a process-global counter made the exact-count assertion
+// racy.
 #[cfg(test)]
-static EVALS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+thread_local! {
+    static EVALS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 fn eval_scalar(program: &Program, memo: &mut Memo, index: usize, u: i32, v: i32) -> i32 {
     if let Some((cached_u, cached_v, value)) = memo.scalar[index]
@@ -91,7 +96,7 @@ fn eval_scalar(program: &Program, memo: &mut Memo, index: usize, u: i32, v: i32)
         return value;
     }
     #[cfg(test)]
-    EVALS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    EVALS.with(|count| count.set(count.get() + 1));
     let value = eval_scalar_uncached(program, memo, index, u, v);
     memo.scalar[index] = Some((u, v, value));
     value
@@ -105,7 +110,7 @@ fn eval_color(program: &Program, memo: &mut Memo, index: usize, u: i32, v: i32) 
         return value;
     }
     #[cfg(test)]
-    EVALS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    EVALS.with(|count| count.set(count.get() + 1));
     let value = eval_color_uncached(program, memo, index, u, v);
     memo.color[index] = Some((u, v, value));
     value
@@ -1036,8 +1041,6 @@ mod tests {
     /// evaluates to 2^n calls per texel without a memo.
     #[test]
     fn repeated_inputs_are_evaluated_once_per_pixel() {
-        use std::sync::atomic::Ordering;
-
         use crate::graph::ProgramOutput;
         use voxel_block::texture_manifest::{AlphaClass, Tiling};
 
@@ -1080,10 +1083,10 @@ mod tests {
             breaks_v: false,
         };
 
-        EVALS.store(0, Ordering::Relaxed);
+        EVALS.with(|count| count.set(0));
         let pixels = evaluate(&program);
         assert_eq!(pixels.len(), 8 * 8 * 4);
-        let evals = EVALS.load(Ordering::Relaxed);
+        let evals = EVALS.with(std::cell::Cell::get);
         assert_eq!(evals, 64 * (color + 1), "one evaluation per node per pixel");
     }
 }
