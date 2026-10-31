@@ -398,6 +398,10 @@ spike. Runs: `20261031T181211Z-m3-packed-8b-128` and
   crossing a page**; `first_instance` is page-relative, and a 309 MiB single
   buffer also exceeds the default `max_buffer_size` (256 MiB). This adds
   **1.0–1.5 d** to M3-02 (1.5 d → 2.5–3.0 d); see the schedule.
+  **Landed in M3-02** as `mesh_pool` on the 44 B fallback path: the descriptor
+  carries the stride, pages are capped at 128 MiB, and no draw crosses a page.
+  See [`m3-02-mesh-pool.md`](m3-02-mesh-pool.md). The record path was not taken,
+  so no storage binding is bound yet.
 
 ### Fallback path
 

@@ -33,8 +33,8 @@ binding number is made in the spec and the pre-registration, never only in a tas
   cross-chunk apron seeding (`M2-14`), dirty-region incremental light (`M2-15`)
   and removal-front escalation (`M2-16`) landed. The `M2-17` light cost
   benchmark landed and the optimized path now measures 5.7% p95 at 128³, under
-  the 20% target. **M3-00 (mesh compression) and M3-01 (streaming shell) are
-  closed; M3-02 (mesh buffer pool) is next.**
+  the 20% target. **M3-00 (mesh compression), M3-01 (streaming shell) and
+  M3-02 (mesh buffer pool) are closed; M3-03 (upload queue) is next.**
 
 ## Tools
 

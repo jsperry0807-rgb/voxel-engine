@@ -110,7 +110,10 @@ attribute.**
    The logical resource is per chunk, so the mesh flips with the chunk's root under
    the M4 `VersionedResource` protocol (M4-10). The physical pool — one arena with
    suballocation or per-chunk buffers — is M3-02's decision; it must preserve the
-   meshlet ranges and keep allocation off the frame path.
+   meshlet ranges and keep allocation off the frame path. **Decided (M3-02):** one
+   paged byte arena with suballocation, 8 MiB pages, one contiguous range per mesh,
+   strides from a `MeshFormat` descriptor; see
+   [`../m3-02-mesh-pool.md`](../m3-02-mesh-pool.md).
 
 4. **Vertex: 16 B, four-byte aligned.** The byte layout is fixed:
 

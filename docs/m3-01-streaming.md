@@ -171,8 +171,9 @@ origins and the production draw on both GPUs.
 ## Limits
 
 - Horizontal ring only; vertical streaming is later.
-- Per-chunk buffers until M3-02. The uploader hides their allocation cost from
-  the frame thread, but the driver stalls still exist off-thread.
+- Per-chunk buffers were replaced by the M3-02 arena (16 × 8 MiB pages, no
+  buffer created after warm-up). The uploader still hides the remaining
+  `write_buffer` staging cost from the frame thread; M3-03 owns that queue.
 - The worker pool does not cancel queued or in-flight work when the camera
   moves; a recenter drops stale results at install time, and a position that
   leaves and re-enters the ring can be generated twice. Cancellation is
@@ -185,5 +186,6 @@ origins and the production draw on both GPUs.
 
 ## Next
 
-M3-02 (mesh buffer pool / arena) on the packed 8 B stride and the `MeshFormat`
-descriptor seam. Then M3-03 adds the upload-side per-frame byte budget.
+M3-02 (mesh buffer pool / arena) landed on the packed 8 B stride and the
+`MeshFormat` descriptor seam; see [`m3-02-mesh-pool.md`](m3-02-mesh-pool.md).
+M3-03 adds the upload-side per-frame byte budget on top of those ranges.
