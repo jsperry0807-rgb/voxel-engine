@@ -85,6 +85,11 @@ fn report_covers_every_fixture_chunk_and_components_sum_to_total() {
             chunk.mesh_reference_bytes,
             chunk.mesh_reference_quads * voxel_storage::reference::mesh::QUAD_BYTES as u64,
         );
+        assert_eq!(chunk.mesh_record_bytes % 16, 0);
+        assert!(
+            chunk.mesh_table_bytes == 0
+                || chunk.mesh_table_bytes == 2 * voxel_storage::gpu::BLOCKS_PER_CHUNK as u64
+        );
         assert_eq!(chunk.light_bytes, 1_024);
         assert_eq!(chunk.probe_bytes, 768);
     }
@@ -117,6 +122,12 @@ fn report_covers_every_fixture_chunk_and_components_sum_to_total() {
     assert_eq!(report.components.probes.p50, Some(768));
     assert!(report.components.mesh.p95.unwrap() > 0);
     assert!(report.components.mesh_reference.p95.unwrap() > 0);
+    assert!(
+        report.components.mesh.p95 > report.components.mesh_reference.p95,
+        "the production AO mesh must differ from the no-AO reference"
+    );
+    assert_eq!(report.mesh_bytes_per_quad, 76);
+    assert!(report.mesh_format.contains("ADR-010"));
 
     let component_sum = report.components.dag.total
         + report.components.legacy_v1.total
@@ -132,6 +143,36 @@ fn report_covers_every_fixture_chunk_and_components_sum_to_total() {
     assert_eq!(report.dag_v1_view.p50, manifest.observed.node_bytes.p50);
     assert_eq!(report.dag_v1_view.p95, manifest.observed.node_bytes.p95);
     assert_eq!(report.dag_v1_view.max, manifest.observed.node_bytes.max);
+
+    // Schema v3 is a semantic change; a pre-v3 document must fail loudly
+    // rather than reinterpret reference bytes as production bytes.
+    let mut value = serde_json::to_value(&report).expect("memory report serializes");
+    value["schema_version"] = 2.into();
+    value["chunks"][0]
+        .as_object_mut()
+        .expect("chunk object")
+        .remove("mesh_payload_bytes");
+    assert!(
+        serde_json::from_value::<voxel_bench::gate::memory::MemoryReport>(value).is_err(),
+        "pre-v3 memory JSON must be rejected"
+    );
+}
+
+#[test]
+fn explicit_format_changes_payload_bytes_not_the_reference() {
+    let format = voxel_bench::gate::memory::MeshFormat {
+        name: "test-44",
+        payload_bytes_per_quad: 44,
+        meshlet_record_bytes: 16,
+        table_bytes: voxel_bench::gate::memory::ADR_010.table_bytes,
+    };
+    let report = voxel_bench::gate::memory::report_with_format(&manifest_path(), format)
+        .expect("the explicit format measures");
+    assert_eq!(report.mesh_format, "test-44");
+    assert_eq!(report.mesh_bytes_per_quad, 44);
+    for chunk in &report.chunks {
+        assert_eq!(chunk.mesh_payload_bytes, chunk.mesh_quads * 44);
+    }
 }
 
 #[test]

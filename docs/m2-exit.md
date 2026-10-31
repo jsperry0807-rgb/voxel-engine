@@ -15,7 +15,7 @@
 > run is the **M1-31 no-AO reference**. The **production AO mesh** measures
 > **3,650 KiB p95** (3,645 KiB payload + 16 B/block records + the u16 table), a
 > **1,250 KiB (52.1%)** miss, not 119.4 KiB. Row 1 becomes **4.16 GiB**
-> (p95 5.42 MiB × 805; still under the 4.80 GiB hard fail, over the 3.20 GiB
+> (p95 5.29 MiB × 805; still under the 4.80 GiB hard fail, over the 3.20 GiB
 > target by 987 MiB). The verdict (FAIL) is unchanged; the severity is not.
 > Phase 0 runs: `benchmarks/runs/20261031T163853Z-m2-production-mesh-128` and
 > `...-64`. The archived M2 run remains append-only.
@@ -52,9 +52,9 @@ for 128³ Default or a confirmed 128³ Minimum.
 | 11 | Measurement dataset | `m2-128` (synthetic) | real populated save | **NOT MEASURED** |
 | 12 | Fallback trigger | rule 3 (128³ memory row) | pre-registration §4 | **NOT MEASURED** |
 
-The measured p95 total is **4.19 MiB/chunk**: DAG 1,100 KiB, v1 pool 658 KiB,
-light 8 KiB, probes 6 KiB, mesh 2,519 KiB (archived reference; production
-3,650). The node row uses the per-chunk
+The measured p95 total is **4.19 MiB/chunk** in the archived run (production
+**5.29 MiB**): DAG 1,100 KiB, v1 pool 658 KiB, light 8 KiB, probes 6 KiB, mesh
+2,519 KiB (archived reference; production 3,650). The node row uses the per-chunk
 maximum, 138,636 nodes, because the pre-registered cap is a hard per-chunk
 limit rather than a distribution. The optimistic projection over 805
 chunks is **3.29 GiB** archived (production 4.16) — 0.09 GiB over the 3.20 GiB
@@ -63,10 +63,10 @@ the target and 650 MiB under the hard fail.
 
 ## 3. The mesh row is the open condition
 
-The gate estimates mesh bytes as greedy quads × 76 B (the frozen ADR-010
-indexed-quad size). The **production AO** p95 is **3,650 KiB**, 52.1% over the
-2.4 MiB cap; the archived run's 2,519 KiB is the no-AO reference. Two facts make
-this a real miss rather than a rounding artifact:
+The gate measures the production AO mesh through `mesh_block` (76 B/quad) plus
+the 16 B/block records and the u16 table. The **production AO** p95 is **3,650
+KiB**, 52.1% over the 2.4 MiB cap; the archived run's 2,519 KiB is the no-AO
+reference. Two facts make this a real miss rather than a rounding artifact:
 
 - the estimate is the **M1-31 reference greedy** mesh, which merges without AO
   and also counts chunk-boundary faces without an apron; the AO split is expected

@@ -166,6 +166,16 @@ fn cli_writes_one_markdown_and_one_json_with_the_twelve_rows_and_machine() {
         }
     }
 
+    // Row 6 is the production AO mesh, not the no-AO reference.
+    assert_eq!(rows[5]["verdict"], "fail");
+    assert!(
+        rows[5]["measured"]
+            .as_str()
+            .is_some_and(|text| text.contains("production AO")),
+        "row 6 must label the production measurement: {}",
+        rows[5]["measured"]
+    );
+
     // The two latency rows are numeric and compare against the frozen budgets.
     assert_eq!(rows[6]["numbers"]["limit"], 8.0);
     assert_eq!(rows[6]["numbers"]["unit"], "ms");

@@ -222,7 +222,7 @@ The frozen gate, profile and thresholds are unchanged.
 - **Fixture:** `m2-128`, the deterministic stand-in generator at the 128³ edge
   over a 3 × 1 × 3 chunk box (x, y, z) (9 chunks, 5,336,168 B). It is still synthetic;
   the dataset row remains **not measured**.
-- **Memory:** the production-mesh p95 is **5.42 MiB/chunk** → **4.16 GiB** over
+- **Memory:** the production-mesh p95 is **5.29 MiB/chunk** → **4.16 GiB** over
   805 chunks. This **passes** the 4.80 GiB hard-fail line by 650 MiB and misses
   the 3.20 GiB target by 987 MiB. (The archived M2 run reported 3.29 GiB from
   the no-AO reference; see the Phase 0 erratum below.) The v1 pool is 658 KiB
@@ -252,5 +252,6 @@ not confirm 128³ Default, and does not close row 11.
 by `gate memory` through `mesh_block`; the runs are
 `benchmarks/runs/20261031T163853Z-m2-production-mesh-128` and
 `...-64`. The corrected 128³ row 6 is **3,650 KiB** (1,250 KiB / 52.1% over)
-and row 1 is **4.16 GiB**. The M2 verdict (FAIL) is unchanged; the severity is
-not.
+and row 1 is **4.16 GiB**. The 64³ production row 6 is **925 KiB** (325.5 KiB
+over the 600 KiB cap) and row 1 is **34.51 GiB**. The M2 verdict (FAIL) is
+unchanged; the severity is not.

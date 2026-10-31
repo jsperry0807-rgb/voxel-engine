@@ -295,8 +295,9 @@ Phase 0 must not depend on a codec that does not exist yet.
   `total`.
 - Row 6 string: `"p95 X KiB (max Y); production AO / <format> (reference Z KiB × 76 B)"`.
 - Add `MESH_BYTES_PER_QUAD` sourced from the active format descriptor.
-- Bump the memory and gate-report schemas; use `#[serde(default)]` on new
-  fields so archived JSON still loads.
+- Bump the memory and gate-report schemas. Memory v3 is a semantic break
+  (reference -> production), so pre-v3 memory JSON is rejected rather than
+  silently reinterpreted; archived gate reports remain readable.
 - Re-run 128³ and 64³; archive; keep M1/M2 runs append-only; add the M2 erratum
   and a new history entry.
 

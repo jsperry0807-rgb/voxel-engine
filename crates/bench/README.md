@@ -147,13 +147,13 @@ row per component with p50/p95/max over chunks plus the fixture-wide total:
 | **Overlay** | Allocated GPU overlay storage: a block table per edited chunk plus 8 704 B per edited 16³ block |
 | **Light** | `LIGHT_BYTES_PER_CHUNK` (1 KiB at 64³, 8 KiB at 128³) |
 | **Probes** | `PROBE_BYTES_PER_CHUNK` near-LOD volume (768 B at 64³, 6 KiB at 128³) |
-| **Mesh estimate** | M1-31 greedy quads × 76 B; count-only, no vertex/index buffer overhead |
+| **Mesh** | Production AO `mesh_block` bytes (76 B/quad) + 16 B/block records + u16 table; the M1-31 no-AO reference is reported separately and excluded from the total |
 | **Total** | The six components above, per chunk |
 
 The transitional v1 `Svdag` pool is counted in the total: it is still resident
 for GPU and disk compatibility, and memory that is occupied must not disappear
 from the gate. It predates the banded layout but is not free. The fixture has no pending overlay entries, so its overlay component
-is zero by measurement, not by assumption. Mesh is an upper bound at chunk
+is zero by measurement, not by assumption. The M1-31 reference is an upper bound at chunk
 boundaries because the M1-31 reference has no neighbour apron; A/B root overhead
 is not part of this measurement. The report carries the fixture's provisional
 limitation verbatim and refuses to measure a save whose live chunk, voxel,

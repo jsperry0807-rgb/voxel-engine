@@ -966,22 +966,24 @@ fn mesh_row(memory: &MemoryReport) -> Result<GateRow, String> {
         "Mesh buffer/chunk",
         "64³: 150–600 KB; 128³: 600 KB–2.4 MB",
         format!(
-            "p95 {} KiB (max {} KiB); production AO × {} B/quad + records",
+            "p95 {} KiB (max {} KiB); production AO / {} ({} B/quad) + records",
             p95 / KIB,
             max / KIB,
-            memory::MESH_BYTES_PER_QUAD,
+            memory.mesh_format,
+            memory.mesh_bytes_per_quad,
         ),
         format!("≤ {} KiB/chunk at {}³", limit_kib, CHUNK_DIM),
         signed_bytes(margin),
         verdict,
         "gate memory (M1-35); production AO mesher; M1-31 reference",
         format!(
-            "The production AO mesh is measured through `mesh_block` ({} B/quad) and includes \
-             16 B per non-empty block meshlet record plus the per-chunk u16 record table. The \
-             M1-31 no-AO reference is {} KiB p95, informational only and not in the total. The \
-             predicted lower bound is {} KiB; a lower estimate is not a failure. The gate uses \
-             p95 and reports max separately.",
-            memory::MESH_BYTES_PER_QUAD,
+            "The production AO mesh is measured through `mesh_block` and charged as {} \
+             ({} B/quad) plus 16 B per non-empty block meshlet record and the per-chunk u16 \
+             record table. The M1-31 no-AO reference is {} KiB p95, informational only and not \
+             in the total. The predicted lower bound is {} KiB; a lower estimate is not a \
+             failure. The gate uses p95 and reports max separately.",
+            memory.mesh_format,
+            memory.mesh_bytes_per_quad,
             reference_p95 / KIB,
             MESH_PREDICTED_MIN_KIB,
         ),

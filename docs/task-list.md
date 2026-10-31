@@ -705,7 +705,7 @@ real save exists before M2.5); the 128³ chunk build is **34.3 chunks/s**
 **Phase 0 erratum (2026-10-31, M3-00):** `gate memory` now measures the
 production AO mesh through `mesh_block` (runs
 `benchmarks/runs/20261031T163853Z-m2-production-mesh-128` and `...-64`).
-Production 128³: **4.16 GiB** projected VRAM (p95 5.42 MiB × 805; PASS against
+Production 128³: **4.16 GiB** projected VRAM (p95 5.29 MiB × 805; PASS against
 4.80 GiB, 987 MiB over the 3.20 GiB target) and **mesh p95 3,650 KiB vs the
 2,400 KiB cap (FAIL by 1,250 KiB, 52.1%)**. Production 64³: mesh p95 **925
 KiB vs 600 (FAIL by 325.5 KiB)** and 34.51 GiB. The M2 verdict (FAIL) is

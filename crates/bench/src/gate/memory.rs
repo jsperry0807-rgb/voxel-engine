@@ -3,7 +3,8 @@
 //! The gate asks one question about memory: how many bytes does a populated
 //! chunk hold, by component, at the current chunk edge? This module answers it
 //! by walking the M1-28 fixture through the M1-27 read-only scanner and adding
-//! the fixed content volumes and the M1-31 greedy-mesh estimate:
+//! the fixed content volumes and the production AO mesh (with the M1-31
+//! no-AO reference reported separately):
 //!
 //! | Component | What is counted |
 //! | --- | --- |
@@ -11,8 +12,9 @@
 //! | Overlay | Allocated GPU overlay storage: one block table per edited chunk plus 8 704 B per edited 16³ block |
 //! | Light | [`LIGHT_BYTES_PER_CHUNK`] (1 KiB at 64³, 8 KiB at 128³) |
 //! | Probes | [`PROBE_BYTES_PER_CHUNK`] (768 B at 64³, 6 KiB at 128³) |
-//! | Mesh | M1-31 greedy quads × 76 B; count-only, no vertex/index buffer overhead |
-//! | Total | The six components above, per chunk |
+//! | Mesh | Production AO `mesh_block` bytes + 16 B/block records + u16 table |
+//! | Mesh reference | M1-31 no-AO quads × 76 B; informational, not in the total |
+//! | Total | The six counted components above, per chunk |
 //!
 //! The DAG row is the authoritative banded layout. The transitional v1 `Svdag`
 //! pool is still resident for GPU and disk compatibility, so it is its own
@@ -58,10 +60,9 @@ pub const SCHEMA_VERSION: u32 = 3;
 pub struct MeshFormat {
     /// Human-readable format name.
     pub name: &'static str,
-    /// Bytes per vertex record.
-    pub vertex_bytes: u64,
-    /// Bytes per index.
-    pub index_bytes: u64,
+    /// Payload bytes for one quad: vertices plus indices, or the per-quad
+    /// record for an instanced format.
+    pub payload_bytes_per_quad: u64,
     /// Bytes per non-empty block's meshlet record.
     pub meshlet_record_bytes: u64,
     /// Bytes in the per-chunk `u16` record-index table.
@@ -69,17 +70,16 @@ pub struct MeshFormat {
 }
 
 impl MeshFormat {
-    /// Bytes for one quad: four vertices plus six indices.
+    /// Payload bytes for one quad.
     pub const fn bytes_per_quad(self) -> u64 {
-        4 * self.vertex_bytes + 6 * self.index_bytes
+        self.payload_bytes_per_quad
     }
 }
 
 /// ADR-010: 16 B vertex, `u16` indices, 16 B meshlet record, `u16` table.
 pub const ADR_010: MeshFormat = MeshFormat {
     name: "ADR-010 16 B vertex + u16 index",
-    vertex_bytes: 16,
-    index_bytes: 2,
+    payload_bytes_per_quad: 76,
     meshlet_record_bytes: 16,
     table_bytes: BLOCKS_PER_CHUNK as u64 * 2,
 };
@@ -147,7 +147,6 @@ pub struct MemoryComponents {
     /// Production AO mesh: vertices, indices, meshlet records and table.
     pub mesh: ComponentDistribution,
     /// M1-31 no-AO reference mesh, informational only; not in `total`.
-    #[serde(default)]
     pub mesh_reference: ComponentDistribution,
     /// Sum of the six counted components above, per chunk.
     pub total: ComponentDistribution,
@@ -183,18 +182,14 @@ pub struct ChunkMemory {
     /// Production vertex + index bytes.
     pub mesh_payload_bytes: u64,
     /// Production meshlet-record bytes (16 B per non-empty block).
-    #[serde(default)]
     pub mesh_record_bytes: u64,
     /// Production `record_index` table bytes.
-    #[serde(default)]
     pub mesh_table_bytes: u64,
     /// Production mesh total: payload + records + table.
     pub mesh_bytes: u64,
     /// M1-31 no-AO reference quad count, informational only.
-    #[serde(default)]
     pub mesh_reference_quads: u64,
     /// M1-31 no-AO reference bytes (`quads × 76`), informational only.
-    #[serde(default)]
     pub mesh_reference_bytes: u64,
     /// Sum of DAG, the v1 pool, overlay, light, probes and production mesh.
     pub total_bytes: u64,
@@ -238,6 +233,10 @@ pub struct MemoryReport {
     pub schema_version: u32,
     /// Fixture identity and provenance.
     pub fixture: FixtureInfo,
+    /// Mesh format name used by this measurement.
+    pub mesh_format: String,
+    /// Mesh payload bytes per quad for this measurement.
+    pub mesh_bytes_per_quad: u64,
     /// Gate components and their per-chunk distributions.
     pub components: MemoryComponents,
     /// Mirror of [`MemoryComponents::legacy_v1`], kept for report consumers.
@@ -386,6 +385,8 @@ fn measure(
     let mut chunks = Vec::with_capacity(manifest.observed.live_chunks.min(4096));
     let mut total_voxels = 0u64;
     let mut overlay_entries = 0u64;
+    let apron = Apron::new();
+    let mut quads = Vec::new();
 
     let summary = scan_save(save_dir, |chunk| {
         chunk.dag.expand(&mut dense);
@@ -412,8 +413,6 @@ fn measure(
         // Production path: the same `greedy_block` + `mesh_block` call the
         // uploader uses, with AO in the merge key. Charge exact vertex and
         // index bytes, one record per non-empty block and the record table.
-        let apron = Apron::new();
-        let mut quads = Vec::new();
         let mut mesh_quads = 0u64;
         let mut mesh_payload_bytes = 0u64;
         let mut non_empty_blocks = 0u64;
@@ -425,8 +424,7 @@ fn measure(
             }
             non_empty_blocks += 1;
             mesh_quads += mesh.quad_count() as u64;
-            mesh_payload_bytes += mesh.vertices.len() as u64 * format.vertex_bytes
-                + mesh.indices.len() as u64 * format.index_bytes;
+            mesh_payload_bytes += mesh.quad_count() as u64 * format.payload_bytes_per_quad;
         });
         let mesh_record_bytes = non_empty_blocks * format.meshlet_record_bytes;
         let mesh_table_bytes = if mesh_quads > 0 {
@@ -546,7 +544,8 @@ fn measure(
             "Mesh = production AO `mesh_block` output ({} B/quad) plus {} B per non-empty block \
              meshlet record and the per-chunk `u16` record table. The M1-31 no-AO reference is \
              reported separately as `mesh_reference` and is not in the total; it is the historical \
-             gate basis and treats chunk-boundary faces as exposed.",
+             gate basis. Both paths use `Apron::new()` (all-air), so interior chunk seams are \
+             counted as exposed and the number is a per-chunk upper bound at chunk borders.",
             format.bytes_per_quad(),
             format.meshlet_record_bytes,
         ),
@@ -557,6 +556,8 @@ fn measure(
 
     Ok(MemoryReport {
         schema_version: SCHEMA_VERSION,
+        mesh_format: format.name.to_owned(),
+        mesh_bytes_per_quad: format.payload_bytes_per_quad,
         fixture,
         components,
         dag_v1_view,
