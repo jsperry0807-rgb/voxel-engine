@@ -48,7 +48,6 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
-use std::sync::Arc;
 
 use voxel_core::constants::ROOT_LEVEL;
 use voxel_core::node_word::{NODE_FLAGS_BITS, NODE_FLAGS_SHIFT};
@@ -194,16 +193,28 @@ impl RunSlot {
 
 /// The content a live base must denote. Two parents may share a base only when
 /// their content compares equal.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum RunContent {
-    Leaf { materials: Vec<u16> },
-    Internal { mask: u8, children: Vec<Node> },
+    // Fixed-size arrays: a run has at most eight children, so the checker does
+    // not allocate one heap vector per node. Unused slots stay zero and are
+    // part of the key, so equal content compares equal.
+    Leaf {
+        // The mask is deliberately not part of a leaf run's key: two parents
+        // may share a base with different masks as long as the stored
+        // materials agree (air is never stored, so the used prefix is exactly
+        // the non-zero entries).
+        materials: [u16; CHILD_SLOTS as usize],
+    },
+    Internal {
+        mask: u8,
+        children: [Node; CHILD_SLOTS as usize],
+    },
 }
 
 impl RunContent {
     fn slots(&self) -> u64 {
         match self {
-            Self::Leaf { materials } => materials.len() as u64,
+            Self::Leaf { materials } => materials.iter().filter(|&&m| m != AIR).count() as u64,
             Self::Internal { mask, .. } => u64::from(mask.count_ones()),
         }
     }
@@ -336,8 +347,8 @@ pub fn check_bands(bands: &Bands, root: Option<NodeRef>) -> Result<CheckReport, 
     // The published root is one external reference to the top node.
     refs.add(root, 1);
 
-    let mut base_content: BTreeMap<RunSlot, Arc<RunContent>> = BTreeMap::new();
-    let mut content_base: HashMap<Arc<RunContent>, RunSlot> = HashMap::new();
+    let mut base_content: BTreeMap<RunSlot, RunContent> = BTreeMap::new();
+    let mut content_base: HashMap<RunContent, RunSlot> = HashMap::new();
     let mut run_refcounts: HashMap<RunSlot, u64> = HashMap::new();
     let mut stack = vec![root];
 
@@ -452,7 +463,8 @@ pub fn check_bands(bands: &Bands, root: Option<NodeRef>) -> Result<CheckReport, 
             }
         }
 
-        let mut children = Vec::with_capacity(run_slots as usize);
+        let mut children = [Node::new(0, 0, 0); CHILD_SLOTS as usize];
+        let mut filled = 0usize;
         for c in 0..CHILD_SLOTS {
             let Some(slot) = node.child_slot(c) else {
                 continue;
@@ -491,15 +503,17 @@ pub fn check_bands(bands: &Bands, root: Option<NodeRef>) -> Result<CheckReport, 
                     format!("child {c} of {node_ref:?} is an empty node"),
                 ));
             }
-            children.push(child);
+            children[filled] = child;
+            filled += 1;
             refs.add(child_ref, 1);
             stack.push(child_ref);
         }
+        debug_assert_eq!(filled, run_slots as usize, "run fills its mask slots");
 
-        let content = Arc::new(RunContent::Internal {
+        let content = RunContent::Internal {
             mask: node.mask(),
             children,
-        });
+        };
         record_run(
             RunSlot::Internal {
                 level: child_level,
@@ -542,14 +556,14 @@ pub fn check_bands(bands: &Bands, root: Option<NodeRef>) -> Result<CheckReport, 
                 format!("live run {slot:?} has no recorded content"),
             ));
         };
-        match content.as_ref() {
+        match content {
             RunContent::Leaf { .. } => {
                 // Leaf slots are materials, not internal nodes; the leaf arena
                 // is checked by `check_leaf_parent` and `check_leaf_arena`.
             }
-            RunContent::Internal { children, .. } => {
+            RunContent::Internal { mask, .. } => {
                 let child_level = slot.level();
-                for (offset, _) in children.iter().enumerate() {
+                for offset in 0..mask.count_ones() as usize {
                     let child_ref = NodeRef::new(child_level, slot.base() + offset as u64);
                     if refs.get(child_ref) < run_refs {
                         return Err(InvariantError::new(
@@ -648,8 +662,8 @@ fn check_leaf_parent(
     bands: &Bands,
     node_ref: NodeRef,
     node: Node,
-    base_content: &mut BTreeMap<RunSlot, Arc<RunContent>>,
-    content_base: &mut HashMap<Arc<RunContent>, RunSlot>,
+    base_content: &mut BTreeMap<RunSlot, RunContent>,
+    content_base: &mut HashMap<RunContent, RunSlot>,
     run_refcounts: &mut HashMap<RunSlot, u64>,
     report: &mut CheckReport,
 ) -> Result<(), InvariantError> {
@@ -678,7 +692,8 @@ fn check_leaf_parent(
         ));
     }
 
-    let mut materials = Vec::with_capacity(count as usize);
+    let mut materials = [0u16; CHILD_SLOTS as usize];
+    let mut filled = 0usize;
     for c in 0..CHILD_SLOTS {
         let Some(slot) = node.child_slot(c) else {
             continue;
@@ -700,12 +715,14 @@ fn check_leaf_parent(
                 format!("leaf child {c} of {node_ref:?} stores air"),
             ));
         }
-        materials.push(material);
+        materials[filled] = material;
+        filled += 1;
     }
+    debug_assert_eq!(filled as u64, count, "leaf run fills its mask slots");
 
     record_run(
         RunSlot::Leaf(base),
-        Arc::new(RunContent::Leaf { materials }),
+        RunContent::Leaf { materials },
         base_content,
         content_base,
         run_refcounts,
@@ -716,9 +733,9 @@ fn check_leaf_parent(
 /// Updates the base/content bijection and run reference counts.
 fn record_run(
     slot: RunSlot,
-    content: Arc<RunContent>,
-    base_content: &mut BTreeMap<RunSlot, Arc<RunContent>>,
-    content_base: &mut HashMap<Arc<RunContent>, RunSlot>,
+    content: RunContent,
+    base_content: &mut BTreeMap<RunSlot, RunContent>,
+    content_base: &mut HashMap<RunContent, RunSlot>,
     run_refcounts: &mut HashMap<RunSlot, u64>,
     report: &mut CheckReport,
 ) -> Result<(), InvariantError> {
@@ -734,7 +751,7 @@ fn record_run(
         }
         Some(_) => {}
         None => {
-            base_content.insert(slot, content.clone());
+            base_content.insert(slot, content);
             match slot {
                 RunSlot::Leaf(_) => report.leaf_runs += 1,
                 RunSlot::Internal { .. } => report.internal_runs += 1,
@@ -754,7 +771,7 @@ fn record_run(
 /// Rejects two distinct live runs whose slot ranges overlap in one arena.
 fn check_run_overlaps(
     bands: &Bands,
-    base_content: &BTreeMap<RunSlot, Arc<RunContent>>,
+    base_content: &BTreeMap<RunSlot, RunContent>,
 ) -> Result<(), InvariantError> {
     let mut leaf_runs: Vec<(u64, u64)> = Vec::new();
     let mut internal_runs: [Vec<(u64, u64)>; BAND_COUNT] = core::array::from_fn(|_| Vec::new());
@@ -1166,14 +1183,18 @@ mod tests {
         let mut run_refcounts = HashMap::new();
         let mut report = CheckReport::default();
         let slot = RunSlot::Internal { level: 2, base: 0 };
-        let first = Arc::new(RunContent::Internal {
+        let mut children = [Node::new(0, 0, 0); CHILD_SLOTS as usize];
+        children[0] = Node::new(0b1, 2, 0);
+        let first = RunContent::Internal {
             mask: 0b1,
-            children: vec![Node::new(0b1, 2, 0)],
-        });
-        let second = Arc::new(RunContent::Internal {
+            children,
+        };
+        let mut children = [Node::new(0, 0, 0); CHILD_SLOTS as usize];
+        children[0] = Node::new(0b10, 2, 0);
+        let second = RunContent::Internal {
             mask: 0b1,
-            children: vec![Node::new(0b10, 2, 0)],
-        });
+            children,
+        };
 
         record_run(
             slot,

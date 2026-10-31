@@ -1436,6 +1436,32 @@ mod tests {
         );
     }
 
+    /// Freeing the primary must promote a colliding sibling, not lose it.
+    #[test]
+    fn freeing_a_primary_promotes_the_colliding_sibling() {
+        let mut g = GpuStore::new();
+        // A consistent primary: one zero word has mask 0, so freeing it decrefs
+        // no children and its hash is the hash of its own content.
+        let words = [0u32];
+        let h = hash_words(&words);
+        let primary = g.alloc(&words);
+        g.dedup.insert(h, primary);
+        let sibling = g.alloc(&words);
+        g.dedup_more.entry(h).or_default().push(sibling);
+
+        g.free_node(primary as usize);
+
+        assert_eq!(
+            g.dedup.get(&h),
+            Some(&sibling),
+            "the sibling must be promoted to the primary slot"
+        );
+        assert!(
+            g.dedup_more.get(&h).is_none_or(|extras| extras.is_empty()),
+            "the promoted sibling must leave the extra bucket"
+        );
+    }
+
     /// A hash collision must not make the colliding content private: the second
     /// insert has to reuse the first node instead of allocating again.
     #[test]

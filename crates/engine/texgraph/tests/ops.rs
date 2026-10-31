@@ -1,4 +1,9 @@
-//! Every op in the library must compile, evaluate and be deterministic.
+//! Every op in the library must compile, evaluate and be deterministic, and
+//! match its committed output hash.
+
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 use voxel_block::texture_manifest::{AlphaClass, Tiling};
 use voxel_texgraph::eval;
@@ -65,6 +70,7 @@ fn run(tiling: Tiling, scalar_ops: &[Op], colour_ops: &[Op]) {
         let b = eval::evaluate_at(&program, 64);
         assert_eq!(a, b, "{} is not deterministic", op.label());
         assert_eq!(a.len(), 64 * 64 * 4);
+        check_golden(tiling, op.label(), "scalar", &a);
     }
 
     for op in colour_ops {
@@ -87,6 +93,7 @@ fn run(tiling: Tiling, scalar_ops: &[Op], colour_ops: &[Op]) {
         let b = eval::evaluate_at(&program, 64);
         assert_eq!(a, b, "{} is not deterministic", op.label());
         assert_eq!(a.len(), 64 * 64 * 4);
+        check_golden(tiling, op.label(), "colour", &a);
     }
 }
 
@@ -348,4 +355,67 @@ fn shape_ops_declare_their_periodicity_cost() {
         x: 2,
         y: 2
     }));
+}
+
+/// Committed per-op output hashes.
+///
+/// The suite otherwise only proves that an op compiles and is deterministic;
+/// a wrong-but-stable op (a changed scale, an off-by-one in a shape) passes
+/// every other assertion. Regenerate after an intentional change with
+/// `UPDATE_OP_GOLDEN=1 cargo test -p voxel-texgraph --test ops`.
+fn golden_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/op_goldens.txt")
+}
+
+fn goldens() -> &'static Mutex<BTreeMap<String, u64>> {
+    static GOLDENS: OnceLock<Mutex<BTreeMap<String, u64>>> = OnceLock::new();
+    GOLDENS.get_or_init(|| {
+        let mut map = BTreeMap::new();
+        if let Ok(text) = std::fs::read_to_string(golden_path()) {
+            for line in text.lines() {
+                // Labels contain spaces ("Radial Gradient", "Brightness /
+                // Contrast"), so the hash is the last token.
+                let Some((label, hash)) = line.rsplit_once(' ') else {
+                    continue;
+                };
+                if let Ok(hash) = u64::from_str_radix(hash, 16) {
+                    map.insert(label.to_owned(), hash);
+                }
+            }
+        }
+        Mutex::new(map)
+    })
+}
+
+fn fnv(bytes: &[u8]) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
+fn check_golden(tiling: Tiling, label: &str, kind: &str, bytes: &[u8]) {
+    let key = format!("{tiling:?}/{kind}/{label}");
+    let hash = fnv(bytes);
+    let mut map = goldens().lock().expect("golden map");
+    if std::env::var_os("UPDATE_OP_GOLDEN").is_some() {
+        map.insert(key, hash);
+        let text: String = map
+            .iter()
+            .map(|(label, hash)| format!("{label} {hash:016x}\n"))
+            .collect();
+        std::fs::write(golden_path(), text).expect("write op goldens");
+        return;
+    }
+    match map.get(&key) {
+        Some(&expected) => assert_eq!(
+            hash, expected,
+            "{key}: op output changed (regenerate with UPDATE_OP_GOLDEN=1 if intended)"
+        ),
+        None => panic!(
+            "{key}: no committed hash; run UPDATE_OP_GOLDEN=1 cargo test -p voxel-texgraph --test ops"
+        ),
+    }
 }
