@@ -88,9 +88,10 @@ vertex buffer cannot be offset by `base_quad` in the shader; storage pull can.
   Metal (macOS); WebGL2 does not expose it. This is an expectation, not a
   guarantee: the spike records the actual feature bit on each target adapter. If a target lacks it, the options are (a) one direct
   draw per meshlet with `first_instance = base_quad` (gives up the indirect
-  path for that target) or (b) a per-draw base buffer with a target-specific
-  draw id; neither is the planned M3-05 path, so a missing feature is a
-  milestone blocker, not a silent fallback.
+  path for that target) or (b) take the 8 B fallback, which does not need
+  `first_instance` but abandons 64³. This is the same risk-owner decision as a
+  performance regression; it is not a silent fallback and it is not an
+  automatic milestone blocker.
 - **Target limits:** the vertex stage must be allowed to read a storage buffer.
   Native WebGPU (Vulkan/Metal/DX12) supports it; WebGL2 does not. Assert
   `max_storage_buffers_per_shader_stage >= 1` with `ShaderStages::VERTEX`.
@@ -123,7 +124,7 @@ mesh; `n` is the loaded-chunk count.
 Sources: DAG/light/probes and the v1 pool from
 [`m1-gate-decision.md`](m1-gate-decision.md) §3 and the 2026-10-29 amendment;
 the mesh numbers are measured. The 64³ instanced total is ~3.18 GiB **before**
-the M6-09a v1-pool removal (essentially no margin against the 3.20 GiB target),
+the M6-09a v1-pool removal (~0.7% margin against the 3.20 GiB target),
 ~2.17 GiB after. The 64³ 8 B fallback is **5.86 GiB, above the 4.80 GiB hard
 fail**.
 
@@ -310,19 +311,22 @@ Phase 0 must not depend on a codec that does not exist yet.
 4. Update the repeated numbers in the task list, M1 decision, roadmap and
    performance targets.
 
-### Phase 1 — instanced-quad spike (1.5–2 d functional + hardware time)
+### Phase 1 — instanced-quad spike (1.5–2 d; the 2 d upper bound includes B2)
 
 - Record encoder + CPU decoder (Gate A).
 - Storage-pull `fetch_record` helper, used by both the vertex and compute entry
   points; Gate B1 readback.
 - Gate D (≤1 LSB) on the **discrete and integrated GPUs** (same session as
   Gate C); llvmpipe is only a functional pre-check, not the tolerance gate.
+- Gate B2 (grid/ortho scene, direct **and** indirect) on the discrete and
+  integrated GPUs; it shares the Gate C session and fits in the 2 d upper
+  bound.
 - Gate C on discrete + integrated GPUs with timestamp queries and vsync off;
   full-frame primary, vertex-bound informational.
 - **Deadline:** if the iGPU is not available within **5 working days**, proceed
-  on the discrete-only result with Gate C recorded **open**, unless the
-  discrete result itself fails; then take the fallback. The open flag is
-  carried to M3-13 for a follow-up.
+  on the discrete-only result with the affected real-GPU gates (C, D and B2)
+  recorded **open**, unless the discrete result itself fails; then take the
+  fallback. The open flag is carried to M3-13 for a follow-up.
 - If Gates A/B1/B2/D and the full-frame result pass, the spike becomes the
   implementation base. A fixable failure gets one retry; otherwise fallback.
 
@@ -334,8 +338,8 @@ Phase 0 must not depend on a codec that does not exist yet.
 - Viewer wiring: `ChunkMeshData` holds records; `chunk_mesh`/`chunk_render` use
   the storage-pull draw; no index buffer.
 - Naive/screenshot path stays on its own 16 B layout.
-- Gate A/B1/B2 tests committed and CI-gated; Gate C/D recorded from the
-  real-GPU session (CI has no real GPU).
+- Gate A/B1 and the functional B2 (llvmpipe) are CI-gated; the real-GPU direct
+  and indirect B2 variants are recorded with C and D in the same session.
 - Gate re-run at both edges; row 6 and row 1 pass; archive.
 - **M3-02 arena requirement:** the arena must be **format-agnostic** (allocate
   byte ranges; take the stride/record size from a descriptor), and it must page
@@ -409,9 +413,11 @@ decision indefinitely and it is not silently closed.
 
 **Consequence and risk owner:** if the discrete-only result is accepted and a
 later iGPU check shows a regression, the response is the fallback (4.25–5 d,
-which also abandons 64³ Minimum) or a re-plan. The milestone owner accepts that
-risk in writing when the discrete-only decision is recorded; it is not an
-implicit acceptance.
+which also abandons 64³ Minimum) or a re-plan. A missing
+`INDIRECT_FIRST_INSTANCE` on a target is the **same risk-owner decision**:
+direct draws for that target (no indirect) or the 8 B fallback (abandons 64³).
+The milestone owner accepts that risk in writing when the discrete-only
+decision is recorded; it is not an implicit acceptance.
 
 **64³ contingency:** if the 64³ row 1 measures between 3.20 and 4.80 GiB, the
 mesh format cannot close the gap. Record a dated pre-registration appendix that
@@ -446,10 +452,12 @@ synthetic fixture.
   3.20 GiB.
 - Gate 64³: row 6 ≤ **540 KiB** (90% rule), row 1 ≤ **3.20 GiB** and ≤ 4.80
   GiB hard fail. The 3.20 GiB target remains **required**: instanced is 3.18
-  GiB p95-projected, 0.02 GiB (0.6%) under the target before the M6-09a pool
-  removal, and 2.17 GiB after. The 0.6% margin is thin and a real save may
-  consume it; this is not a pre-registration relaxation. The 8 B fallback
-  fails both the hard fail (5.86 GiB) and the target.
+  GiB p95-projected, 0.02 GiB (~0.7%) under the target before the M6-09a pool
+  removal, and 2.17 GiB after. The ~0.7% margin is thin and a real save may
+  consume it; this is not a pre-registration relaxation. If the measurement
+  lands in 3.20–4.80 GiB, the §7 contingency applies (dated appendix, owner
+  sign-off, M6-09a resolution). The 8 B fallback fails both the hard fail
+  (5.86 GiB) and the target.
 - ADR-014 merged, pre-registration appendix added, M2 erratum recorded, CI
   goldens/parity job green.
 
@@ -496,10 +504,14 @@ synthetic fixture.
 - **rev 7:** real-draw index Gate B2; `INDIRECT_FIRST_INSTANCE` as a
   hard requirement with the adapter list; page-boundary draws, 128 MiB binding
   and 256 MiB buffer limits; Gate D on real GPUs; 64³ target kept at 3.20 GiB
-  (0.6% p95 margin); 1.5–2 d spike; 11% noise example and spread definition.
-- **rev 8 (current):** corrected the 5-day calendar arithmetic (`5 + post-gate
-  effort`); B2 now has known pixel mapping and direct + indirect variants on
-  real GPUs; the `INDIRECT_FIRST_INSTANCE` list is marked expected, not
-  guaranteed; added the 64³ 3.20–4.80 GiB contingency with owner sign-off and
-  M6-09a resolution; the real-GPU deadline now covers C, D and B2; acceptance
-  adds B2 and the Gate D GPU requirement.
+  (~0.7% p95 margin); 1.5–2 d spike; 11% noise example and spread definition.
+- **rev 8:** corrected the 5-day calendar arithmetic (`5 + post-gate effort`);
+  B2 pixel mapping and direct + indirect variants on real GPUs; the
+  `INDIRECT_FIRST_INSTANCE` list marked expected; 64³ 3.20–4.80 GiB contingency
+  with owner sign-off and M6-09a resolution; real-GPU deadline covers C, D and
+  B2; acceptance adds B2 and the Gate D GPU requirement.
+- **rev 9 (current):** B2 is in the Phase 1 spike and covered by the 2 d upper
+  bound; Phase 1 deadline names C/D/B2; a missing `INDIRECT_FIRST_INSTANCE` is
+  a risk-owner choice (direct draws or fallback), not an automatic blocker; CI
+  runs functional B2 and the real-GPU variants are recorded with C/D; 64³
+  margin corrected to ~0.7%.
