@@ -16,13 +16,15 @@
 use std::sync::Arc;
 
 use pollster::block_on;
+use wgpu::util::StagingBelt;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferDescriptor, BufferUsages,
-    Color, CommandEncoderDescriptor, CurrentSurfaceTexture, Device, DeviceDescriptor, Instance,
-    InstanceDescriptor, LoadOp, Operations, Queue, RenderPassColorAttachment,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, RequestAdapterOptions, ShaderStages,
-    StoreOp, Surface, SurfaceConfiguration, TextureViewDescriptor,
+    BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferDescriptor, BufferSize,
+    BufferUsages, Color, CommandEncoder, CommandEncoderDescriptor, CurrentSurfaceTexture, Device,
+    DeviceDescriptor, Instance, InstanceDescriptor, LoadOp, Operations, Queue,
+    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+    RequestAdapterOptions, ShaderStages, StoreOp, Surface, SurfaceConfiguration,
+    TextureViewDescriptor,
 };
 use winit::dpi::PhysicalSize;
 use winit::event_loop::OwnedDisplayHandle;
@@ -35,7 +37,8 @@ use crate::chunk_lighting;
 use crate::chunk_render::ChunkPipeline;
 use crate::depth::DepthTarget;
 use crate::error::ViewerError;
-use crate::streaming::{self, PUMP_BUDGET, Streaming};
+use crate::streaming::{self, PUMP_BUDGET, PendingUpload, Streaming};
+use crate::upload;
 
 /// Consecutive `Lost` surfaces tolerated before the viewer gives up.
 const MAX_SURFACE_RECREATIONS: u32 = 3;
@@ -69,6 +72,11 @@ pub struct Gpu {
     pub streaming: Streaming,
     /// The chunk draw pipeline.
     pub chunk_pipeline: ChunkPipeline,
+    /// M3-03 staging belt: copies finished meshes into the pool without a
+    /// per-mesh driver allocation.
+    upload_belt: StagingBelt,
+    /// Mesh bytes one frame may copy into the pool.
+    upload_budget: usize,
 }
 
 impl Gpu {
@@ -158,11 +166,14 @@ impl Gpu {
             &data_layout,
             config.format,
         );
-        let streaming = Streaming::new(device.clone(), queue.clone(), data_layout);
+        let upload_budget = upload_budget_bytes();
+        let streaming = Streaming::new(device.clone(), data_layout, upload_budget);
+        let upload_belt = StagingBelt::new(device.clone(), upload::STAGING_CHUNK_BYTES);
         log::info!(
-            "streaming shell: {} chunk ring, {:.0} ms frame budget",
+            "streaming shell: {} chunk ring, {:.0} ms frame budget, {:.0} KiB upload budget",
             streaming::RING_CHUNKS,
-            PUMP_BUDGET.as_secs_f64() * 1000.0
+            PUMP_BUDGET.as_secs_f64() * 1000.0,
+            upload_budget as f64 / 1024.0
         );
 
         Ok(Self {
@@ -179,6 +190,8 @@ impl Gpu {
             atlas,
             streaming,
             chunk_pipeline,
+            upload_belt,
+            upload_budget,
         })
     }
 
@@ -233,11 +246,12 @@ impl Gpu {
             .streaming
             .pump(streaming::center_for(uniform.position), PUMP_BUDGET);
         log::debug!(
-            "stream: {}/{} loaded, {} pending, {} installed, pump {:.3} ms (max {:.3} ms)",
+            "stream: {}/{} loaded, {} pending, {} queued ({} MiB backlog), pump {:.3} ms (max {:.3} ms)",
             stats.loaded,
             streaming::RING_CHUNKS,
             stats.pending,
-            stats.installed,
+            stats.queued,
+            self.streaming.upload_backlog_bytes() as f64 / (1024.0 * 1024.0),
             stats.elapsed.as_secs_f64() * 1000.0,
             stats.max_elapsed.as_secs_f64() * 1000.0,
         );
@@ -282,6 +296,29 @@ impl Gpu {
             .create_command_encoder(&CommandEncoderDescriptor {
                 label: Some("main frame"),
             });
+
+        // M3-03: take at most the frame's upload budget, copy it through the
+        // staging belt, then install the meshes so this frame's pass draws
+        // them. The copies precede the pass in this encoder, so the GPU needs
+        // no fence between them.
+        let upload_started = std::time::Instant::now();
+        let uploads = self.streaming.take_uploads(self.upload_budget);
+        let upload_bytes: usize = uploads.iter().map(upload::UploadBytes::upload_bytes).sum();
+        for upload in &uploads {
+            stage_upload(&mut self.upload_belt, &mut encoder, upload);
+        }
+        let installed = self.streaming.install_uploads(uploads);
+        let upload_elapsed = upload_started.elapsed();
+        self.streaming
+            .note_upload_frame(upload_bytes, upload_elapsed);
+        if installed > 0 {
+            log::trace!(
+                "upload: {installed} meshes, {:.0} KiB in {:.3} ms",
+                upload_bytes as f64 / 1024.0,
+                upload_elapsed.as_secs_f64() * 1000.0,
+            );
+        }
+
         {
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("main frame"),
@@ -311,9 +348,51 @@ impl Gpu {
                 &self.atlas.bind_group,
             );
         }
+        // Unmaps the staging chunks and re-maps them when this submission
+        // completes, so the next frame reuses the same buffers.
+        self.upload_belt.finish_and_recall_on_submit(&encoder);
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
         self.lost_retries = 0;
         Ok(true)
     }
+}
+
+/// Defers one finished mesh into the staging belt and records the copy.
+///
+/// Both writes are padded to the 4 B copy alignment; the pool range already
+/// reserves the pad, so the tail never leaves the mesh's page.
+fn stage_upload(belt: &mut StagingBelt, encoder: &mut CommandEncoder, upload: &PendingUpload) {
+    let Some(mesh) = &upload.mesh else {
+        return;
+    };
+    let vertex_size = BufferSize::new(mesh.vertices.len).expect("a mesh has vertices");
+    let mut view = belt.write_buffer(
+        encoder,
+        &mesh.vertices.buffer,
+        mesh.vertices.offset,
+        vertex_size,
+    );
+    view.copy_from_slice(&upload.vertices);
+    drop(view);
+
+    if let Some(indices) = &mesh.indices {
+        let bytes = bytemuck::cast_slice(&upload.indices);
+        let index_size = BufferSize::new(indices.len).expect("an indexed mesh has indices");
+        let mut view = belt.write_buffer(encoder, &indices.buffer, indices.offset, index_size);
+        view.slice(..bytes.len()).copy_from_slice(bytes);
+        view.slice(bytes.len()..).fill(0);
+        drop(view);
+    }
+}
+
+/// Reads `VOXEL_UPLOAD_KIB`, clamped to a range that can still make progress.
+fn upload_budget_bytes() -> usize {
+    const MIN_KIB: usize = 64;
+    const MAX_KIB: usize = 16 * 1024;
+    std::env::var("VOXEL_UPLOAD_KIB")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .map(|kib| kib.clamp(MIN_KIB, MAX_KIB) * 1024)
+        .unwrap_or(upload::DEFAULT_UPLOAD_BYTES)
 }

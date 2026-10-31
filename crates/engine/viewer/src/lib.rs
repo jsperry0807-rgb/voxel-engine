@@ -21,3 +21,4 @@ pub mod naive_mesh;
 pub mod quads;
 pub mod streaming;
 pub mod tracker;
+pub mod upload;

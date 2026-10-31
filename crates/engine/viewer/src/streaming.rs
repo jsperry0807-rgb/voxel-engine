@@ -28,12 +28,13 @@ use std::time::{Duration, Instant};
 use voxel_core::constants::{CHUNK_DIM, CHUNK_VOLUME, VOXEL_SIZE};
 use voxel_storage::apron::{Face, SIDE};
 use voxel_storage::{Apron, ChunkPos};
-use wgpu::{BindGroup, BindGroupLayout, Device, Queue, RenderPass};
+use wgpu::{BindGroup, BindGroupLayout, Device, RenderPass};
 
 use crate::chunk_content::{self, ChunkContent};
 use crate::chunk_lighting::{self, ChunkLighting};
 use crate::chunk_render::ChunkPipeline;
 use crate::mesh_pool::{self, MeshAllocation, MeshFormat, MeshPool};
+use crate::upload::{self, UploadBytes, UploadQueue};
 
 /// Half the ring width. The ring spans `-RING_HALF ..= RING_HALF - 1` on each
 /// horizontal axis, so `2 * RING_HALF = 16` chunks per axis.
@@ -128,8 +129,8 @@ pub struct PumpStats {
     pub loaded: usize,
     /// Desired chunks not yet resident (includes in-flight work).
     pub pending: usize,
-    /// Chunks installed by this pump.
-    pub installed: usize,
+    /// Finished uploads moved from the channel into the upload queue.
+    pub queued: usize,
     /// Time spent in this pump.
     pub elapsed: Duration,
     /// Largest pump time seen since construction.
@@ -299,9 +300,33 @@ struct Job {
     /// Time this worker spent generating, excluding the queue wait.
     generated: Duration,
 }
-/// An uploader result: `None` when generation or upload failed. The failing
-/// stage logs the reason; the frame thread only accounts for the hole.
-type UploadedJob = (ChunkPos, Option<ChunkResources>);
+/// One finished chunk waiting for the frame thread to upload its mesh bytes.
+///
+/// The arena range and the light bind group are ready; `vertices` and `indices`
+/// are the CPU bytes the frame copies through the staging belt under the
+/// per-frame budget.
+pub struct PendingUpload {
+    /// Where the chunk belongs in the ring.
+    pub position: ChunkPos,
+    /// The reserved pool range, or `None` for a chunk with no visible faces.
+    pub mesh: Option<MeshAllocation>,
+    /// Packed 8 B vertex stream, moved rather than cloned.
+    pub vertices: Vec<u8>,
+    /// `u16` index stream.
+    pub indices: Vec<u16>,
+    /// Light, probes and world-origin bind group.
+    pub lighting: ChunkLighting,
+}
+
+impl UploadBytes for PendingUpload {
+    fn upload_bytes(&self) -> usize {
+        self.vertices.len() + self.indices.len() * 2
+    }
+}
+
+/// An uploader result: `None` when generation or preparation failed. The
+/// failing stage logs the reason; the frame thread only accounts for the hole.
+type UploadedJob = (ChunkPos, Option<PendingUpload>);
 
 /// Shared work queue for the generator threads.
 struct WorkQueue {
@@ -373,11 +398,10 @@ impl WorkQueue {
 /// The streaming ring and its worker pool.
 ///
 /// Three stages keep the frame thread out of the costly work:
-/// generator/mesher workers, one GPU uploader, and the frame thread, which
-/// only installs finished resources into the resident map. Buffer creation and
-/// mapped writes can occasionally block for several milliseconds on this
-/// driver; doing them on the frame thread would turn any such allocation into
-/// a render hitch.
+/// generator/mesher workers, one preparer that allocates pool ranges and light
+/// buffers, and the frame thread, which copies at most the upload budget and
+/// installs the result. Pool allocation and light-buffer creation still block
+/// on the driver for milliseconds, so they stay off the frame thread.
 pub struct Streaming {
     chunks: HashMap<ChunkPos, ChunkResources>,
     requested: HashSet<ChunkPos>,
@@ -386,10 +410,19 @@ pub struct Streaming {
     work: Arc<WorkQueue>,
     /// The M3-02 mesh arena, shared with the uploader thread.
     pool: Arc<Mutex<MeshPool>>,
+    /// Finished meshes waiting for a frame's upload budget (M3-03).
+    uploads: UploadQueue<PendingUpload>,
+    /// Mesh bytes one frame may copy into the pool.
+    upload_budget: usize,
     receiver: Option<Receiver<UploadedJob>>,
     workers: Vec<JoinHandle<()>>,
     uploader: Option<JoinHandle<()>>,
     max_pump: Duration,
+    last_budget: Duration,
+    /// Frames that moved bytes, and the slowest/total time spent copying them.
+    upload_frames: u64,
+    upload_frame_total: Duration,
+    upload_frame_max: Duration,
     hitches: u32,
     complete_logged: bool,
     uploader_down: bool,
@@ -398,7 +431,7 @@ pub struct Streaming {
 impl Streaming {
     /// Starts the generator pool. Nothing is queued until the first
     /// [`Self::pump`] supplies a camera center.
-    pub fn new(device: Device, queue: Queue, data_layout: BindGroupLayout) -> Self {
+    pub fn new(device: Device, data_layout: BindGroupLayout, upload_budget: usize) -> Self {
         let page_bytes = pool_page_bytes(device.limits().max_buffer_size);
         let pool = Arc::new(Mutex::new(MeshPool::new(
             device.clone(),
@@ -438,16 +471,7 @@ impl Streaming {
             .name("chunk-upload".to_owned())
             .spawn({
                 let pool = Arc::clone(&pool);
-                move || {
-                    uploader_loop(
-                        device,
-                        queue,
-                        data_layout,
-                        pool,
-                        content_receiver,
-                        upload_sender,
-                    )
-                }
+                move || uploader_loop(device, data_layout, pool, content_receiver, upload_sender)
             })
             .expect("spawn chunk uploader");
         log::debug!("stream: {worker_count} generator workers, ring {RING_CHUNKS} chunks");
@@ -458,10 +482,16 @@ impl Streaming {
             center: None,
             work,
             pool,
+            uploads: UploadQueue::new(),
+            upload_budget,
             receiver: Some(upload_receiver),
             workers,
             uploader: Some(uploader),
             max_pump: Duration::ZERO,
+            last_budget: PUMP_BUDGET,
+            upload_frames: 0,
+            upload_frame_total: Duration::ZERO,
+            upload_frame_max: Duration::ZERO,
             hitches: 0,
             complete_logged: false,
             uploader_down: false,
@@ -488,50 +518,38 @@ impl Streaming {
         self.hitches
     }
 
-    /// Re-centers the ring if needed, then installs ready resources within
-    /// `budget`.
+    /// Re-centers the ring if needed, then moves finished uploads from the
+    /// worker channel into the byte-budgeted queue within `budget`.
     ///
-    /// The budget is checked before every install. Installing a finished
-    /// resource is a map insert, so a pump normally finishes well inside the
-    /// budget. `max_pump`/`hitches` cover this pump only (including the
-    /// recenter that runs before the loop); they do not include draw, submit or
-    /// the off-thread upload.
+    /// Moving a finished upload is a channel pop plus a map insert, so a pump
+    /// normally finishes well inside the budget. The GPU copy happens later, in
+    /// [`Self::take_uploads`] and the frame's command encoder, under the M3-03
+    /// byte budget. `max_pump`/`hitches` cover this pump only (including the
+    /// recenter); they do not include draw, submit or the upload copy.
     pub fn pump(&mut self, center: ChunkPos, budget: Duration) -> PumpStats {
         let started = Instant::now();
+        self.last_budget = budget;
         if self.center != Some(center) {
             self.recenter(center);
         }
 
-        let mut installed = 0usize;
-        while started.elapsed() < budget {
+        let mut queued = 0usize;
+        while started.elapsed() < budget && self.uploads.backlog_bytes() < upload::MAX_BACKLOG_BYTES
+        {
             let Some(receiver) = &self.receiver else {
                 break;
             };
             match receiver.try_recv() {
-                Ok((position, resources)) => {
+                Ok((position, upload)) => {
                     self.requested.remove(&position);
-                    if !self.desired.contains(&position) {
-                        // A recenter dropped this position while it was in
-                        // flight; its pooled ranges must go back, not leak.
-                        if let Some(resources) = resources
-                            && let Some(mesh) = resources.mesh
-                        {
-                            self.pool
-                                .lock()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                                .free(mesh);
-                        }
-                        continue;
-                    }
-                    match resources {
-                        Some(resources) => {
-                            self.chunks.insert(position, resources);
-                            installed += 1;
-                            log::trace!("stream: installed {position:?}");
+                    match upload {
+                        Some(upload) => {
+                            self.uploads.push(upload);
+                            queued += 1;
                         }
                         None => {
                             log::error!(
-                                "stream: {position:?} failed in generation or upload (see the worker/uploader log)"
+                                "stream: {position:?} failed in generation or preparation (see the worker/preparer log)"
                             );
                         }
                     }
@@ -561,42 +579,135 @@ impl Streaming {
         let stats = PumpStats {
             loaded: self.chunks.len(),
             pending: self.pending(),
-            installed,
+            queued,
             elapsed,
             max_elapsed: self.max_pump,
             hitches: self.hitches,
         };
-        if !self.complete_logged && stats.loaded == RING_CHUNKS {
-            self.complete_logged = true;
-            log::info!(
-                "stream: {RING_CHUNKS} loaded, {} pending; max pump {:.2} ms, {} hitches over {:.0} ms",
-                stats.pending,
-                self.max_pump.as_secs_f64() * 1000.0,
-                self.hitches,
-                budget.as_secs_f64() * 1000.0
-            );
-            let (pool, page_creation) = {
-                let pool = self
-                    .pool
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                (pool.stats(), pool.page_creation_time())
-            };
-            log::info!(
-                "pool: {} pages x {:.0} MiB = {:.1} MiB for {:.1} MiB of meshes; {:.1} MiB slack, {:.1} MiB free in holes ({:.1}% fragmented); {} live meshes, {} mesh allocations, pages created in {:.2} s",
-                pool.pages,
-                pool.page_bytes as f64 / (1024.0 * 1024.0),
-                pool.capacity_bytes as f64 / (1024.0 * 1024.0),
-                pool.used_bytes as f64 / (1024.0 * 1024.0),
-                pool.slack_bytes as f64 / (1024.0 * 1024.0),
-                pool.hole_bytes as f64 / (1024.0 * 1024.0),
-                pool.fragmentation * 100.0,
-                stats.loaded,
-                pool.allocations,
-                page_creation.as_secs_f64(),
-            );
-        }
+        self.maybe_log_complete();
         stats
+    }
+
+    /// Takes at most `budget` bytes of finished uploads for this frame.
+    ///
+    /// Results for positions the camera already left are freed here instead of
+    /// being installed, so a recenter cannot leak pooled ranges. The returned
+    /// jobs must be passed to [`Self::install_uploads`] after their bytes have
+    /// been copied.
+    pub fn take_uploads(&mut self, budget: usize) -> Vec<PendingUpload> {
+        let mut keep = Vec::new();
+        for upload in self.uploads.take_frame(budget) {
+            if self.desired.contains(&upload.position) {
+                keep.push(upload);
+            } else if let Some(mesh) = upload.mesh {
+                self.pool
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .free(mesh);
+            }
+        }
+        keep
+    }
+
+    /// Installs uploads whose copies are recorded in the frame being submitted.
+    ///
+    /// Returns how many became resident. A duplicate result for an already
+    /// resident position replaces it and frees the superseded ranges.
+    pub fn install_uploads(&mut self, uploads: Vec<PendingUpload>) -> usize {
+        let mut installed = 0usize;
+        for upload in uploads {
+            let resources = ChunkResources {
+                mesh: upload.mesh,
+                lighting: upload.lighting,
+            };
+            if let Some(previous) = self.chunks.insert(upload.position, resources)
+                && let Some(mesh) = previous.mesh
+            {
+                self.pool
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .free(mesh);
+            }
+            installed += 1;
+            log::trace!("stream: installed {:?}", upload.position);
+        }
+        self.maybe_log_complete();
+        installed
+    }
+
+    /// Upload bytes waiting for the frame thread.
+    pub fn upload_backlog_bytes(&self) -> usize {
+        self.uploads.backlog_bytes()
+    }
+
+    /// Upload queue counters.
+    pub fn upload_stats(&self) -> upload::UploadStats {
+        self.uploads.stats()
+    }
+
+    /// Records the CPU time one frame spent copying uploads into the pool.
+    /// Frames that moved no bytes are not counted, so the mean is per upload
+    /// frame rather than per rendered frame.
+    pub fn note_upload_frame(&mut self, bytes: usize, elapsed: Duration) {
+        if bytes == 0 {
+            return;
+        }
+        self.upload_frames += 1;
+        self.upload_frame_total += elapsed;
+        self.upload_frame_max = self.upload_frame_max.max(elapsed);
+    }
+
+    /// Logs the ring, pool and upload summaries once, when the ring completes.
+    fn maybe_log_complete(&mut self) {
+        if self.complete_logged || self.chunks.len() != RING_CHUNKS {
+            return;
+        }
+        self.complete_logged = true;
+        log::info!(
+            "stream: {RING_CHUNKS} loaded, {} pending; max pump {:.2} ms, {} hitches over {:.0} ms",
+            self.pending(),
+            self.max_pump.as_secs_f64() * 1000.0,
+            self.hitches,
+            self.last_budget.as_secs_f64() * 1000.0
+        );
+        let (pool, page_creation) = {
+            let pool = self
+                .pool
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            (pool.stats(), pool.page_creation_time())
+        };
+        log::info!(
+            "pool: {} pages x {:.0} MiB = {:.1} MiB for {:.1} MiB of meshes; {:.1} MiB slack, {:.1} MiB free in holes ({:.1}% fragmented); {} live meshes, {} mesh allocations, pages created in {:.2} s",
+            pool.pages,
+            pool.page_bytes as f64 / (1024.0 * 1024.0),
+            pool.capacity_bytes as f64 / (1024.0 * 1024.0),
+            pool.used_bytes as f64 / (1024.0 * 1024.0),
+            pool.slack_bytes as f64 / (1024.0 * 1024.0),
+            pool.hole_bytes as f64 / (1024.0 * 1024.0),
+            pool.fragmentation * 100.0,
+            self.chunks.len(),
+            pool.allocations,
+            page_creation.as_secs_f64(),
+        );
+        let upload = self.uploads.stats();
+        let mean_frame = if self.upload_frames == 0 {
+            0.0
+        } else {
+            self.upload_frame_total.as_secs_f64() * 1000.0 / self.upload_frames as f64
+        };
+        log::info!(
+            "upload: {} meshes, {:.1} MiB in {} frames; max frame {:.0} KiB of {:.0} KiB, peak backlog {:.1} MiB, {} overruns; copy {:.2} ms mean, {:.2} ms max",
+            upload.jobs,
+            upload.bytes as f64 / (1024.0 * 1024.0),
+            upload.frames,
+            upload.max_frame_bytes as f64 / 1024.0,
+            self.upload_budget as f64 / 1024.0,
+            upload.peak_backlog_bytes as f64 / (1024.0 * 1024.0),
+            upload.overruns,
+            mean_frame,
+            self.upload_frame_max.as_secs_f64() * 1000.0,
+        );
     }
 
     fn recenter(&mut self, center: ChunkPos) {
@@ -688,7 +799,6 @@ impl Drop for Streaming {
 #[allow(clippy::too_many_arguments)]
 fn uploader_loop(
     device: Device,
-    queue: Queue,
     data_layout: BindGroupLayout,
     pool: Arc<Mutex<MeshPool>>,
     receiver: Receiver<Job>,
@@ -714,13 +824,12 @@ fn uploader_loop(
             continue;
         };
         let resources = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            upload_chunk(
+            prepare_upload(
                 &device,
-                &queue,
                 &data_layout,
                 &pool,
                 position,
-                &content,
+                content,
                 generated,
                 starved,
             )
@@ -731,7 +840,7 @@ fn uploader_loop(
                 .map(|text| (*text).to_owned())
                 .or_else(|| payload.downcast_ref::<String>().cloned())
                 .unwrap_or_else(|| "unknown panic".to_owned());
-            log::error!("stream: {position:?} upload panicked: {message}");
+            log::error!("stream: {position:?} preparation panicked: {message}");
             None
         });
         if sender.send((position, resources)).is_err() {
@@ -741,18 +850,18 @@ fn uploader_loop(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn upload_chunk(
+fn prepare_upload(
     device: &Device,
-    queue: &Queue,
     data_layout: &BindGroupLayout,
     pool: &Arc<Mutex<MeshPool>>,
     position: ChunkPos,
-    content: &ChunkContent,
+    content: ChunkContent,
     generated: Duration,
     starved: Duration,
-) -> Option<ChunkResources> {
+) -> Option<PendingUpload> {
     let started = Instant::now();
-    let (mesh, timing) = upload_mesh(queue, pool, &content.mesh);
+    let mesh = reserve_mesh(pool, &content.mesh);
+    let allocate = started.elapsed();
     let lighting_started = Instant::now();
     let lighting = chunk_lighting::upload(
         device,
@@ -762,59 +871,43 @@ fn upload_chunk(
         chunk_origin(position),
     );
     log::trace!(
-        "stream: uploaded {position:?}: {} quads, {} mesh B; generated {:.2} ms, starved {:.2} ms, alloc {:.2} ms, write {:.2} ms, lighting {:.2} ms, upload {:.2} ms",
+        "stream: prepared {position:?}: {} quads, {} mesh B; generated {:.2} ms, starved {:.2} ms, alloc {:.2} ms, lighting {:.2} ms",
         content.mesh.quads,
         content.mesh.byte_len(),
         generated.as_secs_f64() * 1000.0,
         starved.as_secs_f64() * 1000.0,
-        timing.allocate.as_secs_f64() * 1000.0,
-        timing.write.as_secs_f64() * 1000.0,
+        allocate.as_secs_f64() * 1000.0,
         lighting_started.elapsed().as_secs_f64() * 1000.0,
-        started.elapsed().as_secs_f64() * 1000.0,
     );
-    Some(ChunkResources { mesh, lighting })
+    Some(PendingUpload {
+        position,
+        mesh,
+        vertices: content.mesh.vertices,
+        indices: content.mesh.indices,
+        lighting,
+    })
 }
 
-/// Time split for one pooled mesh upload.
-#[derive(Clone, Copy, Debug, Default)]
-struct MeshUploadTiming {
-    /// Arena allocation. Includes a page creation when the arena grows.
-    allocate: Duration,
-    /// The `Queue::write_buffer` copy into the page range.
-    write: Duration,
-}
-
-/// Reserves a pool range for `mesh` and writes its bytes.
+/// Reserves a pool range for `mesh`; the frame thread writes the bytes.
 ///
-/// The pool lock is held for the allocation only; the write is ordered by the
-/// queue and the range is exclusively owned until the frame thread frees it.
-fn upload_mesh(
-    queue: &Queue,
+/// The pool lock covers the allocation only, and the range stays exclusively
+/// owned until the frame thread frees it.
+fn reserve_mesh(
     pool: &Arc<Mutex<MeshPool>>,
     mesh: &crate::chunk_content::ChunkMeshData,
-) -> (Option<MeshAllocation>, MeshUploadTiming) {
+) -> Option<MeshAllocation> {
     if mesh.indices.is_empty() {
-        return (None, MeshUploadTiming::default());
+        return None;
     }
-    let allocate_started = Instant::now();
     let vertex_count =
         u32::try_from(mesh.vertices.len() / MeshFormat::PACKED_8B.vertex_stride() as usize)
             .expect("a chunk mesh has at most u32::MAX vertices");
     let index_count =
         u32::try_from(mesh.indices.len()).expect("a chunk mesh has at most u32 indices");
-    let allocation = pool
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .allocate(vertex_count, index_count);
-    let allocate = allocate_started.elapsed();
-    let write_started = Instant::now();
-    allocation.write(queue, &mesh.vertices, bytemuck::cast_slice(&mesh.indices));
-    (
-        Some(allocation),
-        MeshUploadTiming {
-            allocate,
-            write: write_started.elapsed(),
-        },
+    Some(
+        pool.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .allocate(vertex_count, index_count),
     )
 }
 
