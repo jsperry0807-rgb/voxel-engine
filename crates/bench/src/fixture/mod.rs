@@ -380,6 +380,16 @@ pub fn default_manifest() -> PathBuf {
 ///
 /// Refuses to overwrite an existing fixture: a freeze is a deliberate event.
 pub fn build(out: &Path) -> Result<BuildOutcome, String> {
+    build_recipe(out, &Recipe::default())
+}
+
+/// Builds an explicit `recipe` into `out` and freezes its manifest.
+///
+/// The M1 fixture uses the default recipe; the smaller 128³ M2 gate fixture is
+/// the same deterministic generator over a different chunk box. `verify`
+/// rebuilds from the manifest recipe either way.
+pub fn build_recipe(out: &Path, recipe: &Recipe) -> Result<BuildOutcome, String> {
+    recipe.validate()?;
     if out.exists() {
         return Err(format!(
             "{} already exists; refusing to overwrite a frozen fixture (remove it to re-freeze)",
@@ -409,10 +419,9 @@ pub fn build(out: &Path) -> Result<BuildOutcome, String> {
         .map_err(|error| format!("failed to create {}: {error}", tmp.display()))?;
 
     let result = (|| {
-        let recipe = Recipe::default();
         let save_dir = tmp.join("save");
-        let generated = generate(&recipe, &save_dir)?;
-        validate_evidence(&recipe, &generated.observed, &generated.checks)?;
+        let generated = generate(recipe, &save_dir)?;
+        validate_evidence(recipe, &generated.observed, &generated.checks)?;
         let manifest = Manifest {
             schema_version: SCHEMA_VERSION,
             id: name.to_owned(),
@@ -422,7 +431,7 @@ pub fn build(out: &Path) -> Result<BuildOutcome, String> {
             save_root: "save".to_owned(),
             provenance: provenance(parent),
             format: Format::current(),
-            recipe,
+            recipe: recipe.clone(),
             palette: palette(),
             integrity: generated.integrity,
             observed: generated.observed,

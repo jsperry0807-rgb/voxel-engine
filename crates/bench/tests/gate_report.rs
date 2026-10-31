@@ -172,8 +172,11 @@ fn cli_writes_one_markdown_and_one_json_with_the_twelve_rows_and_machine() {
     assert_eq!(rows[7]["numbers"]["limit"], 4.0);
     assert_eq!(rows[7]["numbers"]["unit"], "ms");
 
-    // The synthetic fixture and the missing granularity run are not green.
-    assert_eq!(rows[8]["verdict"], "not_measured");
+    // Granularity is measured by the M1-34 reference on the frozen save; the
+    // synthetic fixture is still provisional, so only the dataset row stays
+    // unmeasured.
+    assert_eq!(rows[8]["numbers"]["limit"], 15.0);
+    assert_eq!(rows[8]["numbers"]["unit"], "%");
     assert_eq!(rows[10]["verdict"], "not_measured");
     // Row 12 reports which fallback rule fired. This fixture fails rows 1/6,
     // so the rule is triggered and the row is not a passing measurement.

@@ -32,16 +32,14 @@
 //! (N64 for the 64³ build, N128 for the 128³ build). It does not multiply the
 //! hard-fail line again; the pre-registration already froze the 1.5× factor.
 //!
-//! # The rows that are not measured here
+//! # The row that is not measured here
 //!
-//! - **Culling granularity** has the M1-34 instrumentation and its 100-pose
-//!   test, but no archived save-level result is consumed by this generator.
 //! - **Measurement dataset** is the synthetic fixture. It is reported as
 //!   provisional until the first real save, as the pre-registration requires.
 //!
-//! Absent a measured failure, those two rows keep the overall gate `incomplete`,
-//! not green. M1-41 attaches the real-save and granularity evidence before M1-42
-//! records the decision.
+//! Culling granularity is measured by [`super::granularity`] over 100 poses on
+//! the frozen save. The dataset row keeps the overall gate `incomplete`, not
+//! green, until a real save replaces the fixture.
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -58,6 +56,7 @@ use voxel_storage::reference::granularity::GRANULARITY_GATE_LIMIT;
 use crate::proc;
 
 use super::edits::{self, EditsReport};
+use super::granularity::{self, GranularityReport};
 use super::memory::{self, FixtureInfo, MemoryReport, NODE_BYTES};
 use super::probes::{self, ProbesReport};
 use super::residency::{self, Profile, ResidencyConfig, ResidencyReport};
@@ -475,7 +474,8 @@ impl GateReport {
         let residency = residency::report(ResidencyConfig::from_profile(profile))?;
         let edits = edits::report(manifest)?;
         let probes = probes::report(manifest)?;
-        Self::from_reports(&memory, &residency, &edits, &probes, profile)
+        let granularity = granularity::report(manifest)?;
+        Self::from_reports(&memory, &residency, &edits, &probes, &granularity, profile)
     }
 
     /// Assembles the report from already-measured harnesses.
@@ -488,6 +488,7 @@ impl GateReport {
         residency: &ResidencyReport,
         edits: &EditsReport,
         probes: &ProbesReport,
+        granularity: &GranularityReport,
         profile: Profile,
     ) -> Result<Self, String> {
         let machine = Machine::current();
@@ -500,7 +501,7 @@ impl GateReport {
         rows.push(mesh_row(memory)?);
         rows.push(edit_latency_row(edits)?);
         rows.push(probe_update_row(probes)?);
-        rows.push(granularity_row());
+        rows.push(granularity_row(granularity));
         rows.push(safety_factor_row());
         rows.push(dataset_row(memory));
         let fallback = fallback(&rows);
@@ -526,9 +527,9 @@ impl GateReport {
              rehearsal for the gate and must not be quoted as the M1 result; the dataset row stays \
              not measured until a real save replaces it."
                 .to_owned(),
-            "Culling granularity has the M1-34 reference and its 100-pose test, but this generator \
-             consumes M1-35…M1-38 only. Attach a granularity run before M1-41 or that row keeps the \
-             gate incomplete."
+            "Culling granularity is measured by the M1-34 reference over 100 poses on the frozen \
+             save. The reference traversal is frustum-only, so its ratio is the baseline the M5 \
+             production occlusion culler must beat."
                 .to_owned(),
             "The fallback is computed from the measured rows with the pre-registration §4 order. It \
              is a preview for M1-42, not a renegotiation of any threshold."
@@ -1048,23 +1049,45 @@ fn probe_update_row(probes: &ProbesReport) -> Result<GateRow, String> {
     ))
 }
 
-fn granularity_row() -> GateRow {
+fn granularity_row(granularity: &GranularityReport) -> GateRow {
+    let limit = GRANULARITY_GATE_LIMIT;
+    let ratio = granularity.p95;
+    // A missed reference-visible block is a correctness failure, not a
+    // granularity result; report it as a fail rather than hiding it in the
+    // ratio.
+    let verdict = if !granularity.is_conservative() {
+        Verdict::Fail
+    } else if ratio <= limit {
+        Verdict::Pass
+    } else {
+        Verdict::Fail
+    };
+    let margin = (limit - ratio) * 100.0;
     gate_row!(
         RowId::CullingGranularity,
         "Culling granularity",
         "≤ 15% traversed-but-invisible at chunk boundaries @ max view",
-        "not measured by this run".to_owned(),
         format!(
-            "≤ {:.0}% traversed-but-invisible",
-            GRANULARITY_GATE_LIMIT * 100.0
+            "p95 {:.2}% (p50 {:.2}%, max {:.2}%) over {} poses",
+            ratio * 100.0,
+            granularity.p50 * 100.0,
+            granularity.max * 100.0,
+            granularity.poses,
         ),
-        "n/a".to_owned(),
-        Verdict::NotMeasured,
-        "M1-34 reference; no archived gate result",
-        "The reference instrumentation and its 100-pose test exist, but this generator consumes \
-         M1-35…M1-38 only. A granularity run must be attached before M1-41, or this row keeps the \
-         gate incomplete; it is not silently passed.",
-        None,
+        format!("≤ {:.0}% traversed-but-invisible", limit * 100.0),
+        format!("{margin:+.2} pp"),
+        verdict,
+        "gate granularity (M1-34 reference)",
+        "Reference frustum traversal at block resolution against the M1-33 occlusion oracle, \
+         on the frozen save. The reference is frustum-only and deliberately over-includes solid \
+         interior blocks, so this is the baseline the M5 production culler must beat; a missed \
+         reference-visible block would be a correctness failure, not granularity.",
+        Some(GateNumber {
+            measured: ratio * 100.0,
+            limit: limit * 100.0,
+            margin,
+            unit: "%".to_owned(),
+        }),
     )
 }
 

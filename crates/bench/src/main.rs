@@ -104,6 +104,9 @@ fn main() {
                      fixture verify check hashes, scan the save and rebuild it\n\
                      --out          output directory (default: benchmarks/fixtures/m1-representative)\n\
                      --manifest     manifest to verify (default: <out>/manifest.json)\n\
+                     --chunk-min    recipe minimum chunk, x,y,z (default: -3,0,-3)\n\
+                     --chunk-max    recipe maximum chunk, x,y,z (default: 2,1,2)\n\
+                     --seed         recipe seed (default: the M1 fixture seed)\n\
                      \n\
                      voxel-bench gate memory [--manifest FILE] [--out FILE] [--json]\n\
                      \n\
@@ -139,6 +142,14 @@ fn main() {
                      gate probes  incremental probe-update latency over 1,000 edits\n\
                      \x20          on the frozen fixture, with p50/p95/max and the\n\
                      \x20          4 ms per-edited-chunk budget (M1-38)\n\
+                     --manifest   fixture manifest (default: benchmarks/fixtures/m1-representative/manifest.json)\n\
+                     --out        also write the JSON report to FILE\n\
+                     --json       print the JSON report instead of the Markdown table\n\
+                     \n\
+                     voxel-bench gate granularity [--manifest FILE] [--out FILE] [--json]\n\
+                     \n\
+                     gate granularity  reference traversed-vs-visible block volume\n\
+                     \x20          over 100 poses on the frozen save (M1-34, row 9)\n\
                      --manifest   fixture manifest (default: benchmarks/fixtures/m1-representative/manifest.json)\n\
                      --out        also write the JSON report to FILE\n\
                      --json       print the JSON report instead of the Markdown table\n\
@@ -411,6 +422,7 @@ fn fixture_mode(args: &[String]) {
 
 fn fixture_build(args: &[String]) {
     let mut out = PathBuf::from(voxel_bench::fixture::DEFAULT_DIR);
+    let mut recipe = voxel_bench::fixture::Recipe::default();
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
@@ -421,12 +433,35 @@ fn fixture_build(args: &[String]) {
                         .unwrap_or_else(|| usage("--out needs a directory")),
                 );
             }
+            "--chunk-min" => {
+                index += 1;
+                recipe.chunk_min = parse_point(
+                    "--chunk-min",
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--chunk-min needs x,y,z")),
+                );
+            }
+            "--chunk-max" => {
+                index += 1;
+                recipe.chunk_max = parse_point(
+                    "--chunk-max",
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--chunk-max needs x,y,z")),
+                );
+            }
+            "--seed" => {
+                index += 1;
+                recipe.seed = args
+                    .get(index)
+                    .and_then(|value| value.parse().ok())
+                    .unwrap_or_else(|| usage("--seed needs a u64"));
+            }
             other => usage(&format!("unknown fixture build argument `{other}`")),
         }
         index += 1;
     }
 
-    match voxel_bench::fixture::build(&out) {
+    match voxel_bench::fixture::build_recipe(&out, &recipe) {
         Ok(built) => {
             let manifest = &built.manifest;
             println!(
@@ -516,13 +551,16 @@ fn fixture_verify(args: &[String]) {
 
 fn gate_mode(args: &[String]) {
     let Some(command) = args.first() else {
-        usage("gate needs `memory`, `residency`, `edits`, `probes`, `scaleup` or `report`");
+        usage(
+            "gate needs `memory`, `residency`, `edits`, `probes`, `granularity`, `scaleup` or `report`",
+        );
     };
     match command.as_str() {
         "memory" => gate_memory(&args[1..]),
         "residency" => gate_residency(&args[1..]),
         "edits" => gate_edits(&args[1..]),
         "probes" => gate_probes(&args[1..]),
+        "granularity" => gate_granularity(&args[1..]),
         "scaleup" => gate_scaleup(&args[1..]),
         "report" => gate_report(&args[1..]),
         other => usage(&format!("unknown gate command `{other}`")),
@@ -574,6 +612,59 @@ fn gate_memory(args: &[String]) {
             Ok(serialized) => println!("{serialized}"),
             Err(error) => {
                 eprintln!("failed to serialize gate memory report: {error}");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        print!("{}", report.markdown());
+    }
+}
+
+fn gate_granularity(args: &[String]) {
+    let mut manifest = voxel_bench::fixture::default_manifest();
+    let mut out: Option<PathBuf> = None;
+    let mut json = false;
+
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--manifest" => {
+                index += 1;
+                manifest = PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--manifest needs a file")),
+                );
+            }
+            "--out" => {
+                index += 1;
+                out = Some(PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--out needs a file")),
+                ));
+            }
+            "--json" => json = true,
+            other => usage(&format!("unknown gate granularity argument `{other}`")),
+        }
+        index += 1;
+    }
+
+    let report = match voxel_bench::gate::granularity::report(&manifest) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("failed to measure {}: {error}", manifest.display());
+            std::process::exit(1);
+        }
+    };
+
+    if let Some(out) = out {
+        write_json_report(&out, &report);
+    }
+
+    if json {
+        match serde_json::to_string_pretty(&report) {
+            Ok(serialized) => println!("{serialized}"),
+            Err(error) => {
+                eprintln!("failed to serialize gate granularity report: {error}");
                 std::process::exit(1);
             }
         }
@@ -958,6 +1049,21 @@ fn usage(message: &str) -> ! {
     eprintln!("voxel-bench: {message}");
     eprintln!("try `voxel-bench --help`");
     std::process::exit(2);
+}
+
+/// Parses an `x,y,z` chunk coordinate for `fixture build`.
+fn parse_point(flag: &str, text: &str) -> [i32; 3] {
+    let parts: Vec<&str> = text.split(',').map(str::trim).collect();
+    if parts.len() != 3 {
+        usage(&format!("{flag} needs three comma-separated integers"));
+    }
+    let mut point = [0i32; 3];
+    for (axis, part) in parts.iter().enumerate() {
+        point[axis] = part
+            .parse()
+            .unwrap_or_else(|_| usage(&format!("{flag}: `{part}` is not an integer")));
+    }
+    point
 }
 
 fn human_ns(ns: u64) -> String {
