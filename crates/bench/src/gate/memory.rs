@@ -33,19 +33,59 @@ use serde::{Deserialize, Serialize};
 use voxel_core::content_constants::{
     LIGHT_BYTES_PER_CHUNK, LIGHT_CELLS_PER_CHUNK, PROBE_BYTES_PER_CHUNK,
 };
+use voxel_mesh::{for_each_block, greedy_block, mesh_block};
 use voxel_storage::gpu::{BLOCKS_PER_CHUNK, OVERLAY_WORDS, chunk_block};
 use voxel_storage::reference::mesh::count_greedy_dense;
 use voxel_storage::scan::scan_save;
 use voxel_storage::{
-    AIR, CHUNK_BITS, CHUNK_DIM, CHUNK_VOLUME, LEAF_MATERIAL_BYTES, Node, serialize,
+    AIR, Apron, CHUNK_BITS, CHUNK_DIM, CHUNK_VOLUME, LEAF_MATERIAL_BYTES, Node, serialize,
 };
 
 use crate::fixture::{self, FixtureStatus, Manifest};
 use crate::save_scan::Distribution;
 
 /// Schema version of the memory report itself.
-/// Version 2 counts the resident v1 `Svdag` pool in [`MemoryComponents::total`].
-pub const SCHEMA_VERSION: u32 = 2;
+/// Version 3 measures the production AO mesh and adds the no-AO reference.
+pub const SCHEMA_VERSION: u32 = 3;
+
+/// The mesh encoding the gate charges for.
+///
+/// The production measurement runs `mesh_block` and charges the exact vertex
+/// and index bytes, plus one record per non-empty block and the per-chunk
+/// `record_index` table. A future format (packed vertex or instanced quads)
+/// changes the descriptor, not the measurement loop.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MeshFormat {
+    /// Human-readable format name.
+    pub name: &'static str,
+    /// Bytes per vertex record.
+    pub vertex_bytes: u64,
+    /// Bytes per index.
+    pub index_bytes: u64,
+    /// Bytes per non-empty block's meshlet record.
+    pub meshlet_record_bytes: u64,
+    /// Bytes in the per-chunk `u16` record-index table.
+    pub table_bytes: u64,
+}
+
+impl MeshFormat {
+    /// Bytes for one quad: four vertices plus six indices.
+    pub const fn bytes_per_quad(self) -> u64 {
+        4 * self.vertex_bytes + 6 * self.index_bytes
+    }
+}
+
+/// ADR-010: 16 B vertex, `u16` indices, 16 B meshlet record, `u16` table.
+pub const ADR_010: MeshFormat = MeshFormat {
+    name: "ADR-010 16 B vertex + u16 index",
+    vertex_bytes: 16,
+    index_bytes: 2,
+    meshlet_record_bytes: 16,
+    table_bytes: BLOCKS_PER_CHUNK as u64 * 2,
+};
+
+/// Bytes per quad for the current ADR-010 encoding.
+pub const MESH_BYTES_PER_QUAD: u64 = ADR_010.bytes_per_quad();
 
 /// Bytes per internal DAG node in the banded layout.
 pub const NODE_BYTES: u64 = core::mem::size_of::<Node>() as u64;
@@ -104,9 +144,12 @@ pub struct MemoryComponents {
     pub light: ComponentDistribution,
     /// Fixed near-LOD probe volume.
     pub probes: ComponentDistribution,
-    /// M1-31 count-only greedy mesh estimate.
+    /// Production AO mesh: vertices, indices, meshlet records and table.
     pub mesh: ComponentDistribution,
-    /// Sum of the six components above, per chunk.
+    /// M1-31 no-AO reference mesh, informational only; not in `total`.
+    #[serde(default)]
+    pub mesh_reference: ComponentDistribution,
+    /// Sum of the six counted components above, per chunk.
     pub total: ComponentDistribution,
 }
 
@@ -135,11 +178,25 @@ pub struct ChunkMemory {
     pub light_bytes: u64,
     /// Near-LOD probe bytes.
     pub probe_bytes: u64,
-    /// Greedy quads counted by the M1-31 reference.
+    /// Production AO quads.
     pub mesh_quads: u64,
-    /// Greedy mesh payload estimate (`mesh_quads × 76`).
+    /// Production vertex + index bytes.
+    pub mesh_payload_bytes: u64,
+    /// Production meshlet-record bytes (16 B per non-empty block).
+    #[serde(default)]
+    pub mesh_record_bytes: u64,
+    /// Production `record_index` table bytes.
+    #[serde(default)]
+    pub mesh_table_bytes: u64,
+    /// Production mesh total: payload + records + table.
     pub mesh_bytes: u64,
-    /// Sum of DAG, the v1 pool, overlay, light, probes and mesh.
+    /// M1-31 no-AO reference quad count, informational only.
+    #[serde(default)]
+    pub mesh_reference_quads: u64,
+    /// M1-31 no-AO reference bytes (`quads × 76`), informational only.
+    #[serde(default)]
+    pub mesh_reference_bytes: u64,
+    /// Sum of DAG, the v1 pool, overlay, light, probes and production mesh.
     pub total_bytes: u64,
 }
 
@@ -239,7 +296,11 @@ impl MemoryReport {
             ("Overlay", &self.components.overlay),
             ("Light", &self.components.light),
             ("Probes", &self.components.probes),
-            ("Mesh estimate", &self.components.mesh),
+            ("Mesh (production AO)", &self.components.mesh),
+            (
+                "Mesh reference (no AO, informational)",
+                &self.components.mesh_reference,
+            ),
             ("Total", &self.components.total),
         ] {
             writeln!(
@@ -275,6 +336,18 @@ pub fn default_report() -> Result<MemoryReport, String> {
 /// The scan must match the manifest's live chunk and voxel counts; a save that
 /// was edited after freezing is an error, not a silently different report.
 pub fn report(manifest_path: &Path) -> Result<MemoryReport, String> {
+    report_with_format(manifest_path, ADR_010)
+}
+
+/// Measures the fixture with an explicit mesh format.
+///
+/// The format is a descriptor (`vertex_bytes`, `index_bytes`, record and table
+/// sizes), so the gate can switch to a packed or instanced encoding without
+/// changing the measurement loop.
+pub fn report_with_format(
+    manifest_path: &Path,
+    format: MeshFormat,
+) -> Result<MemoryReport, String> {
     let manifest = fixture::read_manifest(manifest_path)?;
     if manifest.schema_version != fixture::SCHEMA_VERSION {
         return Err(format!(
@@ -300,13 +373,14 @@ pub fn report(manifest_path: &Path) -> Result<MemoryReport, String> {
     }
 
     let save_dir = fixture::save_dir(manifest_path, &manifest)?;
-    measure(manifest_path, &save_dir, manifest)
+    measure(manifest_path, &save_dir, manifest, format)
 }
 
 fn measure(
     manifest_path: &Path,
     save_dir: &Path,
     manifest: Manifest,
+    format: MeshFormat,
 ) -> Result<MemoryReport, String> {
     let mut dense = vec![0u16; CHUNK_VOLUME];
     let mut chunks = Vec::with_capacity(manifest.observed.live_chunks.min(4096));
@@ -331,9 +405,37 @@ fn measure(
         let dag_bytes = dag_node_bytes + dag_leaf_bytes;
         let dag_v1_bytes = chunk.dag.words() as u64 * core::mem::size_of::<u32>() as u64;
 
-        let mesh = count_greedy_dense(CHUNK_DIM, &dense);
-        let mesh_quads = mesh.quads() as u64;
-        let mesh_bytes = mesh.bytes() as u64;
+        let reference = count_greedy_dense(CHUNK_DIM, &dense);
+        let mesh_reference_quads = reference.quads() as u64;
+        let mesh_reference_bytes = reference.bytes() as u64;
+
+        // Production path: the same `greedy_block` + `mesh_block` call the
+        // uploader uses, with AO in the merge key. Charge exact vertex and
+        // index bytes, one record per non-empty block and the record table.
+        let apron = Apron::new();
+        let mut quads = Vec::new();
+        let mut mesh_quads = 0u64;
+        let mut mesh_payload_bytes = 0u64;
+        let mut non_empty_blocks = 0u64;
+        for_each_block(&dense, &apron, |block, scratch| {
+            greedy_block(scratch, &mut quads);
+            let mesh = mesh_block(&quads, block);
+            if mesh.indices.is_empty() {
+                return;
+            }
+            non_empty_blocks += 1;
+            mesh_quads += mesh.quad_count() as u64;
+            mesh_payload_bytes += mesh.vertices.len() as u64 * format.vertex_bytes
+                + mesh.indices.len() as u64 * format.index_bytes;
+        });
+        let mesh_record_bytes = non_empty_blocks * format.meshlet_record_bytes;
+        let mesh_table_bytes = if mesh_quads > 0 {
+            format.table_bytes
+        } else {
+            0
+        };
+        let mesh_bytes = mesh_payload_bytes + mesh_record_bytes + mesh_table_bytes;
+
         let light_bytes = LIGHT_BYTES_PER_CHUNK as u64;
         let probe_bytes = PROBE_BYTES_PER_CHUNK as u64;
 
@@ -350,7 +452,12 @@ fn measure(
             light_bytes,
             probe_bytes,
             mesh_quads,
+            mesh_payload_bytes,
+            mesh_record_bytes,
+            mesh_table_bytes,
             mesh_bytes,
+            mesh_reference_quads,
+            mesh_reference_bytes,
             total_bytes: dag_bytes
                 + dag_v1_bytes
                 + overlay_bytes
@@ -395,6 +502,7 @@ fn measure(
         light: distribution(chunks.iter().map(|chunk| chunk.light_bytes)),
         probes: distribution(chunks.iter().map(|chunk| chunk.probe_bytes)),
         mesh: distribution(chunks.iter().map(|chunk| chunk.mesh_bytes)),
+        mesh_reference: distribution(chunks.iter().map(|chunk| chunk.mesh_reference_bytes)),
         total: distribution(chunks.iter().map(|chunk| chunk.total_bytes)),
     };
     let dag_v1_view = distribution(chunks.iter().map(|chunk| chunk.dag_v1_bytes));
@@ -434,11 +542,14 @@ fn measure(
              probes = {PROBE_BYTES_PER_CHUNK} B/chunk at the near LOD. Both are fixed by the \
              compiled chunk edge, not by content."
         ),
-        "Mesh estimate = M1-31 count-only greedy quads × 76 B; it excludes vertex/index buffer \
-         overhead and treats every non-air material as opaque. The reference has no neighbour \
-         apron, so faces on a chunk boundary are counted as exposed and the estimate is an \
-         upper bound for those faces."
-            .to_owned(),
+        format!(
+            "Mesh = production AO `mesh_block` output ({} B/quad) plus {} B per non-empty block \
+             meshlet record and the per-chunk `u16` record table. The M1-31 no-AO reference is \
+             reported separately as `mesh_reference` and is not in the total; it is the historical \
+             gate basis and treats chunk-boundary faces as exposed.",
+            format.bytes_per_quad(),
+            format.meshlet_record_bytes,
+        ),
         "A/B root overhead is not part of this measurement; the DAG row counts the shared banded \
          chunk, not the duplicated path runs."
             .to_owned(),

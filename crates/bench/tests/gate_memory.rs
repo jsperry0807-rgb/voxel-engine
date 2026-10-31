@@ -74,8 +74,16 @@ fn report_covers_every_fixture_chunk_and_components_sum_to_total() {
         );
         assert_eq!(chunk.dag_bytes, chunk.dag_node_bytes + chunk.dag_leaf_bytes);
         assert_eq!(
+            chunk.mesh_payload_bytes,
+            chunk.mesh_quads * voxel_bench::gate::memory::MESH_BYTES_PER_QUAD,
+        );
+        assert_eq!(
             chunk.mesh_bytes,
-            chunk.mesh_quads * voxel_storage::reference::mesh::QUAD_BYTES as u64
+            chunk.mesh_payload_bytes + chunk.mesh_record_bytes + chunk.mesh_table_bytes,
+        );
+        assert_eq!(
+            chunk.mesh_reference_bytes,
+            chunk.mesh_reference_quads * voxel_storage::reference::mesh::QUAD_BYTES as u64,
         );
         assert_eq!(chunk.light_bytes, 1_024);
         assert_eq!(chunk.probe_bytes, 768);
@@ -91,6 +99,7 @@ fn report_covers_every_fixture_chunk_and_components_sum_to_total() {
         ("light", &report.components.light),
         ("probes", &report.components.probes),
         ("mesh", &report.components.mesh),
+        ("mesh_reference", &report.components.mesh_reference),
         ("total", &report.components.total),
     ] {
         let p50 = distribution.p50.unwrap_or_else(|| panic!("{name} p50"));
@@ -107,6 +116,7 @@ fn report_covers_every_fixture_chunk_and_components_sum_to_total() {
     assert_eq!(report.components.light.p50, Some(1_024));
     assert_eq!(report.components.probes.p50, Some(768));
     assert!(report.components.mesh.p95.unwrap() > 0);
+    assert!(report.components.mesh_reference.p95.unwrap() > 0);
 
     let component_sum = report.components.dag.total
         + report.components.legacy_v1.total
@@ -148,7 +158,8 @@ fn cli_prints_every_component_and_percentile() {
         "Overlay",
         "Light",
         "Probes",
-        "Mesh estimate",
+        "Mesh (production AO)",
+        "Mesh reference (no AO, informational)",
         "Total",
         "p50",
         "p95",

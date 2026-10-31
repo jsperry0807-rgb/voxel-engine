@@ -63,7 +63,7 @@ use super::residency::{self, Profile, ResidencyConfig, ResidencyReport};
 use super::stat::{format_duration, format_signed_duration, grouped};
 
 /// Schema version of the gate report itself.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// Number of pre-registered rows in `docs/pre-registration.md` §3.
 pub const ROW_COUNT: usize = 12;
@@ -950,6 +950,7 @@ fn mesh_row(memory: &MemoryReport) -> Result<GateRow, String> {
         .p95
         .ok_or_else(|| "the fixture has no chunk for the mesh row".to_owned())?;
     let max = memory.components.mesh.max.unwrap_or(p95);
+    let reference_p95 = memory.components.mesh_reference.p95.unwrap_or(0);
     let built_at_target = CHUNK_BITS == TARGET_CHUNK_BITS;
     let limit_kib = if built_at_target {
         MESH_BUDGET_128_KIB
@@ -965,18 +966,23 @@ fn mesh_row(memory: &MemoryReport) -> Result<GateRow, String> {
         "Mesh buffer/chunk",
         "64³: 150–600 KB; 128³: 600 KB–2.4 MB",
         format!(
-            "p95 {} KiB (max {} KiB); greedy estimate × 76 B",
+            "p95 {} KiB (max {} KiB); production AO × {} B/quad + records",
             p95 / KIB,
             max / KIB,
+            memory::MESH_BYTES_PER_QUAD,
         ),
         format!("≤ {} KiB/chunk at {}³", limit_kib, CHUNK_DIM),
         signed_bytes(margin),
         verdict,
-        "gate memory (M1-35); M1-31 reference mesher",
+        "gate memory (M1-35); production AO mesher; M1-31 reference",
         format!(
-            "The estimate is greedy quads × 76 B and excludes vertex/index buffer overhead. The \
-             predicted lower bound is {} KiB; a lower estimate is not a failure, but it is not a \
-             measured GPU buffer either. The gate uses p95 and reports max separately.",
+            "The production AO mesh is measured through `mesh_block` ({} B/quad) and includes \
+             16 B per non-empty block meshlet record plus the per-chunk u16 record table. The \
+             M1-31 no-AO reference is {} KiB p95, informational only and not in the total. The \
+             predicted lower bound is {} KiB; a lower estimate is not a failure. The gate uses \
+             p95 and reports max separately.",
+            memory::MESH_BYTES_PER_QUAD,
+            reference_p95 / KIB,
             MESH_PREDICTED_MIN_KIB,
         ),
         Some(GateNumber {

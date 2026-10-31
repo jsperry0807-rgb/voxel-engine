@@ -93,7 +93,7 @@ fn cli_writes_one_markdown_and_one_json_with_the_twelve_rows_and_machine() {
             "a failing row must render FAIL"
         );
     }
-    assert_eq!(json["schema_version"], 1);
+    assert_eq!(json["schema_version"], 2);
     assert_eq!(json["profile"], "default");
     assert_eq!(json["profile_gated"], true);
 
