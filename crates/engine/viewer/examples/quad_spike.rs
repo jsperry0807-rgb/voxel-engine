@@ -33,14 +33,19 @@ use wgpu::{
 const QUADS: usize = 64;
 const TARGET: u32 = 256;
 
+const _: () = assert!(
+    voxel_core::constants::CHUNK_DIM == 128,
+    "quad_spike needs `--features chunk128` for the 8 x 8 block grid"
+);
+
 fn main() {
     let instance = Instance::new(InstanceDescriptor::new_without_display_handle_from_env());
     let adapter = pollster::block_on(instance.request_adapter(&RequestAdapterOptions::default()))
         .expect("an adapter is available");
     let info = adapter.get_info();
     println!(
-        "adapter: {} ({:?}, {:?})",
-        info.name, info.backend, info.device_type
+        "adapter: {} ({:?}, {:?}, driver {:?})",
+        info.name, info.backend, info.device_type, info.driver
     );
     assert!(
         adapter
@@ -54,8 +59,17 @@ fn main() {
     }))
     .expect("device");
 
+    let limits = adapter.limits();
+    assert!(
+        limits.max_storage_buffers_per_shader_stage >= 1,
+        "the vertex stage needs at least one storage buffer"
+    );
     let records = records();
     let records_bytes: Vec<u8> = records.iter().flat_map(|record| record.encode()).collect();
+    assert!(
+        limits.max_storage_buffer_binding_size as u64 >= records_bytes.len() as u64,
+        "the record buffer must fit one storage binding"
+    );
     let records_buffer = device.create_buffer(&BufferDescriptor {
         label: Some("quad records"),
         size: records_bytes.len() as u64,
@@ -64,7 +78,17 @@ fn main() {
     });
     queue.write_buffer(&records_buffer, 0, &records_bytes);
 
-    gate_b1(&device, &queue, &records_buffer, &records);
+    let coverage = coverage_records();
+    let coverage_bytes: Vec<u8> = coverage.iter().flat_map(|record| record.encode()).collect();
+    let coverage_buffer = device.create_buffer(&BufferDescriptor {
+        label: Some("coverage records"),
+        size: coverage_bytes.len() as u64,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    queue.write_buffer(&coverage_buffer, 0, &coverage_bytes);
+
+    gate_b1(&device, &queue, &coverage_buffer, &coverage);
     gate_b2(&device, &queue, &records_buffer);
     gate_d(&device, &queue, &records_buffer, &records);
 }
@@ -87,6 +111,45 @@ fn records() -> Vec<QuadRecord> {
             quad.extent[2] = 16;
             quad.extent[0] = 16;
             records.push(QuadRecord::from_quad(&quad, block));
+        }
+    }
+    records
+}
+
+/// All six faces, several non-square extents, all AO patterns and the material
+/// high bits. B1 uses this list; the pixel-grid gates use `records()`.
+fn coverage_records() -> Vec<QuadRecord> {
+    let mut records = Vec::new();
+    for face in [
+        Face::East,
+        Face::West,
+        Face::Top,
+        Face::Bottom,
+        Face::South,
+        Face::North,
+    ] {
+        let axis = match face {
+            Face::East | Face::West => 0,
+            Face::Top | Face::Bottom => 1,
+            Face::South | Face::North => 2,
+        };
+        let u_axis = (axis + 1) % 3;
+        let v_axis = (axis + 2) % 3;
+        for (extent_u, extent_v) in [(1, 1), (3, 5), (16, 2), (7, 9)] {
+            for ao in [[0, 85, 170, 255], [255; 4], [0; 4]] {
+                for material in [0x2A, 0x3FFF] {
+                    let mut quad = GreedyQuad {
+                        face,
+                        material,
+                        ao,
+                        origin: [1, 1, 1],
+                        extent: [1, 1, 1],
+                    };
+                    quad.extent[u_axis] = extent_u;
+                    quad.extent[v_axis] = extent_v;
+                    records.push(QuadRecord::from_quad(&quad, BlockPos::new(0, 0, 0)));
+                }
+            }
         }
     }
     records
@@ -132,7 +195,8 @@ fn gate_b1(
     records_buffer: &wgpu::Buffer,
     records: &[QuadRecord],
 ) {
-    let out_bytes = (QUADS * 4 * 16) as u64;
+    let count = records.len();
+    let out_bytes = (count * 4 * 16) as u64;
     let out_pos = device.create_buffer(&BufferDescriptor {
         label: Some("b1 positions"),
         size: out_bytes,
@@ -173,7 +237,7 @@ fn gate_b1(
     });
     let shader = device.create_shader_module(ShaderModuleDescriptor {
         label: Some("b1"),
-        source: ShaderSource::Wgsl(B1_WGSL.into()),
+        source: ShaderSource::Wgsl(format!("{RECORD_WGSL}\n{B1_BODY}").into()),
     });
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("b1"),
@@ -197,7 +261,7 @@ fn gate_b1(
         });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        pass.dispatch_workgroups(((QUADS * 4).div_ceil(64)) as u32, 1, 1);
+        pass.dispatch_workgroups(((count * 4).div_ceil(64)) as u32, 1, 1);
     }
     queue.submit([encoder.finish()]);
 
@@ -243,7 +307,10 @@ fn gate_b1(
             assert_eq!(mat[base + 3] as u8, vertex.ao[3] / 85, "B1 ao3");
         }
     }
-    println!("B1: {} quads reconstructed exactly", records.len());
+    println!(
+        "B1: {} quads reconstructed exactly (all faces/extents/AO)",
+        records.len()
+    );
 }
 
 fn gate_b2(device: &wgpu::Device, queue: &wgpu::Queue, records_buffer: &wgpu::Buffer) {
@@ -276,7 +343,7 @@ fn gate_b2(device: &wgpu::Device, queue: &wgpu::Queue, records_buffer: &wgpu::Bu
     });
     let shader = device.create_shader_module(ShaderModuleDescriptor {
         label: Some("b2"),
-        source: ShaderSource::Wgsl(B2_WGSL.into()),
+        source: ShaderSource::Wgsl(format!("{RECORD_WGSL}\n{B2_BODY}").into()),
     });
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("b2"),
@@ -372,7 +439,11 @@ fn gate_b2(device: &wgpu::Device, queue: &wgpu::Queue, records_buffer: &wgpu::Bu
                 let x = bx * 32 + 16;
                 let y = (TARGET - 1) - (bz * 32 + 16);
                 let value = pixels[(y * TARGET + x) as usize];
-                assert_eq!(value, expected, "B2 {label} quad {expected} at ({x}, {y})");
+                assert_eq!(
+                    value,
+                    expected + 1,
+                    "B2 {label} quad {expected} at ({x}, {y})"
+                );
             }
         }
         println!("B2 {label}: 64 quad centres matched");
@@ -452,12 +523,7 @@ fn storage_entry(binding: u32, read_only: bool, visibility: ShaderStages) -> Bin
     }
 }
 
-const B1_WGSL: &str = r#"
-@group(0) @binding(0) var<storage, read> records: array<vec2<u32>>;
-@group(0) @binding(1) var<storage, read_write> out_pos: array<vec4<u32>>;
-@group(0) @binding(2) var<storage, read_write> out_mat: array<vec4<u32>>;
-
-fn corner_sign(face: u32, corner: u32) -> vec2<i32> {
+const RECORD_WGSL: &str = r#"fn corner_sign(face: u32, corner: u32) -> vec2<i32> {
     let positive = face == 0u || face == 2u || face == 4u;
     if (positive) {
         switch corner {
@@ -490,6 +556,13 @@ fn reconstruct(w0: u32, w1: u32, corner: u32) -> array<u32, 3> {
     p[v_axis] = p[v_axis] + select(0u, ext_v, s.y > 0);
     return p;
 }
+"#;
+
+const B1_BODY: &str = r#"
+@group(0) @binding(0) var<storage, read> records: array<vec2<u32>>;
+@group(0) @binding(1) var<storage, read_write> out_pos: array<vec4<u32>>;
+@group(0) @binding(2) var<storage, read_write> out_mat: array<vec4<u32>>;
+
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
@@ -511,44 +584,11 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 "#;
 
-const B2_WGSL: &str = r#"
+const B2_BODY: &str = r#"
 @group(0) @binding(0) var<storage, read> records: array<vec2<u32>>;
 
 const CORNERS: array<u32, 6> = array<u32, 6>(0u, 1u, 2u, 0u, 2u, 3u);
 
-fn corner_sign(face: u32, corner: u32) -> vec2<i32> {
-    let positive = face == 0u || face == 2u || face == 4u;
-    if (positive) {
-        switch corner {
-            case 0u: { return vec2<i32>(-1, -1); }
-            case 1u: { return vec2<i32>(1, -1); }
-            case 2u: { return vec2<i32>(1, 1); }
-            default: { return vec2<i32>(-1, 1); }
-        }
-    }
-    switch corner {
-        case 0u: { return vec2<i32>(-1, -1); }
-        case 1u: { return vec2<i32>(-1, 1); }
-        case 2u: { return vec2<i32>(1, 1); }
-        default: { return vec2<i32>(1, -1); }
-    }
-}
-
-fn reconstruct(w0: u32, w1: u32, corner: u32) -> array<u32, 3> {
-    var p = array<u32, 3>(w0 & 255u, (w0 >> 8u) & 255u, (w0 >> 16u) & 255u);
-    let face = w1 & 7u;
-    let axis = face / 2u;
-    let positive = face % 2u == 0u;
-    let u_axis = (axis + 1u) % 3u;
-    let v_axis = (axis + 2u) % 3u;
-    let ext_u = ((w1 >> 3u) & 127u) + 1u;
-    let ext_v = ((w1 >> 10u) & 127u) + 1u;
-    let s = corner_sign(face, corner);
-    p[axis] = p[axis] + select(0u, 1u, positive);
-    p[u_axis] = p[u_axis] + select(0u, ext_u, s.x > 0);
-    p[v_axis] = p[v_axis] + select(0u, ext_v, s.y > 0);
-    return p;
-}
 
 struct VertexOutput {
     @builtin(position) pos: vec4<f32>,
@@ -566,7 +606,7 @@ fn vs(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instanc
         0.0,
         1.0,
     );
-    out.quad = instance;
+    out.quad = instance + 1u;
     return out;
 }
 
@@ -749,7 +789,7 @@ fn make_instanced_color_pipeline(
     });
     let shader = device.create_shader_module(ShaderModuleDescriptor {
         label: Some("gate d instanced"),
-        source: ShaderSource::Wgsl(D_INSTANCED_WGSL.into()),
+        source: ShaderSource::Wgsl(format!("{RECORD_WGSL}\n{D_INSTANCED_BODY}").into()),
     });
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("gate d instanced"),
@@ -901,41 +941,9 @@ fn fs(input: Out) -> @location(0) vec4<f32> {
 }
 "#;
 
-const D_INSTANCED_WGSL: &str = r#"
+const D_INSTANCED_BODY: &str = r#"
 @group(0) @binding(0) var<storage, read> records: array<vec2<u32>>;
 const CORNERS: array<u32, 6> = array<u32, 6>(0u, 1u, 2u, 0u, 2u, 3u);
-fn corner_sign(face: u32, corner: u32) -> vec2<i32> {
-    let positive = face == 0u || face == 2u || face == 4u;
-    if (positive) {
-        switch corner {
-            case 0u: { return vec2<i32>(-1, -1); }
-            case 1u: { return vec2<i32>(1, -1); }
-            case 2u: { return vec2<i32>(1, 1); }
-            default: { return vec2<i32>(-1, 1); }
-        }
-    }
-    switch corner {
-        case 0u: { return vec2<i32>(-1, -1); }
-        case 1u: { return vec2<i32>(-1, 1); }
-        case 2u: { return vec2<i32>(1, 1); }
-        default: { return vec2<i32>(1, -1); }
-    }
-}
-fn reconstruct(w0: u32, w1: u32, corner: u32) -> array<u32, 3> {
-    var p = array<u32, 3>(w0 & 255u, (w0 >> 8u) & 255u, (w0 >> 16u) & 255u);
-    let face = w1 & 7u;
-    let axis = face / 2u;
-    let positive = face % 2u == 0u;
-    let u_axis = (axis + 1u) % 3u;
-    let v_axis = (axis + 2u) % 3u;
-    let ext_u = ((w1 >> 3u) & 127u) + 1u;
-    let ext_v = ((w1 >> 10u) & 127u) + 1u;
-    let s = corner_sign(face, corner);
-    p[axis] = p[axis] + select(0u, 1u, positive);
-    p[u_axis] = p[u_axis] + select(0u, ext_u, s.x > 0);
-    p[v_axis] = p[v_axis] + select(0u, ext_v, s.y > 0);
-    return p;
-}
 struct Out {
     @builtin(position) pos: vec4<f32>,
     @location(0) @interpolate(flat) face: u32,

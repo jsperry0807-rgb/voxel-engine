@@ -28,3 +28,7 @@ chunk128 = ["voxel-core/chunk128", "voxel-storage/chunk128", "voxel-mesh/chunk12
 
 [dev-dependencies]
 naga = { version = "30", features = ["wgsl-in"] }
+
+[[example]]
+name = "quad_spike"
+required-features = ["chunk128"]

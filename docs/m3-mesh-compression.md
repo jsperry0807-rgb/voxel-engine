@@ -310,12 +310,14 @@ KiB** (325.5 KiB over 600) and **34.51 GiB**. Runs:
 
 **Phase 1 spike result (2026-10-31, partial):** the 8 B `QuadRecord` codec and
 Gate A pass (exhaustive faces/extents/AO; >10k mixed-chunk quads). The
-storage-pull example `quad_spike` passes Gate B1, B2 direct and indirect, and
-Gate D at **0 LSB** on both the RTX 4060 and the Radeon iGPU. Gate C (the
-pre-registered 64-chunk full-frame scene with timestamps) remains; the spike
-scene is 64 quads, so it is not a representative performance measurement.
-Run with `cargo run -p voxel-viewer --features chunk128 --example quad_spike`
-under the WSL GPU env.
+storage-pull example `quad_spike` passes Gate B1 on a **144-record coverage list
+(all six faces, non-square extents, all AO patterns, material high bits)**,
+B2 direct and indirect on 64 quads, and Gate D at **0 LSB** on both the RTX
+4060 and the Radeon iGPU (driver `Dozen`). Gate C (the pre-registered 64-chunk
+full-frame scene with timestamps) remains; the pixel scene is 64 quads, so it
+is not a representative performance measurement. Run with
+`cargo run -p voxel-viewer --features chunk128 --example quad_spike` under the
+WSL GPU env.
 
 ---
 
