@@ -17,6 +17,9 @@ use voxel_storage::{
 mod greedy;
 pub use greedy::{GreedyQuad, MergeKey, corner_ao, greedy_block, greedy_block_with_ao};
 
+pub mod dirty;
+pub use dirty::{BLOCKS_PER_CHUNK_EDGE, DirtyBlocks};
+
 pub mod light;
 pub use light::{
     APRON_CELLS, BlockLight, CellEdit, Channel, LEVELS, LightCell, LightFill, LightSource,
