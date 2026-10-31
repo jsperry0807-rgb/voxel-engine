@@ -88,6 +88,45 @@ The fixture is built at 64³ chunks. At the pre-registered 128³ edge the
 verifier fails with an explicit chunk-edge mismatch; the 64³ bytes are not
 valid 128³ data. Re-freeze at the matching edge if a future gate needs it.
 
+## `m2-128`
+
+**Status: provisional until the first real save.**
+
+`m2-128/` is the M2 128³ gate fixture. It is the same deterministic stand-in
+generator as `m1-representative`, frozen at the pre-registered 128³ edge with a
+smaller chunk box so the save stays reviewable.
+
+| Field | Value |
+|---|---|
+| Chunk box | `x,z = -1..=1`, `y = 0` — 9 chunks, 24 × 8 × 24 m |
+| Format | `VXV2` v2, 128³ chunks (`chunk_bits = 7`), `vxr-1` regions |
+| Save | 5,336,168 B in four region files, 7,296,044 non-air voxels |
+| Evidence | 191,798 cave-air, 1,073 overhang roofs, 1,341 structure blocks, 10,345 tree blocks |
+| Frozen at | commit in the manifest; rebuilt byte-identically by `fixture verify` |
+
+Build and verify it with the 128³ feature:
+
+```sh
+cargo run --release -p voxel-bench --features chunk128 -- fixture build \
+  --out benchmarks/fixtures/m2-128 \
+  --chunk-min "-1,0,-1" --chunk-max "1,0,1"
+cargo run --release -p voxel-bench --features chunk128 -- fixture verify \
+  --manifest benchmarks/fixtures/m2-128/manifest.json
+```
+
+The recipe is recorded in the manifest, so `fixture verify` rebuilds the same
+bytes without the command-line arguments. The `generator` field keeps the
+`m1-representative` name because it identifies the stand-in generator code, not
+the milestone that uses it.
+
+### Limitation
+
+The same limitation as `m1-representative` applies: this is synthetic content,
+not a gameplay save and not `docs/worldgen-design.md`. The M2 gate quotes it as
+the **128³ measurement fixture**, with the dataset row (11) carried as not
+measured until a real populated save exists. Its per-chunk distributions are a
+measurement of this fixture, not a shipping estimate.
+
 ### Re-freezing
 
 A freeze is deliberate:
