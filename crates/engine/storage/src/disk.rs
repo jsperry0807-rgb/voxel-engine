@@ -52,6 +52,11 @@ pub(crate) fn parse_header(h: &[u8; HDR]) -> Option<RecordHeader> {
     if kind != KIND_DAG && kind != KIND_DIFF {
         return None;
     }
+    if h[5] != PAYLOAD_TAG_V1 {
+        // A record written by a newer format. Skipping it (rather than
+        // misdecoding the payload) is what the tag is for.
+        return None;
+    }
     Some(RecordHeader {
         kind,
         cell: u16::from_le_bytes(h[6..8].try_into().unwrap()),
@@ -125,10 +130,18 @@ fn encode(kind: u8, cell: u16, payload: &[u8]) -> Vec<u8> {
     b
 }
 
+/// Payload format tag in header byte 5.
+///
+/// `0` is the current v1 `Svdag` pool plus the (self-versioning) overlay. A
+/// future format gets its own tag, so an older reader skips the record instead
+/// of decoding bytes it does not understand.
+const PAYLOAD_TAG_V1: u8 = 0;
+
 fn encode_header(kind: u8, cell: u16, len: u32) -> [u8; HDR] {
     let mut h = [0u8; HDR];
     h[0..4].copy_from_slice(&MAGIC.to_le_bytes());
     h[4] = kind;
+    h[5] = PAYLOAD_TAG_V1;
     h[6..8].copy_from_slice(&cell.to_le_bytes());
     h[8..12].copy_from_slice(&len.to_le_bytes());
     // CRC is filled by the caller, which has the payload.
@@ -892,5 +905,17 @@ mod tests {
             store.open_regions().len()
         );
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_record_with_an_unknown_payload_tag_is_skipped() {
+        let header = encode_header(KIND_DIFF, 1, 0);
+        assert!(parse_header(&header).is_some());
+        let mut newer = header;
+        newer[5] = 9;
+        assert!(
+            parse_header(&newer).is_none(),
+            "a future payload tag must not be decoded as v1"
+        );
     }
 }
