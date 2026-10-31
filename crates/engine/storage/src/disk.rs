@@ -72,7 +72,16 @@ struct Region {
     index: FxMap<u16, Entry>,
     /// Appended since the last [`RegionStore::sync`].
     dirty: bool,
+    /// Access clock, for the open-file cap.
+    last_used: u64,
 }
+
+/// Region handles kept open at once.
+///
+/// A world that streams over many regions would otherwise keep one descriptor
+/// per region until the process hits `EMFILE`, at which point a save fails for
+/// bookkeeping reasons. Closing a region is cheap: the next access re-scans it.
+const MAX_OPEN_REGIONS: usize = 64;
 
 impl Region {
     fn read(&mut self, off: u64, len: u32) -> io::Result<Vec<u8>> {
@@ -96,6 +105,8 @@ pub struct RegionStore {
     /// A region file was created since the last [`RegionStore::sync`].
     dir_dirty: bool,
     recovered_bytes: u64,
+    /// Monotonic access clock for the open-region cap.
+    clock: u64,
     /// Directory fsyncs performed, so tests can pin the durability call.
     #[cfg(test)]
     dir_syncs: usize,
@@ -332,6 +343,7 @@ impl RegionStore {
             regions: FxMap::default(),
             dir_dirty: false,
             recovered_bytes: 0,
+            clock: 0,
             #[cfg(test)]
             dir_syncs: 0,
         })
@@ -368,10 +380,37 @@ impl RegionStore {
                     // A truncated tail is a metadata write; sync it with the
                     // region's contents.
                     dirty: scan.truncated,
+                    last_used: 0,
                 },
             );
+            // Keep the descriptor table bounded: drop the least-recently used
+            // clean regions when it grows past the cap. Dirty ones stay (they
+            // still need their fsync).
+            while self.regions.len() > MAX_OPEN_REGIONS {
+                let victim = self
+                    .regions
+                    .iter()
+                    .filter(|(pos, region)| **pos != rp && !region.dirty)
+                    .min_by_key(|(_, region)| region.last_used)
+                    .map(|(pos, _)| *pos);
+                let Some(victim) = victim else {
+                    break;
+                };
+                self.regions.remove(&victim);
+            }
         }
-        Ok(self.regions.get_mut(&rp))
+        self.clock += 1;
+        let clock = self.clock;
+        let region = self.regions.get_mut(&rp).expect("region exists");
+        region.last_used = clock;
+        Ok(Some(region))
+    }
+
+    /// Closes a clean region's handle; the next access re-scans it.
+    pub fn close(&mut self, rp: RegionPos) {
+        if self.regions.get(&rp).is_some_and(|region| !region.dirty) {
+            self.regions.remove(&rp);
+        }
     }
 
     fn append(&mut self, p: ChunkPos, kind: u8, payload: &[u8]) -> io::Result<()> {
@@ -536,6 +575,8 @@ impl RegionStore {
             let mut file = OpenOptions::new().read(true).write(true).open(&path)?;
             let scan = scan(&mut file)?;
             self.recovered_bytes += scan.recovered;
+            self.clock += 1;
+            let last_used = self.clock;
             self.regions.insert(
                 rp,
                 Region {
@@ -543,6 +584,7 @@ impl RegionStore {
                     len: scan.len,
                     index: scan.index,
                     dirty: false,
+                    last_used,
                 },
             );
             // Renaming changes the directory entry, so persist the directory too.
@@ -821,6 +863,34 @@ mod tests {
         assert_eq!(actual, expected, "the DAG content must survive");
         assert!(overlay.is_empty(), "the undecodable diff is dropped");
         assert!(store.recovered_bytes() >= 4);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Streaming over many regions must not keep one descriptor per region.
+    #[test]
+    fn open_region_table_is_bounded() {
+        let dir = std::env::temp_dir().join(format!(
+            "voxel-disk-fd-cap-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        let mut store = RegionStore::open(&dir).expect("open store");
+        for i in 0..80i32 {
+            store
+                .put_diff(ChunkPos::new(i * 8, 0, 0), &Overlay::default())
+                .expect("write a region");
+        }
+        store.sync().expect("sync");
+        // One more open past the cap closes clean regions.
+        store
+            .put_diff(ChunkPos::new(640, 0, 0), &Overlay::default())
+            .expect("open one more region");
+        assert!(
+            store.open_regions().len() <= MAX_OPEN_REGIONS,
+            "{} region handles are open",
+            store.open_regions().len()
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 }
