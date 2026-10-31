@@ -1,8 +1,8 @@
 //! Draw pipeline for one chunk mesh.
 //!
 //! The pipeline consumes the ADR-010 16-byte vertices from [`ChunkMesh`] and
-//! the M1.5-12 chunk shader. Camera group 0 and atlas group 1 match the rest of
-//! the viewer's binding convention.
+//! the M2-27 chunk shader (AO + block light). Camera is group 0, atlas group 1
+//! and the M2 chunk data (light, probes) group 2.
 
 use wgpu::{
     BindGroup, BindGroupLayout, BlendState, ColorTargetState, ColorWrites, CompareFunction,
@@ -11,6 +11,8 @@ use wgpu::{
     RenderPipelineDescriptor, ShaderModuleDescriptor, ShaderSource, StencilState, TextureFormat,
     VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
 };
+
+use voxel_core::content_constants::LIGHT_CELLS_PER_EDGE;
 
 use crate::chunk_mesh::ChunkMesh;
 use crate::depth::DEPTH_FORMAT;
@@ -55,16 +57,20 @@ impl ChunkPipeline {
         device: &Device,
         camera_layout: &BindGroupLayout,
         atlas_layout: &BindGroupLayout,
+        data_layout: &BindGroupLayout,
         color_format: TextureFormat,
     ) -> Self {
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("chunk"),
-            bind_group_layouts: &[Some(camera_layout), Some(atlas_layout)],
+            bind_group_layouts: &[Some(camera_layout), Some(atlas_layout), Some(data_layout)],
             immediate_size: 0,
         });
+        // The light-cell edge is a compile-time constant; substitute it so the
+        // shader indexes the uploaded light volume correctly at 64³ and 128³.
+        let source = CHUNK_WGSL.replace("{{CELLS}}", &format!("{LIGHT_CELLS_PER_EDGE}u"));
         let shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("chunk"),
-            source: ShaderSource::Wgsl(CHUNK_WGSL.into()),
+            source: ShaderSource::Wgsl(source.into()),
         });
         let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("chunk"),
@@ -111,10 +117,12 @@ impl ChunkPipeline {
         chunk: &ChunkMesh,
         camera: &BindGroup,
         atlas: &BindGroup,
+        data: &BindGroup,
     ) {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, camera, &[]);
         pass.set_bind_group(1, atlas, &[]);
+        pass.set_bind_group(2, data, &[]);
         pass.set_vertex_buffer(0, chunk.vertices.slice(..));
         pass.set_index_buffer(chunk.indices.slice(..), IndexFormat::Uint16);
         pass.draw_indexed(0..chunk.index_count, 0, 0..1);

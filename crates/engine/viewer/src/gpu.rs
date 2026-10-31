@@ -31,6 +31,8 @@ use winit::window::Window;
 use crate::atlas::Atlas;
 use crate::atlas_texture::AtlasTexture;
 use crate::camera::{Camera, CameraUniform};
+use crate::chunk_content;
+use crate::chunk_lighting::{self, ChunkLighting};
 use crate::chunk_mesh::ChunkMesh;
 use crate::chunk_render::ChunkPipeline;
 use crate::depth::DepthTarget;
@@ -38,8 +40,7 @@ use crate::error::ViewerError;
 
 /// Consecutive `Lost` surfaces tolerated before the viewer gives up.
 const MAX_SURFACE_RECREATIONS: u32 = 3;
-use crate::naive_mesh::{Mesh, naive_mesh};
-use voxel_core::constants::{CHUNK_BITS, CHUNK_VOLUME};
+use voxel_storage::ChunkPos;
 
 /// The graphics handles a frame needs.
 pub struct Gpu {
@@ -66,8 +67,10 @@ pub struct Gpu {
     pub depth: DepthTarget,
     /// The material atlas texture, sampler and bind group.
     pub atlas: AtlasTexture,
-    /// One uploaded test chunk.
+    /// One uploaded M2 chunk.
     pub chunk: Option<ChunkMesh>,
+    /// Uploaded block-light and probe volumes for the chunk.
+    pub lighting: ChunkLighting,
     /// The chunk draw pipeline.
     pub chunk_pipeline: ChunkPipeline,
 }
@@ -151,14 +154,45 @@ impl Gpu {
 
         let depth = DepthTarget::new(&device, config.width, config.height);
         let atlas = AtlasTexture::new(&device, &queue, &atlas);
-        let chunk_pipeline =
-            ChunkPipeline::new(&device, &camera_layout, &atlas.layout, config.format);
-        let chunk = ChunkMesh::new(&device, &queue, &test_chunk());
+        let volume = chunk_content::demo_volume();
+        let content = chunk_content::build(&volume, ChunkPos::new(0, 0, 0));
+        let naive_quads = if log::log_enabled!(log::Level::Info) {
+            chunk_content::ChunkMeshData::naive_quad_count(&volume)
+        } else {
+            0
+        };
+        let data_layout = chunk_lighting::layout(&device);
+        let chunk_pipeline = ChunkPipeline::new(
+            &device,
+            &camera_layout,
+            &atlas.layout,
+            &data_layout,
+            config.format,
+        );
+        let chunk = ChunkMesh::from_parts(
+            &device,
+            &queue,
+            &content.mesh.vertices,
+            &content.mesh.indices,
+        );
+        let lighting = chunk_lighting::upload(
+            &device,
+            &queue,
+            &data_layout,
+            &content.light,
+            &content.probes,
+        );
         if let Some(chunk) = &chunk {
             log::info!(
-                "uploaded test chunk: {} quads, {} bytes",
+                "uploaded M2 chunk: {} quads cover {} faces ({:.1}% fewer than naive {}), \
+                 {} B mesh, {} B light, {} B probes",
                 chunk.quad_count(),
-                chunk.byte_len()
+                content.mesh.faces,
+                100.0 - content.mesh.quads as f64 * 100.0 / naive_quads as f64,
+                naive_quads,
+                chunk.byte_len(),
+                lighting.light_bytes,
+                lighting.probe_bytes,
             );
         }
 
@@ -175,6 +209,7 @@ impl Gpu {
             depth,
             atlas,
             chunk,
+            lighting,
             chunk_pipeline,
         })
     }
@@ -294,6 +329,7 @@ impl Gpu {
                     chunk,
                     &self.camera_bind_group,
                     &self.atlas.bind_group,
+                    &self.lighting.bind_group,
                 );
             }
         }
@@ -302,34 +338,4 @@ impl Gpu {
         self.lost_retries = 0;
         Ok(true)
     }
-}
-
-/// Builds a deterministic terrain patch inside one chunk.
-///
-/// The patch is 48x48 columns centred in the 64x64 chunk, so the naive
-/// whole-chunk mesh stays below the u16 index limit while still showing
-/// slopes, material changes and multiple block faces.
-fn test_chunk() -> Mesh {
-    let mut volume = vec![0u16; CHUNK_VOLUME];
-    for z in 8..56 {
-        for x in 8..56 {
-            let fx = (x as f32 - 32.0) / 16.0;
-            let fz = (z as f32 - 32.0) / 16.0;
-            let mound = (1.0 - (fx * fx + fz * fz).sqrt()).max(0.0);
-            let ripple = (x as f32 * 0.35).sin() * 0.5 + (z as f32 * 0.4).cos() * 0.5;
-            let height = (14.0 + mound * 12.0 + ripple) as usize;
-            for y in 0..height {
-                let material = if y + 1 == height {
-                    3
-                } else if y + 4 >= height {
-                    2
-                } else {
-                    1
-                };
-                let index = x | (y << CHUNK_BITS) | (z << (2 * CHUNK_BITS));
-                volume[index] = material;
-            }
-        }
-    }
-    naive_mesh(&volume)
 }

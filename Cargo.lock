@@ -3549,6 +3549,8 @@ dependencies = [
  "serde",
  "voxel-app-support",
  "voxel-core",
+ "voxel-mesh",
+ "voxel-storage",
  "voxel-texgraph",
  "wgpu 30.0.1",
  "winit",

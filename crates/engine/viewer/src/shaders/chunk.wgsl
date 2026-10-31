@@ -1,11 +1,21 @@
-// First chunk shader (M1.5-12).
+// Chunk shader, M2-27: production mesh, AO and block light.
 //
 // ADR-010 vertex data is chunk-local voxel coordinates (6.25 cm), material,
-// and face code. This chunk sits at the world origin, so world = local * 0.0625.
+// face code and four corner AO values. This chunk sits at the world origin, so
+// world = local * 0.0625.
 //
 // UVs are derived per fragment from the face-local position inside a 16-voxel
 // block face, not from a vertex attribute. A 1 m face is therefore exactly one
 // 16x16 atlas tile, with one tile texel per voxel face.
+//
+// The AO array carries the quad's four corner values (a greedy quad's merge key
+// requires identical values across the rectangle); the vertex shader selects its
+// own corner with `vertex_index % 4`, because each quad's four vertices are
+// consecutive in the index stream, and the fragment interpolates it. Block
+// light comes from the M2 light volume uploaded by the viewer; the fragment
+// shades from its own block cell (sampling one step along the face normal is
+// later polish). Probes are uploaded and bound as a placeholder; the indirect
+// pass does not sample them yet.
 
 struct Camera {
     view_proj: mat4x4<f32>,
@@ -23,7 +33,20 @@ var atlas: texture_2d<f32>;
 @group(1) @binding(1)
 var atlas_sampler: sampler;
 
+// One u32 per light word: four words per cell (sky rgb/intensity, block
+// rgb/intensity), chunk-local, x fastest.
+@group(2) @binding(0)
+var<storage, read> block_light: array<u32>;
+
+// Near-grid SH4 records followed by the packed validity mask. Uploaded as a
+// placeholder for the later indirect pass; not sampled yet.
+@group(2) @binding(1)
+var<storage, read> probes: array<u32>;
+
+const CELLS: u32 = {{CELLS}};
+
 struct VertexInput {
+    @builtin(vertex_index) vertex_index: u32,
     // local.xyz, material
     @location(0) local_material: vec4<u32>,
     // face, ao0, ao1, ao2
@@ -37,6 +60,7 @@ struct VertexOutput {
     @location(0) local: vec3<f32>,
     @location(1) @interpolate(flat) material: u32,
     @location(2) @interpolate(flat) face: u32,
+    @location(3) ao: f32,
 };
 
 @vertex
@@ -48,11 +72,19 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     );
     let world = local * 0.0625;
 
+    let corners = array<u32, 4>(
+        input.face_ao0.y,
+        input.face_ao0.z,
+        input.face_ao0.w,
+        input.ao3_reserved.x,
+    );
+
     var output: VertexOutput;
     output.clip_position = camera.view_proj * vec4<f32>(world, 1.0);
     output.local = local;
     output.material = input.local_material.w;
     output.face = input.face_ao0.x;
+    output.ao = f32(corners[input.vertex_index % 4u]) / 255.0;
     return output;
 }
 
@@ -90,9 +122,23 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let uv = (tile_origin + texel) / 256.0;
     let texel_color = textureSample(atlas, atlas_sampler, uv);
 
-    // AO placeholder: the naive mesh writes 255 in every corner. M2 replaces
-    // this with the interpolated corner value.
-    let ao = 1.0;
-    let shade = FACE_SHADE[input.face] * ao;
+    // Chunk-local light cell; the far chunk face clamps onto the last cell.
+    let cell = min(
+        vec3<u32>(
+            u32(floor(input.local.x / 16.0)),
+            u32(floor(input.local.y / 16.0)),
+            u32(floor(input.local.z / 16.0)),
+        ),
+        vec3<u32>(CELLS - 1u),
+    );
+    let base = (cell.x + cell.y * CELLS + cell.z * CELLS * CELLS) * 4u;
+    let sky = (block_light[base + 1u] >> 16u) & 0xFFFFu;
+    let block_level = (block_light[base + 3u] >> 16u) & 0xFFFFu;
+    let level = max(sky, block_level) >> 12u;
+    // A small ambient floor keeps unlit faces readable without changing
+    // sky-lit surfaces (level 15 gives exactly 1.0).
+    let light = 0.25 + 0.75 * f32(level) / 15.0;
+
+    let shade = FACE_SHADE[input.face] * input.ao * light;
     return vec4<f32>(texel_color.rgb * shade, 1.0);
 }

@@ -14,10 +14,11 @@ use voxel_core::constants::{CHUNK_BITS, CHUNK_VOLUME};
 use voxel_viewer::atlas::{AtlasBuilder, TILE_BYTES};
 use voxel_viewer::atlas_texture::AtlasTexture;
 use voxel_viewer::camera::{Camera, CameraUniform};
+use voxel_viewer::chunk_content;
+use voxel_viewer::chunk_lighting;
 use voxel_viewer::chunk_mesh::ChunkMesh;
 use voxel_viewer::chunk_render::ChunkPipeline;
 use voxel_viewer::depth::DepthTarget;
-use voxel_viewer::naive_mesh::naive_mesh;
 
 struct TestGpu {
     // Some software drivers do not tolerate the instance or adapter being
@@ -69,7 +70,18 @@ fn test_gpu() -> Option<&'static TestGpu> {
 
 #[test]
 fn chunk_shader_is_valid_wgsl() {
-    validate_wgsl("chunk.wgsl", include_str!("../src/shaders/chunk.wgsl"));
+    // The chunk shader is a template: the light-cell edge is substituted from
+    // `LIGHT_CELLS_PER_EDGE` so the light indexing matches the uploaded volume.
+    let template = include_str!("../src/shaders/chunk.wgsl");
+    assert!(
+        template.contains("{{CELLS}}"),
+        "chunk.wgsl no longer contains the {{CELLS}} placeholder"
+    );
+    let source = template.replace(
+        "{{CELLS}}",
+        &format!("{}u", voxel_core::content_constants::LIGHT_CELLS_PER_EDGE),
+    );
+    validate_wgsl("chunk.wgsl", &source);
 }
 
 #[test]
@@ -159,8 +171,9 @@ fn chunk_pipeline_draws_without_validation_errors() {
     let mut volume = vec![0u16; CHUNK_VOLUME];
     let index = 1 | (1 << CHUNK_BITS) | (1 << (2 * CHUNK_BITS));
     volume[index] = 1;
-    let mesh = naive_mesh(&volume);
-    let chunk = ChunkMesh::new(device, queue, &mesh).expect("one voxel is one mesh");
+    let content = chunk_content::build(&volume, voxel_storage::ChunkPos::new(0, 0, 0));
+    let chunk = ChunkMesh::from_parts(device, queue, &content.mesh.vertices, &content.mesh.indices)
+        .expect("one voxel is one mesh");
 
     let format = wgpu::TextureFormat::Rgba8UnormSrgb;
     let target = device.create_texture(&wgpu::TextureDescriptor {
@@ -179,7 +192,16 @@ fn chunk_pipeline_draws_without_validation_errors() {
     });
     let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
     let depth = DepthTarget::new(device, 64, 64);
-    let pipeline = ChunkPipeline::new(device, &camera_layout, &atlas_texture.layout, format);
+    let data_layout = chunk_lighting::layout(device);
+    let lighting =
+        chunk_lighting::upload(device, queue, &data_layout, &content.light, &content.probes);
+    let pipeline = ChunkPipeline::new(
+        device,
+        &camera_layout,
+        &atlas_texture.layout,
+        &data_layout,
+        format,
+    );
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("validation pass"),
@@ -211,6 +233,7 @@ fn chunk_pipeline_draws_without_validation_errors() {
             &chunk,
             &camera_bind_group,
             &atlas_texture.bind_group,
+            &lighting.bind_group,
         );
     }
     queue.submit([encoder.finish()]);

@@ -1,8 +1,11 @@
 # Voxel Viewer
 
-The M1.5 vertical slice: a `winit` + `wgpu` window that draws one generated
-terrain chunk with the committed material atlas. It is the base the M2 content
-pipeline replaces the naive mesher on.
+The M2 vertical slice: a `winit` + `wgpu` window that draws one generated
+terrain chunk with the committed material atlas. The chunk is meshed by the
+production greedy + AO path (`voxel-mesh`), its block-light cells are sampled
+by the chunk shader, and the near probe volume is uploaded and bound. The M1.5
+naive mesher remains as the reference/tests and for the historical screenshot
+example; M3 adds streaming and per-block meshlets.
 
 ## Run
 
@@ -47,8 +50,9 @@ Bindings can be overridden by pointing `VOXEL_BINDINGS` at a file; see
 cargo test -p voxel-viewer --test validation
 ```
 
-The test validates `src/shaders/chunk.wgsl` with naga and records an offscreen
-chunk draw inside a wgpu validation error scope. Without an adapter it skips,
+The test substitutes the `{{CELLS}}` light-cell edge into
+`src/shaders/chunk.wgsl`, validates it with naga, and records an offscreen chunk
+draw inside a wgpu validation error scope. Without an adapter it skips,
 unless `VOXEL_REQUIRE_GPU=1` is set; CI uses that with a software Vulkan driver.
 
 ## Screenshots

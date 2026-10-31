@@ -1,7 +1,8 @@
 //! GPU vertex and index buffers for one chunk mesh.
 //!
 //! The mesh is uploaded once at creation. Streaming and partial updates are M3
-//! work; this type only proves the M1.5-10 mesh bytes reach the GPU unchanged.
+//! work; this type owns the vertex/index buffers for either the M1.5 naive mesh
+//! or the M2 production stream.
 
 use std::mem::size_of;
 
@@ -22,44 +23,70 @@ pub struct ChunkMesh {
 }
 
 impl ChunkMesh {
-    /// Uploads `mesh`, or returns `None` for an empty mesh.
+    /// Uploads the M1.5 naive mesh, or returns `None` for an empty mesh.
     ///
-    /// Empty chunks do not allocate zero-sized buffers; they simply have no
-    /// draw work.
+    /// The screenshot example and the naive reference tests use this path; the
+    /// runtime viewer uploads the M2 production stream with [`Self::from_parts`].
     pub fn new(device: &Device, queue: &Queue, mesh: &Mesh) -> Option<Self> {
-        if mesh.indices.is_empty() {
+        Self::from_parts(
+            device,
+            queue,
+            bytemuck::cast_slice(&mesh.vertices),
+            &mesh.indices,
+        )
+    }
+
+    /// Uploads raw ADR-010 vertex bytes and `u16` indices.
+    ///
+    /// The M2 mesh builder emits the 16 B layout directly; this constructor
+    /// keeps the GPU path independent of the Rust vertex type. Empty meshes do
+    /// not allocate zero-sized buffers.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the vertex bytes are not a whole number of 16 B records.
+    pub fn from_parts(
+        device: &Device,
+        queue: &Queue,
+        vertices_bytes: &[u8],
+        indices_data: &[u16],
+    ) -> Option<Self> {
+        if indices_data.is_empty() {
             return None;
         }
+        assert_eq!(
+            vertices_bytes.len() % size_of::<Vertex>(),
+            0,
+            "chunk vertex bytes must be whole 16 B records"
+        );
+        let vertex_count = vertices_bytes.len() / size_of::<Vertex>();
         assert!(
-            mesh.vertices.len() <= u32::MAX as usize,
+            vertex_count <= u32::MAX as usize,
             "chunk vertex count exceeds u32"
         );
-        assert!(mesh.indices.len() <= u32::MAX as usize);
-
-        let vertex_bytes = (mesh.vertices.len() * size_of::<Vertex>()) as u64;
-        let index_bytes = (mesh.indices.len() * size_of::<u16>()) as u64;
+        assert!(indices_data.len() <= u32::MAX as usize);
 
         let vertices = device.create_buffer(&BufferDescriptor {
             label: Some("chunk vertices"),
-            size: vertex_bytes,
+            size: vertices_bytes.len() as u64,
             usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let indices = device.create_buffer(&BufferDescriptor {
             label: Some("chunk indices"),
-            size: index_bytes,
+            size: std::mem::size_of_val(indices_data) as u64,
             usage: BufferUsages::INDEX | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        queue.write_buffer(&vertices, 0, bytemuck::cast_slice(&mesh.vertices));
-        queue.write_buffer(&indices, 0, bytemuck::cast_slice(&mesh.indices));
+        queue.write_buffer(&vertices, 0, vertices_bytes);
+        queue.write_buffer(&indices, 0, bytemuck::cast_slice(indices_data));
 
         Some(Self {
             vertices,
             indices,
-            vertex_count: mesh.vertices.len() as u32,
-            index_count: mesh.indices.len() as u32,
+            vertex_count: vertex_count as u32,
+            index_count: indices_data.len() as u32,
         })
     }
 
