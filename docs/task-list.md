@@ -3,7 +3,7 @@
 **Status:** v1.6 — derived from spec v2.3 and roadmap v3.2
 **Date:** 2026-10-30
 **Owner:** engine
-**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 in progress: `M2-16` done; `M2-17` done (5.7% p95 at 128³, target ≤20%); `M2-18` done; `M2-19` done; `M2-20` done; `M2-21` done; `M2-22` done; `M2-23` next.
+**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 in progress: `M2-16` done; `M2-17` done (5.7% p95 at 128³, target ≤20%); `M2-18` done; `M2-19` done; `M2-20` done; `M2-21` done; `M2-22` done; `M2-23` done; `M2-24` next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -411,7 +411,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 **Goal:** deterministic mesh + AO + block light + probes, at the 128³ Minimum edge.
 **Exit:** M2-30. **Budget:** 27.0 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
-**Status:** In progress — M2-16 done; M2-17 done (5.7% p95 at 128³, target ≤20%); M2-18 done; M2-19 done; M2-20 done; M2-21 done; M2-22 done; M2-23 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
+**Status:** In progress — M2-16 done; M2-17 done (5.7% p95 at 128³, target ≤20%); M2-18 done; M2-19 done; M2-20 done; M2-21 done; M2-22 done; M2-23 done; M2-24 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
 **Art:** none beyond M1.5-14; M2 reuses the slice atlas.
 
 **M1 gate carry-over — blocks M2-30:**
@@ -586,6 +586,20 @@ voxel, so a batch that reverts before publication is not dirty, and a no-op
 write marks nothing. Eleven `dirty_bitset` tests; see
 `cargo test -p voxel-mesh dirty_bitset`.
 
+**M2-23 measured (2026-10-30):** `voxel-mesh::scheduler::RemeshScheduler` owns
+the M2-22 dirty backlog and drains it in ascending block order, at most a
+caller-supplied block budget per frame; a block is the budget unit because one
+18³ block is one bounded mesh task. `next_batch_into` reuses the caller's `Vec`,
+clears each handed-out bit, coalesces edits to a block already queued (`union`)
+and re-queues a block dirtied after it was meshed; `DirtyBlocks::take_first`
+owns the drain so the bit-to-block mapping has one owner. Twelve `scheduler`
+tests pin the budget (1/5/7/64 blocks and the zero-budget no-op), a full drain
+with no repeats or gaps, an 8-word 512-block backlog even at 64³, deterministic
+batch sequences across enqueue orders and merge boundaries, clear, the
+cross-edge panic, merge/requeue semantics, buffer reuse and an end-to-end drain
+of a real `DirtyBlocks` from a COW batch. The 128³ backlog (512 blocks) drains in
+64 frames at an 8-block budget. See `cargo test -p voxel-mesh scheduler`.
+
 ### 6.1 Apron and mesher
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -627,7 +641,7 @@ write marks nothing. Eleven `dirty_bitset` tests; see
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
 | M2-22 | Dirty bitset: per-block dirty flags derived from the COW diff (added/removed/changed) | M1-10 | Editing one voxel dirties exactly the block plus the AO/light apron | `cargo test -p voxel-mesh dirty_bitset` | 0.5 d | [x] |
-| M2-23 | Budgeted remesh scheduler: dirty blocks → mesh batches under a per-frame budget | M2-22 | Backlog drains; no frame exceeds the budget in the test | `cargo test -p voxel-mesh scheduler` | 1 d | [ ] |
+| M2-23 | Budgeted remesh scheduler: dirty blocks → mesh batches under a per-frame budget | M2-22 | Backlog drains; no frame exceeds the budget in the test | `cargo test -p voxel-mesh scheduler` | 1 d | [x] |
 | M2-24 | Scrub latency: single-block edit → remesh + light + probe ≤ 4 ms p95 | M2-23 | Measured; recorded | `cargo run -p voxel-bench -- gate edits` | 0.5 d | [ ] |
 | M2-25 | Ray-test occlusion behind `occlusion.raytest` flag, using the SVDAG; default off | M1-33 | Flag on/off produce comparable visible sets; documented delta | `cargo test -p voxel-mesh --features raytest` | 2 d | [ ] |
 | M2-26 | Ray-test vs flood-fill comparison report: accuracy and cost on 100 poses | M2-25 | Table in `docs/` with the decision recommendation (still default flood-fill) | review | 0.5 d | [ ] |

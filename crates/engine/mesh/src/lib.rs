@@ -20,6 +20,9 @@ pub use greedy::{GreedyQuad, MergeKey, corner_ao, greedy_block, greedy_block_wit
 pub mod dirty;
 pub use dirty::{BLOCKS_PER_CHUNK_EDGE, DirtyBlocks};
 
+pub mod scheduler;
+pub use scheduler::RemeshScheduler;
+
 pub mod light;
 pub use light::{
     APRON_CELLS, BlockLight, CellEdit, Channel, LEVELS, LightCell, LightFill, LightSource,

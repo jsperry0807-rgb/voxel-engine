@@ -315,6 +315,45 @@ impl DirtyBlocks {
         dirty
     }
 
+    /// Removes up to `budget` dirty blocks in ascending linear order.
+    ///
+    /// `out` is cleared first and reused. A zero budget removes nothing and
+    /// leaves `out` empty. This is the scheduler's drain (M2-23): it owns the
+    /// layout decode, so callers never re-derive the bit-to-block mapping.
+    pub fn take_first(&mut self, budget: usize, out: &mut Vec<BlockPos>) -> usize {
+        out.clear();
+        if budget == 0 || self.is_empty() {
+            return 0;
+        }
+
+        let edge = self.blocks_per_edge;
+        let blocks = self.len();
+        'words: for (word_index, &word) in self.words.iter().enumerate() {
+            let mut word = word;
+            while word != 0 {
+                if out.len() >= budget {
+                    break 'words;
+                }
+                let bit = word.trailing_zeros() as usize;
+                word &= word - 1;
+                let index = word_index * 64 + bit;
+                if index >= blocks {
+                    continue;
+                }
+                out.push(BlockPos::new(
+                    (index % edge) as u32,
+                    ((index / edge) % edge) as u32,
+                    (index / (edge * edge)) as u32,
+                ));
+            }
+        }
+
+        for block in out.iter() {
+            self.clear_block(*block);
+        }
+        out.len()
+    }
+
     /// Iterates the dirty blocks in ascending linear order (`x` fastest).
     pub fn iter(&self) -> impl Iterator<Item = BlockPos> + '_ {
         let edge = self.blocks_per_edge;
