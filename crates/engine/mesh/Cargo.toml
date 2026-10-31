@@ -34,3 +34,7 @@ harness = false
 [[test]]
 name = "raytest"
 required-features = ["raytest"]
+
+[[test]]
+name = "raytest_compare"
+required-features = ["raytest"]

@@ -1,9 +1,9 @@
 # M2 ray-test occluder (M2-25)
 
 **Status:** implemented behind `--features raytest`; `occlusion.raytest` defaults
-off (ADR-006).
+off (ADR-006). M2-26 comparison complete: the default stays flood-fill.
 **Code:** `crates/engine/mesh/src/raytest.rs`, tests
-`crates/engine/mesh/tests/raytest.rs`.
+`crates/engine/mesh/tests/raytest.rs` and `raytest_compare.rs`.
 **Verify:** `cargo test -p voxel-mesh --features raytest`.
 
 ## What it does
@@ -69,3 +69,58 @@ horizon, the ray length as the horizon). That is why this stays a flag. M2-26
 owns the 100-pose accuracy/cost table and the decision recommendation; unless the
 ray-test wins on **both** accuracy and cost, the flood fill stays the default
 (ADR-006 kill criterion).
+
+## 100-pose comparison (M2-26)
+
+**World:** a 16³-block SVDAG world with terrain, a slit wall, a pillar and a
+sealed cave pocket (carved below the minimum terrain height, so its roof is
+always solid). 100 deterministic poses: 60 above ground, 20 in front of the
+slit, 20 inside the cave. Horizon 4 blocks; release build on the reference host
+(AMD Ryzen 5 7600).
+
+The M1-33 fixture is a wider procedural world; building SVDAG chunks for its
+100 poses at this horizon needs about two thousand chunks, which is a benchmark,
+not a unit-test-sized sweep. This report substitutes a compact SVDAG world with
+the same feature classes. The visible/delta counts below are exact for this
+world (the test pins them); the cost decision is driven by the horizon scaling,
+not by the fixture's exact geometry.
+
+```bash
+cargo test --release -p voxel-mesh --features raytest --test raytest_compare -- --nocapture
+```
+
+| Metric (64³ compiled edge) | Block flood fill | SVDAG ray-test | Ratio |
+| --- | ---: | ---: | ---: |
+| p50 per pose | 24.8 µs | 799.1 µs | 32.3× |
+| p95 per pose | 28.3 µs | 892.9 µs | 31.5× |
+| Visible blocks per pose | 687.9 | 471.0 | — |
+| Delta (in-world) | — | 20,227 blocks over 100 poses (**35.3%** of in-world fill-visible) | — |
+| Voxel steps per pose | — | 50,794 | — |
+
+At the pre-registered 128³ edge the visible counts are identical and the cost
+ratio is 33.4× p50 / 37.2× p95 (ray p50 833.4 µs, p95 1,084.8 µs). Both p50 and
+p95 move by a few percent between runs; treat the table as one representative
+run, not a fixed constant.
+
+Every pose keeps the ray set a subset of the fill. The delta is the set of
+blocks the fill includes that the ray-test does not reach; it is not measured
+against a ground-truth oracle. The ray-test costs roughly **32× the fill even at
+a 4-block horizon**: it casts one ray per block and walks voxels per ray
+(`O(h⁴)`), while the fill is `O(h³)`. The gap grows with the horizon, so the
+128 m production horizon is not affordable per frame.
+
+### Recommendation: keep the flood fill as the default
+
+- **Cost:** ~32× slower at horizon 4 and superlinear in the horizon; a per-frame
+  128 m pass is out of reach.
+- **Accuracy:** the delta is the connectivity over-inclusion ADR-006 chose on
+  purpose; the escalation trigger is the M1-34 granularity gate, not a raw count
+  of extra blocks. No oracle says every removed block is invisible.
+- **Safety:** the default non-air `SvdagScene` treats any non-air voxel as
+  opaque, while the fill stops only at a fully opaque block. Water, glass,
+  leaves and partially filled blocks (slabs, stairs) can therefore be culled
+  behind; a default would need a material-aware scene whose predicate matches
+  the fill's rule.
+- **Keep the flag:** `occlusion.raytest` stays off by default, available for the
+  far-field/shadow-ray path and for experiments. M2-27 wires the content
+  pipeline, not this flag.
