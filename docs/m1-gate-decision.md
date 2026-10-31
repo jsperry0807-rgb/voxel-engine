@@ -222,18 +222,19 @@ The frozen gate, profile and thresholds are unchanged.
 - **Fixture:** `m2-128`, the deterministic stand-in generator at the 128³ edge
   over a 3 × 1 × 3 chunk box (x, y, z) (9 chunks, 5,336,168 B). It is still synthetic;
   the dataset row remains **not measured**.
-- **Memory:** measured p95 **4.19 MiB/chunk** → **3.29 GiB** over 805 chunks.
-  This **passes** the 4.80 GiB hard-fail line by 1.50 GiB and misses the
-  3.20 GiB target by 98 MiB. The v1 pool is 658 KiB of the total and remains
-  scheduled for removal by M6-09a.
+- **Memory:** the production-mesh p95 is **5.42 MiB/chunk** → **4.16 GiB** over
+  805 chunks. This **passes** the 4.80 GiB hard-fail line by 650 MiB and misses
+  the 3.20 GiB target by 987 MiB. (The archived M2 run reported 3.29 GiB from
+  the no-AO reference; see the Phase 0 erratum below.) The v1 pool is 658 KiB
+  of the total and remains scheduled for removal by M6-09a.
 - **Edit latency:** p95 **8.136 µs** (limit 8 ms). **Probe update:** p95
   **765.844 µs** (limit 4 ms). Node budget: max **138,636** (limit 1.5 M).
   Light and probe-grid rows are fixed at 8,192 B and 6,144 B.
-- **Mesh buffer:** p95 **2,519 KiB** against the 2,400 KiB cap — a **119.4 KiB
-  miss (5.0%)**. This is the reference greedy estimate; the production AO merge
-  is at least as large. **Mesh compression is therefore still the first
-  rule-3 lever, and 128³ Minimum is a measured candidate, not a confirmed
-  profile.**
+- **Mesh buffer:** production AO p95 **3,650 KiB** (3,645 KiB payload + records
+  and table) against the 2,400 KiB cap — a **1,250 KiB (52.1%)** miss. The
+  archived M2 run's 2,519 KiB is the no-AO reference. **Mesh compression is
+  therefore still the first rule-3 lever, and 128³ Minimum is a measured
+  candidate, not a confirmed profile.**
 - **Culling granularity (row 9):** measured by the M1-34 reference over 100 poses
   on the save; p95 **0.00%** traversed-but-invisible, zero missed blocks. The
   reference fill is conservative (partial blocks are passable), so this is a
@@ -246,3 +247,10 @@ The frozen gate, profile and thresholds are unchanged.
 
 The M2 exit tag records this measured state. It does not widen a budget, does
 not confirm 128³ Default, and does not close row 11.
+
+**Phase 0 erratum (2026-10-31, M3-00):** the production AO mesh is now measured
+by `gate memory` through `mesh_block`; the runs are
+`benchmarks/runs/20261031T163853Z-m2-production-mesh-128` and
+`...-64`. The corrected 128³ row 6 is **3,650 KiB** (1,250 KiB / 52.1% over)
+and row 1 is **4.16 GiB**. The M2 verdict (FAIL) is unchanged; the severity is
+not.

@@ -13,11 +13,12 @@ pass/fail measurement, not a build-out.
 
 M0, M1 and M2 are complete. The M1 gate selected the **128³ Minimum** profile for
 M2, conditional on mesh compression and a measured 128³ run. The M2 exit is
-measured ([`m2-exit.md`](m2-exit.md)): VRAM clears the hard-fail line at
-3.29 GiB, edit/probe/light/probe-grid rows pass, and the **mesh row misses the
-2.4 MiB cap by 119.4 KiB**. Mesh compression is therefore the first M3 item and
-128³ Minimum remains a measured candidate, not a confirmed profile. Gate row 9
-is closed (0.00% reference granularity); row 11 is carried until a real save.
+measured ([`m2-exit.md`](m2-exit.md)): production VRAM clears the hard-fail line
+at **4.16 GiB**, edit/probe/light/probe-grid rows pass, and the **production
+mesh row misses the 2.4 MiB cap by 1,250 KiB**. Mesh compression is therefore
+the first M3 item and 128³ Minimum remains a measured candidate, not a confirmed
+profile. Gate row 9 is measured (0.00% reference granularity); row 11 is carried
+until a real save.
 The M1.5 vertical slice and zero-validation CI remain in place.
 
 Two consequences shape the schedule:
@@ -48,9 +49,9 @@ Two consequences shape the schedule:
 
 The M1 layout is in place at both edges; the 128³ variant compiles in CI. M1.5
 added the window, camera, atlas and naive mesher. M2 completed the production
-content path and measured it at the 128³ Minimum edge: 3.29 GiB projected VRAM
-and a mesh row 119.4 KiB over the 2.4 MiB cap, so mesh compression is the first
-M3 item.
+content path and measured it at the 128³ Minimum edge: 4.16 GiB projected VRAM
+and a production mesh row 1,250 KiB over the 2.4 MiB cap, so mesh compression is
+the first M3 item.
 
 Still missing: mesh compression, sparse-set ECS, production occlusion culling,
 LOD, streaming and persistence. The reference granularity oracle is closed at
@@ -247,10 +248,11 @@ Runs at the **128³ Minimum** edge (ADR-002). Default is not greenlit.
 - ≥ 20 terrain chunks/s single-threaded; scrub ≤ 4 ms; scratch ≤ 64 KiB/worker.
 - Ray-test flag produces a documented delta (accuracy and cost) versus flood-fill,
   without changing default behaviour.
-- **128³ Minimum gate run** recorded: memory 3.29 GiB (PASS), edit 8.136 µs
-  (PASS), probe 765.844 µs (PASS), throughput 34.3 chunks/s. The mesh row is
-  2,519 KiB against the 2,400 KiB cap, so the run records an open rule-3 lever
-  rather than a confirmed edge. See [`m2-exit.md`](m2-exit.md).
+- **128³ Minimum gate run** recorded: memory 4.16 GiB (PASS against 4.80),
+  edit 8.136 µs (PASS), probe 765.844 µs (PASS), throughput 34.3 chunks/s. The
+  production mesh row is 3,650 KiB against the 2,400 KiB cap, so the run
+  records an open rule-3 lever rather than a confirmed edge. See
+  [`m2-exit.md`](m2-exit.md).
 - Gate row 9 measured by the M1-34 reference over 100 poses (0.00% p95 reference
   granularity); row 11 **carried** because no real populated save exists before
   M2.5/worldgen or gameplay.
@@ -260,7 +262,7 @@ Runs at the **128³ Minimum** edge (ADR-002). Default is not greenlit.
 ### M3 — Raster scale-up (3 weeks)
 
 - Mesh compression: bring the 128³ mesh p95 under the 2.4 MiB cap (the first
-  rule-3 lever; the M2 exit measured 2,519 KiB).
+  rule-3 lever; the production M2 re-measure is 3,650 KiB).
 - Viewer lifecycle: stream in, mesh, upload, draw.
 - CPU frustum cull of chunk AABBs — the stopgap and the M5 production cull's
   correctness reference (the M1 reference traversal is the granularity oracle).

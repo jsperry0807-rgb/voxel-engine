@@ -3,7 +3,7 @@
 **Status:** v1.7 — derived from spec v2.3 and roadmap v3.3
 **Date:** 2026-10-31
 **Owner:** engine
-**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 complete — `M2-30` (measured exit) landed 2026-10-31; the 128³ Minimum run is recorded, the mesh row is 119.4 KiB over the cap and mesh compression is the first M3 item, gate row 9 is measured and row 11 is carried. M3 is next.
+**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 complete — `M2-30` (measured exit) landed 2026-10-31; the 128³ Minimum run is recorded, the mesh row is 1,250 KiB over the cap (production AO 3,650 KiB) and mesh compression is the first M3 item, gate row 9 is measured and row 11 is carried. M3 is next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -411,7 +411,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 **Goal:** deterministic mesh + AO + block light + probes, at the 128³ Minimum edge.
 **Exit:** M2-30. **Budget:** 27.0 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
-**Status:** Complete — `M2-16`…`M2-30` done. The measured 128³ Minimum exit is in [`m2-exit.md`](m2-exit.md): **9 pass, 1 fail, 2 not measured**. The mesh-buffer row misses by 119.4 KiB, so 128³ Minimum is a measured candidate pending mesh compression; row 9 is measured, row 11 is carried until a real save. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
+**Status:** Complete — `M2-16`…`M2-30` done. The measured 128³ Minimum exit is in [`m2-exit.md`](m2-exit.md): **9 pass, 1 fail, 2 not measured**. The mesh-buffer row misses by 1,250 KiB (production AO 3,650 KiB), so 128³ Minimum is a measured candidate pending mesh compression; row 9 is measured, row 11 is carried until a real save. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
 **Art:** none beyond M1.5-14; M2 reuses the slice atlas.
 
 **M1 gate carry-over — blocks M2-30:**
@@ -429,8 +429,9 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 **M2-30 resolution (2026-10-31):** the measured run is recorded in
 [`m2-exit.md`](m2-exit.md). Row 9 is closed by the M1-34 reference over 100
 poses on the save (p95 0.00%); row 11 is **carried**, not closed, because no real
-save exists until M2.5/worldgen or gameplay. The 128³ memory row passes (3.29
-GiB), but the mesh row misses the 2.4 MiB cap by 119.4 KiB, so mesh compression
+save exists until M2.5/worldgen or gameplay. The 128³ memory row is 4.16 GiB
+(passes the 4.80 GiB hard fail, over the 3.20 GiB target), and the mesh row
+misses the 2.4 MiB cap by 1,250 KiB (production AO 3,650 KiB), so mesh compression
 remains the first rule-3 lever and 128³ Minimum is a measured candidate.
 
 **M2-02 measured (2026-10-29, development host):** the face planes used 49,152 B
@@ -695,16 +696,23 @@ edges pass `cargo test -p voxel-mesh scratch_budget`.
 **M2-30 measured (2026-10-31):** the M2 exit is recorded in
 [`m2-exit.md`](m2-exit.md) and archived as
 `benchmarks/runs/20261031T152718Z-m2-gate-128`. The `m2-128` fixture (9 chunks,
-128³ edge) was frozen and verified, and the gate ran at the Minimum profile:
-**3.29 GiB** projected VRAM (p95 4.19 MiB × 805; PASS against 4.80 GiB, 98 MiB
-over the 3.20 GiB target), edit p95 **8.136 µs**, probe-update p95 **765.844 µs**,
-nodes max **138,636**, light/probe grid fixed, **mesh p95 2,519 KiB vs 2,400 KiB
-cap (FAIL by 119.4 KiB)**, granularity p95 **0.00%** over 100 poses (row 9
-closed), and dataset row 11 **carried** (no real save exists before M2.5). The
-128³ chunk build is **34.3 chunks/s** (M2-28). The mesh row is the open rule-3
-lever: mesh compression is the first M3 item, and 128³ Minimum stays a measured
-candidate rather than a confirmed profile. CI now runs the M2-11 mesh goldens at
-both edges and uploads them as a 90-day artifact.
+128³ edge) was frozen and verified. The M2 run reported edit p95 **8.136 µs**,
+probe-update p95 **765.844 µs**, nodes max **138,636**, granularity p95
+**0.00%** over 100 poses (row 9 measured), and dataset row 11 **carried** (no
+real save exists before M2.5); the 128³ chunk build is **34.3 chunks/s**
+(M2-28). Its 3.29 GiB and 2,519 KiB mesh figures were the **no-AO reference**.
+
+**Phase 0 erratum (2026-10-31, M3-00):** `gate memory` now measures the
+production AO mesh through `mesh_block` (runs
+`benchmarks/runs/20261031T163853Z-m2-production-mesh-128` and `...-64`).
+Production 128³: **4.16 GiB** projected VRAM (p95 5.42 MiB × 805; PASS against
+4.80 GiB, 987 MiB over the 3.20 GiB target) and **mesh p95 3,650 KiB vs the
+2,400 KiB cap (FAIL by 1,250 KiB, 52.1%)**. Production 64³: mesh p95 **925
+KiB vs 600 (FAIL by 325.5 KiB)** and 34.51 GiB. The M2 verdict (FAIL) is
+unchanged; the severity is worse. The mesh row is the open rule-3 lever: mesh
+compression is the first M3 item, and 128³ Minimum stays a measured candidate
+rather than a confirmed profile. CI runs the M2-11 mesh goldens at both edges
+and uploads them as a 90-day artifact.
 
 ### 6.1 Apron and mesher
 

@@ -16,20 +16,21 @@ gives:
 
 | Fixture | Reference p95 | Production AO p95 | Ratio | Cap | Miss |
 |---|---:|---:|---:|---:|---:|
-| 128³ `m2-128` (9 chunks) | 2,519 KiB | **3,645 KiB** | 1.447× | 2,400 KiB | **1,245 KiB (51.9%)** |
-| 64³ `m1-representative` (72 chunks) | 753 KiB | **924 KiB** | 1.227× | 600 KiB | **324 KiB (54.0%)** |
+| 128³ `m2-128` (9 chunks) | 2,519 KiB | **3,650 KiB** | 1.449× | 2,400 KiB | **1,250 KiB (52.1%)** |
+| 64³ `m1-representative` (72 chunks) | 753 KiB | **925 KiB** | 1.228× | 600 KiB | **325 KiB (54.2%)** |
 
-The 128³ production total is 346,081 quads / 26,302,156 B over 9 chunks. The
+The 128³ production payload is 346,081 quads / 26,302,156 B over 9 chunks;
+the gate adds 16 B per non-empty block and the u16 table (3,650 KiB p95). The
 p95 chunk is 49,112 quads; the mean is 38,454, **28% below the p95**. The gate
 uses p95 by pre-registration, so its projection is deliberately conservative.
 With n = 9, the nearest-rank p95 is also the maximum, a second reason to treat
-3,645 KiB as an upper-bound-flavoured number from a single archetype.
+3,650 KiB as an upper-bound-flavoured number from a single archetype.
 
 Two consequences:
 
 1. **Row 1 is also wrong today.** `MemoryComponents::total` includes the mesh
    estimate, so 3.29 GiB is built on `1,772 + 2,519` KiB. With the production
-   mesh it is `(1,772 + 3,645) × 805 = 4.16 GiB`: under the 4.80 GiB hard fail,
+   mesh it is `(1,772 + 3,650) × 805 = 4.16 GiB`: under the 4.80 GiB hard fail,
    but over the 3.20 GiB target by ~0.96 GiB.
 2. **Row 6 is a per-chunk cap.** Rule 3's "near radius, then vertical shell"
    moves rows 1/2, not row 6. AO-tolerant merging is possible but rejected on
@@ -272,7 +273,7 @@ instanced path (4.25–5 d vs 3–4 d) and it **abandons 64³ Minimum**.
 | Index compression only | 64 B | ~3,069 KiB | 128% | Reject: not enough |
 | More aggressive AO merge | fewer quads | fewer | — | Reject: visual artifacts |
 
-Percentages use the 2,400 KiB cap and the production AO p95 of 3,645 KiB. The
+Percentages use the 2,400 KiB cap and the production AO p95 of 3,650 KiB. The
 table is ADR-014's rejected-alternatives record.
 
 ---
@@ -283,7 +284,7 @@ Phase 0 must not depend on a codec that does not exist yet.
 
 - In `crates/bench/src/gate/memory.rs`, after expanding the chunk, run
   `for_each_block` + `greedy_block` + `mesh_block`. Measure the **current 76 B
-  logical** `Mesh` bytes in Phase 0; this reproduces the 3,645 KiB production
+  logical** `Mesh` bytes in Phase 0; this reproduces the 3,650 KiB production
   number and fixes rows 1/6 now.
 - Make the gate's mesh component take a **format descriptor** (bytes per quad,
   or a `MeshFormat` callback), so Phase 2 switches the row to the chosen
@@ -299,6 +300,13 @@ Phase 0 must not depend on a codec that does not exist yet.
 - Re-run 128³ and 64³; archive; keep M1/M2 runs append-only; add the M2 erratum
   and a new history entry.
 
+**Phase 0 result (2026-10-31):** `gate memory` now runs `mesh_block` and
+charges production AO bytes + records/table. Measured: 128³ **3,650 KiB** p95
+(1,250 KiB / 52.1% over the 2,400 KiB cap) and **4.16 GiB** total; 64³ **925
+KiB** (325.5 KiB over 600) and **34.51 GiB**. Runs:
+`benchmarks/runs/20261031T163853Z-m2-production-mesh-128` and
+`...-64`. The M2 erratum is recorded; Phase 1 (instanced-quad spike) is next.
+
 ---
 
 ## 6. Work plan and schedule
@@ -307,7 +315,7 @@ Phase 0 must not depend on a codec that does not exist yet.
 
 1. Add the production `mesh_block` measurement with the current 76 B format.
 2. Re-run both edges; archive.
-3. Append the M2 erratum: production 3,645 KiB, miss 1,245 KiB, row 1 4.16 GiB.
+3. Append the M2 erratum: production 3,650 KiB, miss 1,250 KiB, row 1 4.16 GiB.
 4. Update the repeated numbers in the task list, M1 decision, roadmap and
    performance targets.
 

@@ -1,0 +1,236 @@
+{
+  "schema_version": 2,
+  "generated_unix": 1793464731,
+  "machine": {
+    "reference": {
+      "name": "RTX 4060 reference",
+      "cpu": "AMD Ryzen 5 7600, 6 cores / 12 threads",
+      "gpu": "NVIDIA GeForce RTX 4060",
+      "vram_mib": 8188,
+      "ram_gib": 32,
+      "display": "1920 × 1080",
+      "os": "Linux (primary)",
+      "source": "docs/reference-machine.md"
+    },
+    "host": {
+      "cpu_model": "AMD Ryzen 5 7600 6-Core Processor",
+      "os": "linux",
+      "arch": "x86_64"
+    },
+    "host_is_reference": true,
+    "gpu_probed": false
+  },
+  "profile": "minimum",
+  "profile_gated": true,
+  "fixture": {
+    "id": "m2-128",
+    "status": "provisional",
+    "provisional_until_first_real_save": true,
+    "limitation": "Provisional until the first real save. This world is synthetic: it exercises the shape of a save (terrain, caves, overhangs, structures and mixed materials) but was not produced by gameplay, by docs/worldgen-design.md, or by the save path on the reference machine. Its byte sizes, material histograms and distributions are illustrative only and must not be quoted as gate results (M1-35, M1-37) until a real save is captured and this fixture is re-frozen.",
+    "manifest": "benchmarks/fixtures/m2-128/manifest.json",
+    "save_dir": "benchmarks/fixtures/m2-128/save",
+    "world_hash": "03c687a5d0967d1e24ec1b7d4e8ef3edd4da8e326cecf2bb45fcb57d042b14be",
+    "chunk_bits": 7,
+    "chunk_dim": 128,
+    "chunks": 9,
+    "total_voxels": 7296044,
+    "overlay_entries": 0,
+    "region_files": 4
+  },
+  "rows": [
+    {
+      "id": "vram_budget",
+      "parameter": "VRAM budget for voxel data",
+      "pre_registered": "40% of 8,188 MiB = 3,275 MiB; hard fail at 60% = 4,913 MiB",
+      "measured": "4.16 GiB (p95 5.29 MiB × 805 chunks)",
+      "limit": "≤ 4.80 GiB hard fail (3.20 GiB target)",
+      "margin": "+650.74 MiB to hard fail",
+      "verdict": "pass",
+      "source": "gate memory (M1-35) + gate residency (M1-36)",
+      "note": "Projected from the measured p95 total per chunk; the max chunk (5.29 MiB) would project to 4.16 GiB. The target row is 3.20 GiB (-987.26 MiB), the hard-fail row is 4.80 GiB (+650.74 MiB). The gate uses p95 by pre-registration, not the mean, and does not apply the 1.5× factor a second time.",
+      "numbers": {
+        "measured": 4262.25549697876,
+        "limit": 4913.0,
+        "margin": 650.7445030212402,
+        "unit": "MiB"
+      }
+    },
+    {
+      "id": "loaded_chunks",
+      "parameter": "Target loaded chunk count",
+      "pre_registered": "Per profile and edge, table §2: N64 = 6,432, N128 = 804",
+      "measured": "N64 = 6,440 at 64³; N128 = 805 at 128³ equal volume",
+      "limit": "N64 = 6,440 = 8 × N128; table predicted N64 = 6,432, N128 = 804",
+      "margin": "0 chunks (equal-volume identity)",
+      "verdict": "pass",
+      "source": "gate residency (M1-36)",
+      "note": "The gate asserts the frozen model's equal-volume identity, N64 = 8 × N128. The table's own N64/N128 are a prediction: measured 6,440 / 805 against 6,432 / 804 (deltas +8 / +1). Those deltas are the table's nearest-integer rounding and are reported, not folded back into the model. N64 feeds the memory projection."
+    },
+    {
+      "id": "node_budget",
+      "parameter": "SVDAG node budget/chunk",
+      "pre_registered": "64³ ≤ 200,000; 128³ ≤ 1,500,000 unique nodes",
+      "measured": "max 138,636 nodes/chunk (p95 138,636); 128³ build (128 voxels/edge)",
+      "limit": "≤ 1,500,000 nodes/chunk at 128³",
+      "margin": "+1,361,364 nodes",
+      "verdict": "pass",
+      "source": "gate memory (M1-35)",
+      "note": "The node count is the banded internal-node arena (`dag_node_bytes / 8`), so it is a hard per-chunk cap, not a p95. The other edge's budget is pre-registered but not measured by this build; M1-40 supplies the 128³ projection before M1-42.",
+      "numbers": {
+        "measured": 138636.0,
+        "limit": 1500000.0,
+        "margin": 1361364.0,
+        "unit": "nodes"
+      }
+    },
+    {
+      "id": "light_volume",
+      "parameter": "Light volume/chunk",
+      "pre_registered": "64³: 64 cells = 1 KiB; 128³: 512 cells = 8 KiB",
+      "measured": "8,192 B/chunk (512 cells × 16 B); p50 8,192 B",
+      "limit": "= 8,192 B/chunk at 128³ (512 cells)",
+      "margin": "0 B",
+      "verdict": "pass",
+      "source": "gate memory (M1-35); ADR-004",
+      "note": "One 16 B cell per block, fixed by the compiled chunk edge. The 128³ value is the frozen pre-registration target and is not built in M1. This is an invariant of the memory model, which charges exactly this volume; a resident `LightState` also allocates propagation scratch, which this gate does not measure."
+    },
+    {
+      "id": "probe_grid",
+      "parameter": "Probe grid/chunk",
+      "pre_registered": "64³: 64 probes = 768 B; 128³: 512 probes = 6 KiB",
+      "measured": "512 probes/chunk, 6,144 B; 32,768 rays/full rebake",
+      "limit": "= 512 probes = 6,144 B/chunk at 128³",
+      "margin": "0 B",
+      "verdict": "pass",
+      "source": "gate probes (M1-38) + gate memory (M1-35); ADR-005",
+      "note": "One 12 B SH4 RGB probe per block at the near LOD. The update row measures the latency; this row checks the fixed grid and the byte volume the model charges, which is an invariant rather than a resident allocation. The 128³ value is pre-registered, not built in M1."
+    },
+    {
+      "id": "mesh_buffer",
+      "parameter": "Mesh buffer/chunk",
+      "pre_registered": "64³: 150–600 KB; 128³: 600 KB–2.4 MB",
+      "measured": "p95 3650 KiB (max 3650 KiB); production AO × 76 B/quad + records",
+      "limit": "≤ 2400 KiB/chunk at 128³",
+      "margin": "-1.22 MiB",
+      "verdict": "fail",
+      "source": "gate memory (M1-35); production AO mesher; M1-31 reference",
+      "note": "The production AO mesh is measured through `mesh_block` (76 B/quad) and includes 16 B per non-empty block meshlet record plus the per-chunk u16 record table. The M1-31 no-AO reference is 2519 KiB p95, informational only and not in the total. The predicted lower bound is 150 KiB; a lower estimate is not a failure. The gate uses p95 and reports max separately.",
+      "numbers": {
+        "measured": 3650.234375,
+        "limit": 2400.0,
+        "margin": -1250.234375,
+        "unit": "KiB"
+      }
+    },
+    {
+      "id": "edit_latency",
+      "parameter": "Edit latency",
+      "pre_registered": "p95 ≤ 8 ms (consolidate + upload + fence + flip + dirty light)",
+      "measured": "p95 6.844 µs (p50 4.108 µs, max 2.94 ms); 1,000 edits",
+      "limit": "p95 ≤ 8.00 ms",
+      "margin": "7.99 ms",
+      "verdict": "pass",
+      "source": "gate edits (M1-37)",
+      "note": "Fixed = upload + fence + flip; dirty = COW + light. The fence and upload are the CPU side of the M4 protocol; the headless gate has no GPU device time, so this is a lower bound on a real device path, not a claim about GPU completion.",
+      "numbers": {
+        "measured": 0.006844,
+        "limit": 8.0,
+        "margin": 7.993156,
+        "unit": "ms"
+      }
+    },
+    {
+      "id": "probe_update",
+      "parameter": "Probe-update budget",
+      "pre_registered": "p95 ≤ 4 ms per edited chunk",
+      "measured": "p95 750.015 µs (p50 608.095 µs, max 3.42 ms); 1,000 edited chunks",
+      "limit": "p95 ≤ 4.00 ms per edited chunk",
+      "margin": "3.25 ms",
+      "verdict": "pass",
+      "source": "gate probes (M1-38)",
+      "note": "Update = select + rebake + upload. Only probes whose rays reach the dirty voxel are rebaked; the upload is the CPU staging copy and excludes the device transfer and the M4 fence/flip.",
+      "numbers": {
+        "measured": 0.750015,
+        "limit": 4.0,
+        "margin": 3.249985,
+        "unit": "ms"
+      }
+    },
+    {
+      "id": "culling_granularity",
+      "parameter": "Culling granularity",
+      "pre_registered": "≤ 15% traversed-but-invisible at chunk boundaries @ max view",
+      "measured": "p95 0.00% (p50 0.00%, max 0.00%) over 100 poses",
+      "limit": "≤ 15% traversed-but-invisible",
+      "margin": "+15.00 pp",
+      "verdict": "pass",
+      "source": "gate granularity (M1-34 reference)",
+      "note": "Reference frustum traversal at block resolution against the M1-33 occlusion oracle, on the frozen save. The reference fill is conservative: a partly filled block is passable, so on this terrain save almost everything is reachable and a 0.00% result is non-discriminating. It is the baseline the M5 production culler must beat; a missed reference-visible block would be a correctness failure, not granularity.",
+      "numbers": {
+        "measured": 0.0,
+        "limit": 15.0,
+        "margin": 15.0,
+        "unit": "%"
+      }
+    },
+    {
+      "id": "safety_factor",
+      "parameter": "Safety factor",
+      "pre_registered": "1.5× on the memory budget",
+      "measured": "4,913 MiB = ceil(1.5 × 3,275 MiB)",
+      "limit": "hard fail = 4,913 MiB",
+      "margin": "0 MiB",
+      "verdict": "pass",
+      "source": "pre-registration §3; performance-targets §1.1",
+      "note": "This is an invariant on the frozen budget, not a second measurement. The factor survives hardware changes because the fraction (40%/60%) does; applying it twice would make the gate stricter than the pre-registration.",
+      "numbers": {
+        "measured": 4913.0,
+        "limit": 4913.0,
+        "margin": 0.0,
+        "unit": "MiB"
+      }
+    },
+    {
+      "id": "measurement_dataset",
+      "parameter": "Measurement dataset",
+      "pre_registered": "Real populated save; median, p95, max per chunk",
+      "measured": "m2-128 (provisional; synthetic)",
+      "limit": "real populated save",
+      "margin": "n/a",
+      "verdict": "not_measured",
+      "source": "gate memory fixture (M1-28/M1-35)",
+      "note": "Provisional until the first real save. This world is synthetic: it exercises the shape of a save (terrain, caves, overhangs, structures and mixed materials) but was not produced by gameplay, by docs/worldgen-design.md, or by the save path on the reference machine. Its byte sizes, material histograms and distributions are illustrative only and must not be quoted as gate results (M1-35, M1-37) until a real save is captured and this fixture is re-frozen. The distributions are measured (p50/p95/max per chunk), but the dataset is not admissible as the M1 gate result until a real populated save replaces it."
+    },
+    {
+      "id": "fallback_trigger",
+      "parameter": "Fallback trigger",
+      "pre_registered": "See §4; pre-registered; no renegotiation inside M1",
+      "measured": "rule 3 triggered by the measured rows",
+      "limit": "pre-registration §4 fallback order",
+      "margin": "n/a",
+      "verdict": "not_measured",
+      "source": "pre-registration §4",
+      "note": "Rule 3: a voxel-memory row failed at 128³. Apply the pre-registered sacrifice order: mesh compression, then near radius, then vertical shell. Never shrink the far clip below 8 km."
+    }
+  ],
+  "summary": {
+    "rows": 12,
+    "pass": 9,
+    "fail": 1,
+    "not_measured": 2,
+    "status": "fail"
+  },
+  "fallback": {
+    "triggered": true,
+    "rule": 3,
+    "action": "Rule 3: a voxel-memory row failed at 128³. Apply the pre-registered sacrifice order: mesh compression, then near radius, then vertical shell. Never shrink the far clip below 8 km."
+  },
+  "notes": [
+    "The twelve rows are the frozen table in docs/pre-registration.md §3. Every verdict is computed from a measured value, a checked invariant, or is not_measured; no row is typed PASS. A row the M1-35…M1-38 harnesses do not measure is NOT MEASURED, not green.",
+    "The memory projection is the measured p95 per-chunk total multiplied by the loaded chunk count at the edge this build uses. It applies the frozen 60% hard-fail line (4,913 MiB); the 1.5× safety factor is already inside that line, so it is not applied twice.",
+    "The headless gate does not open a wgpu adapter. GPU identity is quoted from docs/reference-machine.md and is not re-probed; the host CPU, OS and architecture are read from the running process.",
+    "The fixture is provisional until the first real save. Its distributions are a rehearsal for the gate and must not be quoted as the M1 result; the dataset row stays not measured until a real save replaces it.",
+    "Culling granularity is measured by the M1-34 reference over 100 poses on the frozen save. The reference traversal is frustum-only, so its ratio is the baseline the M5 production occlusion culler must beat.",
+    "The fallback is computed from the measured rows with the pre-registration §4 order. It is a preview, not a renegotiation of any threshold."
+  ]
+}
