@@ -206,7 +206,7 @@ The deadline is the art task in the last column; its output must be ready before
 
 `water_still` is authored here even though transparency lands in M3.5; the slice draws it as a normal face.
 
-**Later sets.** The M2.5 keys below are frozen in the manifest at slots 41–69; the M3.5 and UI keys remain proposed until their task lands. The deadline is the art task in the last column.
+**Later sets.** The M2.5 and M3.5 water keys below are frozen in the manifest at slots 41–71; the UI keys remain proposed until their task lands. The deadline is the art task in the last column.
 
 | Texture / material | Applies to | Done in task |
 | --- | --- | --- |
@@ -235,9 +235,9 @@ The deadline is the art task in the last column; its output must be ready before
 | `fern` | forest and taiga undergrowth | M2.5-31 |
 | `cactus_top`, `cactus_side`, `cactus_bottom` | desert | M2.5-31 |
 | `dead_bush` | desert and savanna | M2.5-31 |
-| `water_flow`* | rivers and current | M3.5-15 |
-| `foam_strip`* | river foam | M3.5-15 |
-| `caustics`* | underwater light, only if not procedural | M3.5-15 |
+| `water_flow` | rivers and current | M3.5-15 |
+| `foam_strip` | river foam | M3.5-15 |
+| `caustics` (procedural; no atlas tile) | underwater light | M3.5-15 |
 | `map_item_icon`* | map item icon (UI sprite) | M3.5-10 |
 | `player_marker`* | map marker (UI sprite) | M3.5-10 |
 
@@ -245,7 +245,7 @@ The deadline is the art task in the last column; its output must be ready before
 
 **Underground, structures and flora (≤ 32 new tiles).** The per-material rows above are the deadline list. Lava and geothermal tiles carry the emissive material flag; that is a property, not a texture rule. Giant-tree detail reuses the oak/spruce keys; transition and detail templates add zero slots. The 15 M2.5-31 faces and their block rows are frozen in the manifest; the flora, structure and underground tables and their fixtures remain acceptance work.
 
-**Water and current (≤ 3 new tiles).** `water_still` exists from M1.5-14; add `water_flow` and `foam_strip`. The flow axis and UV-scroll rate are documented with the tiles. Caustics are procedural unless M3.5-15 adds a `caustics` tile; the decision is recorded with M3.5-15, and no caustics texture is invented in the shader task.
+**Water and current (≤ 3 new tiles).** `water_still` exists from M1.5-14; `water_flow` and `foam_strip` are frozen at slots 70–71. Both are Translucent and tile on both axes, flow along +X, and use a nominal 0.25 tile/s UV scroll that M3.5-08 scales by current speed. Caustics are procedural; no `caustics` tile enters the atlas. The flow axis, alpha policy and scroll rate are recorded in `docs/water-textures.md`.
 
 **Map UI (0 slots).** The atlas item icon and player marker are UI sprites, not material tiles. They are authored inside M3.5-10 and never enter the 256-slot table.
 
@@ -891,7 +891,7 @@ neighbour; runtime camera motion/eviction is M3-09. See
 | M3.5-11 | Menu orbit view of the square slab and ocean rim | M2.5-27 | Pre-rendered/2.5D view in the menu; no gameplay renderer | run | 1 d | [ ] |
 | M3.5-12 | Visual regression set: seam, water, far field, night | M3.5-15, M3.5-08 | Four screenshots with a documented diff threshold; final M3.5-15 water art | review | 1 d | [ ] |
 | M3.5-13 | Streaming hitch test over a 2 km flight with water and far field | M3.5-03 | p99 ≤ 4 ms; no frame > 16.6 ms | `cargo run -p voxel-bench -- hitch` | 1 d | [ ] |
-| M3.5-15 | Author water and current textures: `water_flow`, `foam_strip`, optional `caustics`; alpha/tint policy; flow axis and UV-scroll rate | M1.5-14 | Keys are in the manifest and atlas; alpha is smooth; flow axis and UV-scroll rate documented; caustics are procedural or a named tile | `cargo test -p voxel-block texture_manifest`; `cargo run -p voxel-viewer -- bake-atlas`; visual | 1.5 d | [ ] |
+| M3.5-15 | Author water and current textures: `water_flow`, `foam_strip`, optional `caustics`; alpha/tint policy; flow axis and UV-scroll rate | M1.5-14 | Keys are in the manifest and atlas; alpha is smooth; flow axis and UV-scroll rate documented; caustics are procedural or a named tile | `cargo test -p voxel-block texture_manifest`; `cargo run -p voxel-viewer -- bake-atlas`; visual | 1.5 d | [x] |
 | M3.5-16 | M3.5 exit: tag `m3.5`, budgets recorded, material manifest frozen | M3.5-13, M3.5-15 | Tag; docs updated; manifest accounts for ids 0..N−1 with no gap and the unused tail; CI rejects a block key without a texture | `git tag -n m3.5` | 0.25 d | [ ] |
 
 ---

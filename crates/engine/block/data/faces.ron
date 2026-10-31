@@ -78,5 +78,8 @@
         "voxel:block/cactus_side",
         "voxel:block/cactus_bottom",
         "voxel:block/dead_bush",
+        // M3.5-15 — water and current.
+        "voxel:block/water_flow",
+        "voxel:block/foam_strip",
     ],
 )

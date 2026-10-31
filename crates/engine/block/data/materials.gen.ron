@@ -1,7 +1,7 @@
 (
     schema: 1,
-    manifest_blake3: "394abdf34054619f426e26d927365cfcb6c4a82eb4d9e94cecfa4faca7955b35",
-    blocks_blake3: "4b3d33778caae12710f23af92894208098931ecf43aa68c6735746e5a7bbae8c",
+    manifest_blake3: "91a48ccc9e05f56e0f0e75d11de41d58a407fd626193d45f03da5dfd16cd2bd1",
+    blocks_blake3: "5b216519accd78bb9299e05bbb3c2eebcc37582cd1160d61b00b37be92c5b927",
     materials: [
         (
             id: 1,
@@ -347,6 +347,16 @@
             id: 69,
             key: "voxel:block/dead_bush",
             alpha: Cutout,
+        ),
+        (
+            id: 70,
+            key: "voxel:block/water_flow",
+            alpha: Translucent,
+        ),
+        (
+            id: 71,
+            key: "voxel:block/foam_strip",
+            alpha: Translucent,
         ),
     ],
     faces: [
@@ -844,6 +854,24 @@
             south: 69,
             east: 69,
             west: 69,
+        ),
+        (
+            block: "voxel:water_flow",
+            top: 70,
+            bottom: 70,
+            north: 70,
+            south: 70,
+            east: 70,
+            west: 70,
+        ),
+        (
+            block: "voxel:foam_strip",
+            top: 71,
+            bottom: 71,
+            north: 71,
+            south: 71,
+            east: 71,
+            west: 71,
         ),
     ],
 )

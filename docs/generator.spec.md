@@ -100,7 +100,7 @@ Rules:
 
 1. Parses; `schema == 1`.
 2. Key set == distinct `voxel:block/*` keys in `blocks.ron` (no missing, no extra); exactly the keys in `data/faces.ron`, with each entry's slot equal to its position in that table.
-3. Slots unique, exactly `1..=40`, all <= 255.
+3. Slots unique, exactly `1..=N` (N = `data/faces.ron` length), all <= 255.
 4. File exists, resolves inside crate, decodes as 256x256 RGBA8 colour type 6.
 5. BLAKE3(file bytes) == `hash`.
 6. `alpha` equals the strictest alpha class required by every block using the face (all users of a key must agree on RenderType; disagreement = error `RenderTypeConflict`).
@@ -209,7 +209,7 @@ The viewer, at startup, verifies `atlas.hash.ron` against `atlas.png` and the ma
 
 ```rust
 pub struct BlockId(u16);           // identity, dense, from blocks.ron
-pub struct MaterialId(u8);         // 0 = air, 1..=40 drawable; equals atlas slot
+pub struct MaterialId(u8);         // 0 = air, 1..=N drawable; equals atlas slot
 pub struct FaceMaterials { pub top: MaterialId, pub bottom: MaterialId,
                            pub north: MaterialId, pub south: MaterialId,
                            pub east: MaterialId, pub west: MaterialId }
@@ -242,11 +242,11 @@ pub struct FaceMaterials { pub top: MaterialId, pub bottom: MaterialId,
     blocks_blake3: "<hex of blocks.ron>",
     materials: [
         (id: 1, key: "voxel:block/stone", alpha: Opaque),
-        // ... through id 69
+        // ... through id 71
     ],
     faces: [
         (block: "voxel:stone", top: 1, bottom: 1, north: 1, south: 1, east: 1, west: 1),
-        // ... one per block in blocks.ron order (55 blocks)
+        // ... one per block in blocks.ron order (57 blocks)
     ],
 )
 ```
@@ -284,7 +284,7 @@ pub struct FaceMaterials { pub top: MaterialId, pub bottom: MaterialId,
 
 Every spatial op takes a period in lattice cells and wraps lattice coordinates modulo that period, so a texture built only from periodic ops tiles on both axes. Ops that break periodicity (e.g. `HBand`, `Rect`) are tagged `breaks_v` / `breaks_h`; the validator checks that a graph's declared `tiling` is consistent with the ops it uses.
 
-### 8.4 Initial op set (enough for all 69 faces)
+### 8.4 Initial op set (enough for all 71 faces)
 
 - Sources: `Const`, `Uv`, `ValueNoise`, `Worley` (F1/F2/edge), `Fbm`, `Rings` (integer sqrt), `Stripes` (axis, count, wobble), `Rect`, `HBand`.
 - Patterns and shapes: `Checker`, `Bricks`, `Wave`, `Spiral`, `RadialGradient`, `Circle`, `Star`, `Polygon`.
@@ -386,7 +386,7 @@ M1.5-15 screenshots. The committed set lives under `docs/images/m1.5-15-*.png`.
 Future art-set acceptance screenshots include the first 8 hex of
 `atlas_png_blake3` in the filename.
 
-1. `face-sheet`: all 69 faces on a 12x6 grid, nearest filtering, 1:1 (the M1.5 review sheet is the 23 M1.5 faces on a 6x4 grid).
+1. `face-sheet`: all 71 faces on a 12x6 grid, nearest filtering, 1:1 (the M1.5 review sheet is the 23 M1.5 faces on a 6x4 grid).
 2. `grass-block`: top, side and bottom visible, side fringe matches top.
 3. `sandstone-block`: three faces agree at edges.
 4. `log-and-leaves`: oak log + leaves cutout gaps.
@@ -427,7 +427,7 @@ The generator is implemented and runnable:
 
 - `cargo run -p voxel-texgen` opens the editor; `cargo run -p voxel-texgen -- check` verifies the committed set.
 - The deterministic core is `voxel-texgraph`; the app is `voxel-texgen` and contains no byte-producing logic of its own.
-- All 69 graphs, PNGs, `textures.ron`, `materials.gen.ron`, `atlas.png` and `atlas.hash.ron` are committed.
+- All 71 graphs, PNGs, `textures.ron`, `materials.gen.ron`, `atlas.png` and `atlas.hash.ron` are committed.
 - The evaluator adds `MixColor`, the pattern/shape nodes, domain transforms and the colour/effect nodes listed in section 8.4.
 - Neighbourhood effects (`Blur`, `Emboss`, `NormalMap`, `Bevel`) re-sample their input at fixed 256-grid texel offsets. They preserve periodicity because the offsets wrap, but cost more than pointwise ops; preview at 128² while authoring.
 - `Circle`, `Star`, `Polygon`, `Rotate` and `Mirror` are tagged as breaking both axes; `Polar` and `Cartesian` break the vertical axis. The validator rejects them under incompatible tiling.

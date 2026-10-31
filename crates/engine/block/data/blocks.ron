@@ -778,5 +778,33 @@
             )),
             flags: 4,
         ),
+        // M3.5-15 — water and current.
+        (
+            key: "voxel:water_flow",
+            render_type: Translucent,
+            textures: Some((
+                top: "voxel:block/water_flow",
+                bottom: "voxel:block/water_flow",
+                north: "voxel:block/water_flow",
+                south: "voxel:block/water_flow",
+                east: "voxel:block/water_flow",
+                west: "voxel:block/water_flow",
+            )),
+            flags: 24,
+            light_opacity: 3,
+        ),
+        (
+            key: "voxel:foam_strip",
+            render_type: Translucent,
+            textures: Some((
+                top: "voxel:block/foam_strip",
+                bottom: "voxel:block/foam_strip",
+                north: "voxel:block/foam_strip",
+                south: "voxel:block/foam_strip",
+                east: "voxel:block/foam_strip",
+                west: "voxel:block/foam_strip",
+            )),
+            flags: 4,
+        ),
     ],
 )

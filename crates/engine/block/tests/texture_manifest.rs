@@ -61,6 +61,6 @@ fn materials_gen_is_current() {
         "materials.gen.ron is stale; run `cargo run -p voxel-texgen -- generate`"
     );
     assert_eq!(table.schema, 1);
-    assert_eq!(table.materials.len(), 69);
-    assert_eq!(table.faces.len(), 55);
+    assert_eq!(table.materials.len(), 71);
+    assert_eq!(table.faces.len(), 57);
 }

@@ -12,6 +12,7 @@
 | [`reference-machine.md`](reference-machine.md) | The machine every gate number is measured on; gated profiles |
 | [`performance-targets.md`](performance-targets.md) | Frame, VRAM, RAM and CPU budgets; sacrifice ladder; CI policy |
 | [`generator.spec.md`](generator.spec.md) | Material and texture pipeline: graphs, manifest, bake filter, atlas, material table |
+| [`water-textures.md`](water-textures.md) | M3.5-15 water/current faces: flow axis, UV scroll, alpha policy, caustics decision |
 
 When these disagree, the spec wins, then the roadmap, then the task list. Any change to a
 binding number is made in the spec and the pre-registration, never only in a task.

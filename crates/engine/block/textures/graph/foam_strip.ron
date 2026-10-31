@@ -1,0 +1,22 @@
+(
+    schema: 1,
+    key: "voxel:block/foam_strip",
+    size: 256,
+    tiling: Both,
+    alpha: Translucent,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 12, octaves: 3), inputs: []),
+        (id: 1, op: Stripes(axis: Y, count: 4, wobble: 10000), inputs: []),
+        (id: 2, op: Const(value: 30000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: Smoothstep(edge0: 40000, edge1: 56000), inputs: [3]),
+        (id: 5, op: Ramp(stops: [(0, "#bfe8f4"), (65535, "#ffffff")]), inputs: [3]),
+        (id: 6, op: AlphaBand(min: 30000, max: 60000), inputs: [4]),
+        (id: 7, op: ValueNoise(period: 64, octaves: 1), inputs: []),
+        (id: 8, op: Threshold(at: 62000), inputs: [7]),
+        (id: 9, op: Ramp(stops: [(0, "#e8f8ff"), (65535, "#ffffff")]), inputs: [7]),
+        (id: 10, op: MixColor, inputs: [5, 9, 8]),
+    ],
+    output: (color: 10, alpha: Node(6)),
+)
