@@ -55,8 +55,10 @@ attribute.**
    visibility and the three neighbours per AO corner. At chunk borders it comes from
    the six 1-voxel face planes of the resident neighbours (M2-01); interior neighbours
    are read through the store. No 130³ dense copy and no chunk-wide scratch is built.
-   The 18³ `u16` material scratch is 11.4 KiB; masks, AO and emit buffers keep the
-   per-worker total under 64 KiB.
+   The 18³ `u16` material scratch is 11.4 KiB and the merge mask/AO stay on the
+   stack, so the per-worker **scratch** stays under 64 KiB. The per-block quad
+   list and emitted meshlet are outputs, bounded by the block's `3 × 16³` quads,
+   not scratch.
 
    The six chunk face planes are a read-only chunk-level cache, shared rather than
    copied per worker: **48 KiB at 64³, 192 KiB at 128³**, against 4.2 MiB for a dense
