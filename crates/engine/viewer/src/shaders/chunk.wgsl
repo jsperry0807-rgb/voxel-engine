@@ -1,7 +1,7 @@
-// Chunk shader, M2-27: production mesh, AO and block light.
+// Chunk shader, M3-00: packed 8 B vertex, AO and block light.
 //
-// ADR-010 vertex data is chunk-local voxel coordinates (6.25 cm), material,
-// face code and four corner AO values. This chunk sits at the world origin, so
+// The vertex carries chunk-local voxel coordinates (6.25 cm), material, face
+// code and four 2-bit AO levels. This chunk sits at the world origin, so
 // world = local * 0.0625.
 //
 // UVs are derived per fragment from the face-local position inside a 16-voxel
@@ -47,12 +47,10 @@ const CELLS: u32 = {{CELLS}};
 
 struct VertexInput {
     @builtin(vertex_index) vertex_index: u32,
-    // local.xyz, material
-    @location(0) local_material: vec4<u32>,
-    // face, ao0, ao1, ao2
-    @location(1) face_ao0: vec4<u32>,
-    // ao3, reserved
-    @location(2) ao3_reserved: vec4<u32>,
+    // local.xyz, spare
+    @location(0) local_spare: vec4<u32>,
+    // material u16, packed u16 (face 3 bits + four 2-bit AO levels)
+    @location(1) material_packed: vec2<u32>,
 };
 
 struct VertexOutput {
@@ -66,25 +64,23 @@ struct VertexOutput {
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
     let local = vec3<f32>(
-        f32(input.local_material.x),
-        f32(input.local_material.y),
-        f32(input.local_material.z),
+        f32(input.local_spare.x),
+        f32(input.local_spare.y),
+        f32(input.local_spare.z),
     );
     let world = local * 0.0625;
 
-    let corners = array<u32, 4>(
-        input.face_ao0.y,
-        input.face_ao0.z,
-        input.face_ao0.w,
-        input.ao3_reserved.x,
-    );
+    let material = input.material_packed.x;
+    let packed = input.material_packed.y;
+    let face = packed & 7u;
+    let level = (packed >> (3u + 2u * (input.vertex_index % 4u))) & 3u;
 
     var output: VertexOutput;
     output.clip_position = camera.view_proj * vec4<f32>(world, 1.0);
     output.local = local;
-    output.material = input.local_material.w;
-    output.face = input.face_ao0.x;
-    output.ao = f32(corners[input.vertex_index % 4u]) / 255.0;
+    output.material = material;
+    output.face = face;
+    output.ao = f32(level * 85u) / 255.0;
     return output;
 }
 

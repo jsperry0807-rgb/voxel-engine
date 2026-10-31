@@ -19,9 +19,30 @@ use crate::depth::DEPTH_FORMAT;
 
 const CHUNK_WGSL: &str = include_str!("shaders/chunk.wgsl");
 
-/// The ADR-010 16 B vertex layout, shared with offline tools that draw the
-/// same vertex stream (the screenshot example).
-pub const VERTEX_ATTRIBUTES: [VertexAttribute; 3] = [
+/// The packed 8 B production vertex layout.
+pub const VERTEX_ATTRIBUTES: [VertexAttribute; 2] = [
+    VertexAttribute {
+        format: VertexFormat::Uint8x4,
+        offset: 0,
+        shader_location: 0,
+    },
+    VertexAttribute {
+        format: VertexFormat::Uint16x2,
+        offset: 4,
+        shader_location: 1,
+    },
+];
+
+/// The vertex buffer layout for [`ChunkPipeline`].
+pub const VERTEX_LAYOUT: VertexBufferLayout<'static> = VertexBufferLayout {
+    array_stride: 8,
+    step_mode: VertexStepMode::Vertex,
+    attributes: &VERTEX_ATTRIBUTES,
+};
+
+/// The M1.5 naive 16 B layout, kept for the screenshot example and its
+/// historical artifacts.
+pub const NAIVE_VERTEX_ATTRIBUTES: [VertexAttribute; 3] = [
     VertexAttribute {
         format: VertexFormat::Uint16x4,
         offset: 0,
@@ -39,11 +60,11 @@ pub const VERTEX_ATTRIBUTES: [VertexAttribute; 3] = [
     },
 ];
 
-/// The vertex buffer layout for [`ChunkPipeline`].
-pub const VERTEX_LAYOUT: VertexBufferLayout<'static> = VertexBufferLayout {
+/// The naive 16 B vertex buffer layout.
+pub const NAIVE_VERTEX_LAYOUT: VertexBufferLayout<'static> = VertexBufferLayout {
     array_stride: 16,
     step_mode: VertexStepMode::Vertex,
-    attributes: &VERTEX_ATTRIBUTES,
+    attributes: &NAIVE_VERTEX_ATTRIBUTES,
 };
 
 /// The chunk render pipeline.

@@ -122,12 +122,18 @@ fn report_covers_every_fixture_chunk_and_components_sum_to_total() {
     assert_eq!(report.components.probes.p50, Some(768));
     assert!(report.components.mesh.p95.unwrap() > 0);
     assert!(report.components.mesh_reference.p95.unwrap() > 0);
+    let production_quads: u64 = report.chunks.iter().map(|chunk| chunk.mesh_quads).sum();
+    let reference_quads: u64 = report
+        .chunks
+        .iter()
+        .map(|chunk| chunk.mesh_reference_quads)
+        .sum();
     assert!(
-        report.components.mesh.p95 > report.components.mesh_reference.p95,
-        "the production AO mesh must differ from the no-AO reference"
+        production_quads > reference_quads,
+        "the production AO merge must emit more quads than the no-AO reference"
     );
-    assert_eq!(report.mesh_bytes_per_quad, 76);
-    assert!(report.mesh_format.contains("ADR-010"));
+    assert_eq!(report.mesh_bytes_per_quad, 44);
+    assert!(report.mesh_format.contains("packed 8 B"));
 
     let component_sum = report.components.dag.total
         + report.components.legacy_v1.total

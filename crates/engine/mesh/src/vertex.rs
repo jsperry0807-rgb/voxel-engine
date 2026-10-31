@@ -123,3 +123,153 @@ mod tests {
         }
     }
 }
+
+/// The M3-00 packed 8 B upload vertex (4 per quad + six `u16` indices = 44 B).
+///
+/// The logical [`Vertex`] stays 16 B for goldens and determinism. This is the
+/// GPU encoding: local xyz `u8`, spare, material `u16`, and one `u16` with
+/// face (3 bits) + four 2-bit AO levels. The three spare bytes of the logical
+/// vertex are not needed here.
+#[repr(C, align(4))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PackedVertex {
+    /// Chunk-local voxel coordinate, `0..=255`.
+    pub local: [u8; 3],
+    /// Reserved, zero.
+    pub spare: u8,
+    /// Material id (atlas slot after resolution).
+    pub material: u16,
+    /// Face 3 bits + AO levels.
+    pub face_ao: u16,
+}
+
+impl PackedVertex {
+    /// Encoded size in bytes.
+    pub const SIZE: usize = 8;
+    /// Encoded alignment in bytes.
+    pub const ALIGN: usize = 4;
+
+    /// Packs a logical vertex.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a local coordinate exceeds `u8`, the face is above 5, or an
+    /// AO value is not one of the four canonical levels.
+    pub fn from_vertex(vertex: &Vertex) -> Self {
+        assert!(
+            vertex
+                .local
+                .iter()
+                .all(|&coordinate| coordinate <= u8::MAX as u16),
+            "local coordinate exceeds the packed 8 B vertex"
+        );
+        assert!(vertex.face <= 5, "face {} is out of range", vertex.face);
+        let mut face_ao = u16::from(vertex.face);
+        for (corner, value) in vertex.ao.iter().enumerate() {
+            let level: u16 = match value {
+                0 => 0,
+                85 => 1,
+                170 => 2,
+                255 => 3,
+                other => panic!("AO value {other} is not a canonical level"),
+            };
+            face_ao |= level << (3 + 2 * corner);
+        }
+        Self {
+            local: [
+                vertex.local[0] as u8,
+                vertex.local[1] as u8,
+                vertex.local[2] as u8,
+            ],
+            spare: 0,
+            material: vertex.material,
+            face_ao,
+        }
+    }
+
+    /// Unpacks to the logical vertex.
+    pub fn to_vertex(self) -> Vertex {
+        let mut ao = [0u8; 4];
+        for (corner, slot) in ao.iter_mut().enumerate() {
+            *slot = ((self.face_ao >> (3 + 2 * corner)) & 3) as u8 * 85;
+        }
+        Vertex::new(
+            [
+                u16::from(self.local[0]),
+                u16::from(self.local[1]),
+                u16::from(self.local[2]),
+            ],
+            self.material,
+            (self.face_ao & 7) as u8,
+            ao,
+        )
+    }
+
+    /// Encodes the fixed 8 B little-endian layout.
+    pub fn encode(self) -> [u8; Self::SIZE] {
+        let mut bytes = [0u8; Self::SIZE];
+        bytes[0..3].copy_from_slice(&self.local);
+        bytes[3] = self.spare;
+        bytes[4..6].copy_from_slice(&self.material.to_le_bytes());
+        bytes[6..8].copy_from_slice(&self.face_ao.to_le_bytes());
+        bytes
+    }
+
+    /// Decodes the fixed 8 B little-endian layout.
+    pub fn decode(bytes: [u8; Self::SIZE]) -> Self {
+        Self {
+            local: [bytes[0], bytes[1], bytes[2]],
+            spare: bytes[3],
+            material: u16::from_le_bytes([bytes[4], bytes[5]]),
+            face_ao: u16::from_le_bytes([bytes[6], bytes[7]]),
+        }
+    }
+}
+
+const _: () = assert!(size_of::<PackedVertex>() == PackedVertex::SIZE);
+const _: () = assert!(align_of::<PackedVertex>() == PackedVertex::ALIGN);
+
+#[cfg(test)]
+mod packed_tests {
+    use super::*;
+
+    #[test]
+    fn packed_vertex_round_trips_every_field() {
+        let levels = [0u8, 85, 170, 255];
+        for face in 0..=5u8 {
+            for material in [0u16, 1, 255, 0xBEEF] {
+                for ao in [levels, [0; 4], [255; 4], [85, 170, 255, 0]] {
+                    let vertex = Vertex::new([0, 64, 128], material, face, ao);
+                    let packed = PackedVertex::from_vertex(&vertex);
+                    assert_eq!(packed.to_vertex(), vertex);
+                    assert_eq!(PackedVertex::decode(packed.encode()), packed);
+                    assert_eq!(packed.spare, 0);
+                    assert_eq!(packed.face_ao & 7, u16::from(face));
+                }
+            }
+        }
+        let local = Vertex::new([255, 0, 1], 7, 5, [85; 4]);
+        assert_eq!(
+            PackedVertex::decode(PackedVertex::from_vertex(&local).encode()).to_vertex(),
+            local
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "exceeds")]
+    fn packed_vertex_rejects_a_local_above_u8() {
+        let _ = PackedVertex::from_vertex(&Vertex::new([256, 0, 0], 1, 0, [255; 4]));
+    }
+
+    #[test]
+    #[should_panic(expected = "canonical")]
+    fn packed_vertex_rejects_a_non_canonical_ao() {
+        let _ = PackedVertex::from_vertex(&Vertex::new([0, 0, 0], 1, 0, [1; 4]));
+    }
+
+    #[test]
+    fn packed_vertex_is_eight_bytes() {
+        assert_eq!(size_of::<PackedVertex>(), 8);
+        assert_eq!(align_of::<PackedVertex>(), 4);
+    }
+}

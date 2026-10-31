@@ -8,6 +8,8 @@ use std::mem::size_of;
 
 use wgpu::{Buffer, BufferDescriptor, BufferUsages, Device, Queue};
 
+use voxel_mesh::PackedVertex;
+
 use crate::naive_mesh::{Mesh, Vertex};
 
 /// One chunk's vertex and index buffers.
@@ -20,6 +22,8 @@ pub struct ChunkMesh {
     pub vertex_count: u32,
     /// Number of indices in [`Self::indices`].
     pub index_count: u32,
+    /// Bytes per uploaded vertex record.
+    pub vertex_stride: u64,
 }
 
 impl ChunkMesh {
@@ -28,38 +32,53 @@ impl ChunkMesh {
     /// The screenshot example and the naive reference tests use this path; the
     /// runtime viewer uploads the M2 production stream with [`Self::from_parts`].
     pub fn new(device: &Device, queue: &Queue, mesh: &Mesh) -> Option<Self> {
-        Self::from_parts(
+        Self::upload(
             device,
             queue,
             bytemuck::cast_slice(&mesh.vertices),
             &mesh.indices,
+            size_of::<Vertex>() as u64,
         )
     }
 
-    /// Uploads raw ADR-010 vertex bytes and `u16` indices.
+    /// Uploads the packed 8 B production vertex stream and `u16` indices.
     ///
-    /// The M2 mesh builder emits the 16 B layout directly; this constructor
-    /// keeps the GPU path independent of the Rust vertex type. Empty meshes do
-    /// not allocate zero-sized buffers.
+    /// Empty meshes do not allocate zero-sized buffers.
     ///
     /// # Panics
     ///
-    /// Panics if the vertex bytes are not a whole number of 16 B records.
+    /// Panics if the vertex bytes are not a whole number of 8 B records.
     pub fn from_parts(
         device: &Device,
         queue: &Queue,
         vertices_bytes: &[u8],
         indices_data: &[u16],
     ) -> Option<Self> {
+        Self::upload(
+            device,
+            queue,
+            vertices_bytes,
+            indices_data,
+            PackedVertex::SIZE as u64,
+        )
+    }
+
+    fn upload(
+        device: &Device,
+        queue: &Queue,
+        vertices_bytes: &[u8],
+        indices_data: &[u16],
+        vertex_stride: u64,
+    ) -> Option<Self> {
         if indices_data.is_empty() {
             return None;
         }
         assert_eq!(
-            vertices_bytes.len() % size_of::<Vertex>(),
+            vertices_bytes.len() as u64 % vertex_stride,
             0,
-            "chunk vertex bytes must be whole 16 B records"
+            "chunk vertex bytes must be whole {vertex_stride} B records"
         );
-        let vertex_count = vertices_bytes.len() / size_of::<Vertex>();
+        let vertex_count = vertices_bytes.len() / vertex_stride as usize;
         assert!(
             vertex_count <= u32::MAX as usize,
             "chunk vertex count exceeds u32"
@@ -87,6 +106,7 @@ impl ChunkMesh {
             indices,
             vertex_count: vertex_count as u32,
             index_count: indices_data.len() as u32,
+            vertex_stride,
         })
     }
 
@@ -97,7 +117,7 @@ impl ChunkMesh {
 
     /// Bytes in the vertex buffer.
     pub fn vertex_bytes(&self) -> u64 {
-        u64::from(self.vertex_count) * size_of::<Vertex>() as u64
+        u64::from(self.vertex_count) * self.vertex_stride
     }
 
     /// Bytes in the index buffer.
@@ -105,7 +125,7 @@ impl ChunkMesh {
         u64::from(self.index_count) * size_of::<u16>() as u64
     }
 
-    /// Total bytes, which must be 76 per quad for the ADR-010 format.
+    /// Total bytes; 76/quad for the naive 16 B path, 44/quad for packed.
     pub fn byte_len(&self) -> u64 {
         self.vertex_bytes() + self.index_bytes()
     }

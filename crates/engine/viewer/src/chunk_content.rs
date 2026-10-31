@@ -26,13 +26,13 @@ use voxel_core::constants::{BLOCK_DIM, CHUNK_BITS, CHUNK_DIM, CHUNK_VOLUME};
 use voxel_core::content_constants::LIGHT_CELLS_PER_EDGE;
 use voxel_mesh::light::{BlockLight, LightFill, full_pass};
 use voxel_mesh::probe::{ProbeGrid, ProbeLod, bake};
-use voxel_mesh::{for_each_block, greedy_block, mesh_block};
+use voxel_mesh::{PackedVertex, for_each_block, greedy_block, mesh_block};
 use voxel_storage::{Apron, ChunkPos};
 
-/// One chunk's production mesh as raw ADR-010 bytes.
+/// One chunk's production mesh as raw packed upload bytes.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ChunkMeshData {
-    /// 16 B ADR-010 vertices.
+    /// 8 B packed vertices (4 per quad + six `u16` indices = 44 B/quad).
     pub vertices: Vec<u8>,
     /// `u16` indices, chunk-wide.
     pub indices: Vec<u16>,
@@ -125,13 +125,13 @@ pub fn mesh(volume: &[u16]) -> ChunkMeshData {
         greedy_block(scratch, &mut quads);
         face_count += quads.iter().map(|quad| quad.area() as usize).sum::<usize>();
         let meshlet = mesh_block(&quads, block);
-        let base = vertices.len() / 16;
+        let base = vertices.len() / PackedVertex::SIZE;
         assert!(
             base + meshlet.vertices.len() <= u16::MAX as usize + 1,
             "chunk mesh exceeds the u16 index range"
         );
         for vertex in &meshlet.vertices {
-            vertices.extend_from_slice(&vertex.encode());
+            vertices.extend_from_slice(&PackedVertex::from_vertex(vertex).encode());
         }
         indices.extend(meshlet.indices.iter().map(|index| base as u16 + index));
         quad_count += meshlet.quad_count();

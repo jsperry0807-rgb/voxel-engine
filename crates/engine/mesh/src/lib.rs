@@ -49,7 +49,7 @@ pub use probe::{
 };
 
 mod vertex;
-pub use vertex::Vertex;
+pub use vertex::{PackedVertex, Vertex};
 
 /// Voxels along one block edge.
 pub const BLOCK_EDGE: usize = BLOCK_DIM;

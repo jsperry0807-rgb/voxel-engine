@@ -32,7 +32,7 @@ use voxel_viewer::atlas::Atlas;
 use voxel_viewer::atlas_texture::AtlasTexture;
 use voxel_viewer::camera::{Camera, CameraUniform};
 use voxel_viewer::chunk_mesh::ChunkMesh;
-use voxel_viewer::chunk_render::VERTEX_LAYOUT;
+use voxel_viewer::chunk_render::NAIVE_VERTEX_LAYOUT;
 use voxel_viewer::depth::{DEPTH_FORMAT, DepthTarget};
 use voxel_viewer::naive_mesh::{Mesh, Quad, Vertex, mesh_face, naive_mesh};
 
@@ -743,7 +743,7 @@ impl Gpu {
                     module: &shader,
                     entry_point: Some("vs_main"),
                     compilation_options: Default::default(),
-                    buffers: &[Some(VERTEX_LAYOUT)],
+                    buffers: &[Some(NAIVE_VERTEX_LAYOUT)],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,

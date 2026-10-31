@@ -77,6 +77,7 @@ where they conflict with the spec.
 - [`m2-apron-cost.md`](m2-apron-cost.md) — M2-02 apron vs dense padded-copy measurement
 - [`m2-exit.md`](m2-exit.md) — M2-30 measured 128³ Minimum exit: twelve rows, the mesh miss, rows 9/11
 - [`m3-mesh-compression.md`](m3-mesh-compression.md) — proposed instanced-quad (8 B/quad) plan, with an 8 B vertex fallback, for the 128³ mesh cap
+- [`m3-packed-8b.md`](m3-packed-8b.md) — landed 44 B/quad packed-vertex fallback and its 128³/64³ gate numbers
 - [`../benchmarks/README.md`](../benchmarks/README.md) — run archive, lenses, caveats
 - [`../benchmarks/HISTORY.md`](../benchmarks/HISTORY.md) — every recorded run with deltas
 - [`../crates/bench/README.md`](../crates/bench/README.md) — harness internals

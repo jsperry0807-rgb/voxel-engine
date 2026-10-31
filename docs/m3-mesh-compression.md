@@ -331,12 +331,23 @@ the extra per-quad vertex work is. Run with
 `cargo run -p voxel-viewer --features chunk128 --example gate_c` under the WSL
 GPU env.
 
-**Next decision:** the planned fallback is the **8 B packed vertex** attribute
-path (4 vertices per quad; 44 B/quad indexed, or 32 B/quad with a 4-vertex
-strip). It clears row 6 at 2,119 KiB (11.7% margin) and row 1 at 2.99 GiB, but
-the 64³ total is 5.86 GiB (44 B) or 5.0 GiB (32 B), above the 4.80 GiB hard
-fail until M6-09a. Choosing the fallback **abandons 64³ Minimum** until then;
-that is the §7/§9 product decision.
+**44 B indexed fallback landed (2026-10-31).** The packed 8 B vertex is in
+`voxel-mesh` and the viewer production path. Measured gate:
+
+- **128³ Minimum:** row 6 **2,115 KiB PASS** (+284.5 KiB), row 1 **2.98 GiB
+  PASS** (+219 MiB against the 3.20 target, +1.81 GiB against 4.80).
+- **64³ Default:** row 6 **536 KiB PASS** (+63.7), row 1 **24.84 GiB FAIL**.
+- **64³ Minimum:** row 6 PASS, row 1 **6.22 GiB FAIL** (−1.42 GiB to 4.80);
+  after the M6-09a v1-pool removal it is still ~**5.2 GiB**, above 4.80.
+
+The 44 B fallback therefore fixes the 128³ edge but **abandons 64³ Minimum
+permanently**, not just until M6-09a. The 32 B/quad 4-vertex strip is the only
+variant that revives 64³ after the pool removal (~4.3 GiB), but it is
+unmeasured on the attribute path and is deferred to a separate time-boxed
+spike. Runs: `20261031T181211Z-m3-packed-8b-128` and
+`20261031T181227Z-m3-packed-8b-64`.
+
+**Next:** review/integrate the packed path, then the optional 32 B strip spike.
 
 ---
 

@@ -34,7 +34,7 @@ fn production_mesh_beats_the_naive_face_count() {
         naive.quad_count(),
         "the greedy mesh must cover every naive face"
     );
-    assert_eq!(content.mesh.vertices.len(), content.mesh.quads * 4 * 16);
+    assert_eq!(content.mesh.vertices.len(), content.mesh.quads * 4 * 8);
     assert_eq!(content.mesh.indices.len(), content.mesh.quads * 6);
     // The shader derives the AO corner from `vertex_index % 4`, which relies on
     // four consecutive vertices per quad and the [0,1,2,0,2,3] pattern.
@@ -71,20 +71,24 @@ fn production_mesh_is_deterministic_and_inside_the_chunk() {
     assert_eq!(first.light, second.light);
     assert_eq!(first.probes, second.probes);
 
-    let vertices = first.mesh.vertices.len() / 16;
+    let vertices = first.mesh.vertices.len() / 8;
     assert_eq!(vertices, first.mesh.quads * 4);
-    for vertex in first.mesh.vertices.as_chunks::<16>().0 {
-        let local = [
-            u16::from_le_bytes([vertex[0], vertex[1]]),
-            u16::from_le_bytes([vertex[2], vertex[3]]),
-            u16::from_le_bytes([vertex[4], vertex[5]]),
-        ];
+    for vertex in first.mesh.vertices.as_chunks::<8>().0 {
+        let local = [vertex[0], vertex[1], vertex[2]];
         assert!(
-            local.iter().all(|&axis| axis <= CHUNK_DIM as u16),
+            local
+                .iter()
+                .all(|&axis| u16::from(axis) <= CHUNK_DIM as u16),
             "local {local:?} is outside the chunk"
         );
-        assert!(vertex[8] <= 5, "face code {} is out of range", vertex[8]);
-        assert_eq!(&vertex[13..16], &[0, 0, 0], "reserved bytes must be zero");
+        assert_eq!(vertex[3], 0, "the packed spare byte must be zero");
+        let face_ao = u16::from_le_bytes([vertex[6], vertex[7]]);
+        assert!(
+            (face_ao & 7) <= 5,
+            "face code {} is out of range",
+            face_ao & 7
+        );
+        assert_eq!(face_ao >> 11, 0, "reserved face/AO bits must be zero");
     }
     for &index in &first.mesh.indices {
         assert!((index as usize) < vertices, "index {index} out of range");
@@ -104,7 +108,7 @@ fn production_content_carries_light_and_probes() {
         content.mesh.byte_len(),
         content.mesh.vertices.len() + content.mesh.indices.len() * 2
     );
-    assert_eq!(content.mesh.vertices.len(), content.mesh.quads * 4 * 16);
+    assert_eq!(content.mesh.vertices.len(), content.mesh.quads * 4 * 8);
     // The chunk-wide u16 index stream is capped at 16,384 quads.
     assert!(content.mesh.indices.len() <= 6 * 16_384);
     assert_eq!(

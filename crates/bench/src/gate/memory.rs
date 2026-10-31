@@ -84,8 +84,16 @@ pub const ADR_010: MeshFormat = MeshFormat {
     table_bytes: BLOCKS_PER_CHUNK as u64 * 2,
 };
 
-/// Bytes per quad for the current ADR-010 encoding.
-pub const MESH_BYTES_PER_QUAD: u64 = ADR_010.bytes_per_quad();
+/// M3-00 packed fallback: 8 B upload vertex + six `u16` indices.
+pub const PACKED_8B: MeshFormat = MeshFormat {
+    name: "M3-00 packed 8 B vertex + u16 index",
+    payload_bytes_per_quad: 44,
+    meshlet_record_bytes: 16,
+    table_bytes: BLOCKS_PER_CHUNK as u64 * 2,
+};
+
+/// Bytes per quad for the gate's current encoding.
+pub const MESH_BYTES_PER_QUAD: u64 = PACKED_8B.bytes_per_quad();
 
 /// Bytes per internal DAG node in the banded layout.
 pub const NODE_BYTES: u64 = core::mem::size_of::<Node>() as u64;
@@ -335,7 +343,7 @@ pub fn default_report() -> Result<MemoryReport, String> {
 /// The scan must match the manifest's live chunk and voxel counts; a save that
 /// was edited after freezing is an error, not a silently different report.
 pub fn report(manifest_path: &Path) -> Result<MemoryReport, String> {
-    report_with_format(manifest_path, ADR_010)
+    report_with_format(manifest_path, PACKED_8B)
 }
 
 /// Measures the fixture with an explicit mesh format.
