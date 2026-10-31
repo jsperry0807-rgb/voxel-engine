@@ -211,3 +211,38 @@ gate, the chosen profile or any threshold.
 - **128³ Minimum is still unmeasured.** The M2 gate run after `M2-29` is the
   measurement that confirms or rejects the upgrade; mesh compression remains
   the first lever.
+
+## 8. Amendment — 2026-10-31: the M2 128³ measurement
+
+M2 is complete and the 128³ Minimum run is measured. The report is
+[`m2-exit.md`](m2-exit.md); the archived run is
+[`benchmarks/runs/20261031T150052Z-m2-gate-128`](../benchmarks/runs/20261031T150052Z-m2-gate-128).
+The frozen gate, profile and thresholds are unchanged.
+
+- **Fixture:** `m2-128`, the deterministic stand-in generator at the 128³ edge
+  over a 3 × 3 × 1 chunk box (9 chunks, 5,336,168 B). It is still synthetic;
+  the dataset row remains **not measured**.
+- **Memory:** measured p95 **4.19 MiB/chunk** → **3.29 GiB** over 805 chunks.
+  This **passes** the 4.80 GiB hard-fail line by 1.50 GiB and misses the
+  3.20 GiB target by 98 MiB. The v1 pool is 658 KiB of the total and remains
+  scheduled for removal by M6-09a.
+- **Edit latency:** p95 **5.290 µs** (limit 8 ms). **Probe update:** p95
+  **739.384 µs** (limit 4 ms). Node budget: p95 **140,786** (limit 1.5 M).
+  Light and probe-grid rows are fixed at 8,192 B and 6,144 B.
+- **Mesh buffer:** p95 **2,519 KiB** against the 2,400 KiB cap — a **119.4 KiB
+  miss (5.0%)**. This is the reference greedy estimate; the production AO merge
+  is at least as large. **Mesh compression is therefore still the first
+  rule-3 lever, and 128³ Minimum is a measured candidate, not a confirmed
+  profile.**
+- **Culling granularity (row 9):** closed by the M1-34 reference over 100 poses
+  on the save; p95 **0.00%** traversed-but-invisible, zero missed blocks. The
+  reference fill is conservative (partial blocks are passable), so this is a
+  lower bound and the synthetic two-chunk case remains the sensitivity check.
+- **Measurement dataset (row 11):** **carried**. No real populated save exists
+  before M2.5/worldgen or gameplay. Re-freeze the fixture and rerun the gate
+  when one does.
+- **Throughput:** 34.3 chunks/s at 128³ and 210.4 chunks/s at 64³,
+  single-threaded (M2-28).
+
+The M2 exit tag records this measured state. It does not widen a budget, does
+not confirm 128³ Default, and does not close row 11.

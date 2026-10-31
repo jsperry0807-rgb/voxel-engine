@@ -65,6 +65,29 @@ jobs:
       - run: cargo test --workspace
       - run: cargo test -p voxel-mesh --features raytest
 
+  goldens:
+    name: golden mesh fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      # The golden files are the frozen M2-11 mesh contract at both edges.
+      - run: cargo test -p voxel-mesh --test golden
+      - run: cargo test -p voxel-mesh --features chunk128 --test golden
+      - name: Checksum the frozen goldens
+        run: sha256sum crates/engine/mesh/tests/golden/*.txt > target/golden-sha256.txt
+      - name: Upload the frozen goldens
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4
+        with:
+          name: mesh-goldens
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            crates/engine/mesh/tests/golden/
+            target/golden-sha256.txt
+
   textures:
     name: texture pipeline
     runs-on: ubuntu-latest

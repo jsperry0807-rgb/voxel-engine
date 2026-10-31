@@ -1,8 +1,8 @@
 # Voxel Engine Roadmap
 
-**Status:** v3.2 — M1 gate decided, M1.5 slice landed, M2 in progress
+**Status:** v3.3 — M1 gate decided, M1.5 slice landed, M2 measured exit recorded
 **Companion to:** [`voxel-engine-architecture-spec.md`](voxel-engine-architecture-spec.md), [`worldgen-design.md`](worldgen-design.md)
-**Date:** 2026-10-29
+**Date:** 2026-10-31
 **Scope:** storage, content pipeline, worldgen, renderer, far field, water, GPU sync, culling, LOD, streaming
 **Not in scope:** gameplay, editor, networking, audio, physics, damage rendering, content authoring
 
@@ -11,11 +11,14 @@ per-block light, and a chunk edge that is **64³ in M1 with 128³ pre-registered
 This roadmap turns those into an ordered plan whose first milestone is a
 pass/fail measurement, not a build-out.
 
-M0 and M1 are complete. The M1 gate selected the **128³ Minimum** profile for M2,
-conditional on mesh compression and a measured 128³ run. The M1.5 vertical slice
-is complete: the before/after texel-density pair (M1.5-17), the full M1.5-15
-screenshot set and zero-validation CI (M1.5-16) are in place. M2 has started:
-the apron API (M2-01) landed on 2026-10-28.
+M0, M1 and M2 are complete. The M1 gate selected the **128³ Minimum** profile for
+M2, conditional on mesh compression and a measured 128³ run. The M2 exit is
+measured ([`m2-exit.md`](m2-exit.md)): VRAM clears the hard-fail line at
+3.29 GiB, edit/probe/light/probe-grid rows pass, and the **mesh row misses the
+2.4 MiB cap by 119.4 KiB**. Mesh compression is therefore the first M3 item and
+128³ Minimum remains a measured candidate, not a confirmed profile. Gate row 9
+is closed (0.00% reference granularity); row 11 is carried until a real save.
+The M1.5 vertical slice and zero-validation CI remain in place.
 
 Two consequences shape the schedule:
 
@@ -35,22 +38,23 @@ Two consequences shape the schedule:
 |---|---|---|
 | `voxel-core` | Canonical `Face` orientation, neighbour offsets, face planes | Complete |
 | `voxel-block` | Registry, materials, texture slices, material variants, palettes, tags, RON | Complete; atlas-backed material ids in use |
-| `voxel-storage` | Parameterized 64³/128³ 8 B-node SVDAG, COW `apply_edits`, overlays, region log, global deduped GPU pool, consolidation policy, six-face apron | **M1 layout complete; M2-01 apron landed** |
-| `voxel-mesh` | Block-granular driver over 16³ blocks with a reusable 18³ scratch; greedy rectangle core with the `(material, orientation, 4×AO)` merge key, backface culling, four-level AO sampling and chunk-border AO equality; 16 B vertex codec, golden fixtures, thread/order determinism, full-pass two-channel block light, cross-chunk apron seeding, dirty-region incremental light, removal-front escalation and a 5.7%-of-full incremental edit | **M2-03…M2-17 landed**; probes pending |
+| `voxel-storage` | Parameterized 64³/128³ 8 B-node SVDAG, COW `apply_edits`, overlays, region log, global deduped GPU pool, consolidation policy, six-face apron | **M1 layout complete; M2 apron and granularity reference landed** |
+| `voxel-mesh` | Block-granular driver, greedy + AO rectangles, 16 B vertex codec, golden fixtures, determinism, two-channel block light, incremental light, per-block dirty bitset, budgeted scheduler, SH4 probe bake/LOD/update, optional SVDAG ray-test, scratch budget | **M2 complete (M2-03…M2-29)**; mesh compression is the first M3 item |
 | `voxel-render` | `WgpuSink`, `MaterialBuffers`, `GpuWorld`, `svdag.wgsl` | Upload path; the viewer owns the draw loop |
-| `voxel-viewer` | `winit` + `wgpu` window, fly camera, mouse look, atlas sampling, depth pass, naive per-face mesher, input layer | **M1.5 code complete**; production mesh/light/probes pending |
+| `voxel-viewer` | `winit` + `wgpu` window, fly camera, mouse look, atlas sampling, depth pass, input layer; production greedy + AO mesh, block light and probe upload | **M2-27 landed**; streaming and meshlets are M3 |
 | `voxel-texgraph` / `voxel-texgen` | Deterministic node-graph evaluator, manifest, material table, atlas bake, editor and MCP tools | Complete for M1.5 |
 | `voxel-launcher` / `xtask` | Desktop launcher, Linux/Windows builds, toolchain preflight plus an explicit `setup-win` | Complete |
 | `voxel-bench` | Memory/CPU/latency/counter suites, archived history, `iai` counters | Complete; the gate depends on it |
 
 The M1 layout is in place at both edges; the 128³ variant compiles in CI. M1.5
-added the window, camera, atlas and naive mesher. M2-01 added the apron. The
-production content path is now the work in front of the project.
+added the window, camera, atlas and naive mesher. M2 completed the production
+content path and measured it at the 128³ Minimum edge: 3.29 GiB projected VRAM
+and a mesh row 119.4 KiB over the 2.4 MiB cap, so mesh compression is the first
+M3 item.
 
-Still missing: probes, sparse-set ECS, culling, LOD, streaming, persistence,
-and the measured 128³ gate run. AO, production block light, the greedy core,
-the apron and the 16 B vertex stream landed with M2; CI, the window/camera
-app, the naive mesher and the launcher are in place.
+Still missing: mesh compression, sparse-set ECS, production occlusion culling,
+LOD, streaming and persistence. The reference granularity oracle is closed at
+row 9; the real populated save for row 11 waits on M2.5/worldgen or gameplay.
 
 ---
 
@@ -243,17 +247,20 @@ Runs at the **128³ Minimum** edge (ADR-002). Default is not greenlit.
 - ≥ 20 terrain chunks/s single-threaded; scrub ≤ 4 ms; scratch ≤ 64 KiB/worker.
 - Ray-test flag produces a documented delta (accuracy and cost) versus flood-fill,
   without changing default behaviour.
-- **128³ Minimum gate run** recorded after M2-29: memory, edit, probe and
-  throughput measured on the reference machine. If it misses the 4.80 GiB
-  hard-fail line, fall back to 64³ Minimum with the pre-registered sacrifice
-  ladder.
-- Gate rows 9 and 11 closed: the M1-34 granularity reference is wired into the
-  report, and a real populated save replaces the provisional fixture.
+- **128³ Minimum gate run** recorded: memory 3.29 GiB (PASS), edit 5.290 µs
+  (PASS), probe 739.384 µs (PASS), throughput 34.3 chunks/s. The mesh row is
+  2,519 KiB against the 2,400 KiB cap, so the run records an open rule-3 lever
+  rather than a confirmed edge. See [`m2-exit.md`](m2-exit.md).
+- Gate row 9 closed by the M1-34 reference over 100 poses (0.00% p95 reference
+  granularity); row 11 **carried** because no real populated save exists before
+  M2.5/worldgen or gameplay.
 
 ---
 
 ### M3 — Raster scale-up (3 weeks)
 
+- Mesh compression: bring the 128³ mesh p95 under the 2.4 MiB cap (the first
+  rule-3 lever; the M2 exit measured 2,519 KiB).
 - Viewer lifecycle: stream in, mesh, upload, draw.
 - CPU frustum cull of chunk AABBs — the stopgap and the M5 production cull's
   correctness reference (the M1 reference traversal is the granularity oracle).

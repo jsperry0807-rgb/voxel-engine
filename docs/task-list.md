@@ -3,7 +3,7 @@
 **Status:** v1.6 — derived from spec v2.3 and roadmap v3.2
 **Date:** 2026-10-30
 **Owner:** engine
-**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 in progress: `M2-16` done; `M2-17` done (5.7% p95 at 128³, target ≤20%); `M2-18` done; `M2-19` done; `M2-20` done; `M2-21` done; `M2-22` done; `M2-23` done; `M2-24` done; `M2-25` done; `M2-26` done; `M2-27` done; `M2-28` done; `M2-29` done; `M2-30` next.
+**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 complete — `M2-30` (measured exit) landed 2026-10-31; the 128³ Minimum run is recorded, the mesh row is 119.4 KiB over the cap and mesh compression is the first M3 item, gate row 9 is closed and row 11 is carried. M3 is next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -411,7 +411,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 **Goal:** deterministic mesh + AO + block light + probes, at the 128³ Minimum edge.
 **Exit:** M2-30. **Budget:** 27.0 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
-**Status:** In progress — M2-16 done; M2-17 done (5.7% p95 at 128³, target ≤20%); M2-18 done; M2-19 done; M2-20 done; M2-21 done; M2-22 done; M2-23 done; M2-24 done; M2-25 done; M2-26 done; M2-27 done; M2-28 done; M2-29 done; M2-30 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
+**Status:** Complete — `M2-16`…`M2-30` done. The measured 128³ Minimum exit is in [`m2-exit.md`](m2-exit.md): **9 pass, 1 fail, 2 not measured**. The mesh-buffer row misses by 119.4 KiB, so 128³ Minimum is a measured candidate pending mesh compression; row 9 is measured, row 11 is carried until a real save. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
 **Art:** none beyond M1.5-14; M2 reuses the slice atlas.
 
 **M1 gate carry-over — blocks M2-30:**
@@ -425,6 +425,13 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
   and replace the provisional fixture with a real populated save.
 - If the 128³ run misses the 4.80 GiB hard-fail line, apply the pre-registered
   fallback: 64³ Minimum, then mesh compression, near radius, vertical shell.
+
+**M2-30 resolution (2026-10-31):** the measured run is recorded in
+[`m2-exit.md`](m2-exit.md). Row 9 is closed by the M1-34 reference over 100
+poses on the save (p95 0.00%); row 11 is **carried**, not closed, because no real
+save exists until M2.5/worldgen or gameplay. The 128³ memory row passes (3.29
+GiB), but the mesh row misses the 2.4 MiB cap by 119.4 KiB, so mesh compression
+remains the first rule-3 lever and 128³ Minimum is a measured candidate.
 
 **M2-02 measured (2026-10-29, development host):** the face planes used 49,152 B
 and 445 µs versus 574,992 B and 4.90 ms for a dense padded copy at 64³
@@ -685,6 +692,20 @@ or chunk-wide buffer changes the counts regardless of size. Quad and mesh
 buffers are per-block outputs bounded by `3 × 16³` quads, not scratch. Both
 edges pass `cargo test -p voxel-mesh scratch_budget`.
 
+**M2-30 measured (2026-10-31):** the M2 exit is recorded in
+[`m2-exit.md`](m2-exit.md) and archived as
+`benchmarks/runs/20261031T150052Z-m2-gate-128`. The `m2-128` fixture (9 chunks,
+128³ edge) was frozen and verified, and the gate ran at the Minimum profile:
+**3.29 GiB** projected VRAM (p95 4.19 MiB × 805; PASS against 4.80 GiB, 98 MiB
+over the 3.20 GiB target), edit p95 **5.290 µs**, probe-update p95 **739.384 µs**,
+nodes p95 **140,786**, light/probe grid fixed, **mesh p95 2,519 KiB vs 2,400 KiB
+cap (FAIL by 119.4 KiB)**, granularity p95 **0.00%** over 100 poses (row 9
+closed), and dataset row 11 **carried** (no real save exists before M2.5). The
+128³ chunk build is **34.3 chunks/s** (M2-28). The mesh row is the open rule-3
+lever: mesh compression is the first M3 item, and 128³ Minimum stays a measured
+candidate rather than a confirmed profile. CI now runs the M2-11 mesh goldens at
+both edges and uploads them as a 90-day artifact.
+
 ### 6.1 Apron and mesher
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -733,7 +754,7 @@ edges pass `cargo test -p voxel-mesh scratch_budget`.
 | M2-27 | Wire M2 into the viewer: replace the naive mesher; light + probes uploaded | M2-12, M2-21 | Visual parity with M1.5 except better merge ratio; 60 Hz; no new material keys, the M1.5-14 atlas is unchanged | run | 1 d | [x] |
 | M2-28 | Throughput: ≥ 20 terrain chunks/s single-threaded | M2-27 | Measured over 100 chunks; recorded | `cargo bench -p voxel-mesh build` | 0.5 d | [x] |
 | M2-29 | Scratch-memory budget test: ≤ 64 KiB per worker, no chunk-wide densify anywhere | M2-03 | Counting allocator test fails if exceeded | `cargo test -p voxel-mesh scratch_budget` | 0.5 d | [x] |
-| M2-30 | M2 exit: tag `m2`, update roadmap, freeze goldens as CI artifacts; record the 128³ Minimum run and close gate rows 9/11 | M2-29; M1 gate carry-over | Tag; CI runs the goldens; 128³ memory/edit/probe numbers and gate rows 9/11 recorded | `git tag -n m2`; gate report | 0.5 d | [ ] |
+| M2-30 | M2 exit: tag `m2`, update roadmap, freeze goldens as CI artifacts; record the 128³ Minimum run and close gate rows 9/11 | M2-29; M1 gate carry-over | Tag; CI runs the goldens; 128³ memory/edit/probe numbers and gate rows 9/11 recorded | `git tag -n m2`; gate report | 0.5 d | [x] |
 
 ---
 
