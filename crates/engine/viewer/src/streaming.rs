@@ -324,7 +324,12 @@ impl WorkQueue {
     }
 
     fn close(&self) {
-        self.lock().closed = true;
+        let mut state = self.lock();
+        state.closed = true;
+        // Shutdown must not drain the backlog: a 256-chunk ring can still have
+        // seconds of queued work when the window closes.
+        state.jobs.clear();
+        drop(state);
         self.ready.notify_all();
     }
 
@@ -656,6 +661,14 @@ fn worker_loop(work: &WorkQueue, sender: &SyncSender<Job>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn closing_discards_queued_jobs() {
+        let queue = WorkQueue::new();
+        queue.enqueue([ChunkPos::new(1, 0, 1)]);
+        queue.close();
+        assert!(queue.take().is_none());
+    }
 
     #[test]
     fn ring_has_256_unique_chunks() {
