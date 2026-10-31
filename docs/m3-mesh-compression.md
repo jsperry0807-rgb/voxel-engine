@@ -76,19 +76,23 @@ are reserved.
 buffer and no `VertexStepMode::Instance` record stream. A hardware-indexed
 vertex buffer cannot be offset by `base_quad` in the shader; storage pull can.
 
-- The record buffer is a `var<storage, read>` array. The vertex shader computes
-  `quad = base_quad + instance_index` and fetches `records[quad]`.
-- `instance_index` is the hardware instance index within the draw (0-based).
-  `base_quad` is supplied per meshlet by a uniform in the spike. For M3-05's
-  indirect path, the base must come from the meshlet record or the draw's
-  `first_instance`; either use `INDIRECT_FIRST_INSTANCE` (verify it on the
-  target adapters) or issue one direct draw per meshlet. The storage-pull
-  design is independent of that plumbing; the draw contract is the spike's
-  decision.
+- The record buffer is a `var<storage, read>` array. **One rule, no double
+  counting:** the draw sets `first_instance = base_quad`, and the vertex shader
+  fetches `records[instance_index]`. WebGPU's `instance_index` already includes
+  `first_instance`; adding the base again would count it twice.
+- The spike's direct draw sets `first_instance = base_quad`. For M3-05's
+  indirect path, the same field is set in the indirect command; that requires
+  `INDIRECT_FIRST_INSTANCE` to be honored (verify it on the target adapters).
+  If the feature is unavailable, issue one direct draw per meshlet with the
+  same `first_instance = base_quad`. There is no separate `base_quad +
+  instance_index` arithmetic anywhere.
 - **Target limits:** the vertex stage must be allowed to read a storage buffer.
-  Native WebGPU (Vulkan/Metal/DX12) supports it; WebGL2 does not. Assert the
-  adapter's `max_storage_buffers_per_shader_stage >= 1` with
-  `ShaderStages::VERTEX` at startup; WebGL2 is out of scope.
+  Native WebGPU (Vulkan/Metal/DX12) supports it; WebGL2 does not. Assert
+  `max_storage_buffers_per_shader_stage >= 1` with `ShaderStages::VERTEX`.
+  Also assert `max_storage_buffer_binding_size` against the record arena: the
+  128³ profile holds 805 chunks × ~393 KiB ≈ **309 MiB**, above the 128 MiB
+  WebGPU default. Either request a higher adapter limit or page the arena into
+  bindings ≤128 MiB; M3-02 owns that paging.
 - Draw: 6 vertices × `quad_count` instances per meshlet, no index buffer. The
   shader maps `vertex_index` 0..5 to `[0,1,2,0,2,3]`, reconstructs the four
   corners from `origin + face + extent`, and selects the AO corner. The diagonal
@@ -131,10 +135,15 @@ are integers, exactly representable in `f32`.
 the same WGSL module that uses the **same storage-pull `fetch_record` helper**
 as the vertex shader, writes the reconstructed `(position, face, material, AO)`
 for every vertex to a storage buffer, and read it back. Compare **positions,
-face, material and AO levels exactly** to the `Mesh` vertices. AO levels are
-integers 0–3, so there is no tolerance here. Coverage must include all six
-faces, every extent (including repeated extents), all four AO levels and both
-material extremes.
+face, material and AO levels exactly**. AO levels are integers 0–3, so there is
+no tolerance here. Coverage must include all six faces, every extent (including
+repeated extents), all four AO levels, both material extremes, **a nonzero
+`first_instance` base, and several meshlets in one batch**. The compute entry
+point feeds thread ids and cannot observe the `instance_index`/`first_instance`
+behaviour, so it must receive the same global quad index
+(`base_quad + local`) that the draw will produce; that case is what catches a
+double-counted base. Compare in the **Mesh's expanded index order, six corners
+per quad** (`[0,1,2,0,2,3]`), not just the four stored vertices.
 
 Because Gate B and production share `fetch_record`, Gate B covers the production
 record decode. It does **not** cover a `Uint8x4` vertex-attribute decode,
@@ -148,11 +157,25 @@ only). Run on at least:
 - one discrete GPU (RTX 4060 reference), and
 - one integrated GPU (e.g. Intel UHD 770 or AMD Radeon 780M).
 
-The primary metric is **full-frame time on a representative scene**, measured
+The primary metric is **full-frame time on a pre-registered scene**, measured
 with **GPU timestamp queries** (not CPU wall time) and with **vsync disabled**
-(uncapped/`AutoNoVsync` or Immediate present mode). Threshold: no more than 10%
-full-frame regression vs the indexed path on either GPU, and the reference
-discrete still meets 60 Hz at 1080p with vsync off.
+(uncapped/`AutoNoVsync` or Immediate present mode). The scene is fixed before
+the run:
+
+- **Scene:** the `m2-128` fixture tiled to 64 visible chunks; once M3-08 exists,
+  its seeded stress scene is the replacement and gets the same treatment.
+- **Camera:** one deterministic fly-through/cave-walk path, recorded as a
+  config file in the spike directory; the same path for both renderers.
+- **Frames:** 60-frame warm-up, then 300 measured frames per run; **5 runs**.
+- **Noise rule:** use the **median** of the 5 runs; if the run-to-run p95 spread
+  is >5%, add runs or reject the set. A 9% result that is within the noise rule
+  is not a regression; a 9% result with >5% spread is not yet a measurement.
+- **Threshold:** no more than 10% full-frame regression vs the indexed path on
+  either GPU, applied to the median. The reference discrete must meet 60 Hz
+  (median full-frame ≤16.6 ms) at 1080p with vsync off.
+
+The exact scene/camera config, frame counts and run count are checked into the
+spike directory so the gate is reproducible.
 
 **Vertex-bound time is informational only.** Six invocations per quad against
 four cached, shared indexed vertices is a ~1.5× vertex-work problem by
@@ -298,15 +321,22 @@ Phase 0 must not depend on a codec that does not exist yet.
 shader + image parity 1 d, gate/re-run 1 d = **4.25–5 d after the spike**. It
 costs more than instanced (3–4 d) and abandons 64³ Minimum.
 
-### Schedule: best, typical, worst
+### Effort and calendar
 
-| Path | Composition | Cumulative |
-|---|---|---:|
-| Best (instanced passes) | Phase 0 1 + spike 1 + instanced 3–4 | **5–6 d** |
-| Typical (spike fails, fallback passes) | Phase 0 1 + spike 1 + fallback 4.25–5 | **6.25–7 d** |
-| Worst (fallback misses 90%, third exit) | typical + dedup measurement/implementation or re-plan 1–3 | **7.25–10 d** |
+Request the iGPU on **day 1**; the Gate C wait overlaps Phase 0 and the
+functional spike.
 
-M3's published budget is 9 d: **14–15 d best, 16–19 d worst**. Quote both.
+| Path | Effort | Calendar if the iGPU arrives early | Calendar if it takes the full 5 d |
+|---|---:|---:|---:|
+| Best (instanced passes) | 5–6 d | 5–6 d | up to **8–9 d** (2 d overlap, 3 d remaining wait) |
+| Typical (spike fails, fallback passes) | 6.25–7 d | 6.25–7 d | up to **9.25–10 d** |
+| Worst (fallback misses 90%, third exit) | 7.25–10 d | 7.25–10 d | up to **10.25–13 d** |
+
+M3 needs **+0.5 d for M3-02** (format descriptor and ≤128 MiB storage-binding
+paging), so the published 9 d becomes **14.5–15.5 d best and 16.5–19.5 d
+worst**, before any late-iGPU calendar slip. Quote effort and calendar
+separately; the wait is calendar, not effort, but it is still a schedule
+commitment.
 
 ---
 
@@ -317,7 +347,7 @@ is **≤ 90% of the row-6 cap** (≥10% margin).
 
 | Format | 128³ | 64³ |
 |---|---:|---:|
-| Instanced | 16.4% of cap (83.6% margin) | 16.3% (83.7%) |
+| Instanced | 16.4% of cap (83.6% margin) | 16.4% (83.6%) |
 | 8 B vertex | 88.3% (11.7% margin, 41 KiB) | **89.3% (10.7%, 4 KiB)** |
 
 The 8 B fallback is inside the rule only on the synthetic fixtures; it has no
@@ -340,10 +370,17 @@ fail. **Choosing the fallback abandons 64³ Minimum.**
    - **4b. Re-plan row 6/cap** or accept another profile — an explicit ADR-002
      decision.
 
-**Gate C open:** if the iGPU is unavailable after **5 working days**, proceed on
-the discrete-only result with Gate C recorded open (or take the fallback if the
-discrete result fails). The open flag goes to M3-13; it does not block the
-decision indefinitely and it is not silently closed.
+**Gate C open:** request the iGPU on **day 1**. If it is unavailable after **5
+working days**, proceed on the discrete-only result with Gate C recorded open
+(or take the fallback if the discrete result fails). The open flag goes to
+M3-13; it does not block the decision indefinitely and it is not silently
+closed.
+
+**Consequence and risk owner:** if the discrete-only result is accepted and a
+later iGPU check shows a regression, the response is the fallback (4.25–5 d,
+which also abandons 64³ Minimum) or a re-plan. The milestone owner accepts that
+risk in writing when the discrete-only decision is recorded; it is not an
+implicit acceptance.
 
 **Real-save trigger:** if the first real save's row 11 p95 is above 90% of the
 selected format's cap, re-open the format decision. Do not close row 11 on a
@@ -365,9 +402,12 @@ synthetic fixture.
 - Gate D: RGBA difference ≤1 LSB.
 - Gate 128³ Minimum: row 6 PASS with p95 ≤ 2,400 KiB and ≤90% of cap; row 1 ≤
   3.20 GiB.
-- Gate 64³: row 6 ≤ **540 KiB** (90% rule), **and** row 1 ≤ 4.80 GiB. The 8 B
-  fallback fails the second condition (5.86 GiB); only instanced keeps 64³
-  viable.
+- Gate 64³: row 6 ≤ **540 KiB** (90% rule), **and** row 1 ≤ 4.80 GiB. The
+  3.20 GiB target is **not required at 64³ before M6-09a**; the hard fail is
+  the binding condition. Instanced is 3.18 GiB before the pool removal (0.02
+  GiB under target, within noise) and 2.17 GiB after; the target becomes
+  required after M6-09a. The 8 B fallback fails the hard fail (5.86 GiB); only
+  instanced keeps 64³ viable.
 - ADR-014 merged, pre-registration appendix added, M2 erratum recorded, CI
   goldens/parity job green.
 
@@ -380,7 +420,8 @@ synthetic fixture.
    more time and abandons 64³ Minimum.
 2. **Hardware access:** can the spike run on the RTX 4060 reference **and** an
    integrated GPU within 5 working days? If not, the default is discrete-only
-   with Gate C open.
+   with Gate C open; the milestone owner accepts in writing that a later iGPU
+   regression costs the fallback (4.25–5 d) and abandons 64³.
 3. **64³ product decision:** if the fallback is ever chosen, accept that 64³
    Minimum is abandoned (5.86 GiB > 4.80 hard fail). If 64³ must stay viable,
    the instanced path is required.
