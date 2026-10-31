@@ -551,7 +551,8 @@ check_viewer_smoke() {
     return
   fi
 
-  local bin="$TARGET_DIR/debug/voxel-viewer"
+  local triple="${CARGO_BUILD_TARGET:-}"
+  local bin="$TARGET_DIR/${triple:+$triple/}debug/voxel-viewer"
   if [[ ! -x "$bin" ]]; then
     end_check "in-repo" "$name" FAIL "$bin is missing after the build" "$build_log" $((SECONDS - t0))
     return

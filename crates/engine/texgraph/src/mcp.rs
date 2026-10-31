@@ -30,6 +30,7 @@ use std::path::PathBuf;
 use base64::Engine;
 use serde_json::{Value, json};
 use voxel_block::texture_manifest::TextureManifest;
+use voxel_core::atlas::TILE_SIZE;
 
 use crate::bake;
 use crate::eval;
@@ -439,7 +440,7 @@ impl Server {
             Ok(tile) => tile,
             Err(error) => return ToolResult::error(error.to_string()),
         };
-        let tile_png = match png::encode_rgba(128, 128, &upscale(&tile, 16, 128)) {
+        let tile_png = match png::encode_rgba(128, 128, &upscale(&tile, TILE_SIZE as usize, 128)) {
             Ok(png) => png,
             Err(error) => return ToolResult::error(error.to_string()),
         };
@@ -489,7 +490,7 @@ impl Server {
             Ok(tile) => tile,
             Err(error) => return ToolResult::error(error.to_string()),
         };
-        let png = match png::encode_rgba(128, 128, &upscale(&tile, 16, 128)) {
+        let png = match png::encode_rgba(128, 128, &upscale(&tile, TILE_SIZE as usize, 128)) {
             Ok(png) => png,
             Err(error) => return ToolResult::error(error.to_string()),
         };

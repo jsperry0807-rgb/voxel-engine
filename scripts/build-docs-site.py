@@ -78,11 +78,19 @@ def is_excluded(rel: Path) -> bool:
 
 
 def collect_markdown() -> list[Path]:
-    return sorted(
-        rel
-        for path in ROOT.rglob("*.md")
-        if not (rel := path.relative_to(ROOT)) or not is_excluded(rel)
-    )
+    found: list[Path] = []
+    # Prune excluded directories instead of walking into them and filtering
+    # afterwards: `target/` alone holds tens of thousands of paths, and on old
+    # Pythons `rglob` follows symlinked directories.
+    for dirpath, dirnames, filenames in os.walk(ROOT, followlinks=False):
+        dirnames[:] = [name for name in dirnames if name not in EXCLUDE_DIRS]
+        for name in filenames:
+            if not name.endswith(".md"):
+                continue
+            rel = Path(dirpath, name).relative_to(ROOT)
+            if not is_excluded(rel):
+                found.append(rel)
+    return sorted(found)
 
 
 def staged_path(rel: Path) -> Path:

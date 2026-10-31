@@ -309,9 +309,12 @@ impl ChunkDag {
     /// Panics if a live root or in-flight frame still references the chunk.
     pub fn compact(&mut self) -> CompactionStats {
         self.assert_quiescent();
-        let mut stats = self.compact_leaves_inner();
+        // The live set does not change when a band is renumbered (only bases
+        // are remapped), so one walk covers every arena.
+        let reachable = self.reachable();
+        let mut stats = self.compact_leaves_with(&reachable);
         for level in 0..=ROOT_LEVEL {
-            stats.merge(self.compact_band_inner(level));
+            stats.merge(self.compact_band_with(level, &reachable));
         }
         stats
     }

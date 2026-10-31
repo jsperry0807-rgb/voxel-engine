@@ -131,8 +131,15 @@ impl Gpu {
         });
 
         let size = window.inner_size();
+        // The adapter's limit applies to the first configure too; a HiDPI window
+        // larger than it otherwise fails validation before the first frame.
+        let max = device.limits().max_texture_dimension_2d;
         let config = surface
-            .get_default_config(&adapter, size.width.max(1), size.height.max(1))
+            .get_default_config(
+                &adapter,
+                size.width.max(1).min(max),
+                size.height.max(1).min(max),
+            )
             .ok_or(ViewerError::UnsupportedSurface)?;
         log::debug!("surface: {config:?}");
         surface.configure(&device, &config);

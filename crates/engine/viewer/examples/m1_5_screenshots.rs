@@ -226,7 +226,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let atlas_hash: AtlasHash = ron::from_str(&std::fs::read_to_string(
         root.join("crates/engine/viewer/assets/atlas/atlas.hash.ron"),
     )?)?;
-    let hash = &atlas_hash.atlas_png_blake3[..8];
+    let hash = atlas_hash
+        .atlas_png_blake3
+        .get(..8)
+        .ok_or("atlas.hash.ron: atlas_png_blake3 is shorter than 8 characters")?;
     let block_size = (1024, 768);
     write_grass_sheet(
         &gpu,

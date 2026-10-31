@@ -1289,8 +1289,6 @@ mod tests {
     /// mask is part of the run key, not just the child count.
     #[test]
     fn run_intern_different_masks_never_share_over_10k_runs() {
-        use std::collections::HashMap;
-
         const CASES: usize = 10_000;
         const LEVEL: u32 = 2;
         const MASKS: [u8; 4] = [0b0000_0011, 0b0000_1100, 0b0000_0101, 0b0000_1010];
@@ -1305,7 +1303,7 @@ mod tests {
                 Node::new(1, LEVEL, group as u64 * 2 + 2),
             ];
 
-            let base = pool.intern(LEVEL, mask, &kids);
+            pool.intern(LEVEL, mask, &kids);
             assert_eq!(pool.live_runs(), case + 1);
         }
 

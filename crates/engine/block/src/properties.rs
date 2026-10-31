@@ -253,6 +253,10 @@ pub struct BlockProperties {
     ///
     /// A template is copied into the chunk's SVDAG when this block is placed;
     /// a uniform material expands to its single [`crate::MaterialId`] instead.
+    ///
+    /// The value is authored in RON and is not bounds-checked at load: the
+    /// placement path must validate it against the target pool (a hard-coded
+    /// root from another build is meaningless).
     pub template_root: Option<u64>,
     /// Coarse behavioral flags.
     pub flags: BlockFlags,
