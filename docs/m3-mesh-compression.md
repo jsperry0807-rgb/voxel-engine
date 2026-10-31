@@ -313,11 +313,30 @@ Gate A pass (exhaustive faces/extents/AO; >10k mixed-chunk quads). The
 storage-pull example `quad_spike` passes Gate B1 on a **144-record coverage list
 (all six faces, non-square extents, all AO patterns, material high bits)**,
 B2 direct and indirect on 64 quads, and Gate D at **0 LSB** on both the RTX
-4060 and the Radeon iGPU (driver `Dozen`). Gate C (the pre-registered 64-chunk
-full-frame scene with timestamps) remains; the pixel scene is 64 quads, so it
-is not a representative performance measurement. Run with
-`cargo run -p voxel-viewer --features chunk128 --example quad_spike` under the
-WSL GPU env.
+4060 and the Radeon iGPU (driver `Dozen`).
+
+**Gate C result (2026-10-31): FAIL for instanced quads.** Scene: the largest
+u16-meshlet chunk of `m2-128` (capped at 16,384 quads), tiled to 64 chunks,
+fixed 300-frame camera path, 60 warm-up frames, 5 runs, GPU timestamps,
+vsync-free 1080p. The reported ratio is instanced/indexed median full-frame:
+
+| GPU | Indexed | Instanced (6-vertex) | Indexed-4 | 4-vertex strip |
+|---|---:|---:|---:|---:|
+| RTX 4060 | 0.422 ms | 0.591 ms (**1.400×**) | 1.351× | 0.553 ms (**1.311×**) |
+| Radeon iGPU | 4.323 ms | 6.237 ms (**1.443×**) | — | 5.970 ms (**1.381×**) |
+
+All variants exceed the 10% full-frame threshold. The instanced record path is
+rejected on performance; the compute/attribute equivalence is not the issue,
+the extra per-quad vertex work is. Run with
+`cargo run -p voxel-viewer --features chunk128 --example gate_c` under the WSL
+GPU env.
+
+**Next decision:** the planned fallback is the **8 B packed vertex** attribute
+path (4 vertices per quad; 44 B/quad indexed, or 32 B/quad with a 4-vertex
+strip). It clears row 6 at 2,119 KiB (11.7% margin) and row 1 at 2.99 GiB, but
+the 64³ total is 5.86 GiB (44 B) or 5.0 GiB (32 B), above the 4.80 GiB hard
+fail until M6-09a. Choosing the fallback **abandons 64³ Minimum** until then;
+that is the §7/§9 product decision.
 
 ---
 

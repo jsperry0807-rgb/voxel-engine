@@ -830,6 +830,13 @@ and uploads them as a 90-day artifact.
 ## 8. M3 — Raster scale-up
 
 **Goal:** a real world at real distance without GPU culling. **Exit:** M3-13. **Budget:** 9 d raw. **Depends:** M2.
+
+**M3-00 mesh compression (in progress):** Gate A/B1/B2/D pass on the RTX 4060
+and Radeon iGPU. **Gate C fails** for instanced quads: 1.311× (4060) and
+1.381× (iGPU) the indexed full-frame time, above the 10% threshold. The planned
+8 B packed-vertex fallback clears row 6 at 44 B/quad (2,119 KiB) but its 64³
+total is 5.86 GiB, above the 4.80 GiB hard fail until M6-09a; choosing it
+abandons 64³ Minimum. Product decision pending.
 **Art:** none; M3 reuses M1.5-14 and, if M2.5 ran, M2.5-31.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |

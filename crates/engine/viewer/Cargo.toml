@@ -32,3 +32,7 @@ naga = { version = "30", features = ["wgsl-in"] }
 [[example]]
 name = "quad_spike"
 required-features = ["chunk128"]
+
+[[example]]
+name = "gate_c"
+required-features = ["chunk128"]
