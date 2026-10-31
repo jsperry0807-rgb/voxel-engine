@@ -88,6 +88,20 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 // Face codes are 0..5 = +X, -X, +Y, -Y, +Z, -Z.
 const FACE_SHADE: array<f32, 6> = array<f32, 6>(0.62, 0.62, 1.0, 0.5, 0.82, 0.72);
 
+/// One light cell's normalised level, clamping the cell index at the volume
+/// edge. `cell` is a continuous position in cell space.
+fn sample_light(cell: vec3<f32>) -> f32 {
+    let index = min(
+        vec3<u32>(max(floor(cell), vec3<f32>(0.0))),
+        vec3<u32>(CELLS - 1u),
+    );
+    let base = (index.x + index.y * CELLS + index.z * CELLS * CELLS) * 4u;
+    let sky = (block_light[base + 1u] >> 16u) & 0xFFFFu;
+    let block_level = (block_light[base + 3u] >> 16u) & 0xFFFFu;
+    let level = max(sky, block_level) >> 12u;
+    return f32(level) / 15.0;
+}
+
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     // Block origin along the face's tangent axes. Fragment centres inside a
@@ -123,22 +137,30 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         vec2<u32>(input.material % 16u, input.material / 16u) * 16u;
     let texel_color = textureLoad(atlas, vec2<i32>(tile_origin + texel), 0);
 
-    // Chunk-local light cell; the far chunk face clamps onto the last cell.
-    let cell = min(
-        vec3<u32>(
-            u32(floor(input.local.x / 16.0)),
-            u32(floor(input.local.y / 16.0)),
-            u32(floor(input.local.z / 16.0)),
-        ),
-        vec3<u32>(CELLS - 1u),
-    );
-    let base = (cell.x + cell.y * CELLS + cell.z * CELLS * CELLS) * 4u;
-    let sky = (block_light[base + 1u] >> 16u) & 0xFFFFu;
-    let block_level = (block_light[base + 3u] >> 16u) & 0xFFFFu;
-    let level = max(sky, block_level) >> 12u;
+    // Block light is stored one cell per 1 m block. A nearest-cell lookup
+    // makes every cell boundary a hard step, which reads as noisy patches on
+    // a slope; interpolate the eight surrounding cells instead.
+    let light_position = input.local / 16.0 - 0.5;
+    let light_base = floor(light_position);
+    let light_frac = light_position - light_base;
+    let light_000 = sample_light(light_base);
+    let light_100 = sample_light(light_base + vec3<f32>(1.0, 0.0, 0.0));
+    let light_010 = sample_light(light_base + vec3<f32>(0.0, 1.0, 0.0));
+    let light_110 = sample_light(light_base + vec3<f32>(1.0, 1.0, 0.0));
+    let light_001 = sample_light(light_base + vec3<f32>(0.0, 0.0, 1.0));
+    let light_101 = sample_light(light_base + vec3<f32>(1.0, 0.0, 1.0));
+    let light_011 = sample_light(light_base + vec3<f32>(0.0, 1.0, 1.0));
+    let light_111 = sample_light(light_base + vec3<f32>(1.0, 1.0, 1.0));
+    let light_00 = mix(light_000, light_100, light_frac.x);
+    let light_10 = mix(light_010, light_110, light_frac.x);
+    let light_01 = mix(light_001, light_101, light_frac.x);
+    let light_11 = mix(light_011, light_111, light_frac.x);
+    let light_0 = mix(light_00, light_10, light_frac.y);
+    let light_1 = mix(light_01, light_11, light_frac.y);
+    let level = mix(light_0, light_1, light_frac.z);
     // A small ambient floor keeps unlit faces readable without changing
     // sky-lit surfaces (level 15 gives exactly 1.0).
-    let light = 0.25 + 0.75 * f32(level) / 15.0;
+    let light = 0.25 + 0.75 * level;
 
     // Fully occluded corners keep some ambient light; without this floor,
     // one-voxel step edges read as black grid lines.

@@ -108,6 +108,11 @@ cracks:
 - **Black step edges:** fully occluded AO corners multiplied the shade to zero.
   The AO mapping now has a 0.4 floor (`0.4 + 0.6 * ao`), so a one-voxel step
   still has a contact shadow but not a black line.
+- **Large noisy patches on slopes:** block light was read with a nearest-cell
+  lookup, so every 1 m cell boundary was a hard light step. The chunk shader
+  now trilinearly interpolates the eight surrounding cells. The patches
+  disappear; the remaining thin step outlines are the actual 1-voxel geometry
+  and AO, not light-cell noise.
 
 The atlas sampler and mip chain remain for the M1.5 screenshot example, which
 samples the atlas continuously. A 9×9-chunk offscreen capture at the default
