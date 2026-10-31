@@ -664,24 +664,33 @@ check_coverage() {
 }
 
 check_mutants() {
-  local name="mutants"
   if [[ "${HEALTH_MUTANTS:-1}" == "0" ]]; then
-    skip_check "external" "$name" "disabled by HEALTH_MUTANTS=0"
+    skip_check "external" "mutants" "disabled by HEALTH_MUTANTS=0"
     return
   fi
   if ! have cargo-mutants; then
-    skip_check "external" "$name" "cargo-mutants is not installed"
+    skip_check "external" "mutants" "cargo-mutants is not installed"
     return
   fi
 
   local -a command=(cargo mutants)
+  local args_label="workspace"
   if [[ -n "${HEALTH_MUTANTS_ARGS:-}" ]]; then
     # Intentional word splitting: this is a small, documented argument string.
     read -r -a extra <<<"$HEALTH_MUTANTS_ARGS"
     command+=("${extra[@]}")
+    args_label="$HEALTH_MUTANTS_ARGS"
   else
     command+=(--workspace)
   fi
+  # A shard must not share `mutants.out` or the log with its siblings: cargo
+  # clears the output directory at start, so parallel shards delete each
+  # other's results and the last one is reported as a full pass.
+  local slugged
+  slugged=$(printf '%s' "$args_label" | tr -c 'A-Za-z0-9' '-' | sed 's/--*/-/g; s/^-//; s/-$//')
+  local out="${HEALTH_MUTANTS_OUT:-$TARGET_DIR/mutants/$slugged}"
+  command+=(--output "$out")
+  local name="mutants ${slugged}"
   run_check "external" "$name" "${command[@]}"
   if [[ "${S_STATUS[LAST_INDEX]}" != "PASS" ]]; then
     local summary

@@ -8,6 +8,15 @@ on:
       - "mkdocs.yml"
       - "scripts/build-docs-site.py"
       - ".github/workflows/docs.yml"
+  # Build (but do not publish) on pull requests, so a broken link or an
+  # absolute asset path fails before it reaches main. GitHub Actions does not
+  # support YAML anchors, hence the repeated list.
+  pull_request:
+    paths:
+      - "**/*.md"
+      - "mkdocs.yml"
+      - "scripts/build-docs-site.py"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 permissions:
@@ -31,13 +40,16 @@ jobs:
           python-version: "3.12"
       - run: pip install mkdocs-material~=9.5
       - run: python3 scripts/build-docs-site.py
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
   deploy:
     name: deploy
+    if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
     environment:
