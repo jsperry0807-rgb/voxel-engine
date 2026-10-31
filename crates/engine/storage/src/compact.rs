@@ -397,7 +397,7 @@ impl ChunkDag {
             remap.insert(old_base, new_base);
         }
 
-        debug_assert_eq!(new_nodes.len() as u64, allocator.next_slot());
+        assert_eq!(new_nodes.len() as u64, allocator.next_slot());
         let new_slots = new_nodes.len() as u64;
         self.bands_mut().replace_band(level, new_nodes);
         self.remap_parent_bases(level, &remap, reachable);

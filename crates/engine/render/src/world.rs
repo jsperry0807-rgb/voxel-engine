@@ -55,7 +55,7 @@ impl GpuWorld {
     ///
     /// The overlay shadows the DAG in `sample_chunk`, so the edit is visible to
     /// the next frame after [`Self::flush`]. Storage is allocated per 16^3
-    /// block: one edit costs one ~8 KiB block slot, not one per chunk. Call
+    /// block: one edit costs one ~8.5 KiB block slot, not one per chunk. Call
     /// [`Self::clear_chunk_overlay`] after folding the same edits into the DAG
     /// with [`Self::apply_edits`].
     pub fn set_overlay(&mut self, pos: ChunkPos, idx: u32, material: u16) {

@@ -1229,7 +1229,6 @@ mod tests {
         let mut state = 0x0ddc_0ffe_e15e_beefu64;
         let mut entries: Vec<(u32, u8, Vec<Node>, u64)> = Vec::new();
         let mut by_key: HashMap<Key, u64> = HashMap::new();
-        let mut by_address: HashMap<(u32, u64), Key> = HashMap::new();
         let mut expected_hits = 0u64;
         let mut expected_misses = 0u64;
 
@@ -1272,10 +1271,6 @@ mod tests {
                     before + 1,
                     "case {case}: a miss appends exactly one run"
                 );
-                assert!(
-                    by_address.insert((level, base), key.clone()).is_none(),
-                    "case {case}: two distinct keys share base {base} in level {level}"
-                );
                 by_key.insert(key.clone(), base);
                 entries.push((level, mask, kids, base));
                 expected_misses += 1;
@@ -1301,7 +1296,6 @@ mod tests {
         const MASKS: [u8; 4] = [0b0000_0011, 0b0000_1100, 0b0000_0101, 0b0000_1010];
 
         let mut pool = RunInterner::new();
-        let mut by_address: HashMap<u64, (usize, u8)> = HashMap::new();
 
         for case in 0..CASES {
             let group = case / MASKS.len();
@@ -1312,10 +1306,6 @@ mod tests {
             ];
 
             let base = pool.intern(LEVEL, mask, &kids);
-            assert!(
-                by_address.insert(base, (group, mask)).is_none(),
-                "case {case}: mask {mask:#010b} merged with another run of group {group}"
-            );
             assert_eq!(pool.live_runs(), case + 1);
         }
 

@@ -10,7 +10,7 @@
 //!   grows/rehashes -> full re-upload.
 //! * overlay  : per edited 16^3 block, a 4 096-entry override buffer. A chunk's block table
 //!   has [`BLOCKS_PER_CHUNK`] words (64 at 64³, 512 at 128³), one per block, each pointing
-//!   at an 8 KiB overlay slot (2 048 words of packed `u16` material ids followed by 128
+//!   at an 8.5 KiB overlay slot (2 176 words: 128 presence words, 2 048 packed `u16` material ids
 //!   words of presence bits). The slot is sized by the fixed block edge, never by the chunk
 //!   edge. The bit, not the value, means "edited": a carved voxel stores material 0 and
 //!   must shadow the DAG with air. Block tables and overlay slots are allocated lazily,
@@ -764,7 +764,7 @@ impl GpuStore {
     /// The overlay shadows the DAG, so the edit is visible to the next frame without a
     /// consolidation pass. Material `0` carves the voxel to air; the presence bit, not the
     /// value, marks it as edited. Storage is allocated per 16^3 block, so a single edit costs
-    /// one 8 KiB overlay slot, not one per chunk.
+    /// one 8.5 KiB overlay slot, not one per chunk.
     pub fn set_overlay(&mut self, p: ChunkPos, idx: u32, v: u16) {
         assert!((idx as usize) < CHUNK_VOLUME, "voxel index out of range");
         let (_, table_slot) = self.ensure_block_table(p);
@@ -1424,6 +1424,16 @@ mod tests {
         assert_eq!(g.table_slots(), capacity);
         assert_eq!(g.tombs, 1, "the single vacated slot was reused");
         assert_eq!(g.chunk_count(), 0);
+
+        // Without a batch the retirements accumulate forever; ending one and
+        // reclaiming it must return the pool to its single-DAG size.
+        let tag = g.end_batch();
+        g.reclaim(tag);
+        assert!(
+            g.unique_nodes() <= 1,
+            "{} unused node(s) survived reclaim",
+            g.unique_nodes()
+        );
     }
 
     /// A hash collision must not make the colliding content private: the second

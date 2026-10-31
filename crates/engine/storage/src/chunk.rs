@@ -95,8 +95,10 @@ impl AccessCounters {
 /// One chunk in the banded SVDAG layout.
 ///
 /// The bands are append-only and level-correct: every node in band `l` carries
-/// `level == l`, and the root (when present) is the only node in band
-/// `ROOT_LEVEL`. A chunk with no voxels has no bands and no root.
+/// `level == l`, and the root (when present) is the only *live* node in band
+/// `ROOT_LEVEL`. Every COW batch appends another root word there, so retired
+/// roots accumulate until that band is compacted. A chunk with no voxels can
+/// keep bands but has no root.
 pub struct ChunkDag {
     bands: Bands,
     root: Option<NodeRef>,

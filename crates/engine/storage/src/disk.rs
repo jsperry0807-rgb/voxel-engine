@@ -317,6 +317,13 @@ fn scan(file: &mut File) -> io::Result<Scan> {
             // This record verified, so scanning it is real work rather than
             // adversarial recovery; refund it and keep the budget for failures.
             budget = budget.saturating_add(cost);
+            if record.cell >= 512 {
+                // Outside the 8×8×8 region; no `ChunkPos` can address it.
+                skipped += HDR as u64 + u64::from(record.len);
+                pos += HDR as u64 + record.len as u64;
+                good_end = pos;
+                continue;
+            }
             let e = index.entry(record.cell).or_default();
             match record.kind {
                 KIND_DAG => {
