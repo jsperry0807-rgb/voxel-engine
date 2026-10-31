@@ -12,13 +12,14 @@ use voxel_core::content_constants::LIGHT_BYTES_PER_CHUNK;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingType, BufferBindingType, BufferDescriptor, BufferUsages, Device,
-    Queue, ShaderStages,
+    ShaderStages,
 };
 
 /// Creates the chunk-data bind group layout (group 2).
 ///
-/// Binding 0 is the light-cell array, binding 1 the probe SH/validity array.
-/// Both are read-only storage buffers visible to the fragment stage.
+/// Binding 0 is the light-cell array, binding 1 the probe SH/validity array,
+/// both read-only storage buffers visible to the fragment stage. Binding 2 is
+/// the chunk's world-space voxel origin, visible to the vertex stage.
 pub fn layout(device: &Device) -> BindGroupLayout {
     // The light volume is exactly one 16 B cell per block, so a mismatched
     // upload (wrong chunk edge) is a validation error rather than silently
@@ -43,9 +44,19 @@ pub fn layout(device: &Device) -> BindGroupLayout {
         },
         count: None,
     };
+    let origin = BindGroupLayoutEntry {
+        binding: 2,
+        visibility: ShaderStages::VERTEX,
+        ty: BindingType::Buffer {
+            ty: BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: NonZeroU64::new(16),
+        },
+        count: None,
+    };
     device.create_bind_group_layout(&BindGroupLayoutDescriptor {
         label: Some("chunk data"),
-        entries: &[light, probes],
+        entries: &[light, probes, origin],
     })
 }
 
@@ -64,13 +75,21 @@ pub struct ChunkLighting {
 /// non-zero buffer so the binding stays valid.
 pub fn upload(
     device: &Device,
-    queue: &Queue,
     layout: &BindGroupLayout,
     light: &[u8],
     probes: &[u8],
+    origin: [f32; 3],
 ) -> ChunkLighting {
-    let light_bytes = upload_bytes(device, queue, "chunk light", light);
-    let probe_bytes = upload_bytes(device, queue, "chunk probes", probes);
+    // Creation mappings keep these one-shot uploads out of the queue's
+    // staging belt; a whole ring creates hundreds of them between frames.
+    let light_bytes = upload_bytes(device, "chunk light", light);
+    let probe_bytes = upload_bytes(device, "chunk probes", probes);
+    let origin_buffer = upload_bytes_typed(
+        device,
+        "chunk origin",
+        bytemuck::cast_slice(&[origin[0], origin[1], origin[2], 0.0]),
+        BufferUsages::UNIFORM,
+    );
     let bind_group = device.create_bind_group(&BindGroupDescriptor {
         label: Some("chunk data"),
         layout,
@@ -82,6 +101,10 @@ pub fn upload(
             BindGroupEntry {
                 binding: 1,
                 resource: probe_bytes.buffer.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 2,
+                resource: origin_buffer.as_entire_binding(),
             },
         ],
     });
@@ -97,16 +120,34 @@ struct Uploaded {
     size: u64,
 }
 
-fn upload_bytes(device: &Device, queue: &Queue, label: &str, bytes: &[u8]) -> Uploaded {
+fn upload_bytes(device: &Device, label: &str, bytes: &[u8]) -> Uploaded {
     let size = (bytes.len().div_ceil(4) * 4).max(4) as u64;
+    let buffer = upload_bytes_typed(device, label, bytes, BufferUsages::STORAGE);
+    Uploaded { buffer, size }
+}
+
+/// Creates a padded buffer and writes it through a creation mapping.
+fn upload_bytes_typed(
+    device: &Device,
+    label: &str,
+    bytes: &[u8],
+    usage: BufferUsages,
+) -> wgpu::Buffer {
+    let size = (bytes.len().div_ceil(4) * 4).max(4);
     let buffer = device.create_buffer(&BufferDescriptor {
         label: Some(label),
-        size,
-        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-        mapped_at_creation: false,
+        size: size as u64,
+        usage,
+        mapped_at_creation: true,
     });
-    let mut padded = bytes.to_vec();
-    padded.resize(size as usize, 0);
-    queue.write_buffer(&buffer, 0, &padded);
-    Uploaded { buffer, size }
+    {
+        let mut view = buffer
+            .slice(..)
+            .get_mapped_range_mut()
+            .expect("mapped-at-creation chunk buffer");
+        view.slice(..bytes.len()).copy_from_slice(bytes);
+        view.slice(bytes.len()..).fill(0);
+    }
+    buffer.unmap();
+    buffer
 }

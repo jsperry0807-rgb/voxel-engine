@@ -2,7 +2,7 @@
 //!
 //! The pipeline consumes the packed 8-byte vertices from [`ChunkMesh`] and
 //! the M2-27 chunk shader (AO + block light). Camera is group 0, atlas group 1
-//! and the M2 chunk data (light, probes) group 2.
+//! and the M2/M3 chunk data (light, probes, world-voxel origin) group 2.
 
 use wgpu::{
     BindGroup, BindGroupLayout, BlendState, ColorTargetState, ColorWrites, CompareFunction,

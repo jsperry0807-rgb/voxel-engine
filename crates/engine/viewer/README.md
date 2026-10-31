@@ -1,11 +1,12 @@
 # Voxel Viewer
 
-The M2 vertical slice: a `winit` + `wgpu` window that draws one generated
-terrain chunk with the committed material atlas. The chunk is meshed by the
-production greedy + AO path (`voxel-mesh`), its block-light cells are sampled
-by the chunk shader, and the near probe volume is uploaded and bound. The M1.5
-naive mesher remains as the reference/tests and for the historical screenshot
-example; M3 adds streaming and per-block meshlets.
+The M3 streaming slice: a `winit` + `wgpu` window that keeps a 16×16 ring of
+256 generated terrain chunks resident around the camera. Chunks are generated
+and meshed on worker threads, uploaded on a separate uploader thread, and
+installed by the frame thread within a 4 ms budget. Each chunk binds a
+world-voxel origin so one pipeline draws the whole ring. The M1.5 naive mesher
+remains as the reference/tests and for the historical screenshot example;
+per-block meshlets and the arena are later M3 work.
 
 ## Run
 

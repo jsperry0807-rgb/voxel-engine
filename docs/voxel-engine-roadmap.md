@@ -1,6 +1,6 @@
 # Voxel Engine Roadmap
 
-**Status:** v3.4 — M2 measured exit; M3-00 mesh compression closed
+**Status:** v3.5 — M2 measured exit; M3-00 and M3-01 closed
 **Companion to:** [`voxel-engine-architecture-spec.md`](voxel-engine-architecture-spec.md), [`worldgen-design.md`](worldgen-design.md)
 **Date:** 2026-10-31
 **Scope:** storage, content pipeline, worldgen, renderer, far field, water, GPU sync, culling, LOD, streaming
@@ -20,7 +20,9 @@ the first M3 item and 128³ Minimum remains a measured candidate, not a confirme
 profile. Gate row 9 is measured (0.00% reference granularity); row 11 is carried
 until a real save. **M3-00 is closed:** the 44 B packed vertex passes 128³
 (row 6 2,115 KiB, row 1 2.98 GiB); 64³ is abandoned; the 32 B strip is deferred.
-The M1.5 vertical slice and zero-validation CI remain in place.
+**M3-01 is closed:** the 256-chunk ring loads on both GPUs with max pump
+0.09 ms and no hitch over 4 ms. The M1.5 vertical slice and zero-validation CI
+remain in place.
 
 Two consequences shape the schedule:
 
@@ -265,7 +267,9 @@ Runs at the **128³ Minimum** edge (ADR-002). Default is not greenlit.
 - Mesh compression **done (M3-00):** 44 B packed 8 B vertex; 128³ row 6
   2,115 KiB and row 1 2.98 GiB pass. 64³ is abandoned; the 32 B strip is a
   deferred contingency.
-- Viewer lifecycle: stream in, mesh, upload, draw.
+- Viewer lifecycle **streaming shell done (M3-01):** 256-chunk ring, off-thread
+  generation/meshing and upload, 4 ms frame-thread install budget. Draw and
+  culling remain.
 - CPU frustum cull of chunk AABBs — the stopgap and the M5 production cull's
   correctness reference (the M1 reference traversal is the granularity oracle).
 - Mesh buffer pool; the chosen scheme becomes M4's versioned resource.

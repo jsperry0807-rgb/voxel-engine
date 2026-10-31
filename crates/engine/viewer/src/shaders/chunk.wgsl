@@ -1,8 +1,8 @@
 // Chunk shader, M3-00: packed 8 B vertex, AO and block light.
 //
 // The vertex carries chunk-local voxel coordinates (6.25 cm), material, face
-// code and four 2-bit AO levels. This chunk sits at the world origin, so
-// world = local * 0.0625.
+// code and four 2-bit AO levels. Each chunk binds a world-voxel origin, so
+// world = (local + chunk_origin.xyz) * 0.0625.
 //
 // UVs are derived per fragment from the face-local position inside a 16-voxel
 // block face, not from a vertex attribute. A 1 m face is therefore exactly one
@@ -43,6 +43,10 @@ var<storage, read> block_light: array<u32>;
 @group(2) @binding(1)
 var<storage, read> probes: array<u32>;
 
+// Chunk origin in world voxels.
+@group(2) @binding(2)
+var<uniform> chunk_origin: vec4<f32>;
+
 const CELLS: u32 = {{CELLS}};
 
 struct VertexInput {
@@ -68,7 +72,7 @@ fn vs_main(input: VertexInput) -> VertexOutput {
         f32(input.local_spare.y),
         f32(input.local_spare.z),
     );
-    let world = local * 0.0625;
+    let world = (local + chunk_origin.xyz) * 0.0625;
 
     let material = input.material_packed.x;
     let packed = input.material_packed.y;

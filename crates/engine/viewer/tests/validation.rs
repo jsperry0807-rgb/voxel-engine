@@ -174,7 +174,7 @@ fn chunk_pipeline_draws_without_validation_errors() {
     let index = 1 | (1 << CHUNK_BITS) | (1 << (2 * CHUNK_BITS));
     volume[index] = 1;
     let content = chunk_content::build(&volume, voxel_storage::ChunkPos::new(0, 0, 0));
-    let chunk = ChunkMesh::from_parts(device, queue, &content.mesh.vertices, &content.mesh.indices)
+    let chunk = ChunkMesh::from_parts(device, &content.mesh.vertices, &content.mesh.indices)
         .expect("one voxel is one mesh");
 
     let format = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -195,8 +195,13 @@ fn chunk_pipeline_draws_without_validation_errors() {
     let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
     let depth = DepthTarget::new(device, 64, 64);
     let data_layout = chunk_lighting::layout(device);
-    let lighting =
-        chunk_lighting::upload(device, queue, &data_layout, &content.light, &content.probes);
+    let lighting = chunk_lighting::upload(
+        device,
+        &data_layout,
+        &content.light,
+        &content.probes,
+        [0.0; 3],
+    );
     let pipeline = ChunkPipeline::new(
         device,
         &camera_layout,
@@ -519,4 +524,253 @@ fn fs(input: Out) -> @location(0) u32 {
         (10u32 | 11 << 8 | 12 << 16 | 3 << 24 | 4 << 27 | 3 << 30),
     ];
     assert_eq!(values, expected, "packed vertex attributes did not decode");
+}
+
+/// Renders one chunk mesh to a 64×64 target and returns the RGBA pixels.
+fn render_chunk_to_pixels(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    pipeline: &ChunkPipeline,
+    chunk: &ChunkMesh,
+    camera: &wgpu::BindGroup,
+    atlas: &wgpu::BindGroup,
+    data: &wgpu::BindGroup,
+) -> Vec<u8> {
+    let target = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("origin target"),
+        size: wgpu::Extent3d {
+            width: 64,
+            height: 64,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let view = target.create_view(&wgpu::TextureViewDescriptor::default());
+    let depth = DepthTarget::new(device, 64, 64);
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("origin pass"),
+    });
+    {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("origin pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &depth.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            ..Default::default()
+        });
+        pipeline.draw(&mut pass, chunk, camera, atlas, data);
+    }
+    queue.submit([encoder.finish()]);
+
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("origin readback"),
+        size: 64 * 64 * 4,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("origin readback"),
+    });
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &target,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(256),
+                rows_per_image: Some(64),
+            },
+        },
+        wgpu::Extent3d {
+            width: 64,
+            height: 64,
+            depth_or_array_layers: 1,
+        },
+    );
+    queue.submit([encoder.finish()]);
+
+    let slice = readback.slice(..);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    slice.map_async(wgpu::MapMode::Read, move |result| {
+        let _ = sender.send(result);
+    });
+    device
+        .poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: None,
+        })
+        .expect("device poll");
+    receiver
+        .recv()
+        .expect("map callback ran")
+        .expect("map the readback");
+    let pixels = slice.get_mapped_range().expect("mapped range").to_vec();
+    readback.unmap();
+    pixels
+}
+
+#[test]
+fn chunk_origin_moves_the_chunk_in_world_space() {
+    let Some(gpu) = test_gpu() else {
+        return;
+    };
+    let device = &gpu.device;
+    let queue = &gpu.queue;
+    let error_scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
+
+    let camera_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("origin camera"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    });
+    let camera_bind = |position: Vec3, target: Vec3| {
+        let camera = Camera::looking_at(position, target, 1.0);
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("origin camera uniform"),
+            size: std::mem::size_of::<CameraUniform>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        queue.write_buffer(&buffer, 0, bytemuck::bytes_of(&camera.uniform()));
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("origin camera"),
+            layout: &camera_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        })
+    };
+
+    let centre = Vec3::splat(0.093_75);
+    let position = Vec3::new(0.6, 0.5, 0.6);
+    let shift = Vec3::new(4.0, 0.0, 0.0);
+    let left_camera = camera_bind(position, centre);
+    let positive_camera = camera_bind(position + shift, centre + shift);
+    let negative_camera = camera_bind(position - shift, centre - shift);
+
+    let mut builder = AtlasBuilder::new();
+    builder
+        .set_tile(1, &[255u8; TILE_BYTES])
+        .expect("slot 1 is valid");
+    let atlas_texture = AtlasTexture::new(device, queue, &builder.build());
+
+    let mut volume = vec![0u16; CHUNK_VOLUME];
+    volume[1 | (1 << CHUNK_BITS) | (1 << (2 * CHUNK_BITS))] = 1;
+    let content = chunk_content::build(&volume, voxel_storage::ChunkPos::new(0, 0, 0));
+    let chunk = ChunkMesh::from_parts(device, &content.mesh.vertices, &content.mesh.indices)
+        .expect("one voxel is one mesh");
+
+    let data_layout = chunk_lighting::layout(device);
+    let left_data = chunk_lighting::upload(
+        device,
+        &data_layout,
+        &content.light,
+        &content.probes,
+        [0.0; 3],
+    );
+    let positive_data = chunk_lighting::upload(
+        device,
+        &data_layout,
+        &content.light,
+        &content.probes,
+        [64.0, 0.0, 0.0],
+    );
+    let negative_data = chunk_lighting::upload(
+        device,
+        &data_layout,
+        &content.light,
+        &content.probes,
+        [-64.0, 0.0, 0.0],
+    );
+    let pipeline = ChunkPipeline::new(
+        device,
+        &camera_layout,
+        &atlas_texture.layout,
+        &data_layout,
+        wgpu::TextureFormat::Rgba8UnormSrgb,
+    );
+
+    let left = render_chunk_to_pixels(
+        device,
+        queue,
+        &pipeline,
+        &chunk,
+        &left_camera,
+        &atlas_texture.bind_group,
+        &left_data.bind_group,
+    );
+    let positive = render_chunk_to_pixels(
+        device,
+        queue,
+        &pipeline,
+        &chunk,
+        &positive_camera,
+        &atlas_texture.bind_group,
+        &positive_data.bind_group,
+    );
+    let negative = render_chunk_to_pixels(
+        device,
+        queue,
+        &pipeline,
+        &chunk,
+        &negative_camera,
+        &atlas_texture.bind_group,
+        &negative_data.bind_group,
+    );
+    assert!(
+        left.chunks(4)
+            .any(|pixel| pixel[0] > 0 || pixel[1] > 0 || pixel[2] > 0),
+        "the origin-0 draw wrote no pixels"
+    );
+    for (label, shifted) in [("positive", &positive), ("negative", &negative)] {
+        let max_diff = left
+            .iter()
+            .zip(shifted)
+            .map(|(a, b)| a.abs_diff(*b))
+            .max()
+            .unwrap_or(0);
+        assert!(
+            max_diff <= 2,
+            "a 64-voxel {label} origin shift with a matching camera shift should reproduce the image; max channel diff {max_diff}"
+        );
+    }
+
+    let error = pollster::block_on(error_scope.pop());
+    assert!(
+        error.is_none(),
+        "origin draw raised a validation error: {error:?}"
+    );
 }

@@ -104,9 +104,18 @@ pub struct ChunkContent {
 /// `volume` is a dense `CHUNK_DIM³` array with material 0 as air. Materials are
 /// atlas slots for this demo chunk.
 pub fn build(volume: &[u16], chunk: ChunkPos) -> ChunkContent {
+    build_with_apron(volume, chunk, &Apron::new())
+}
+
+/// Like [`build`], but culls the chunk border against `apron`.
+///
+/// The streaming path fills the apron from the same analytic terrain function
+/// as the volume, so border faces are culled against the real neighbour and AO
+/// does not treat the chunk edge as air.
+pub fn build_with_apron(volume: &[u16], chunk: ChunkPos, apron: &Apron) -> ChunkContent {
     assert_eq!(volume.len(), CHUNK_VOLUME, "a chunk volume is CHUNK_VOLUME");
     ChunkContent {
-        mesh: mesh(volume),
+        mesh: mesh_with_apron(volume, apron),
         light: light(volume),
         probes: probes(volume, chunk),
     }
@@ -117,24 +126,36 @@ pub fn build(volume: &[u16], chunk: ChunkPos) -> ChunkContent {
 /// The volume must already store atlas ids. A real block-id chunk should use
 /// [`mesh_resolved`] so the packed vertices carry atlas slots.
 pub fn mesh(volume: &[u16]) -> ChunkMeshData {
-    mesh_resolved(volume, |material, _face| material)
+    mesh_with_apron(volume, &Apron::new())
+}
+
+/// Meshes the chunk against `apron`, resolving materials with identity.
+pub fn mesh_with_apron(volume: &[u16], apron: &Apron) -> ChunkMeshData {
+    mesh_resolved_with_apron(volume, apron, |material, _face| material)
 }
 
 /// Meshes the chunk and resolves each vertex material before packing.
 ///
 /// `resolve(block_material, face)` maps the chunk's block id to an atlas slot.
-pub fn mesh_resolved<F>(volume: &[u16], mut resolve: F) -> ChunkMeshData
+pub fn mesh_resolved<F>(volume: &[u16], resolve: F) -> ChunkMeshData
 where
     F: FnMut(u16, voxel_core::Face) -> u16,
 {
-    let apron = Apron::new();
+    mesh_resolved_with_apron(volume, &Apron::new(), resolve)
+}
+
+/// Meshes the chunk against `apron` and resolves each vertex material.
+pub fn mesh_resolved_with_apron<F>(volume: &[u16], apron: &Apron, mut resolve: F) -> ChunkMeshData
+where
+    F: FnMut(u16, voxel_core::Face) -> u16,
+{
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
     let mut quads = Vec::new();
     let mut quad_count = 0usize;
     let mut face_count = 0usize;
 
-    for_each_block(volume, &apron, |block, scratch| {
+    for_each_block(volume, apron, |block, scratch| {
         greedy_block(scratch, &mut quads);
         face_count += quads.iter().map(|quad| quad.area() as usize).sum::<usize>();
         let meshlet = mesh_block(&quads, block);

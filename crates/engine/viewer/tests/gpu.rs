@@ -241,7 +241,7 @@ fn chunk_mesh_buffers_match_quad_count() {
         }
     }
     let mesh = naive_mesh(&volume);
-    let buffers = ChunkMesh::new(&gpu.device, &gpu.queue, &mesh).expect("non-empty mesh");
+    let buffers = ChunkMesh::new(&gpu.device, &mesh).expect("non-empty mesh");
 
     assert_eq!(buffers.quad_count(), mesh.quad_count());
     assert_eq!(buffers.vertex_count as usize, mesh.vertices.len());

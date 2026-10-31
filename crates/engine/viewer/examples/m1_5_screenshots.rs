@@ -596,7 +596,7 @@ impl Gpu {
         variant: AtlasVariant,
         atlas: &wgpu::BindGroup,
     ) -> Result<Vec<u8>, Box<dyn Error>> {
-        let chunk = ChunkMesh::new(&self.device, &self.queue, mesh).ok_or("empty mesh")?;
+        let chunk = ChunkMesh::new(&self.device, mesh).ok_or("empty mesh")?;
         let camera_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("screenshot camera"),
             size: std::mem::size_of::<CameraUniform>() as u64,

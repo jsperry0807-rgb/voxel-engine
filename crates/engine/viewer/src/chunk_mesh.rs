@@ -6,7 +6,7 @@
 
 use std::mem::size_of;
 
-use wgpu::{Buffer, BufferDescriptor, BufferUsages, Device, Queue};
+use wgpu::{Buffer, BufferDescriptor, BufferUsages, Device};
 
 use voxel_mesh::PackedVertex;
 
@@ -31,10 +31,9 @@ impl ChunkMesh {
     ///
     /// The screenshot example and the naive reference tests use this path; the
     /// runtime viewer uploads the M2 production stream with [`Self::from_parts`].
-    pub fn new(device: &Device, queue: &Queue, mesh: &Mesh) -> Option<Self> {
+    pub fn new(device: &Device, mesh: &Mesh) -> Option<Self> {
         Self::upload(
             device,
-            queue,
             bytemuck::cast_slice(&mesh.vertices),
             &mesh.indices,
             size_of::<Vertex>() as u64,
@@ -50,13 +49,11 @@ impl ChunkMesh {
     /// Panics if the vertex bytes are not a whole number of 8 B records.
     pub fn from_parts(
         device: &Device,
-        queue: &Queue,
         vertices_bytes: &[u8],
         indices_data: &[u16],
     ) -> Option<Self> {
         Self::upload(
             device,
-            queue,
             vertices_bytes,
             indices_data,
             PackedVertex::SIZE as u64,
@@ -65,7 +62,6 @@ impl ChunkMesh {
 
     fn upload(
         device: &Device,
-        queue: &Queue,
         vertices_bytes: &[u8],
         indices_data: &[u16],
         vertex_stride: u64,
@@ -85,21 +81,21 @@ impl ChunkMesh {
         );
         assert!(indices_data.len() <= u32::MAX as usize);
 
-        let vertices = device.create_buffer(&BufferDescriptor {
-            label: Some("chunk vertices"),
-            size: vertices_bytes.len() as u64,
-            usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let indices = device.create_buffer(&BufferDescriptor {
-            label: Some("chunk indices"),
-            size: std::mem::size_of_val(indices_data) as u64,
-            usage: BufferUsages::INDEX | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        queue.write_buffer(&vertices, 0, vertices_bytes);
-        queue.write_buffer(&indices, 0, bytemuck::cast_slice(indices_data));
+        // Write at creation rather than through `queue.write_buffer`: the
+        // streaming shell creates hundreds of buffers between frames, and the
+        // queue's staging belt can block on an outstanding submission.
+        let vertices = create_mapped(
+            device,
+            "chunk vertices",
+            vertices_bytes,
+            BufferUsages::VERTEX,
+        );
+        let indices = create_mapped(
+            device,
+            "chunk indices",
+            bytemuck::cast_slice(indices_data),
+            BufferUsages::INDEX,
+        );
 
         Some(Self {
             vertices,
@@ -129,6 +125,43 @@ impl ChunkMesh {
     pub fn byte_len(&self) -> u64 {
         self.vertex_bytes() + self.index_bytes()
     }
+}
+
+/// Creates a buffer and fills it through a creation mapping.
+///
+/// Mapped-at-creation uploads do not enter the queue's staging belt, so an
+/// upload stage cannot stall behind an earlier submission. The mapped range
+/// must be a multiple of the four-byte copy alignment; the tail is zeroed.
+fn create_mapped(device: &Device, label: &str, bytes: &[u8], usage: BufferUsages) -> Buffer {
+    let size = ((bytes.len() as u64).div_ceil(4) * 4).max(4);
+    let created = std::time::Instant::now();
+    let buffer = device.create_buffer(&BufferDescriptor {
+        label: Some(label),
+        size,
+        usage,
+        mapped_at_creation: true,
+    });
+    let create_time = created.elapsed();
+    let mapped = std::time::Instant::now();
+    {
+        let mut view = buffer
+            .slice(..)
+            .get_mapped_range_mut()
+            .expect("mapped-at-creation chunk buffer");
+        view.slice(..bytes.len()).copy_from_slice(bytes);
+        view.slice(bytes.len()..).fill(0);
+    }
+    let write_time = mapped.elapsed();
+    let unmap_started = std::time::Instant::now();
+    buffer.unmap();
+    let unmap_time = unmap_started.elapsed();
+    log::trace!(
+        "{label}: {size} B create {:.2} ms, map+write {:.2} ms, unmap {:.2} ms",
+        create_time.as_secs_f64() * 1000.0,
+        write_time.as_secs_f64() * 1000.0,
+        unmap_time.as_secs_f64() * 1000.0,
+    );
+    buffer
 }
 
 #[cfg(test)]

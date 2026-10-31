@@ -23,7 +23,7 @@ binding number is made in the spec and the pre-registration, never only in a tas
 - **M1.5 is complete.** The viewer, atlas, naive mesher, full M1.5-15
   screenshot set and the M1.5-17 before/after texel-density pair landed. The
   zero-validation CI job (`M1.5-16`) is also in place.
-- **M2 is in progress.** The apron API (`M2-01`), its cost benchmark (`M2-02`),
+- **M2 is complete.** The apron API (`M2-01`), its cost benchmark (`M2-02`),
   the block-granular driver (`M2-03`), the greedy core (`M2-04`), the merge key
   (`M2-05`), backface culling (`M2-06`), AO sampling (`M2-07`), the AO
   merge-ratio measurement (`M2-08`), the chunk-border AO seam (`M2-09`), the
@@ -32,7 +32,8 @@ binding number is made in the spec and the pre-registration, never only in a tas
   cross-chunk apron seeding (`M2-14`), dirty-region incremental light (`M2-15`)
   and removal-front escalation (`M2-16`) landed. The `M2-17` light cost
   benchmark landed and the optimized path now measures 5.7% p95 at 128³, under
-  the 20% target. Probes are next.
+  the 20% target. **M3-00 (mesh compression) and M3-01 (streaming shell) are
+  closed; M3-02 (mesh buffer pool) is next.**
 
 ## Tools
 
@@ -78,6 +79,7 @@ where they conflict with the spec.
 - [`m2-exit.md`](m2-exit.md) — M2-30 measured 128³ Minimum exit: twelve rows, the mesh miss, rows 9/11
 - [`m3-mesh-compression.md`](m3-mesh-compression.md) — proposed instanced-quad (8 B/quad) plan, with an 8 B vertex fallback, for the 128³ mesh cap
 - [`m3-packed-8b.md`](m3-packed-8b.md) — landed 44 B/quad packed-vertex fallback and its 128³/64³ gate numbers
+- [`m3-01-streaming.md`](m3-01-streaming.md) — 256-chunk streaming ring: three-stage pipeline, origin uniform and the 0.09 ms pump measurement
 - [`../benchmarks/README.md`](../benchmarks/README.md) — run archive, lenses, caveats
 - [`../benchmarks/HISTORY.md`](../benchmarks/HISTORY.md) — every recorded run with deltas
 - [`../crates/bench/README.md`](../crates/bench/README.md) — harness internals

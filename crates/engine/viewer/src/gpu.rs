@@ -6,8 +6,8 @@
 //! (minimized) is left alone: wgpu rejects a zero width or height, and the next
 //! [`WindowEvent::Resized`] brings a usable size back.
 //!
-//! [`Gpu::render`] uploads the camera, acquires the next frame, clears color
-//! and depth, draws the test chunk and presents. The present waits on the
+//! [`Gpu::render`] uploads the camera, pumps the streaming ring, acquires the
+//! next frame, clears color and depth, draws every resident chunk and presents. The present waits on the
 //! swap chain's `Fifo` mode, so the event loop runs at the display's refresh
 //! rate rather than spinning.
 //!
@@ -31,16 +31,14 @@ use winit::window::Window;
 use crate::atlas::Atlas;
 use crate::atlas_texture::AtlasTexture;
 use crate::camera::{Camera, CameraUniform};
-use crate::chunk_content;
-use crate::chunk_lighting::{self, ChunkLighting};
-use crate::chunk_mesh::ChunkMesh;
+use crate::chunk_lighting;
 use crate::chunk_render::ChunkPipeline;
 use crate::depth::DepthTarget;
 use crate::error::ViewerError;
+use crate::streaming::{self, PUMP_BUDGET, Streaming};
 
 /// Consecutive `Lost` surfaces tolerated before the viewer gives up.
 const MAX_SURFACE_RECREATIONS: u32 = 3;
-use voxel_storage::ChunkPos;
 
 /// The graphics handles a frame needs.
 pub struct Gpu {
@@ -67,10 +65,8 @@ pub struct Gpu {
     pub depth: DepthTarget,
     /// The material atlas texture, sampler and bind group.
     pub atlas: AtlasTexture,
-    /// One uploaded M2 chunk.
-    pub chunk: Option<ChunkMesh>,
-    /// Uploaded block-light and probe volumes for the chunk.
-    pub lighting: ChunkLighting,
+    /// The M3-01 chunk ring, its workers and its per-frame install budget.
+    pub streaming: Streaming,
     /// The chunk draw pipeline.
     pub chunk_pipeline: ChunkPipeline,
 }
@@ -154,13 +150,6 @@ impl Gpu {
 
         let depth = DepthTarget::new(&device, config.width, config.height);
         let atlas = AtlasTexture::new(&device, &queue, &atlas);
-        let volume = chunk_content::demo_volume();
-        let content = chunk_content::build(&volume, ChunkPos::new(0, 0, 0));
-        let naive_quads = if log::log_enabled!(log::Level::Info) {
-            chunk_content::ChunkMeshData::naive_quad_count(&volume)
-        } else {
-            0
-        };
         let data_layout = chunk_lighting::layout(&device);
         let chunk_pipeline = ChunkPipeline::new(
             &device,
@@ -169,32 +158,12 @@ impl Gpu {
             &data_layout,
             config.format,
         );
-        let chunk = ChunkMesh::from_parts(
-            &device,
-            &queue,
-            &content.mesh.vertices,
-            &content.mesh.indices,
+        let streaming = Streaming::new(device.clone(), data_layout);
+        log::info!(
+            "streaming shell: {} chunk ring, {:.0} ms frame budget",
+            streaming::RING_CHUNKS,
+            PUMP_BUDGET.as_secs_f64() * 1000.0
         );
-        let lighting = chunk_lighting::upload(
-            &device,
-            &queue,
-            &data_layout,
-            &content.light,
-            &content.probes,
-        );
-        if let Some(chunk) = &chunk {
-            log::info!(
-                "uploaded M2 chunk: {} quads cover {} faces ({:.1}% fewer than naive {}), \
-                 {} B mesh, {} B light, {} B probes",
-                chunk.quad_count(),
-                content.mesh.faces,
-                100.0 - content.mesh.quads as f64 * 100.0 / naive_quads as f64,
-                naive_quads,
-                chunk.byte_len(),
-                lighting.light_bytes,
-                lighting.probe_bytes,
-            );
-        }
 
         Ok(Self {
             instance,
@@ -208,8 +177,7 @@ impl Gpu {
             camera_bind_group,
             depth,
             atlas,
-            chunk,
-            lighting,
+            streaming,
             chunk_pipeline,
         })
     }
@@ -248,17 +216,30 @@ impl Gpu {
     }
 
     /// Uploads `camera`, acquires the next surface texture, clears color and
-    /// depth, draws the test chunk and presents.
+    /// depth, draws every resident streamed chunk and presents.
     ///
     /// Returns `true` when a frame was presented. A skipped frame is not an
     /// error: occluded windows, timeouts and a swap chain that had to be
     /// reconfigured all return `Ok(false)`, so the caller can wait for the
     /// platform to request the next frame instead of spinning.
     pub fn render(&mut self, clear: Color, camera: &Camera) -> Result<bool, ViewerError> {
-        self.queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::bytes_of(&camera.uniform()),
+        let uniform = camera.uniform();
+        self.queue
+            .write_buffer(&self.camera_buffer, 0, bytemuck::bytes_of(&uniform));
+
+        // Pump before acquiring the frame: the install budget is frame-thread
+        // work, so it must happen before the frame is paced by presentation.
+        let stats = self
+            .streaming
+            .pump(streaming::center_for(uniform.position), PUMP_BUDGET);
+        log::debug!(
+            "stream: {}/{} loaded, {} pending, {} installed, pump {:.3} ms (max {:.3} ms)",
+            stats.loaded,
+            streaming::RING_CHUNKS,
+            stats.pending,
+            stats.installed,
+            stats.elapsed.as_secs_f64() * 1000.0,
+            stats.max_elapsed.as_secs_f64() * 1000.0,
         );
 
         let frame = match self.surface.get_current_texture() {
@@ -323,15 +304,12 @@ impl Gpu {
                 }),
                 ..Default::default()
             });
-            if let Some(chunk) = &self.chunk {
-                self.chunk_pipeline.draw(
-                    &mut pass,
-                    chunk,
-                    &self.camera_bind_group,
-                    &self.atlas.bind_group,
-                    &self.lighting.bind_group,
-                );
-            }
+            self.streaming.draw(
+                &mut pass,
+                &self.chunk_pipeline,
+                &self.camera_bind_group,
+                &self.atlas.bind_group,
+            );
         }
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
