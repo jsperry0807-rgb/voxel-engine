@@ -3,7 +3,7 @@
 **Status:** v1.6 — derived from spec v2.3 and roadmap v3.2
 **Date:** 2026-10-30
 **Owner:** engine
-**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 in progress: `M2-16` done; `M2-17` done (5.7% p95 at 128³, target ≤20%); `M2-18` done; `M2-19` done; `M2-20` done; `M2-21` done; `M2-22` done; `M2-23` done; `M2-24` done; `M2-25` next.
+**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 in progress: `M2-16` done; `M2-17` done (5.7% p95 at 128³, target ≤20%); `M2-18` done; `M2-19` done; `M2-20` done; `M2-21` done; `M2-22` done; `M2-23` done; `M2-24` done; `M2-25` done; `M2-26` next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -411,7 +411,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 **Goal:** deterministic mesh + AO + block light + probes, at the 128³ Minimum edge.
 **Exit:** M2-30. **Budget:** 27.0 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
-**Status:** In progress — M2-16 done; M2-17 done (5.7% p95 at 128³, target ≤20%); M2-18 done; M2-19 done; M2-20 done; M2-21 done; M2-22 done; M2-23 done; M2-24 done; M2-25 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
+**Status:** In progress — M2-16 done; M2-17 done (5.7% p95 at 128³, target ≤20%); M2-18 done; M2-19 done; M2-20 done; M2-21 done; M2-22 done; M2-23 done; M2-24 done; M2-25 done; M2-26 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
 **Art:** none beyond M1.5-14; M2 reuses the slice atlas.
 
 **M1 gate carry-over — blocks M2-30:**
@@ -615,6 +615,22 @@ heightmap, so light values keep the M1-29 static-sky model and only latency is
 used here. Schema v3 adds the scrub terms and keeps the M1-37 8 ms edit terms
 unchanged. See `cargo run -p voxel-bench -- gate edits`.
 
+**M2-25 measured (2026-10-31):** the SVDAG ray-test occluder lives in
+`voxel-mesh::raytest` behind the `raytest` cargo feature; `RayTestConfig` mirrors
+the `occlusion.raytest` key (ADR-006) and defaults off. One ray per block over the
+same 128 m block cube and bit layout as the M1-33 fill; a voxel-resolution DDA
+reads resident `Svdag`s (`SvdagScene`), the target block's own voxels are skipped
+so opaque boundary blocks stay visible, and a camera inside solid skips its own
+block. On a 9³ pillar fixture the fill marks 729 blocks visible and the ray-test
+566 — a delta of 163 (22.4%) around the obstacle — with 729 rays and 54,032 voxel
+steps; open sky and a closed room agree exactly, and a floor patch shows an 11.5%
+delta. The scene-comparison tests assert the ray set is a subset of the fill
+(line of sight implies connectivity). A material-aware `SvdagScene` keeps water
+transparent, and the suite also covers negative chunks, multiple chunks, a
+camera inside solid and a camera on a block boundary. The 100-pose accuracy/cost
+table and the decision recommendation are M2-26. See [`m2-raytest.md`](m2-raytest.md) and
+`cargo test -p voxel-mesh --features raytest`.
+
 ### 6.1 Apron and mesher
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -658,7 +674,7 @@ unchanged. See `cargo run -p voxel-bench -- gate edits`.
 | M2-22 | Dirty bitset: per-block dirty flags derived from the COW diff (added/removed/changed) | M1-10 | Editing one voxel dirties exactly the block plus the AO/light apron | `cargo test -p voxel-mesh dirty_bitset` | 0.5 d | [x] |
 | M2-23 | Budgeted remesh scheduler: dirty blocks → mesh batches under a per-frame budget | M2-22 | Backlog drains; no frame exceeds the budget in the test | `cargo test -p voxel-mesh scheduler` | 1 d | [x] |
 | M2-24 | Scrub latency: single-block edit → remesh + light + probe ≤ 4 ms p95 | M2-23 | Measured; recorded | `cargo run -p voxel-bench -- gate edits` | 0.5 d | [x] |
-| M2-25 | Ray-test occlusion behind `occlusion.raytest` flag, using the SVDAG; default off | M1-33 | Flag on/off produce comparable visible sets; documented delta | `cargo test -p voxel-mesh --features raytest` | 2 d | [ ] |
+| M2-25 | Ray-test occlusion behind `occlusion.raytest` flag, using the SVDAG; default off | M1-33 | Flag on/off produce comparable visible sets; documented delta | `cargo test -p voxel-mesh --features raytest` | 2 d | [x] |
 | M2-26 | Ray-test vs flood-fill comparison report: accuracy and cost on 100 poses | M2-25 | Table in `docs/` with the decision recommendation (still default flood-fill) | review | 0.5 d | [ ] |
 | M2-27 | Wire M2 into the viewer: replace the naive mesher; light + probes uploaded | M2-12, M2-21 | Visual parity with M1.5 except better merge ratio; 60 Hz; no new material keys, the M1.5-14 atlas is unchanged | run | 1 d | [ ] |
 | M2-28 | Throughput: ≥ 20 terrain chunks/s single-threaded | M2-27 | Measured over 100 chunks; recorded | `cargo bench -p voxel-mesh build` | 0.5 d | [ ] |

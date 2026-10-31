@@ -49,6 +49,8 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      # The optional ray-test occluder is feature-gated, so it needs its own pass.
+      - run: cargo clippy -p voxel-mesh --features raytest --all-targets -- -D warnings
 
   test:
     name: test
@@ -61,6 +63,7 @@ jobs:
       # GPU round-trips skip themselves when no adapter is available; the
       # layout and shader tests still run everywhere.
       - run: cargo test --workspace
+      - run: cargo test -p voxel-mesh --features raytest
 
   textures:
     name: texture pipeline

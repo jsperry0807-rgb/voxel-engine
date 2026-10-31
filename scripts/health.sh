@@ -607,6 +607,8 @@ run_in_repo_checks() {
   run_check "in-repo" "clippy" cargo clippy --workspace --all-targets -- -D warnings
   run_check "in-repo" "tests (workspace)" cargo test --workspace
   run_check "in-repo" "tests (chunk128)" cargo test --workspace --features chunk128
+  run_check "in-repo" "tests (raytest)" cargo test -p voxel-mesh --features raytest
+  run_check "in-repo" "clippy (raytest)" cargo clippy -p voxel-mesh --features raytest --all-targets -- -D warnings
   run_check "in-repo" "texgen check" cargo run -p voxel-texgen -- check
   run_check "in-repo" "shader tests" cargo test -p voxel-render --test shaders
   check_viewer_validation

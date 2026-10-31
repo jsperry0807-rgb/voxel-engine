@@ -33,6 +33,11 @@ pub use light::{
 mod mesh;
 pub use mesh::{Mesh, face_from_code, mesh_block, mesh_face};
 
+#[cfg(feature = "raytest")]
+pub mod raytest;
+#[cfg(feature = "raytest")]
+pub use raytest::{RayTestConfig, RayTestFill, SvdagScene, VoxelScene, ray_test, ray_test_scene};
+
 pub mod probe;
 pub use probe::{
     BakeStep, ProbeBake, ProbeGrid, ProbeLod, ProbeLodState, ProbeReach, ProbeSample, ProbeVolume,
