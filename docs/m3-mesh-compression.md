@@ -80,12 +80,17 @@ vertex buffer cannot be offset by `base_quad` in the shader; storage pull can.
   counting:** the draw sets `first_instance = base_quad`, and the vertex shader
   fetches `records[instance_index]`. WebGPU's `instance_index` already includes
   `first_instance`; adding the base again would count it twice.
-- The spike's direct draw sets `first_instance = base_quad`. For M3-05's
-  indirect path, the same field is set in the indirect command; that requires
-  `INDIRECT_FIRST_INSTANCE` to be honored (verify it on the target adapters).
-  If the feature is unavailable, issue one direct draw per meshlet with the
-  same `first_instance = base_quad`. There is no separate `base_quad +
-  instance_index` arithmetic anywhere.
+- The spike's direct draw sets `first_instance = base_quad`.
+  **`INDIRECT_FIRST_INSTANCE` is a hard requirement for M3-05's indirect
+  path**, not a soft check: without it, indirect draws must use
+  `first_instance == 0`, and the per-meshlet base cannot be expressed. Vulkan
+  (RTX 4060/Linux, Intel/AMD iGPU), DX12 (Windows) and Metal (macOS) expose the
+  feature in wgpu; WebGL2 does not. The spike records it on the discrete and
+  integrated adapters. If a target lacks it, the options are (a) one direct
+  draw per meshlet with `first_instance = base_quad` (gives up the indirect
+  path for that target) or (b) a per-draw base buffer with a target-specific
+  draw id; neither is the planned M3-05 path, so a missing feature is a
+  milestone blocker, not a silent fallback.
 - **Target limits:** the vertex stage must be allowed to read a storage buffer.
   Native WebGPU (Vulkan/Metal/DX12) supports it; WebGL2 does not. Assert
   `max_storage_buffers_per_shader_stage >= 1` with `ShaderStages::VERTEX`.
@@ -124,14 +129,14 @@ fail**.
 
 ### 2.4 Parity and performance gates
 
-Three separate gates; none substitutes for another.
+Four gates (A, B, C, D); B has a compute decode check (B1) and a real-draw check (B2). None substitutes for another.
 
 **Gate A — CPU encoder/decoder exactness.** Decode every record into its four
 corners (position, material, face, AO) and assert equality with the `Mesh`
 vertices from `mesh_block`, for every fixture block at both edges. Positions
 are integers, exactly representable in `f32`.
 
-**Gate B — shader fetch/reconstruction exactness.** Add a compute entry point to
+**Gate B1 — shader fetch/reconstruction exactness.** Add a compute entry point to
 the same WGSL module that uses the **same storage-pull `fetch_record` helper**
 as the vertex shader, writes the reconstructed `(position, face, material, AO)`
 for every vertex to a storage buffer, and read it back. Compare **positions,
@@ -141,11 +146,21 @@ repeated extents), all four AO levels, both material extremes, **a nonzero
 `first_instance` base, and several meshlets in one batch**. The compute entry
 point feeds thread ids and cannot observe the `instance_index`/`first_instance`
 behaviour, so it must receive the same global quad index
-(`base_quad + local`) that the draw will produce; that case is what catches a
-double-counted base. Compare in the **Mesh's expanded index order, six corners
-per quad** (`[0,1,2,0,2,3]`), not just the four stored vertices.
+(`base_quad + local`) that the draw will produce. This checks the decode, not
+the real `instance_index`; Gate B2 checks that. Compare in the **Mesh's
+expanded index order, six corners per quad** (`[0,1,2,0,2,3]`), not just the
+four stored vertices.
 
-Because Gate B and production share `fetch_record`, Gate B covers the production
+**Gate B2 — real-draw index test (catches the base double-count).** Gate B1's
+compute entry is handed the global index, so it cannot observe what
+`instance_index` does in a real draw. Add a render pass that issues nonzero
+`first_instance` draws over several meshlets; the vertex shader writes the
+fetched quad index as a flat varying and the fragment writes it to an
+`R32Uint` target, with a unique value per quad. Read back and assert every
+pixel equals the expected global index (`first_instance + local`). This is the
+test that fails if the base is added twice.
+
+Because Gate B1 and production share `fetch_record`, Gate B1 covers the production
 record decode. It does **not** cover a `Uint8x4` vertex-attribute decode,
 because the instanced path has none. If the 8 B vertex fallback is chosen, it
 needs its own exact attribute-decode test.
@@ -167,9 +182,10 @@ the run:
 - **Camera:** one deterministic fly-through/cave-walk path, recorded as a
   config file in the spike directory; the same path for both renderers.
 - **Frames:** 60-frame warm-up, then 300 measured frames per run; **5 runs**.
-- **Noise rule:** use the **median** of the 5 runs; if the run-to-run p95 spread
-  is >5%, add runs or reject the set. A 9% result that is within the noise rule
-  is not a regression; a 9% result with >5% spread is not yet a measurement.
+- **Noise rule:** use the **median** of the 5 runs. Define spread as
+  `(max − min) / median` across the five run medians; if the spread is >5%, add
+  runs or reject the set. An **11%** result within the noise rule is a
+  regression; an 11% result with >5% spread is not yet a measurement.
 - **Threshold:** no more than 10% full-frame regression vs the indexed path on
   either GPU, applied to the median. The reference discrete must meet 60 Hz
   (median full-frame ≤16.6 ms) at 1080p with vsync off.
@@ -189,9 +205,10 @@ deadline/default is in §7.
 
 **Gate D — image smoke test.** Render the same scene through the current 16 B
 indexed path and the instanced path; allow a documented **≤1 LSB** tolerance.
-This is where the f32 AO/colour conversion tolerance lives (not Gate B).
-Division and unorm8 fetch are not bit-identical across GPUs/compilers, and FMA
-contraction can differ.
+This is where the f32 AO/colour conversion tolerance lives (not Gate B1).
+Run it on the **same discrete and integrated GPUs as Gate C**, not llvmpipe
+alone: the tolerance exists for GPU/compiler differences (FMA, unorm8), and the
+CPU rasterizer does not exercise them. llvmpipe is functional coverage only.
 
 ### 2.5 Cost and risk
 
@@ -206,7 +223,7 @@ contraction can differ.
 
 ## 3. Fallback: 8 B packed vertex (44 B/quad)
 
-Use this only if the instanced spike fails Gates A/B/D or Gate C after the one
+Use this only if the instanced spike fails Gates A/B1/B2/D or Gate C after the one
 retry in §7. It is **not** a schedule shortcut: it costs more time than the
 instanced path (4.25–5 d vs 3–4 d) and it **abandons 64³ Minimum**.
 
@@ -229,8 +246,8 @@ instanced path (4.25–5 d vs 3–4 d) and it **abandons 64³ Minimum**.
   save.
 - Keep the logical `Vertex` at 16 B for goldens/determinism; add a `GpuVertex`
   (8 B) for upload. The M1.5 naive path keeps its own 16 B layout.
-- If chosen, Gate B must add an exact `Uint8x4`/`Uint16x2` attribute-decode test;
-  the storage-pull Gate B does not cover it.
+- If chosen, Gate B1 must add an exact `Uint8x4`/`Uint16x2` attribute-decode test;
+  the storage-pull Gate B1 does not cover it.
 
 ---
 
@@ -285,20 +302,20 @@ Phase 0 must not depend on a codec that does not exist yet.
 4. Update the repeated numbers in the task list, M1 decision, roadmap and
    performance targets.
 
-### Phase 1 — instanced-quad spike (1 d functional + hardware time)
+### Phase 1 — instanced-quad spike (1.5–2 d functional + hardware time)
 
 - Record encoder + CPU decoder (Gate A).
 - Storage-pull `fetch_record` helper, used by both the vertex and compute entry
-  points; Gate B readback.
-- Gate D (≤1 LSB) on the local adapter (llvmpipe is fine for functional
-  coverage).
+  points; Gate B1 readback.
+- Gate D (≤1 LSB) on the **discrete and integrated GPUs** (same session as
+  Gate C); llvmpipe is only a functional pre-check, not the tolerance gate.
 - Gate C on discrete + integrated GPUs with timestamp queries and vsync off;
   full-frame primary, vertex-bound informational.
 - **Deadline:** if the iGPU is not available within **5 working days**, proceed
   on the discrete-only result with Gate C recorded **open**, unless the
   discrete result itself fails; then take the fallback. The open flag is
   carried to M3-13 for a follow-up.
-- If Gates A/B/D and the full-frame result pass, the spike becomes the
+- If Gates A/B1/B2/D and the full-frame result pass, the spike becomes the
   implementation base. A fixable failure gets one retry; otherwise fallback.
 
 ### Phase 2 — instanced quads (3–4 d)
@@ -309,11 +326,15 @@ Phase 0 must not depend on a codec that does not exist yet.
 - Viewer wiring: `ChunkMeshData` holds records; `chunk_mesh`/`chunk_render` use
   the storage-pull draw; no index buffer.
 - Naive/screenshot path stays on its own 16 B layout.
-- Gate A/B/D tests committed and CI-gated; Gate C recorded.
+- Gate A/B1/B2 tests committed and CI-gated; Gate C/D recorded from the
+  real-GPU session (CI has no real GPU).
 - Gate re-run at both edges; row 6 and row 1 pass; archive.
-- **M3-02 arena requirement:** the arena must be **format-agnostic** — allocate
-  byte ranges and take the stride/record size from a descriptor, so a later
-  switch between instanced records and a vertex format does not rework it.
+- **M3-02 arena requirement:** the arena must be **format-agnostic** (allocate
+  byte ranges; take the stride/record size from a descriptor), and it must page
+  the record arena into ≤128 MiB bindings with **no draw or indirect batch
+  crossing a page**; `first_instance` is page-relative, and a 309 MiB single
+  buffer also exceeds the default `max_buffer_size` (256 MiB). This adds
+  **1.0–1.5 d** to M3-02 (1.5 d → 2.5–3.0 d); see the schedule.
 
 ### Fallback path
 
@@ -328,15 +349,15 @@ functional spike.
 
 | Path | Effort | Calendar if the iGPU arrives early | Calendar if it takes the full 5 d |
 |---|---:|---:|---:|
-| Best (instanced passes) | 5–6 d | 5–6 d | up to **8–9 d** (2 d overlap, 3 d remaining wait) |
-| Typical (spike fails, fallback passes) | 6.25–7 d | 6.25–7 d | up to **9.25–10 d** |
-| Worst (fallback misses 90%, third exit) | 7.25–10 d | 7.25–10 d | up to **10.25–13 d** |
+| Best (instanced passes) | 5.5–7 d | 5.5–7 d | up to **7.5–9.5 d** (Phase 0 + spike overlap 2.5–3 d, then 2–2.5 d remaining) |
+| Typical (spike fails, fallback passes) | 6.75–8 d | 6.75–8 d | up to **8.75–10.5 d** |
+| Worst (fallback misses 90%, third exit) | 7.75–11 d | 7.75–11 d | up to **9.75–13.5 d** |
 
-M3 needs **+0.5 d for M3-02** (format descriptor and ≤128 MiB storage-binding
-paging), so the published 9 d becomes **14.5–15.5 d best and 16.5–19.5 d
-worst**, before any late-iGPU calendar slip. Quote effort and calendar
-separately; the wait is calendar, not effort, but it is still a schedule
-commitment.
+M3 needs **+1.0–1.5 d for M3-02** (format descriptor, ≤128 MiB binding pages,
+`max_buffer_size`, and no draw crossing a page), so the published 9 d becomes
+**15.5–17.5 d best and 17.75–21.5 d worst**, before any late-iGPU calendar
+slip. Quote effort and calendar separately; the wait is calendar, not effort,
+but it is still a schedule commitment.
 
 ---
 
@@ -356,7 +377,7 @@ fail. **Choosing the fallback abandons 64³ Minimum.**
 
 **Decision tree (one retry maximum):**
 
-1. Spike attempt 1 passes Gates A/B/D and the full-frame Gate C → **instanced**.
+1. Spike attempt 1 passes Gates A/B1/B2/D and the full-frame Gate C → **instanced**.
 2. Attempt 1 fails a fixable class → fix once, **retry attempt 2**. Pass →
    instanced; fail → 3.
 3. **8 B fallback.** If it measures ≤90% of cap → accept as a stopgap and record
@@ -391,9 +412,9 @@ synthetic fixture.
 ## 8. Acceptance
 
 - `cargo test -p voxel-mesh` (logical codec, mesh shape, AO, determinism,
-  goldens at both edges) and `cargo test -p voxel-viewer` (Gates A/B/D).
+  goldens at both edges) and `cargo test -p voxel-viewer` (Gates A/B1/B2/D).
 - Gate A: decoded corners equal `Mesh` exactly.
-- Gate B: shader fetch/reconstruction exact for position, face, material and AO
+- Gate B1: shader fetch/reconstruction exact for position, face, material and AO
   levels; coverage includes all faces, extents and AO levels.
 - Gate C: discrete + integrated GPUs, GPU timestamp queries, vsync off;
   full-frame ≤10% regression; vertex-bound reported informationally; reference
@@ -402,12 +423,12 @@ synthetic fixture.
 - Gate D: RGBA difference ≤1 LSB.
 - Gate 128³ Minimum: row 6 PASS with p95 ≤ 2,400 KiB and ≤90% of cap; row 1 ≤
   3.20 GiB.
-- Gate 64³: row 6 ≤ **540 KiB** (90% rule), **and** row 1 ≤ 4.80 GiB. The
-  3.20 GiB target is **not required at 64³ before M6-09a**; the hard fail is
-  the binding condition. Instanced is 3.18 GiB before the pool removal (0.02
-  GiB under target, within noise) and 2.17 GiB after; the target becomes
-  required after M6-09a. The 8 B fallback fails the hard fail (5.86 GiB); only
-  instanced keeps 64³ viable.
+- Gate 64³: row 6 ≤ **540 KiB** (90% rule), row 1 ≤ **3.20 GiB** and ≤ 4.80
+  GiB hard fail. The 3.20 GiB target remains **required**: instanced is 3.18
+  GiB p95-projected, 0.02 GiB (0.6%) under the target before the M6-09a pool
+  removal, and 2.17 GiB after. The 0.6% margin is thin and a real save may
+  consume it; this is not a pre-registration relaxation. The 8 B fallback
+  fails both the hard fail (5.86 GiB) and the target.
 - ADR-014 merged, pre-registration appendix added, M2 erratum recorded, CI
   goldens/parity job green.
 
@@ -425,8 +446,7 @@ synthetic fixture.
 3. **64³ product decision:** if the fallback is ever chosen, accept that 64³
    Minimum is abandoned (5.86 GiB > 4.80 hard fail). If 64³ must stay viable,
    the instanced path is required.
-4. **Schedule:** re-baseline M3 to best 14–15 d / worst 16–19 d, or move
-   M3-08/M3-12.
+4. **Schedule:** re-baseline M3 to best **15.5–17.5 d** / worst **17.75–21.5 d** (includes the +1.0–1.5 d M3-02 work), or move M3-08/M3-12.
 5. **Placement:** new `M3-00a`/`M3-00b` before `M3-01`.
 
 ---
@@ -442,8 +462,15 @@ synthetic fixture.
 - **rev 4:** real-GPU Gate C with vertex-bound/pixel split; best/typical/worst
   schedule; 14-bit material allocation; shader output readback; 64³ fallback
   called out as 4 KiB inside the rule; arithmetic table.
-- **rev 5 (current):** storage-pull design (no per-instance vertex buffer);
+- **rev 5:** storage-pull design (no per-instance vertex buffer);
   full-frame Gate C with timestamp queries and vsync off, vertex-bound
   informational; 5-day Gate C open deadline; Phase 0 uses the current 76 B
   format; fallback explicitly abandons 64³ and is not a schedule option; M3-02
   arena made format-agnostic.
+- **rev 6:** one `first_instance` rule; effort/calendar split, risk owner, and
+  the first storage-binding note.
+- **rev 7 (current):** real-draw index Gate B2; `INDIRECT_FIRST_INSTANCE` as a
+  hard requirement with the adapter list; page-boundary draws, 128 MiB binding
+  and 256 MiB buffer limits; Gate D on real GPUs; 64³ target kept at 3.20 GiB
+  (0.6% p95 margin); 1.5–2 d spike; consistent worst-case arithmetic; 11%
+  noise example and spread definition.
