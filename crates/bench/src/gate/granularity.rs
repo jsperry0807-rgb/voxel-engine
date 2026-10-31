@@ -36,9 +36,11 @@ use voxel_storage::ChunkPos;
 use voxel_storage::dag::Svdag;
 use voxel_storage::reference::cull::{Camera, ChunkView, Frustum, Vec3};
 use voxel_storage::reference::granularity::{GRANULARITY_GATE_LIMIT, measure};
-use voxel_storage::reference::occlusion::flood_fill;
+use voxel_storage::reference::occlusion::{DEFAULT_HORIZON_BLOCKS, flood_fill};
 use voxel_storage::scan::scan_save;
-use voxel_storage::{AIR, CHUNK_BITS, CHUNK_VOLUME, local_index};
+use voxel_storage::{CHUNK_BITS, CHUNK_VOLUME, local_index};
+
+use voxel_block::BlockKind;
 
 use crate::fixture::{self, Manifest};
 
@@ -103,13 +105,14 @@ impl GranularityReport {
     /// Renders the report as Markdown.
     pub fn markdown(&self) -> String {
         let mut out = String::new();
-        writeln!(out, "# M1 gate granularity (M1-34, row 9)\n").unwrap();
+        writeln!(out, "# Save-level granularity (M1-34 reference, row 9)\n").unwrap();
         writeln!(
             out,
             "**Fixture:** `{}` ({})\n",
             self.fixture.id, self.fixture.status
         )
         .unwrap();
+        writeln!(out, "> {}\n", self.fixture.limitation).unwrap();
         writeln!(
             out,
             "**Poses:** {}; **limit:** {:.0}% traversed-but-invisible\n",
@@ -128,7 +131,7 @@ impl GranularityReport {
         .unwrap();
         writeln!(
             out,
-            "| Pose | Traversed | Visible | Missed | Ratio |\n|---:|---:|---:|---:|---:|\n"
+            "| Pose | Traversed | Visible | Missed | Ratio |\n|---:|---:|---:|---:|---:|"
         )
         .unwrap();
         for pose in &self.per_pose {
@@ -193,6 +196,10 @@ fn measure_save(
         for (index, material) in chunk.overlay.iter() {
             dense[index as usize] = material;
         }
+        // The traversal must see the same world as the opacity fill. Rebuilding
+        // the DAG folds any pending overlay into the view instead of measuring
+        // a pre-edit world.
+        let dag = Svdag::from_dense(&dense);
         let blocks_per_edge = CHUNK_DIM / BLOCK_DIM;
         let mut opaque = vec![false; blocks_per_edge * blocks_per_edge * blocks_per_edge];
         for bz in 0..blocks_per_edge {
@@ -207,7 +214,7 @@ fn measure_save(
                                     (by * BLOCK_DIM + y) as u32,
                                     (bz * BLOCK_DIM + z) as u32,
                                 );
-                                if dense[index as usize] == AIR {
+                                if !material_opaque(dense[index as usize]) {
                                     solid = false;
                                     break 'block;
                                 }
@@ -222,7 +229,7 @@ fn measure_save(
         chunks.insert(
             chunk.pos,
             Loaded {
-                dag: chunk.dag,
+                dag,
                 blocks_per_edge,
                 opaque,
             },
@@ -277,7 +284,12 @@ fn measure_save(
     let half = ((max[0] - min[0]).max(max[2] - min[2])) as f64 * 0.5;
     let radius = (half * 2.0_f64.sqrt() + 2.0).max(4.0);
     let eye_height = max[1] as f64 + 2.0;
-    let horizon = (radius + half.max(max[1] as f64 - min[1] as f64)).ceil() as u32 + 4;
+    let horizon = ((radius + half.max(max[1] as f64 - min[1] as f64)).ceil() as u32 + 4)
+        .min(DEFAULT_HORIZON_BLOCKS);
+    // The fixture is the whole world here; the far plane only has to cover it.
+    // The production 8 km maximum view is measured by the M5 culler, not this
+    // reference harness.
+    let far = (radius + half + 16.0).max(64.0);
 
     let mut per_pose = Vec::with_capacity(POSES);
     for pose in 0..POSES {
@@ -294,11 +306,16 @@ fn measure_save(
             fov_y: PI / 3.0,
             aspect: 16.0 / 9.0,
             near: 0.1,
-            far: 64.0,
+            far,
         };
         let frustum = Frustum::from_camera(&camera);
         let fill = flood_fill(eye, horizon, |bx, by, bz| is_opaque(&chunks, bx, by, bz));
         let measured = measure(&frustum, &views, &fill, BLOCK_LEVEL);
+        if measured.traversed_blocks() == 0 {
+            return Err(format!(
+                "granularity pose {pose} traversed no blocks; the camera or fixture bounds are wrong"
+            ));
+        }
         let ratio = measured.ratio();
         per_pose.push(PoseSample {
             pose,
@@ -330,6 +347,15 @@ fn measure_save(
         missed_blocks,
         per_pose,
     })
+}
+
+/// True when a fixture material id is fully opaque under the built-in block
+/// properties. Liquids, leaves, cutout plants and other passable blocks are not
+/// opaque even though they are non-air, matching the M1-33 contract.
+fn material_opaque(material: u16) -> bool {
+    BlockKind::ALL
+        .get(material as usize)
+        .is_some_and(|kind| kind.default_properties().is_opaque())
 }
 
 /// Nearest-rank p50/p95/max over finite ratios, sorted in place.

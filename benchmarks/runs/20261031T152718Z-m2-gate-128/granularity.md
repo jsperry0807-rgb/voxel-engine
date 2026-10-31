@@ -1,7 +1,9 @@
 wrote target/m2-gate/128/granularity.json
-# M1 gate granularity (M1-34, row 9)
+# Save-level granularity (M1-34 reference, row 9)
 
 **Fixture:** `m2-128` (provisional)
+
+> Provisional until the first real save. This world is synthetic: it exercises the shape of a save (terrain, caves, overhangs, structures and mixed materials) but was not produced by gameplay, by docs/worldgen-design.md, or by the save path on the reference machine. Its byte sizes, material histograms and distributions are illustrative only and must not be quoted as gate results (M1-35, M1-37) until a real save is captured and this fixture is re-frozen.
 
 **Poses:** 100; **limit:** 15% traversed-but-invisible
 
@@ -14,7 +16,6 @@ wrote target/m2-gate/128/granularity.json
 
 | Pose | Traversed | Visible | Missed | Ratio |
 |---:|---:|---:|---:|---:|
-
 | 0 | 2243 | 2243 | 0 | 0.00% |
 | 1 | 2244 | 2244 | 0 | 0.00% |
 | 2 | 2247 | 2247 | 0 | 0.00% |

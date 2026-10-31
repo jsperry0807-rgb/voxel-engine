@@ -247,11 +247,11 @@ Runs at the **128³ Minimum** edge (ADR-002). Default is not greenlit.
 - ≥ 20 terrain chunks/s single-threaded; scrub ≤ 4 ms; scratch ≤ 64 KiB/worker.
 - Ray-test flag produces a documented delta (accuracy and cost) versus flood-fill,
   without changing default behaviour.
-- **128³ Minimum gate run** recorded: memory 3.29 GiB (PASS), edit 5.290 µs
-  (PASS), probe 739.384 µs (PASS), throughput 34.3 chunks/s. The mesh row is
+- **128³ Minimum gate run** recorded: memory 3.29 GiB (PASS), edit 8.136 µs
+  (PASS), probe 765.844 µs (PASS), throughput 34.3 chunks/s. The mesh row is
   2,519 KiB against the 2,400 KiB cap, so the run records an open rule-3 lever
   rather than a confirmed edge. See [`m2-exit.md`](m2-exit.md).
-- Gate row 9 closed by the M1-34 reference over 100 poses (0.00% p95 reference
+- Gate row 9 measured by the M1-34 reference over 100 poses (0.00% p95 reference
   granularity); row 11 **carried** because no real populated save exists before
   M2.5/worldgen or gameplay.
 

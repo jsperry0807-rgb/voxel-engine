@@ -1,6 +1,6 @@
 //! The M1 gate report generator (M1-39).
 //!
-//! `gate report` assembles the four M1 harnesses into one decision table:
+//! `gate report` assembles the five M1/M2 harnesses into one decision table:
 //!
 //! | Harness | Row(s) |
 //! | --- | --- |
@@ -481,7 +481,7 @@ impl GateReport {
     /// Assembles the report from already-measured harnesses.
     ///
     /// This is the same path [`Self::generate`] uses, so a caller that already
-    /// has the four reports gets the identical gate table without running the
+    /// has the five reports gets the identical gate table without running the
     /// measurements again.
     pub fn from_reports(
         memory: &MemoryReport,
@@ -532,7 +532,7 @@ impl GateReport {
              production occlusion culler must beat."
                 .to_owned(),
             "The fallback is computed from the measured rows with the pre-registration §4 order. It \
-             is a preview for M1-42, not a renegotiation of any threshold."
+             is a preview, not a renegotiation of any threshold."
                 .to_owned(),
         ];
 
@@ -808,11 +808,16 @@ fn node_budget_row(memory: &MemoryReport) -> Result<GateRow, String> {
         .map(|chunk| chunk.dag_node_bytes / NODE_BYTES)
         .max()
         .ok_or_else(|| "the fixture has no chunk for the node budget".to_owned())?;
-    let p95_nodes = memory
-        .components
-        .dag
+    // `components.dag` includes leaf materials, so its p95 is not a node
+    // count. Percentile the per-chunk node counts directly.
+    let mut node_counts: Vec<u64> = memory
+        .chunks
+        .iter()
+        .map(|chunk| chunk.dag_node_bytes / NODE_BYTES)
+        .collect();
+    let p95_nodes = crate::save_scan::Distribution::from_values(&mut node_counts)
         .p95
-        .map_or(0, |bytes| bytes / NODE_BYTES);
+        .unwrap_or(0);
     let built_at_target = CHUNK_BITS == TARGET_CHUNK_BITS;
     let limit = if built_at_target {
         NODE_BUDGET_128
@@ -1079,8 +1084,9 @@ fn granularity_row(granularity: &GranularityReport) -> GateRow {
         verdict,
         "gate granularity (M1-34 reference)",
         "Reference frustum traversal at block resolution against the M1-33 occlusion oracle, \
-         on the frozen save. The reference is frustum-only and deliberately over-includes solid \
-         interior blocks, so this is the baseline the M5 production culler must beat; a missed \
+         on the frozen save. The reference fill is conservative: a partly filled block is \
+         passable, so on this terrain save almost everything is reachable and a 0.00% result is \
+         non-discriminating. It is the baseline the M5 production culler must beat; a missed \
          reference-visible block would be a correctness failure, not granularity.",
         Some(GateNumber {
             measured: ratio * 100.0,
@@ -1130,7 +1136,7 @@ fn dataset_row(memory: &MemoryReport) -> GateRow {
     };
     let measured = if provisional {
         format!(
-            "{} ({}; synthetic, provisional)",
+            "{} ({}; synthetic)",
             memory.fixture.id, memory.fixture.status
         )
     } else {
@@ -1206,10 +1212,11 @@ fn fallback(rows: &[GateRow]) -> Fallback {
         return Fallback {
             triggered: true,
             rule: Some(1),
-            action:
-                "Rule 1: edit latency, probe update or granularity failed at 64³. 128³ is dead; \
-                     stay at 64³ and record the measured numbers. Do not renegotiate the row."
-                    .to_owned(),
+            action: "Rule 1: edit latency, probe update or granularity failed at 64³ (or the \
+                     granularity traversal missed a reference-visible block, a correctness \
+                     failure). 128³ is dead; stay at 64³ and record the measured numbers. Do not \
+                     renegotiate the row."
+                .to_owned(),
         };
     }
     if failed(RowId::VramBudget)
@@ -1218,6 +1225,16 @@ fn fallback(rows: &[GateRow]) -> Fallback {
         || failed(RowId::ProbeGrid)
         || failed(RowId::MeshBuffer)
     {
+        if CHUNK_BITS == TARGET_CHUNK_BITS {
+            return Fallback {
+                triggered: true,
+                rule: Some(3),
+                action: "Rule 3: a voxel-memory row failed at 128³. Apply the pre-registered \
+                         sacrifice order: mesh compression, then near radius, then vertical shell. \
+                         Never shrink the far clip below 8 km."
+                    .to_owned(),
+            };
+        }
         return Fallback {
             triggered: true,
             rule: Some(2),
@@ -1232,10 +1249,10 @@ fn fallback(rows: &[GateRow]) -> Fallback {
     Fallback {
         triggered: false,
         rule: None,
-        action: "No measured row triggers a §4 fallback. The 128³ projection (M1-40), the \
-                 granularity row and the real-save dataset remain outstanding before the M1-42 \
-                 decision. If the projection fails at 128³, rule 3 applies: mesh compression, then \
-                 near radius, then vertical shell; never shrink the far clip below 8 km."
+        action: "No measured row triggers a §4 fallback. The real-save dataset remains \
+                 outstanding before the gate can be green. If a later memory row fails at 128³, \
+                 rule 3 applies: mesh compression, then near radius, then vertical shell; never \
+                 shrink the far clip below 8 km."
             .to_owned(),
     }
 }

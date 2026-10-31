@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_unix": 1793458837,
+  "generated_unix": 1793460430,
   "machine": {
     "reference": {
       "name": "RTX 4060 reference",
@@ -70,7 +70,7 @@
       "id": "node_budget",
       "parameter": "SVDAG node budget/chunk",
       "pre_registered": "64³ ≤ 200,000; 128³ ≤ 1,500,000 unique nodes",
-      "measured": "max 138,636 nodes/chunk (p95 140,786); 128³ build (128 voxels/edge)",
+      "measured": "max 138,636 nodes/chunk (p95 138,636); 128³ build (128 voxels/edge)",
       "limit": "≤ 1,500,000 nodes/chunk at 128³",
       "margin": "+1,361,364 nodes",
       "verdict": "pass",
@@ -126,16 +126,16 @@
       "id": "edit_latency",
       "parameter": "Edit latency",
       "pre_registered": "p95 ≤ 8 ms (consolidate + upload + fence + flip + dirty light)",
-      "measured": "p95 5.290 µs (p50 3.186 µs, max 3.02 ms); 1,000 edits",
+      "measured": "p95 8.136 µs (p50 4.889 µs, max 2.90 ms); 1,000 edits",
       "limit": "p95 ≤ 8.00 ms",
       "margin": "7.99 ms",
       "verdict": "pass",
       "source": "gate edits (M1-37)",
       "note": "Fixed = upload + fence + flip; dirty = COW + light. The fence and upload are the CPU side of the M4 protocol; the headless gate has no GPU device time, so this is a lower bound on a real device path, not a claim about GPU completion.",
       "numbers": {
-        "measured": 0.00529,
+        "measured": 0.008136,
         "limit": 8.0,
-        "margin": 7.99471,
+        "margin": 7.991864,
         "unit": "ms"
       }
     },
@@ -143,16 +143,16 @@
       "id": "probe_update",
       "parameter": "Probe-update budget",
       "pre_registered": "p95 ≤ 4 ms per edited chunk",
-      "measured": "p95 739.384 µs (p50 601.231 µs, max 3.37 ms); 1,000 edited chunks",
+      "measured": "p95 765.844 µs (p50 618.955 µs, max 3.93 ms); 1,000 edited chunks",
       "limit": "p95 ≤ 4.00 ms per edited chunk",
-      "margin": "3.26 ms",
+      "margin": "3.23 ms",
       "verdict": "pass",
       "source": "gate probes (M1-38)",
       "note": "Update = select + rebake + upload. Only probes whose rays reach the dirty voxel are rebaked; the upload is the CPU staging copy and excludes the device transfer and the M4 fence/flip.",
       "numbers": {
-        "measured": 0.739384,
+        "measured": 0.765844,
         "limit": 4.0,
-        "margin": 3.260616,
+        "margin": 3.234156,
         "unit": "ms"
       }
     },
@@ -165,7 +165,7 @@
       "margin": "+15.00 pp",
       "verdict": "pass",
       "source": "gate granularity (M1-34 reference)",
-      "note": "Reference frustum traversal at block resolution against the M1-33 occlusion oracle, on the frozen save. The reference is frustum-only and deliberately over-includes solid interior blocks, so this is the baseline the M5 production culler must beat; a missed reference-visible block would be a correctness failure, not granularity.",
+      "note": "Reference frustum traversal at block resolution against the M1-33 occlusion oracle, on the frozen save. The reference fill is conservative: a partly filled block is passable, so on this terrain save almost everything is reachable and a 0.00% result is non-discriminating. It is the baseline the M5 production culler must beat; a missed reference-visible block would be a correctness failure, not granularity.",
       "numbers": {
         "measured": 0.0,
         "limit": 15.0,
@@ -194,7 +194,7 @@
       "id": "measurement_dataset",
       "parameter": "Measurement dataset",
       "pre_registered": "Real populated save; median, p95, max per chunk",
-      "measured": "m2-128 (provisional; synthetic, provisional)",
+      "measured": "m2-128 (provisional; synthetic)",
       "limit": "real populated save",
       "margin": "n/a",
       "verdict": "not_measured",
@@ -205,12 +205,12 @@
       "id": "fallback_trigger",
       "parameter": "Fallback trigger",
       "pre_registered": "See §4; pre-registered; no renegotiation inside M1",
-      "measured": "rule 2 triggered by the measured rows",
+      "measured": "rule 3 triggered by the measured rows",
       "limit": "pre-registration §4 fallback order",
       "margin": "n/a",
       "verdict": "not_measured",
       "source": "pre-registration §4",
-      "note": "Rule 2: a voxel-memory row failed at 64³. Do not automatically stay at 64³. Run the M1-40 analytic 128³ projection; if 128³ clears, the failure is an argument for the upgrade, not against it."
+      "note": "Rule 3: a voxel-memory row failed at 128³. Apply the pre-registered sacrifice order: mesh compression, then near radius, then vertical shell. Never shrink the far clip below 8 km."
     }
   ],
   "summary": {
@@ -222,8 +222,8 @@
   },
   "fallback": {
     "triggered": true,
-    "rule": 2,
-    "action": "Rule 2: a voxel-memory row failed at 64³. Do not automatically stay at 64³. Run the M1-40 analytic 128³ projection; if 128³ clears, the failure is an argument for the upgrade, not against it."
+    "rule": 3,
+    "action": "Rule 3: a voxel-memory row failed at 128³. Apply the pre-registered sacrifice order: mesh compression, then near radius, then vertical shell. Never shrink the far clip below 8 km."
   },
   "notes": [
     "The twelve rows are the frozen table in docs/pre-registration.md §3. Every verdict is computed from a measured value, a checked invariant, or is not_measured; no row is typed PASS. A row the M1-35…M1-38 harnesses do not measure is NOT MEASURED, not green.",
@@ -231,6 +231,6 @@
     "The headless gate does not open a wgpu adapter. GPU identity is quoted from docs/reference-machine.md and is not re-probed; the host CPU, OS and architecture are read from the running process.",
     "The fixture is provisional until the first real save. Its distributions are a rehearsal for the gate and must not be quoted as the M1 result; the dataset row stays not measured until a real save replaces it.",
     "Culling granularity is measured by the M1-34 reference over 100 poses on the frozen save. The reference traversal is frustum-only, so its ratio is the baseline the M5 production occlusion culler must beat.",
-    "The fallback is computed from the measured rows with the pre-registration §4 order. It is a preview for M1-42, not a renegotiation of any threshold."
+    "The fallback is computed from the measured rows with the pre-registration §4 order. It is a preview, not a renegotiation of any threshold."
   ]
 }

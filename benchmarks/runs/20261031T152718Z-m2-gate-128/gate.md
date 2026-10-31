@@ -10,22 +10,22 @@
 
 **Fixture:** `m2-128` (provisional) — provisional: yes
 
-**Generated:** unix 1793458837
+**Generated:** unix 1793460430
 
 | # | Pre-registered row | Requirement | Measured | Margin | Result |
 |---|---|---|---|---|---|
 | 1 | VRAM budget for voxel data | ≤ 4.80 GiB hard fail (3.20 GiB target) | 3.29 GiB (p95 4.19 MiB × 805 chunks) | +1.50 GiB to hard fail | **PASS** |
 | 2 | Target loaded chunk count | N64 = 6,440 = 8 × N128; table predicted N64 = 6,432, N128 = 804 | N64 = 6,440 at 64³; N128 = 805 at 128³ equal volume | 0 chunks (equal-volume identity) | **PASS** |
-| 3 | SVDAG node budget/chunk | ≤ 1,500,000 nodes/chunk at 128³ | max 138,636 nodes/chunk (p95 140,786); 128³ build (128 voxels/edge) | +1,361,364 nodes | **PASS** |
+| 3 | SVDAG node budget/chunk | ≤ 1,500,000 nodes/chunk at 128³ | max 138,636 nodes/chunk (p95 138,636); 128³ build (128 voxels/edge) | +1,361,364 nodes | **PASS** |
 | 4 | Light volume/chunk | = 8,192 B/chunk at 128³ (512 cells) | 8,192 B/chunk (512 cells × 16 B); p50 8,192 B | 0 B | **PASS** |
 | 5 | Probe grid/chunk | = 512 probes = 6,144 B/chunk at 128³ | 512 probes/chunk, 6,144 B; 32,768 rays/full rebake | 0 B | **PASS** |
 | 6 | Mesh buffer/chunk | ≤ 2400 KiB/chunk at 128³ | p95 2519 KiB (max 2519 KiB); greedy estimate × 76 B | -119.4 KiB | **FAIL** |
-| 7 | Edit latency | p95 ≤ 8.00 ms | p95 5.290 µs (p50 3.186 µs, max 3.02 ms); 1,000 edits | 7.99 ms | **PASS** |
-| 8 | Probe-update budget | p95 ≤ 4.00 ms per edited chunk | p95 739.384 µs (p50 601.231 µs, max 3.37 ms); 1,000 edited chunks | 3.26 ms | **PASS** |
+| 7 | Edit latency | p95 ≤ 8.00 ms | p95 8.136 µs (p50 4.889 µs, max 2.90 ms); 1,000 edits | 7.99 ms | **PASS** |
+| 8 | Probe-update budget | p95 ≤ 4.00 ms per edited chunk | p95 765.844 µs (p50 618.955 µs, max 3.93 ms); 1,000 edited chunks | 3.23 ms | **PASS** |
 | 9 | Culling granularity | ≤ 15% traversed-but-invisible | p95 0.00% (p50 0.00%, max 0.00%) over 100 poses | +15.00 pp | **PASS** |
 | 10 | Safety factor | hard fail = 4,913 MiB | 4,913 MiB = ceil(1.5 × 3,275 MiB) | 0 MiB | **PASS** |
-| 11 | Measurement dataset | real populated save | m2-128 (provisional; synthetic, provisional) | n/a | **NOT MEASURED** |
-| 12 | Fallback trigger | pre-registration §4 fallback order | rule 2 triggered by the measured rows | n/a | **NOT MEASURED** |
+| 11 | Measurement dataset | real populated save | m2-128 (provisional; synthetic) | n/a | **NOT MEASURED** |
+| 12 | Fallback trigger | pre-registration §4 fallback order | rule 3 triggered by the measured rows | n/a | **NOT MEASURED** |
 
 ## Row detail
 
@@ -37,14 +37,14 @@
 6. **Mesh buffer/chunk** — pre-registered: 64³: 150–600 KB; 128³: 600 KB–2.4 MB. Source: gate memory (M1-35); M1-31 reference mesher. The estimate is greedy quads × 76 B and excludes vertex/index buffer overhead. The predicted lower bound is 150 KiB; a lower estimate is not a failure, but it is not a measured GPU buffer either. The gate uses p95 and reports max separately.
 7. **Edit latency** — pre-registered: p95 ≤ 8 ms (consolidate + upload + fence + flip + dirty light). Source: gate edits (M1-37). Fixed = upload + fence + flip; dirty = COW + light. The fence and upload are the CPU side of the M4 protocol; the headless gate has no GPU device time, so this is a lower bound on a real device path, not a claim about GPU completion.
 8. **Probe-update budget** — pre-registered: p95 ≤ 4 ms per edited chunk. Source: gate probes (M1-38). Update = select + rebake + upload. Only probes whose rays reach the dirty voxel are rebaked; the upload is the CPU staging copy and excludes the device transfer and the M4 fence/flip.
-9. **Culling granularity** — pre-registered: ≤ 15% traversed-but-invisible at chunk boundaries @ max view. Source: gate granularity (M1-34 reference). Reference frustum traversal at block resolution against the M1-33 occlusion oracle, on the frozen save. The reference is frustum-only and deliberately over-includes solid interior blocks, so this is the baseline the M5 production culler must beat; a missed reference-visible block would be a correctness failure, not granularity.
+9. **Culling granularity** — pre-registered: ≤ 15% traversed-but-invisible at chunk boundaries @ max view. Source: gate granularity (M1-34 reference). Reference frustum traversal at block resolution against the M1-33 occlusion oracle, on the frozen save. The reference fill is conservative: a partly filled block is passable, so on this terrain save almost everything is reachable and a 0.00% result is non-discriminating. It is the baseline the M5 production culler must beat; a missed reference-visible block would be a correctness failure, not granularity.
 10. **Safety factor** — pre-registered: 1.5× on the memory budget. Source: pre-registration §3; performance-targets §1.1. This is an invariant on the frozen budget, not a second measurement. The factor survives hardware changes because the fraction (40%/60%) does; applying it twice would make the gate stricter than the pre-registration.
 11. **Measurement dataset** — pre-registered: Real populated save; median, p95, max per chunk. Source: gate memory fixture (M1-28/M1-35). Provisional until the first real save. This world is synthetic: it exercises the shape of a save (terrain, caves, overhangs, structures and mixed materials) but was not produced by gameplay, by docs/worldgen-design.md, or by the save path on the reference machine. Its byte sizes, material histograms and distributions are illustrative only and must not be quoted as gate results (M1-35, M1-37) until a real save is captured and this fixture is re-frozen. The distributions are measured (p50/p95/max per chunk), but the dataset is not admissible as the M1 gate result until a real populated save replaces it.
-12. **Fallback trigger** — pre-registered: See §4; pre-registered; no renegotiation inside M1. Source: pre-registration §4. Rule 2: a voxel-memory row failed at 64³. Do not automatically stay at 64³. Run the M1-40 analytic 128³ projection; if 128³ clears, the failure is an argument for the upgrade, not against it.
+12. **Fallback trigger** — pre-registered: See §4; pre-registered; no renegotiation inside M1. Source: pre-registration §4. Rule 3: a voxel-memory row failed at 128³. Apply the pre-registered sacrifice order: mesh compression, then near radius, then vertical shell. Never shrink the far clip below 8 km.
 
 ## Fallback
 
-Rule 2: a voxel-memory row failed at 64³. Do not automatically stay at 64³. Run the M1-40 analytic 128³ projection; if 128³ clears, the failure is an argument for the upgrade, not against it.
+Rule 3: a voxel-memory row failed at 128³. Apply the pre-registered sacrifice order: mesh compression, then near radius, then vertical shell. Never shrink the far clip below 8 km.
 
 ## Notes
 
@@ -53,4 +53,4 @@ Rule 2: a voxel-memory row failed at 64³. Do not automatically stay at 64³. Ru
 - The headless gate does not open a wgpu adapter. GPU identity is quoted from docs/reference-machine.md and is not re-probed; the host CPU, OS and architecture are read from the running process.
 - The fixture is provisional until the first real save. Its distributions are a rehearsal for the gate and must not be quoted as the M1 result; the dataset row stays not measured until a real save replaces it.
 - Culling granularity is measured by the M1-34 reference over 100 poses on the frozen save. The reference traversal is frustum-only, so its ratio is the baseline the M5 production occlusion culler must beat.
-- The fallback is computed from the measured rows with the pre-registration §4 order. It is a preview for M1-42, not a renegotiation of any threshold.
+- The fallback is computed from the measured rows with the pre-registration §4 order. It is a preview, not a renegotiation of any threshold.

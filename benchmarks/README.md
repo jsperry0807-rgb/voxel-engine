@@ -43,11 +43,13 @@ cargo run --release -p voxel-bench -- gate scaleup --out target/gate/scaleup.jso
   > target/gate/scaleup.md
 cargo run --release -p voxel-bench -- gate scaleup --profile minimum \
   --out target/gate/scaleup-minimum.json > target/gate/scaleup-minimum.md
+cargo run --release -p voxel-bench -- gate granularity \
+  --out target/gate/granularity.json > target/gate/granularity.md
 ```
 
-Copy `gate.md`, `gate.json`, `scaleup.md`, `scaleup.json`, `scaleup-minimum.md` and
-`scaleup-minimum.json` into the recorded run directory so the report stays with the
-numbers it judges. The gate measures Minimum and Default; the scale-up must be read
+Copy `gate.md`, `gate.json`, `granularity.md`, `granularity.json`, `scaleup.md`,
+`scaleup.json`, `scaleup-minimum.md` and `scaleup-minimum.json` into the recorded run
+directory so the report stays with the numbers it judges. The gate measures Minimum and Default; the scale-up must be read
 per profile, because the per-chunk term is shared but the loaded count is not. The twelve rows and the
 fallback order are frozen in [`../docs/pre-registration.md`](../docs/pre-registration.md);
 the gate report computes every verdict from a measured value and does not type `PASS`.

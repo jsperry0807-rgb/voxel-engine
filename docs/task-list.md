@@ -1,9 +1,9 @@
 # Roadmap Task List
 
-**Status:** v1.6 — derived from spec v2.3 and roadmap v3.2
-**Date:** 2026-10-30
+**Status:** v1.7 — derived from spec v2.3 and roadmap v3.3
+**Date:** 2026-10-31
 **Owner:** engine
-**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 complete — `M2-30` (measured exit) landed 2026-10-31; the 128³ Minimum run is recorded, the mesh row is 119.4 KiB over the cap and mesh compression is the first M3 item, gate row 9 is closed and row 11 is carried. M3 is next.
+**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 complete — `M2-30` (measured exit) landed 2026-10-31; the 128³ Minimum run is recorded, the mesh row is 119.4 KiB over the cap and mesh compression is the first M3 item, gate row 9 is measured and row 11 is carried. M3 is next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -382,7 +382,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ## 5. M1.5 — Vertical slice
 
 **Goal:** one textured chunk in a window. **Exit:** M1.5-17. **Budget:** 10.5 d code + 4 d art (M1.5-14). **Depends:** M1-15 (layout API), M0-06 (atlas math); M1.5-14 before M1.5-07.
-**Status:** Complete — M1.5-01…M1.5-17 done. The before/after texel-density pair, the full M1.5-15 screenshot set and the viewer README have landed. M2 work has started.
+**Status:** Complete — M1.5-01…M1.5-17 done. The before/after texel-density pair, the full M1.5-15 screenshot set and the viewer README have landed. M2 is complete.
 **Art:** M1.5-14 authors the 23 slice faces; M1.5-17 is the exit art checkpoint.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -694,11 +694,11 @@ edges pass `cargo test -p voxel-mesh scratch_budget`.
 
 **M2-30 measured (2026-10-31):** the M2 exit is recorded in
 [`m2-exit.md`](m2-exit.md) and archived as
-`benchmarks/runs/20261031T150052Z-m2-gate-128`. The `m2-128` fixture (9 chunks,
+`benchmarks/runs/20261031T152718Z-m2-gate-128`. The `m2-128` fixture (9 chunks,
 128³ edge) was frozen and verified, and the gate ran at the Minimum profile:
 **3.29 GiB** projected VRAM (p95 4.19 MiB × 805; PASS against 4.80 GiB, 98 MiB
-over the 3.20 GiB target), edit p95 **5.290 µs**, probe-update p95 **739.384 µs**,
-nodes p95 **140,786**, light/probe grid fixed, **mesh p95 2,519 KiB vs 2,400 KiB
+over the 3.20 GiB target), edit p95 **8.136 µs**, probe-update p95 **765.844 µs**,
+nodes max **138,636**, light/probe grid fixed, **mesh p95 2,519 KiB vs 2,400 KiB
 cap (FAIL by 119.4 KiB)**, granularity p95 **0.00%** over 100 poses (row 9
 closed), and dataset row 11 **carried** (no real save exists before M2.5). The
 128³ chunk build is **34.3 chunks/s** (M2-28). The mesh row is the open rule-3
@@ -754,7 +754,7 @@ both edges and uploads them as a 90-day artifact.
 | M2-27 | Wire M2 into the viewer: replace the naive mesher; light + probes uploaded | M2-12, M2-21 | Visual parity with M1.5 except better merge ratio; 60 Hz; no new material keys, the M1.5-14 atlas is unchanged | run | 1 d | [x] |
 | M2-28 | Throughput: ≥ 20 terrain chunks/s single-threaded | M2-27 | Measured over 100 chunks; recorded | `cargo bench -p voxel-mesh build` | 0.5 d | [x] |
 | M2-29 | Scratch-memory budget test: ≤ 64 KiB per worker, no chunk-wide densify anywhere | M2-03 | Counting allocator test fails if exceeded | `cargo test -p voxel-mesh scratch_budget` | 0.5 d | [x] |
-| M2-30 | M2 exit: tag `m2`, update roadmap, freeze goldens as CI artifacts; record the 128³ Minimum run and close gate rows 9/11 | M2-29; M1 gate carry-over | Tag; CI runs the goldens; 128³ memory/edit/probe numbers and gate rows 9/11 recorded | `git tag -n m2`; gate report | 0.5 d | [x] |
+| M2-30 | M2 exit: tag `m2`, update roadmap, freeze goldens as CI artifacts; record the 128³ Minimum run and close row 9, carrying row 11 | M2-29; M1 gate carry-over | Tag; CI runs the goldens; 128³ numbers recorded and row 9 measured, row 11 carried | `git tag -n m2`; gate report | 0.5 d | [x] |
 
 ---
 

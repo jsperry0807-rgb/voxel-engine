@@ -23,18 +23,18 @@ wrote target/m2-gate/128/scaleup.json
 
 | Component | Measured |
 |---|---:|
-| Edit upload | 251 ns |
-| Edit fence | 21 ns |
-| Edit flip | 20 ns |
-| Edit fixed | 291 ns |
-| Edit COW | 1.282 µs |
-| Edit light | 2.845 µs |
-| Edit dirty | 4.078 µs |
-| Edit total | 4.669 µs |
-| Probe select | 608.566 µs |
-| Probe rebake | 140.817 µs |
-| Probe upload | 50 ns |
-| Probe update | 741.497 µs |
+| Edit upload | 350 ns |
+| Edit fence | 30 ns |
+| Edit flip | 50 ns |
+| Edit fixed | 431 ns |
+| Edit COW | 2.094 µs |
+| Edit light | 6.452 µs |
+| Edit dirty | 8.146 µs |
+| Edit total | 9.378 µs |
+| Probe select | 645.596 µs |
+| Probe rebake | 144.484 µs |
+| Probe upload | 150 ns |
+| Probe update | 774.670 µs |
 | Memory v1 pool/chunk | 657.7 KiB |
 | Memory total/chunk | 4.19 MiB |
 
@@ -44,10 +44,10 @@ wrote target/m2-gate/128/scaleup.json
 
 | Term | Optimistic | Pessimistic | Limit |
 |---|---:|---:|---:|
-| Edit fixed | 291 ns | 291 ns | 8.00 ms |
-| Edit dirty | 4.078 µs | 4.078 µs | — |
-| Edit total | 4.669 µs (PASS, 8.00 ms) | 4.669 µs (PASS, 8.00 ms) | 8.00 ms |
-| Probe update | 741.497 µs (PASS, 3.26 ms) | 741.497 µs (PASS, 3.26 ms) | 4.00 ms |
+| Edit fixed | 431 ns | 431 ns | 8.00 ms |
+| Edit dirty | 8.146 µs | 8.146 µs | — |
+| Edit total | 9.378 µs (PASS, 7.99 ms) | 9.378 µs (PASS, 7.99 ms) | 8.00 ms |
+| Probe update | 774.670 µs (PASS, 3.23 ms) | 774.670 µs (PASS, 3.23 ms) | 4.00 ms |
 | Memory projected | 3.29 GiB (PASS) | 3.29 GiB (PASS) | 4.80 GiB |
 | DAG nodes/chunk | 138,636 (PASS) | 138,636 (PASS) | 1,500,000 |
 
