@@ -42,6 +42,17 @@
 //! non-finite positions collapse to zero, and a zero-length or non-finite normal
 //! returns zero radiance.
 //!
+//! # Ring LOD (M2-20)
+//!
+//! Probe density is a property of the chunk's ring, not of a frame: the
+//! horizontal distance from the camera to the chunk AABB picks near (≤ 128 m),
+//! mid (≤ 256 m) or far (no probes), per ADR-005 §6. [`ProbeLodState`] owns the
+//! bound volume and the requested ring. A crossing only sets a target; the
+//! caller bakes it on the content timeline with [`ProbeLodState::begin`] and
+//! flips with [`ProbeLodState::commit`]. The previous volume stays bound and
+//! samplable throughout, targets that change before a bake starts coalesce into
+//! one rebuild, and a ring is never sampled across two grids.
+//!
 //! # A frozen oracle
 //!
 //! The grid, seed, ray fan, traversal and quantiser are deliberately a copy of
@@ -66,10 +77,10 @@
 
 use std::f64::consts::{PI, TAU};
 
-use voxel_core::constants::BLOCK_DIM;
-use voxel_core::content_constants::PROBE_BYTES;
+use voxel_core::constants::{BLOCK_DIM, CHUNK_DIM};
+use voxel_core::content_constants::{PROBE_BYTES, PROBE_MID_RADIUS_M, PROBE_NEAR_RADIUS_M};
 use voxel_storage::dag::Svdag;
-use voxel_storage::{AIR, CHUNK_DIM, ChunkPos};
+use voxel_storage::{AIR, ChunkPos};
 
 /// Number of real SH coefficients in one probe: `l = 0` and `l = 1`.
 pub const SH_COEFFICIENTS: usize = 4;
@@ -176,6 +187,9 @@ impl ProbeGrid {
     }
 
     /// Mid grid: one probe per 2×2×2 blocks.
+    ///
+    /// Centres are the block centres of every second block (`0, 2, 4, …`), the
+    /// same lattice as the M1-30 reference.
     pub fn mid(edge_blocks: usize) -> Self {
         Self::new(edge_blocks, ProbeLod::Mid)
     }
@@ -644,6 +658,187 @@ impl ProbeSample {
             }
         }
         radiance
+    }
+}
+
+/// Horizontal distance in metres from `camera` to the chunk's world AABB.
+///
+/// A chunk is `CHUNK_DIM` voxels on an edge at
+/// [`VOXEL_SIZE`](voxel_core::constants::VOXEL_SIZE), so 4 m at 64³ and
+/// 8 m at 128³. The camera's height is ignored: probe rings are horizontal
+/// (ADR-005 §6). A non-finite camera x or z has no meaningful distance and
+/// reports infinity, which puts the chunk in the far ring.
+pub fn chunk_distance_m(chunk: ChunkPos, camera: [f64; 3]) -> f64 {
+    if !camera[0].is_finite() || !camera[2].is_finite() {
+        return f64::INFINITY;
+    }
+    let extent = f64::from(voxel_core::constants::aabb_extent(0));
+    let min_x = chunk.x as f64 * extent;
+    let min_z = chunk.z as f64 * extent;
+    let dx = axis_distance(camera[0], min_x, min_x + extent);
+    let dz = axis_distance(camera[2], min_z, min_z + extent);
+    (dx * dx + dz * dz).sqrt()
+}
+
+/// Distance from `value` to the inclusive interval `min ..= max`.
+fn axis_distance(value: f64, min: f64, max: f64) -> f64 {
+    if value < min {
+        min - value
+    } else if value > max {
+        value - max
+    } else {
+        0.0
+    }
+}
+
+/// The probe ring for a chunk at `camera`, per ADR-005 §6.
+///
+/// Membership is the horizontal distance to the chunk AABB: near up to
+/// [`PROBE_NEAR_RADIUS_M`], mid up to [`PROBE_MID_RADIUS_M`], far beyond. A
+/// far chunk carries no probe volume.
+pub fn chunk_probe_lod(chunk: ChunkPos, camera: [f64; 3]) -> ProbeLod {
+    let distance = chunk_distance_m(chunk, camera);
+    if distance <= f64::from(PROBE_NEAR_RADIUS_M) {
+        ProbeLod::Near
+    } else if distance <= f64::from(PROBE_MID_RADIUS_M) {
+        ProbeLod::Mid
+    } else {
+        ProbeLod::Far
+    }
+}
+
+/// Per-chunk probe LOD lifecycle: the bound volume plus a queued ring target.
+///
+/// Ring membership changes on the content timeline, not per frame (ADR-005 §6).
+/// [`Self::request`] only records the target; the caller bakes it with
+/// [`Self::begin`] and flips with [`Self::commit`]. The volume bound before the
+/// flip stays readable the whole time, so sampling never crosses two grids.
+///
+/// Requests coalesce while no build is in flight: a chunk that crosses several
+/// radii before the bake starts builds once, at the latest target. A request
+/// that arrives during a build is queued and handled after the commit.
+///
+/// # Failure and hysteresis
+///
+/// [`Self::abort`] drops an in-flight build without touching the bound volume;
+/// the target stays queued, so a cancelled streaming job can be retried.
+/// Boundary hysteresis (a dead band or minimum dwell) is the streamer's policy:
+/// this type implements the ADR's coalescing rule exactly, so a camera that
+/// keeps recrossing a radius *after* each build starts queues one rebuild per
+/// crossing.
+#[derive(Debug)]
+pub struct ProbeLodState {
+    volume: ProbeVolume,
+    target: ProbeLod,
+    building: Option<ProbeLod>,
+    rebuilds: usize,
+}
+
+impl ProbeLodState {
+    /// Binds `volume` as the current grid; its LOD is the starting ring.
+    pub fn new(volume: ProbeVolume) -> Self {
+        let target = volume.grid().lod();
+        Self {
+            volume,
+            target,
+            building: None,
+            rebuilds: 0,
+        }
+    }
+
+    /// The ring of the currently bound volume.
+    pub fn current(&self) -> ProbeLod {
+        self.volume.grid().lod()
+    }
+
+    /// The volume samplers should use right now.
+    pub fn volume(&self) -> &ProbeVolume {
+        &self.volume
+    }
+
+    /// The latest requested ring.
+    pub const fn target(&self) -> ProbeLod {
+        self.target
+    }
+
+    /// The ring being baked, if a build is in flight.
+    pub const fn building(&self) -> Option<ProbeLod> {
+        self.building
+    }
+
+    /// Completed flips; one per rebuild the chunk actually paid for.
+    pub const fn rebuilds(&self) -> usize {
+        self.rebuilds
+    }
+
+    /// True when a rebuild is in flight or still queued.
+    pub fn is_pending(&self) -> bool {
+        self.building.is_some() || self.target != self.current()
+    }
+
+    /// Queues the ring for this chunk from a camera position.
+    ///
+    /// Returns the ring, so a streamer can log the crossing without a second
+    /// distance query.
+    pub fn request_at(&mut self, chunk: ChunkPos, camera: [f64; 3]) -> ProbeLod {
+        let lod = chunk_probe_lod(chunk, camera);
+        self.request(lod);
+        lod
+    }
+
+    /// Queues a ring target.
+    ///
+    /// Before the rebuild starts, later requests replace the earlier ones, so
+    /// only the latest target is built. While a build is in flight the request
+    /// is remembered and starts a second build after the commit.
+    pub fn request(&mut self, lod: ProbeLod) {
+        self.target = lod;
+    }
+
+    /// Starts the queued rebuild and returns the LOD to bake.
+    ///
+    /// Returns `None` when the bound volume is already at the requested ring or
+    /// when a build is in flight (the in-flight bake is never restarted). The
+    /// caller bakes at the returned LOD and passes the volume to
+    /// [`Self::commit`].
+    pub fn begin(&mut self) -> Option<ProbeLod> {
+        if self.building.is_some() || self.target == self.current() {
+            return None;
+        }
+        self.building = Some(self.target);
+        self.building
+    }
+
+    /// Drops an in-flight build, for example when the streaming job that was
+    /// baking it is cancelled or its chunk is evicted.
+    ///
+    /// The bound volume and the requested target are unchanged, so the rebuild
+    /// can be started again with [`Self::begin`].
+    pub fn abort(&mut self) {
+        self.building = None;
+    }
+
+    /// Flips to a freshly baked volume.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no build is in flight, if `volume` was not baked at the ring
+    /// returned by [`Self::begin`], or if it was baked for another chunk edge.
+    pub fn commit(&mut self, volume: ProbeVolume) {
+        let building = self.building.expect("commit without begin");
+        assert_eq!(
+            volume.grid().lod(),
+            building,
+            "a committed volume must be at the ring being built"
+        );
+        assert_eq!(
+            volume.grid().edge_blocks(),
+            self.volume.grid().edge_blocks(),
+            "a committed volume must keep the chunk edge"
+        );
+        self.volume = volume;
+        self.building = None;
+        self.rebuilds += 1;
     }
 }
 

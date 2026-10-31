@@ -29,8 +29,8 @@ pub use mesh::{Mesh, face_from_code, mesh_block, mesh_face};
 
 pub mod probe;
 pub use probe::{
-    BakeStep, ProbeBake, ProbeGrid, ProbeLod, ProbeSample, ProbeVolume, SampleSource, Sh4Probe,
-    bake, bake_svdag,
+    BakeStep, ProbeBake, ProbeGrid, ProbeLod, ProbeLodState, ProbeSample, ProbeVolume,
+    SampleSource, Sh4Probe, bake, bake_svdag, chunk_distance_m, chunk_probe_lod,
 };
 
 mod vertex;
