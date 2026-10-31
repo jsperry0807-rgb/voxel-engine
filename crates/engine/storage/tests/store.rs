@@ -153,6 +153,22 @@ fn overlay_only_chunk_survives_and_folds() {
     std::fs::remove_dir_all(dir).ok();
 }
 
+/// A stream-only session (load, evict, never edit) must still be able to free
+/// the pool: `tick` ends no batch when nothing is dirty, so the eviction has to.
+#[test]
+fn eviction_advances_the_gpu_epoch() {
+    let dir = tmp("evict-epoch");
+    let p = ChunkPos::new(0, 0, 0);
+    let mut w = World::new(&dir, flat(), MemSink::default()).unwrap();
+    w.load(p).unwrap();
+    let before = w.gpu().next_epoch();
+    let tag = w.evict(p).unwrap();
+    assert_eq!(tag, before, "the eviction retires under the current tag");
+    assert_eq!(w.gpu().next_epoch(), before + 1);
+    w.reclaim(tag);
+    std::fs::remove_dir_all(dir).ok();
+}
+
 #[test]
 fn gpu_overlay_is_restored_from_disk() {
     let dir = tmp("overlay-disk");

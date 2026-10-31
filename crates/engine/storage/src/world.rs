@@ -433,7 +433,13 @@ impl<S: GpuSink> World<S> {
     /// Drop a chunk from RAM + GPU. Edits are persisted as an overlay snapshot
     /// (no rebuild) and synced, so a crash after eviction cannot lose edits that
     /// were reported as persisted.
-    pub fn evict(&mut self, p: ChunkPos) -> io::Result<()> {
+    /// Returns the GPU epoch tag for this eviction.
+    ///
+    /// Pass it to [`Self::reclaim`] once every frame submitted before the batch
+    /// was uploaded has finished. Without a new tag the eviction's retirements
+    /// can never be freed: `tick` only ends a batch when there are pending
+    /// edits, so a stream-only session would grow the retire lists forever.
+    pub fn evict(&mut self, p: ChunkPos) -> io::Result<u64> {
         if self.persist(p)? {
             self.disk.sync()?;
             if let Some(c) = self.chunks.get_mut(&p) {
@@ -446,7 +452,9 @@ impl<S: GpuSink> World<S> {
             self.disk.close(p.region());
             self.refresh_oversized();
         }
-        Ok(())
+        let tag = self.gpu.end_batch();
+        self.gpu.flush(&mut self.sink);
+        Ok(tag)
     }
 
     pub fn chunk(&self, p: ChunkPos) -> Option<&Chunk> {

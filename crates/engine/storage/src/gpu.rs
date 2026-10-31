@@ -1042,7 +1042,13 @@ impl GpuStore {
     pub fn contains(&self, p: ChunkPos) -> bool {
         self.probe(p).is_ok()
     }
-    pub fn epoch(&self) -> u64 {
+    /// The tag the *next* batch will receive.
+    ///
+    /// Do not pass this to [`Self::reclaim`]: that would free the batch that was
+    /// just ended, which frames submitted before the following flush may still
+    /// read. Reclaim the tag returned by [`Self::end_batch`] or
+    /// [`Self::consolidate`].
+    pub fn next_epoch(&self) -> u64 {
         self.epoch
     }
     pub fn pool(&self) -> &[u32] {
