@@ -21,11 +21,12 @@
 //! - **Parent reachability.** Every node reached from the root resolves, every
 //!   present child is inside its band, and every reachable node is accounted
 //!   for by a parent run or by the root itself.
-//! - **Refcounts.** The checker derives a reference count for every reachable
-//!   node and every live run. A run's nodes are referenced at least as many
-//!   times as the run itself, and no reachable node has a zero count. The live
-//!   root and in-flight-frame counters are reported and must be internally
-//!   consistent.
+//! - **Parent edges.** While walking, the checker counts the parent edges that
+//!   reach each node and each live run, and verifies the two counts agree. This
+//!   is a consistency check on the traversal, not an independent refcount: a
+//!   stale word that nothing reaches is invisible here (that would need a scan
+//!   of every band word, including retired ones). The live root and
+//!   in-flight-frame counters are reported as measured.
 //!
 //! The checker never mutates the chunk. It returns the first violation as an
 //! [`InvariantError`]; [`ChunkDag::assert_invariants`] is the panicking form
@@ -512,7 +513,10 @@ pub fn check_bands(bands: &Bands, root: Option<NodeRef>) -> Result<CheckReport, 
     }
 
     // Every reachable node must have at least one reference (the root's
-    // external reference or a parent run slot).
+    // external reference or a parent run slot). The traversal incremented those
+    // counts itself, so this catches an inconsistent walk, not stale bytes.
+    // (See the module note: independent refcounts would require scanning every
+    // band word.)
     for level in 0..=ROOT_LEVEL {
         for (index, &live) in visited[level as usize].iter().enumerate() {
             if !live {

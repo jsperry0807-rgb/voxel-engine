@@ -1379,6 +1379,32 @@ mod tests {
         }
     }
 
+    /// `reclaim(tag)` must leave a newer batch alone: a frame submitted before
+    /// the following flush may still read it.
+    #[test]
+    fn reclaim_defers_a_newer_batch() {
+        let p = ChunkPos::new(0, 0, 0);
+        let first_dag = Svdag::from_dense(&vec![1u16; CHUNK_VOLUME]);
+        let second_dag = Svdag::from_dense(&vec![2u16; CHUNK_VOLUME]);
+        let mut g = GpuStore::new();
+        let first = g.consolidate([(p, &first_dag)]);
+        let second = g.consolidate([(p, &second_dag)]);
+        assert_eq!(second, first + 1);
+
+        let before = g.unique_nodes();
+        g.reclaim(first);
+        assert_eq!(
+            g.unique_nodes(),
+            before,
+            "reclaiming an older tag must not free the newer batch"
+        );
+        g.reclaim(second);
+        assert!(
+            g.unique_nodes() < before,
+            "the older batch is freed by its own tag"
+        );
+    }
+
     /// A single chunk inserted and removed repeatedly must keep reusing its one
     /// vacated slot. Otherwise every edit churn would grow the GPU table.
     #[test]
