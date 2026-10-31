@@ -190,9 +190,9 @@ like `tests/validation.rs`. `cargo test --workspace --features chunk128` (the
 
 ## Limits
 
-- **Upload staging is still per mesh.** M3-03 owns the staging ring, the byte
-  budget and moving the write back to the frame thread. Until then the uploader
-  thread hides the 110–360 ms outliers from the frame.
+- **Upload staging was still per mesh at close.** M3-03 replaced it with a
+  byte-budgeted queue and a staging belt; the frame now copies at most 1 MiB per
+  frame. See [`m3-03-upload-queue.md`](m3-03-upload-queue.md).
 - **Lighting is still per chunk** (light, probes, origin buffer + bind group).
   The pool is mesh-only; M3-06's instrumentation and M3-11's memory report split
   the rows.
@@ -207,6 +207,5 @@ like `tests/validation.rs`. `cargo test --workspace --features chunk128` (the
 
 ## Next
 
-M3-03: an upload queue with a per-frame byte budget on top of these ranges, so
-the 10 MB backlog drains within budget and the write can return to the frame
-thread.
+M3-03 landed the upload queue and per-frame byte budget on top of these ranges;
+M3-04 is the CPU frustum cull.
