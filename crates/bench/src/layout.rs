@@ -138,12 +138,12 @@ fn rng(state: &mut u64) -> u64 {
 /// pool. Expanded positions count one node per sibling slot in the unshared
 /// tree, so it is the same logical tree the banded layout stores.
 fn legacy_stats(dag: &Svdag) -> (u64, u64) {
-    if dag.root == NONE {
+    if dag.root() == NONE {
         return (0, 0);
     }
     let mut seen = HashSet::new();
     let mut positions = HashMap::new();
-    let expanded = legacy_positions(&dag.pool, dag.root, &mut seen, &mut positions);
+    let expanded = legacy_positions(dag.pool(), dag.root(), &mut seen, &mut positions);
     (seen.len() as u64, expanded)
 }
 

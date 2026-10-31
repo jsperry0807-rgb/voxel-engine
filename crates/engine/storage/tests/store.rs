@@ -59,7 +59,7 @@ fn dag_roundtrip() {
     assert_eq!(Svdag::from_bytes(&dag.to_bytes()).unwrap(), dag);
     // A solid chunk collapses to one node per internal level.
     let solid = Svdag::from_dense(&vec![3u16; CHUNK_VOLUME]);
-    assert!(solid.pool.len() <= ROOT_LEVEL as usize * 9);
+    assert!(solid.pool().len() <= ROOT_LEVEL as usize * 9);
 }
 
 #[test]
@@ -336,8 +336,8 @@ fn apply_edits_matches_dense_rebuild() {
         fast.expand(&mut out);
         assert_eq!(out, dd, "{n_edits} edits: content");
         assert_eq!(
-            fast.pool.len(),
-            slow.pool.len(),
+            fast.pool().len(),
+            slow.pool().len(),
             "{n_edits} edits: same canonical node count"
         );
     }
@@ -347,8 +347,8 @@ fn apply_edits_matches_dense_rebuild() {
     assert!(solid.apply_edits(all).is_empty());
     let filled = Svdag::empty().apply_edits((0..CHUNK_VOLUME as u32).map(|i| (i, 5)));
     assert_eq!(
-        filled.pool.len(),
-        Svdag::from_dense(&vec![5u16; CHUNK_VOLUME]).pool.len()
+        filled.pool().len(),
+        Svdag::from_dense(&vec![5u16; CHUNK_VOLUME]).pool().len()
     );
 }
 

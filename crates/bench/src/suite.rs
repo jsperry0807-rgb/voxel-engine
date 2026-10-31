@@ -91,7 +91,7 @@ fn memory_chunks(out: &mut Vec<MemoryRecord>) {
                 bytes(dag_bytes),
                 dense_bytes as f64 / dag_bytes.max(1) as f64,
                 bytes(dense_bytes),
-                dag.root,
+                dag.root(),
             ),
         });
     }

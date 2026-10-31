@@ -119,8 +119,24 @@ impl Decoded {
 /// raised it. `catch_unwind` keeps the fuzz loop alive long enough to persist
 /// the offending bytes.
 fn decode_all(bytes: &[u8]) -> Result<Decoded, &'static str> {
-    let chunk = panic::catch_unwind(AssertUnwindSafe(|| ChunkDag::from_bytes(bytes).is_some()))
-        .map_err(|_| "ChunkDag::from_bytes")?;
+    // An accepted chunk must survive the operations a caller performs next;
+    // `is_some()` alone never exercises `check`, `get` or `expand`.
+    let chunk = panic::catch_unwind(AssertUnwindSafe(|| {
+        ChunkDag::from_bytes(bytes)
+            .map(|dag| {
+                // `check` must not panic on accepted bytes. `get`/`expand` are
+                // only contracted for a chunk that passed the checker: a
+                // framing-valid but semantically invalid chunk is what
+                // `check` exists to reject.
+                if dag.check().is_ok() {
+                    let mut out = vec![0u16; CHUNK_VOLUME];
+                    dag.expand(&mut out);
+                    let _ = dag.get(1, 2, 3);
+                }
+            })
+            .is_some()
+    }))
+    .map_err(|_| "ChunkDag operations")?;
     let svdag = panic::catch_unwind(AssertUnwindSafe(|| Svdag::from_bytes(bytes).is_some()))
         .map_err(|_| "Svdag::from_bytes")?;
     let overlay = panic::catch_unwind(AssertUnwindSafe(|| Overlay::from_bytes(bytes).is_some()))

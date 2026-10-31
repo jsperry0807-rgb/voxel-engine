@@ -72,7 +72,6 @@ fn cli_writes_one_markdown_and_one_json_with_the_twelve_rows_and_machine() {
         "**Fixture:**",
         "| # | Pre-registered row |",
         "**PASS**",
-        "**FAIL**",
         "**NOT MEASURED**",
         "## Fallback",
         "## Notes",
@@ -81,6 +80,19 @@ fn cli_writes_one_markdown_and_one_json_with_the_twelve_rows_and_machine() {
     }
 
     let json = read_json(&json_path);
+    // The renderer must emit the failing label whenever a row fails; requiring
+    // it unconditionally tied this test to a red fixture.
+    let any_fail = json["rows"]
+        .as_array()
+        .expect("rows")
+        .iter()
+        .any(|row| row["verdict"] == "fail");
+    if any_fail {
+        assert!(
+            markdown.contains("**FAIL**"),
+            "a failing row must render FAIL"
+        );
+    }
     assert_eq!(json["schema_version"], 1);
     assert_eq!(json["profile"], "default");
     assert_eq!(json["profile_gated"], true);

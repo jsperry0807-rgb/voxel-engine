@@ -749,7 +749,7 @@ impl GpuStore {
         } else {
             let mut memo = std::mem::take(&mut self.import_memo);
             memo.clear();
-            let g = self.import(&dag.pool, dag.root, &mut memo);
+            let g = self.import(dag.pool(), dag.root(), &mut memo);
             self.import_memo = memo;
             self.rc[g as usize] += 1;
             g
