@@ -1,11 +1,13 @@
 //! M2-27: the viewer draws the production M2 content.
 //!
 //! The demo chunk must mesh with fewer quads than the M1.5 naive per-face
-//! mesher, keep the ADR-010 16 B vertex layout, and carry both the block-light
+//! mesher, keep the packed 8 B vertex layout, and carry both the block-light
 //! cells and the near-grid probe volume for upload.
 
 use voxel_core::constants::CHUNK_DIM;
 use voxel_core::content_constants::LIGHT_CELLS_PER_EDGE;
+use voxel_mesh::{PackedVertex, for_each_block, greedy_block, mesh_block};
+use voxel_storage::Apron;
 use voxel_storage::ChunkPos;
 use voxel_viewer::chunk_content::{self, ChunkMeshData};
 use voxel_viewer::naive_mesh::naive_mesh;
@@ -138,5 +140,37 @@ fn production_content_carries_light_and_probes() {
                 assert_eq!(word(3) >> 16, u32::from(cell.block.intensity));
             }
         }
+    }
+}
+
+#[test]
+fn packed_vertices_decode_to_the_logical_mesh() {
+    let volume = chunk_content::demo_volume();
+    let mut packed = Vec::new();
+    let mut logical = Vec::new();
+    for_each_block(&volume, &Apron::new(), |block, scratch| {
+        let mut quads = Vec::new();
+        greedy_block(scratch, &mut quads);
+        let mesh = mesh_block(&quads, block);
+        for vertex in &mesh.vertices {
+            packed.extend_from_slice(&PackedVertex::from_vertex(vertex).encode());
+            logical.push(*vertex);
+        }
+    });
+    assert_eq!(packed.as_chunks::<8>().0.len(), logical.len());
+    for (bytes, vertex) in packed.as_chunks::<8>().0.iter().zip(&logical) {
+        assert_eq!(PackedVertex::decode(*bytes).to_vertex(), *vertex);
+    }
+    let content = chunk_content::mesh(&volume);
+    assert_eq!(content.vertices, packed);
+}
+
+#[test]
+fn mesh_resolved_applies_the_material_resolver() {
+    let volume = chunk_content::demo_volume();
+    let content = chunk_content::mesh_resolved(&volume, |material, _face| material + 100);
+    for bytes in content.vertices.as_chunks::<8>().0 {
+        let material = u16::from_le_bytes([bytes[4], bytes[5]]);
+        assert!(material >= 101, "resolver was not applied: {material}");
     }
 }

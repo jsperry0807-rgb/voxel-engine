@@ -11,13 +11,14 @@ use std::sync::OnceLock;
 use glam::Vec3;
 
 use voxel_core::constants::{CHUNK_BITS, CHUNK_VOLUME};
+use voxel_mesh::PackedVertex;
 use voxel_viewer::atlas::{AtlasBuilder, TILE_BYTES};
 use voxel_viewer::atlas_texture::AtlasTexture;
 use voxel_viewer::camera::{Camera, CameraUniform};
 use voxel_viewer::chunk_content;
 use voxel_viewer::chunk_lighting;
 use voxel_viewer::chunk_mesh::ChunkMesh;
-use voxel_viewer::chunk_render::ChunkPipeline;
+use voxel_viewer::chunk_render::{ChunkPipeline, VERTEX_LAYOUT};
 use voxel_viewer::depth::DepthTarget;
 
 struct TestGpu {
@@ -305,4 +306,217 @@ fn chunk_pipeline_draws_without_validation_errors() {
         error.is_none(),
         "chunk draw raised a validation error: {error:?}"
     );
+}
+
+#[test]
+fn packed_vertex_attributes_decode_exactly() {
+    let Some(gpu) = test_gpu() else {
+        return;
+    };
+    let device = &gpu.device;
+    let queue = &gpu.queue;
+
+    let vertices = [
+        PackedVertex::from_vertex(&voxel_mesh::Vertex::new(
+            [1, 2, 3],
+            0x0005,
+            5,
+            [0, 85, 170, 255],
+        )),
+        PackedVertex::from_vertex(&voxel_mesh::Vertex::new(
+            [4, 5, 6],
+            0x000A,
+            3,
+            [0, 85, 170, 255],
+        )),
+        PackedVertex::from_vertex(&voxel_mesh::Vertex::new(
+            [7, 8, 9],
+            0x000F,
+            1,
+            [0, 85, 170, 255],
+        )),
+        PackedVertex::from_vertex(&voxel_mesh::Vertex::new(
+            [10, 11, 12],
+            0x0013,
+            4,
+            [0, 85, 170, 255],
+        )),
+    ];
+    let bytes: Vec<u8> = vertices.iter().flat_map(|vertex| vertex.encode()).collect();
+    let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("packed attribute vertices"),
+        size: bytes.len() as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    queue.write_buffer(&vertex_buffer, 0, &bytes);
+
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("packed attribute shader"),
+        source: wgpu::ShaderSource::Wgsl(
+            r#"
+struct In {
+    @location(0) local_spare: vec4<u32>,
+    @location(1) material_packed: vec2<u32>,
+};
+struct Out {
+    @builtin(position) pos: vec4<f32>,
+    @location(0) @interpolate(flat) value: u32,
+};
+@vertex
+fn vs(input: In, @builtin(vertex_index) vertex_index: u32) -> Out {
+    let packed = input.material_packed.y;
+    let face = packed & 7u;
+    let level = (packed >> (3u + 2u * (vertex_index % 4u))) & 3u;
+    let value = input.local_spare.x
+        | (input.local_spare.y << 8u)
+        | (input.local_spare.z << 16u)
+        | ((input.material_packed.x & 7u) << 24u)
+        | (face << 27u)
+        | (level << 30u);
+    var out: Out;
+    out.pos = vec4<f32>(-1.0 + (f32(vertex_index) + 0.5) / 2.0, 0.0, 0.0, 1.0);
+    out.value = value;
+    return out;
+}
+@fragment
+fn fs(input: Out) -> @location(0) u32 {
+    return input.value;
+}
+"#
+            .into(),
+        ),
+    });
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("packed attribute layout"),
+        bind_group_layouts: &[],
+        immediate_size: 0,
+    });
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("packed attribute pipeline"),
+        layout: Some(&layout),
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: Some("vs"),
+            compilation_options: Default::default(),
+            buffers: &[Some(VERTEX_LAYOUT)],
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs"),
+            compilation_options: Default::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: wgpu::TextureFormat::R32Uint,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::PointList,
+            ..Default::default()
+        },
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    });
+    let target = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("packed attribute target"),
+        size: wgpu::Extent3d {
+            width: 4,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::R32Uint,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let view = target.create_view(&wgpu::TextureViewDescriptor::default());
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("packed attribute pass"),
+    });
+    {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("packed attribute pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            ..Default::default()
+        });
+        pass.set_pipeline(&pipeline);
+        pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        pass.draw(0..4, 0..1);
+    }
+    queue.submit([encoder.finish()]);
+
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("packed attribute readback"),
+        size: 256,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("packed attribute readback"),
+    });
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &target,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(256),
+                rows_per_image: Some(1),
+            },
+        },
+        wgpu::Extent3d {
+            width: 4,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+    );
+    queue.submit([encoder.finish()]);
+    let slice = readback.slice(..);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    slice.map_async(wgpu::MapMode::Read, move |result| {
+        let _ = sender.send(result);
+    });
+    device
+        .poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: None,
+        })
+        .expect("device poll");
+    receiver.recv().expect("map callback").expect("map");
+    let values: Vec<u32> = slice
+        .get_mapped_range()
+        .expect("mapped range")
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .take(4)
+        .map(|bytes| u32::from_le_bytes(*bytes))
+        .collect();
+    readback.unmap();
+
+    let expected = [
+        (1u32 | 2 << 8 | 3 << 16 | 5 << 24 | 5 << 27),
+        (4u32 | 5 << 8 | 6 << 16 | 2 << 24 | 3 << 27 | 1 << 30),
+        (7u32 | 8 << 8 | 9 << 16 | 7 << 24 | 1 << 27 | 2 << 30),
+        (10u32 | 11 << 8 | 12 << 16 | 3 << 24 | 4 << 27 | 3 << 30),
+    ];
+    assert_eq!(values, expected, "packed vertex attributes did not decode");
 }

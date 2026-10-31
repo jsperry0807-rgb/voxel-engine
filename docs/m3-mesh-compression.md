@@ -117,17 +117,18 @@ mesh; `n` is the loaded-chunk count.
 | Edge | DAG | v1 pool | Light | Probes | Mesh | Total/chunk | × n | Projection |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | 128³ instanced | 1,099.9 | 657.7 | 8.0 | 6.0 | 393.0 | 2,164.6 KiB | 805 | **1.66 GiB** |
-| 128³ 8 B vertex | 1,099.9 | 657.7 | 8.0 | 6.0 | 2,119.0 | 3,890.6 KiB | 805 | **2.99 GiB** |
-| 64³ instanced | 253.2 | 164.0 | 1.0 | 0.75 | 98.4 | 517.4 KiB | 6,440 | **3.18 GiB** |
-| 64³ instanced, no v1 pool | 253.2 | 0 | 1.0 | 0.75 | 98.4 | 353.4 KiB | 6,440 | **2.17 GiB** |
-| 64³ 8 B vertex | 253.2 | 164.0 | 1.0 | 0.75 | 536.0 | 955.0 KiB | 6,440 | **5.86 GiB** |
+| 128³ 8 B vertex | 1,099.9 | 657.7 | 8.0 | 6.0 | 2,115.0 | 3,886.0 KiB | 805 | **2.98 GiB** |
+| 64³ instanced | 253.2 | 164.0 | 1.0 | 0.75 | 98.4 | 517.4 KiB | 6,440 | **3.20 GiB (target +4.6 MiB)** |
+| 64³ instanced, no v1 pool | 253.2 | 0 | 1.0 | 0.75 | 98.4 | 353.4 KiB | 6,440 | **3.04 GiB** |
+| 64³ 8 B vertex | 253.2 | 164.0 | 1.0 | 0.75 | 536.0 | 1,012.1 KiB | 6,440 | **6.22 GiB** |
 
 Sources: DAG/light/probes and the v1 pool from
 [`m1-gate-decision.md`](m1-gate-decision.md) §3 and the 2026-10-29 amendment;
-the mesh numbers are measured. The 64³ instanced total is ~3.18 GiB **before**
-the M6-09a v1-pool removal (~0.7% margin against the 3.20 GiB target),
-~2.17 GiB after. The 64³ 8 B fallback is **5.86 GiB, above the 4.80 GiB hard
-fail**.
+the mesh numbers are measured with the gate's per-chunk total p95 (not the
+sum of component p95s). The 64³ instanced total is **3.20 GiB**, over the 3.20
+GiB target by ~4.6 MiB before the M6-09a v1-pool removal, and ~3.04 GiB after.
+The 64³ 8 B fallback is **6.22 GiB, above the 4.80 GiB hard fail** (5.11 GiB
+after the pool removal by the p95-of-total method).
 
 ### 2.4 Parity and performance gates
 
@@ -245,9 +246,9 @@ instanced path (4.25–5 d vs 3–4 d) and it **abandons 64³ Minimum**.
 | 6–7 | `packed` | `u16`: face 3 bits, AO 4 × 2 bits, 5 spare/version bits |
 
 - Quad: `4 × 8 + 6 × 2 = 44 B` (42.1% smaller).
-- 128³: ~2,119 KiB p95, **88.3% of cap** (2,160 KiB line, 41 KiB buffer).
+- 128³: **2,115 KiB** measured p95, **88.1% of cap** (2,160 KiB line, 45 KiB buffer).
 - 64³: ~536 KiB, **89.3% of cap** (540 KiB line, **4 KiB buffer**).
-- Row 1: 128³ 2.99 GiB (passes 3.20); **64³ 5.86 GiB (above the 4.80 hard
+- Row 1: 128³ **2.98 GiB** (passes 3.20); **64³ 6.22 GiB (above the 4.80 hard
   fail)**. Choosing this fallback is a product decision to abandon 64³
   Minimum, not just a row-6 stopgap.
 - Of the two candidates, this is the one that keeps the 12 B/quad index buffer.
@@ -266,7 +267,7 @@ instanced path (4.25–5 d vs 3–4 d) and it **abandons 64³ Minimum**.
 | Option | Bytes/quad | 128³ p95 | Share of 2,400 KiB cap | Verdict |
 |---|---:|---:|---:|---|
 | **Instanced quads + storage pull** | **8 B** | **~393 KiB** | **16.4%** | **Primary** |
-| 8 B packed vertex | 44 B | ~2,119 KiB | 88.3% | Fallback; no real-save headroom; abandons 64³ |
+| 8 B packed vertex | 44 B | **2,115 KiB** | 88.1% | Landed fallback; 64³ abandoned |
 | Per-quad constants + 3 B positions | ~28 B | ~1,343 KiB | 56.0% | Dominated by instanced |
 | Vertex dedup (unmeasured) | 32–40 B | ~1,500–1,900 KiB | 62–79% | Only after a 0.5 d measurement |
 | 12 B vertex | 60 B | ~2,877 KiB | 120% | Reject: still over cap |
@@ -338,11 +339,11 @@ GPU env.
   PASS** (+219 MiB against the 3.20 target, +1.81 GiB against 4.80).
 - **64³ Default:** row 6 **536 KiB PASS** (+63.7), row 1 **24.84 GiB FAIL**.
 - **64³ Minimum:** row 6 PASS, row 1 **6.22 GiB FAIL** (−1.42 GiB to 4.80);
-  after the M6-09a v1-pool removal it is still ~**5.2 GiB**, above 4.80.
+  after the M6-09a v1-pool removal it is **5.11 GiB** (p95 of total−pool) / 5.21 GiB (difference of p95s), above 4.80.
 
 The 44 B fallback therefore fixes the 128³ edge but **abandons 64³ Minimum
 permanently**, not just until M6-09a. The 32 B/quad 4-vertex strip is the only
-variant that revives 64³ after the pool removal (~4.3 GiB), but it is
+variant that revives 64³ after the pool removal (~4.22 GiB), but it is
 unmeasured on the attribute path and is deferred to a separate time-boxed
 spike. Runs: `20261031T181211Z-m3-packed-8b-128` and
 `20261031T181227Z-m3-packed-8b-64`.
@@ -432,10 +433,10 @@ is **≤ 90% of the row-6 cap** (≥10% margin).
 | Format | 128³ | 64³ |
 |---|---:|---:|
 | Instanced | 16.4% of cap (83.6% margin) | 16.4% (83.6%) |
-| 8 B vertex | 88.3% (11.7% margin, 41 KiB) | **89.3% (10.7%, 4 KiB)** |
+| 8 B vertex | **88.1%** (11.9% margin, 45 KiB) | **89.3% (10.7%, 4 KiB)** |
 
 The 8 B fallback is inside the rule only on the synthetic fixtures; it has no
-real-save headroom, and at 64³ its total (5.86 GiB) fails the 4.80 GiB hard
+real-save headroom, and at 64³ its total (6.22 GiB) fails the 4.80 GiB hard
 fail. **Choosing the fallback abandons 64³ Minimum.**
 
 **Decision tree (one retry maximum):**
@@ -501,13 +502,11 @@ synthetic fixture.
 - Gate 128³ Minimum: row 6 PASS with p95 ≤ 2,400 KiB and ≤90% of cap; row 1 ≤
   3.20 GiB.
 - Gate 64³: row 6 ≤ **540 KiB** (90% rule), row 1 ≤ **3.20 GiB** and ≤ 4.80
-  GiB hard fail. The 3.20 GiB target remains **required**: instanced is 3.18
-  GiB p95-projected, 0.02 GiB (~0.7%) under the target before the M6-09a pool
-  removal, and 2.17 GiB after. The ~0.7% margin is thin and a real save may
-  consume it; this is not a pre-registration relaxation. If the measurement
-  lands in 3.20–4.80 GiB, the §7 contingency applies (dated appendix, owner
-  sign-off, M6-09a resolution). The 8 B fallback fails both the hard fail
-  (5.86 GiB) and the target.
+  GiB hard fail. The 3.20 GiB target remains **required**: instanced is 3.20
+  GiB p95-projected (over the target by ~4.6 MiB) before the M6-09a pool
+  removal, and ~3.04 GiB after. The 8 B fallback fails both the hard fail
+  (6.22 GiB) and the target. If a measurement lands in 3.20–4.80 GiB, the §7
+  contingency applies (dated appendix, owner sign-off, M6-09a resolution).
 - ADR-014 merged, pre-registration appendix added, M2 erratum recorded, CI
   goldens/parity job green.
 
@@ -524,7 +523,7 @@ synthetic fixture.
    owner accepts in writing that a later iGPU regression costs the fallback
    (4.25–5 d) and abandons 64³.
 3. **64³ product decision:** if the fallback is ever chosen, accept that 64³
-   Minimum is abandoned (5.86 GiB > 4.80 hard fail). If 64³ must stay viable,
+   Minimum is abandoned (6.22 GiB > 4.80 hard fail). If 64³ must stay viable,
    the instanced path is required. If the instanced 64³ row 1 measures
    3.20–4.80 GiB, the dated appendix / owner sign-off / M6-09a contingency in
    §7 applies; it is not a silent relaxation.
@@ -554,7 +553,7 @@ synthetic fixture.
 - **rev 7:** real-draw index Gate B2; `INDIRECT_FIRST_INSTANCE` as a
   hard requirement with the adapter list; page-boundary draws, 128 MiB binding
   and 256 MiB buffer limits; Gate D on real GPUs; 64³ target kept at 3.20 GiB
-  (~0.7% p95 margin); 1.5–2 d spike; 11% noise example and spread definition.
+  64³ margin corrected (instanced over target; 44 B is 6.22 GiB); 1.5–2 d spike; 11% noise example and spread definition.
 - **rev 8:** corrected the 5-day calendar arithmetic (`5 + post-gate effort`);
   B2 pixel mapping and direct + indirect variants on real GPUs; the
   `INDIRECT_FIRST_INSTANCE` list marked expected; 64³ 3.20–4.80 GiB contingency
@@ -564,4 +563,4 @@ synthetic fixture.
   bound; Phase 1 deadline names C/D/B2; a missing `INDIRECT_FIRST_INSTANCE` is
   a risk-owner choice (direct draws or fallback), not an automatic blocker; CI
   runs functional B2 and the real-GPU variants are recorded with C/D; 64³
-  margin corrected to ~0.7%.
+  44 B fallback landed and the 64³ margin corrected (6.22 GiB).

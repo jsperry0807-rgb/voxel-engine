@@ -3,7 +3,7 @@
 //! The viewer draws one terrain patch. This module turns its dense voxel volume
 //! into the three M2 content volumes the renderer needs:
 //!
-//! - the ADR-010 vertex stream from the production greedy mesher with AO
+//! - the packed 8 B vertex stream from the production greedy mesher with AO
 //!   (`greedy_block` + `mesh_block`), replacing the M1.5 naive per-face mesh;
 //! - block-light cells from the production full pass (`voxel_mesh::light`);
 //! - the near-grid SH4 probe volume from the production bake
@@ -12,7 +12,7 @@
 //! Mesh vertices are chunk-local and the emitted material id is the atlas slot:
 //! the demo volume already stores atlas ids, so no registry resolution is
 //! needed (the atlas is unchanged, as M2-27 requires). A real chunk stores
-//! block ids and must call `Mesh::resolve_materials` before upload (M3
+//! block ids and must use `mesh_resolved` with the registry before packing (M3
 //! streaming).
 //!
 //! The chunk-wide index stream is `u16`, so a single mesh is capped at 16,384
@@ -26,7 +26,7 @@ use voxel_core::constants::{BLOCK_DIM, CHUNK_BITS, CHUNK_DIM, CHUNK_VOLUME};
 use voxel_core::content_constants::LIGHT_CELLS_PER_EDGE;
 use voxel_mesh::light::{BlockLight, LightFill, full_pass};
 use voxel_mesh::probe::{ProbeGrid, ProbeLod, bake};
-use voxel_mesh::{PackedVertex, for_each_block, greedy_block, mesh_block};
+use voxel_mesh::{PackedVertex, face_from_code, for_each_block, greedy_block, mesh_block};
 use voxel_storage::{Apron, ChunkPos};
 
 /// One chunk's production mesh as raw packed upload bytes.
@@ -113,7 +113,20 @@ pub fn build(volume: &[u16], chunk: ChunkPos) -> ChunkContent {
 }
 
 /// Meshes the chunk with the production greedy + AO path.
+///
+/// The volume must already store atlas ids. A real block-id chunk should use
+/// [`mesh_resolved`] so the packed vertices carry atlas slots.
 pub fn mesh(volume: &[u16]) -> ChunkMeshData {
+    mesh_resolved(volume, |material, _face| material)
+}
+
+/// Meshes the chunk and resolves each vertex material before packing.
+///
+/// `resolve(block_material, face)` maps the chunk's block id to an atlas slot.
+pub fn mesh_resolved<F>(volume: &[u16], mut resolve: F) -> ChunkMeshData
+where
+    F: FnMut(u16, voxel_core::Face) -> u16,
+{
     let apron = Apron::new();
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
@@ -131,7 +144,9 @@ pub fn mesh(volume: &[u16]) -> ChunkMeshData {
             "chunk mesh exceeds the u16 index range"
         );
         for vertex in &meshlet.vertices {
-            vertices.extend_from_slice(&PackedVertex::from_vertex(vertex).encode());
+            let mut resolved = *vertex;
+            resolved.material = resolve(vertex.material, face_from_code(vertex.face));
+            vertices.extend_from_slice(&PackedVertex::from_vertex(&resolved).encode());
         }
         indices.extend(meshlet.indices.iter().map(|index| base as u16 + index));
         quad_count += meshlet.quad_count();

@@ -27,14 +27,20 @@ logical vertex order.
 | 64³ Default | **536 KiB PASS** (+63.7) | 24.84 GiB FAIL |
 | 64³ Minimum | 536 KiB PASS | **6.22 GiB FAIL** (−1.42 GiB to 4.80) |
 
-The 64³ Minimum total is ~5.2 GiB even after the M6-09a v1-pool removal, so the
+The 64³ Minimum total is **5.11 GiB** (p95 of total−pool) / 5.21 GiB (difference of p95s) even after the M6-09a v1-pool removal, so the
 44 B fallback does **not** revive 64³. The 32 B/quad 4-vertex strip is the only
-variant that reaches ~4.3 GiB after the pool removal; it is deferred to a
+variant that reaches ~4.22 GiB after the pool removal; it is deferred to a
 separate time-boxed spike because the attribute path is unmeasured.
 
 Runs:
 `benchmarks/runs/20261031T181211Z-m3-packed-8b-128` and
-`benchmarks/runs/20261031T181227Z-m3-packed-8b-64`.
+`benchmarks/runs/20261031T181227Z-m3-packed-8b-64`. They were recorded from a
+dirty tree at `a1728ae`; the packed-format commit is `bc4f8ce`.
+
+## Viewer bytes
+
+The demo chunk now uploads **97,152 B** (2,208 quads × 44 B), down from the M2
+167,808 B at 76 B/quad.
 
 ## Code
 

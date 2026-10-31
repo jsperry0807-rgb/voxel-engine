@@ -1,4 +1,4 @@
-//! The ADR-010 16 B mesh vertex (M2-10).
+//! The logical ADR-010 16 B mesh vertex and the M3 packed 8 B upload vertex.
 //!
 //! The layout is fixed: three chunk-local `u16` coordinates, a `u16` material,
 //! the face code, four `u8` corner AO values and three reserved zero bytes.
@@ -8,6 +8,8 @@
 //! the GPU upload path; `size_of` and `align_of` are asserted at compile time.
 
 use std::mem::{align_of, size_of};
+
+use voxel_core::constants::CHUNK_DIM;
 
 /// One mesh vertex, exactly 16 B and four-byte aligned.
 #[repr(C, align(4))]
@@ -227,6 +229,7 @@ impl PackedVertex {
 }
 
 const _: () = assert!(size_of::<PackedVertex>() == PackedVertex::SIZE);
+const _: () = assert!(CHUNK_DIM <= u8::MAX as usize);
 const _: () = assert!(align_of::<PackedVertex>() == PackedVertex::ALIGN);
 
 #[cfg(test)]
@@ -253,6 +256,19 @@ mod packed_tests {
             PackedVertex::decode(PackedVertex::from_vertex(&local).encode()).to_vertex(),
             local
         );
+    }
+
+    #[test]
+    fn packed_vertex_has_a_literal_byte_layout() {
+        let vertex = Vertex::new([1, 2, 3], 0xBEEF, 5, [0, 85, 170, 255]);
+        let bytes = PackedVertex::from_vertex(&vertex).encode();
+        assert_eq!(bytes, [1, 2, 3, 0, 0xEF, 0xBE, 0x25, 0x07]);
+    }
+
+    #[test]
+    #[should_panic(expected = "out of range")]
+    fn packed_vertex_rejects_a_face_above_five() {
+        let _ = PackedVertex::from_vertex(&Vertex::new([0, 0, 0], 1, 6, [255; 4]));
     }
 
     #[test]

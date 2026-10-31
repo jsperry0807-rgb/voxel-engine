@@ -835,7 +835,7 @@ and uploads them as a 90-day artifact.
 and Radeon iGPU; **Gate C fails** for instanced quads (1.311×/1.381× indexed,
 over the 10% threshold). The **44 B packed 8 B vertex fallback is landed**:
 128³ row 6 **2,115 KiB PASS**, row 1 **2.98 GiB PASS**; 64³ row 6 **536 KiB
-PASS**, 64³ Minimum row 1 **6.22 GiB FAIL** (still ~5.2 GiB after M6-09a).
+PASS**, 64³ Minimum row 1 **6.22 GiB FAIL** (5.11/5.21 GiB after M6-09a).
 The 32 B 4-vertex strip is deferred to a separate spike.
 **Art:** none; M3 reuses M1.5-14 and, if M2.5 ran, M2.5-31.
 

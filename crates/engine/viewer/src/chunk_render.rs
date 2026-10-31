@@ -1,6 +1,6 @@
 //! Draw pipeline for one chunk mesh.
 //!
-//! The pipeline consumes the ADR-010 16-byte vertices from [`ChunkMesh`] and
+//! The pipeline consumes the packed 8-byte vertices from [`ChunkMesh`] and
 //! the M2-27 chunk shader (AO + block light). Camera is group 0, atlas group 1
 //! and the M2 chunk data (light, probes) group 2.
 
@@ -39,6 +39,11 @@ pub const VERTEX_LAYOUT: VertexBufferLayout<'static> = VertexBufferLayout {
     step_mode: VertexStepMode::Vertex,
     attributes: &VERTEX_ATTRIBUTES,
 };
+
+const _: () = assert!(
+    VERTEX_LAYOUT.array_stride == voxel_mesh::PackedVertex::SIZE as u64,
+    "the chunk pipeline stride must match PackedVertex"
+);
 
 /// The M1.5 naive 16 B layout, kept for the screenshot example and its
 /// historical artifacts.
@@ -140,6 +145,10 @@ impl ChunkPipeline {
         atlas: &BindGroup,
         data: &BindGroup,
     ) {
+        debug_assert_eq!(
+            chunk.vertex_stride, VERTEX_LAYOUT.array_stride,
+            "chunk mesh stride does not match the packed pipeline"
+        );
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, camera, &[]);
         pass.set_bind_group(1, atlas, &[]);
