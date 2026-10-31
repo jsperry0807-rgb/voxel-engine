@@ -12,6 +12,11 @@
 //! - **address mode: clamp to edge** — the shader keeps UVs inside a tile, and
 //!   clamping prevents a bad UV from wrapping into a neighbouring material.
 //!
+//! The chunk shader fetches exact base-level texels with `textureLoad`; it does
+//! not use this sampler, because sampling across a tile boundary bleeds the
+//! neighbouring material into the face edge. The sampler and mip chain remain
+//! for the M1.5 screenshot example, which samples the atlas continuously.
+//!
 //! The atlas occupies bind group 1 (binding 0 = texture, binding 1 = sampler).
 //! The camera uniform is bind group 0.
 

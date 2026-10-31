@@ -95,6 +95,25 @@ so one mesh pipeline draws all chunks. `chunk_origin(pos)` is
 and origin 64 with the camera shifted by the matching 4 m and requires the
 images to match within 2 LSB.
 
+## Visual fixes
+
+The first streamed capture showed two kinds of lines that were not geometry
+cracks:
+
+- **White grid lines:** the chunk shader sampled the atlas through a filtering
+  sampler. At a tile edge the filter footprint crossed into the neighbouring
+  tile; grass (tile 3) sits directly above snow (tile 19), so its bottom edge
+  picked up white. The shader now fetches the exact base-level texel with
+  `textureLoad`, so no sampler or mip level can cross a tile boundary.
+- **Black step edges:** fully occluded AO corners multiplied the shade to zero.
+  The AO mapping now has a 0.4 floor (`0.4 + 0.6 * ao`), so a one-voxel step
+  still has a contact shadow but not a black line.
+
+The atlas sampler and mip chain remain for the M1.5 screenshot example, which
+samples the atlas continuously. A 9×9-chunk offscreen capture at the default
+camera was used to check both fixes; it is a diagnostic, not a committed golden
+(M3-12 owns the visual regression image).
+
 ## Measured run
 
 Release viewer, `--features chunk128`, 1920×1080, default camera:

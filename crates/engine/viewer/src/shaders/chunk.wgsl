@@ -1,12 +1,12 @@
-// Chunk shader, M3-00: packed 8 B vertex, AO and block light.
+// Chunk shader, M3-01: packed 8 B vertex, AO and block light.
 //
 // The vertex carries chunk-local voxel coordinates (6.25 cm), material, face
 // code and four 2-bit AO levels. Each chunk binds a world-voxel origin, so
 // world = (local + chunk_origin.xyz) * 0.0625.
 //
-// UVs are derived per fragment from the face-local position inside a 16-voxel
-// block face, not from a vertex attribute. A 1 m face is therefore exactly one
-// 16x16 atlas tile, with one tile texel per voxel face.
+// Tile texels are fetched per fragment from the face-local position inside a
+// 16-voxel block face, not from a vertex attribute. A 1 m face is therefore
+// exactly one 16x16 atlas tile, with one tile texel per voxel face.
 //
 // The AO array carries the quad's four corner values (a greedy quad's merge key
 // requires identical values across the rectangle); the vertex shader selects its
@@ -29,9 +29,6 @@ var<uniform> camera: Camera;
 
 @group(1) @binding(0)
 var atlas: texture_2d<f32>;
-
-@group(1) @binding(1)
-var atlas_sampler: sampler;
 
 // One u32 per light word: four words per cell (sky rgb/intensity, block
 // rgb/intensity), chunk-local, x fastest.
@@ -115,12 +112,16 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         face_uv = vec2<f32>(16.0 - rel.x, 16.0 - rel.y); // -Z
     }
 
-    // Half-texel inset keeps nearest sampling off the neighbouring tile.
-    let texel = clamp(face_uv, vec2<f32>(0.5), vec2<f32>(15.5));
+    // Fetch the exact tile texel. Sampling the atlas with a sampler at a tile
+    // edge bleeds the neighbouring material into the last texel (white snow
+    // below grass, dark stone elsewhere), which reads as a grid line.
+    let texel = vec2<u32>(
+        u32(clamp(face_uv.x, 0.0, 15.999)),
+        u32(clamp(face_uv.y, 0.0, 15.999)),
+    );
     let tile_origin =
-        vec2<f32>(f32(input.material % 16u), f32(input.material / 16u)) * 16.0;
-    let uv = (tile_origin + texel) / 256.0;
-    let texel_color = textureSample(atlas, atlas_sampler, uv);
+        vec2<u32>(input.material % 16u, input.material / 16u) * 16u;
+    let texel_color = textureLoad(atlas, vec2<i32>(tile_origin + texel), 0);
 
     // Chunk-local light cell; the far chunk face clamps onto the last cell.
     let cell = min(
@@ -139,6 +140,9 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     // sky-lit surfaces (level 15 gives exactly 1.0).
     let light = 0.25 + 0.75 * f32(level) / 15.0;
 
-    let shade = FACE_SHADE[input.face] * input.ao * light;
+    // Fully occluded corners keep some ambient light; without this floor,
+    // one-voxel step edges read as black grid lines.
+    let ao = 0.4 + 0.6 * input.ao;
+    let shade = FACE_SHADE[input.face] * ao * light;
     return vec4<f32>(texel_color.rgb * shade, 1.0);
 }
