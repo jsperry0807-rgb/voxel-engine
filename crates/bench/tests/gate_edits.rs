@@ -11,7 +11,9 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use voxel_bench::fixture::Manifest;
-use voxel_bench::gate::edits::{self, BUDGET_NS, EDITS, SCHEMA_VERSION, WARMUP_EDITS};
+use voxel_bench::gate::edits::{
+    self, BUDGET_NS, EDITS, SCHEMA_VERSION, SCRUB_BUDGET_NS, WARMUP_EDITS,
+};
 use voxel_core::constants::ROOT_LEVEL;
 
 fn fixture_dir() -> PathBuf {
@@ -68,6 +70,23 @@ fn report_splits_every_fixture_edit_into_fixed_and_dirty_terms() {
         assert!(term.total_ns > 0, "{name}: the run produced samples");
     }
 
+    for (name, term) in [
+        ("scrub_dirty", &report.scrub_terms.dirty),
+        ("remesh", &report.scrub_terms.remesh),
+        ("scrub_light", &report.scrub_terms.light),
+        ("probe", &report.scrub_terms.probe),
+        ("scrub_total", &report.scrub_terms.total),
+    ] {
+        assert!(term.p50_ns <= term.p95_ns, "{name}: p50 <= p95");
+        assert!(term.p95_ns <= term.max_ns, "{name}: p95 <= max");
+        assert!(term.total_ns > 0, "{name}: the run produced samples");
+    }
+    // The frozen fixture's edits are occupancy-neutral solid→solid swaps, so
+    // the dirty batch is exactly the voxel's own block and no probe can change.
+    assert_eq!(report.scrub_counts.dirty_blocks_per_edit, 1);
+    assert_eq!(report.scrub_counts.affected_probes_per_edit, 0);
+    assert!(report.scrub_counts.quads_per_edit > 0);
+
     assert_eq!(report.budget.budget_ns, BUDGET_NS);
     assert_eq!(report.budget.measured_p95_ns, report.terms.total.p95_ns);
     assert_eq!(
@@ -80,6 +99,20 @@ fn report_splits_every_fixture_edit_into_fixed_and_dirty_terms() {
         report.budget.within_budget,
         report.budget.margin_ns >= 0,
         "within_budget must agree with the measured p95"
+    );
+
+    assert_eq!(report.scrub_budget.budget_ns, SCRUB_BUDGET_NS);
+    assert_eq!(
+        report.scrub_budget.measured_p95_ns,
+        report.scrub_terms.total.p95_ns
+    );
+    assert_eq!(
+        report.scrub_budget.margin_ns,
+        SCRUB_BUDGET_NS as i64 - report.scrub_terms.total.p95_ns as i64
+    );
+    assert_eq!(
+        report.scrub_budget.within_budget,
+        report.scrub_budget.margin_ns >= 0
     );
 
     for sample in &report.edits {
@@ -116,6 +149,37 @@ fn report_splits_every_fixture_edit_into_fixed_and_dirty_terms() {
             sample.upload_bytes,
             sample.upload_node_bytes + sample.upload_leaf_bytes + sample.upload_level_start_bytes,
             "edit {}: upload bytes are the three real ranges",
+            sample.edit
+        );
+        assert_eq!(
+            sample.scrub_total_ns,
+            sample.compact_ns
+                + sample.cow_ns
+                + sample.scrub_dirty_ns
+                + sample.remesh_ns
+                + sample.scrub_light_ns
+                + sample.probe_ns,
+            "edit {}: scrub total is compaction + cow + dirty + remesh + light + probe",
+            sample.edit
+        );
+        assert!(
+            (1..=8).contains(&sample.dirty_blocks),
+            "edit {}: the 2×2×2 apron bounds the dirty batch",
+            sample.edit
+        );
+        assert_eq!(
+            sample.affected_probes, 0,
+            "edit {}: a solid→solid swap cannot change probe visibility",
+            sample.edit
+        );
+        assert!(
+            sample.remesh_ns > 0,
+            "edit {}: the remesh timer produced a sample",
+            sample.edit
+        );
+        assert!(
+            sample.probe_ns > 0,
+            "edit {}: the probe selection timer produced a sample",
             sample.edit
         );
         assert_eq!(
@@ -187,6 +251,12 @@ fn cli_prints_both_terms_and_every_percentile() {
         "p95",
         "max",
         "27 cells/edit",
+        "Scrub budget (M2-24)",
+        "Dirty blocks",
+        "Remesh",
+        "Probe",
+        "4.00 ms",
+        "Compaction + edit + dirty + remesh + light + probe",
     ] {
         assert!(
             text.contains(needle),
