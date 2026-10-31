@@ -575,6 +575,23 @@ mod tests {
     }
 
     #[test]
+    fn a_stale_material_table_is_rejected() {
+        let blocks = include_str!("../data/blocks.ron");
+        let materials = include_str!("../data/materials.gen.ron");
+        // A table generated from a different blocks input must not freeze with
+        // the old atlas slots.
+        let edited = format!("{blocks}\n// changed after generation\n");
+        let mut builder = BlockRegistryBuilder::new();
+        let error = builder
+            .load_ron_with_materials(&edited, materials)
+            .expect_err("a stale pairing must be rejected");
+        assert!(
+            matches!(error, crate::ron::BlockLoadError::StaleMaterials { .. }),
+            "{error:?}"
+        );
+    }
+
+    #[test]
     fn material_registry_matches_committed_blocks() {
         let blocks = include_str!("../data/blocks.ron");
         let materials = include_str!("../data/materials.gen.ron");

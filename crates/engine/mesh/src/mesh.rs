@@ -10,6 +10,7 @@ use crate::BLOCK_EDGE;
 use crate::BlockPos;
 use crate::greedy::{GreedyQuad, corner_signs, face_axis};
 use crate::vertex::Vertex;
+use voxel_storage::CHUNK_DIM;
 
 /// One block's vertex and index buffers.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -73,6 +74,15 @@ pub fn mesh_block(quads: &[GreedyQuad], block: BlockPos) -> Mesh {
     mesh.vertices.reserve(quads.len() * 4);
     mesh.indices.reserve(quads.len() * 6);
     let block_origin = block.origin();
+    // `BlockPos` fields are public and unchecked; a block outside the chunk
+    // would wrap the `u16` cast below and emit every vertex in the wrong block.
+    for (axis, &origin) in block_origin.iter().enumerate() {
+        assert!(
+            u64::from(origin) + BLOCK_EDGE as u64 <= CHUNK_DIM as u64,
+            "block origin {:?} on axis {axis} is outside the chunk",
+            block_origin
+        );
+    }
 
     for quad in quads {
         assert!(
@@ -129,11 +139,16 @@ fn quad_vertices(quad: &GreedyQuad, block_origin: [u32; 3]) -> [Vertex; 4] {
 
     corner_signs(quad.face).map(|(u_sign, v_sign)| {
         let mut local = [0u16; 3];
-        local[axis] = (block_origin[axis] + plane) as u16;
-        local[u_axis] =
-            (block_origin[u_axis] + u0 + if u_sign < 0 { 0 } else { quad.extent[u_axis] }) as u16;
-        local[v_axis] =
-            (block_origin[v_axis] + v0 + if v_sign < 0 { 0 } else { quad.extent[v_axis] }) as u16;
+        local[axis] =
+            u16::try_from(block_origin[axis] + plane).expect("chunk-local coordinate fits u16");
+        local[u_axis] = u16::try_from(
+            block_origin[u_axis] + u0 + if u_sign < 0 { 0 } else { quad.extent[u_axis] },
+        )
+        .expect("chunk-local coordinate fits u16");
+        local[v_axis] = u16::try_from(
+            block_origin[v_axis] + v0 + if v_sign < 0 { 0 } else { quad.extent[v_axis] },
+        )
+        .expect("chunk-local coordinate fits u16");
         Vertex::new(local, quad.material, face, quad.ao)
     })
 }
