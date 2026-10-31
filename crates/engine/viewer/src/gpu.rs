@@ -85,9 +85,9 @@ impl Gpu {
         display: OwnedDisplayHandle,
         atlas: Atlas,
     ) -> Result<Self, ViewerError> {
-        let instance = Instance::new(InstanceDescriptor::new_with_display_handle(Box::new(
-            display,
-        )));
+        let instance = Instance::new(InstanceDescriptor::new_with_display_handle_from_env(
+            Box::new(display),
+        ));
         let surface = instance.create_surface(window.clone())?;
         let adapter = block_on(instance.request_adapter(&RequestAdapterOptions {
             compatible_surface: Some(&surface),

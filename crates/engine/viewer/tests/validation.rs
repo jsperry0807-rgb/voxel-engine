@@ -32,7 +32,8 @@ struct TestGpu {
 fn gpu() -> Option<&'static TestGpu> {
     static GPU: OnceLock<Option<TestGpu>> = OnceLock::new();
     GPU.get_or_init(|| {
-        let instance = wgpu::Instance::default();
+        let instance =
+            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,

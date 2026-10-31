@@ -416,7 +416,8 @@ fn block_corners(face: Face, [x, y, z]: [u16; 3], size: u16) -> [[u16; 3]; 4] {
 
 impl Gpu {
     fn new(root: &Path) -> Result<Self, Box<dyn Error>> {
-        let instance = wgpu::Instance::default();
+        let instance =
+            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
