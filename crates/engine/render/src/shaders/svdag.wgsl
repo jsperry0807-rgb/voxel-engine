@@ -52,7 +52,9 @@ fn chunk_slot(p: vec3<i32>) -> u32 {
     let cap = arrayLength(&chunk_table) / SLOT_WORDS;
     let mask = cap - 1u;
     var i = slot_hash(p) & mask;
-    loop {
+    // Bounded: if the CPU table's sizing contract ever breaks (a bind group
+    // kept across a resize), the probe must miss instead of spinning forever.
+    for (var step = 0u; step < cap; step = step + 1u) {
         let base = i * SLOT_WORDS;
         let root = chunk_table[base + 3u];
         let blocks = chunk_table[base + 4u];
@@ -68,8 +70,6 @@ fn chunk_slot(p: vec3<i32>) -> u32 {
         }
         i = (i + 1u) & mask;
     }
-    // Unreachable: probe() mirrors the CPU table, which always has a free slot.
-    // Naga needs an explicit return after a loop body that only returns.
     return NONE;
 }
 

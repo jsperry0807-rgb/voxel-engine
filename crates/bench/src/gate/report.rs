@@ -679,8 +679,14 @@ fn vram_row(memory: &MemoryReport, residency: &ResidencyReport) -> Result<GateRo
     let limit = VOXEL_FAIL_MIB * MIB;
     let target = VOXEL_TARGET_MIB * MIB;
     let verdict = at_most(projected, limit);
-    let margin = limit as i64 - projected as i64;
-    let target_margin = target as i64 - projected as i64;
+    // `u64` values above `i64::MAX` would wrap a plain subtraction and print a
+    // wrong signed margin in the decision artifact.
+    let signed_delta = |limit: u64, value: u64| -> i64 {
+        (i128::from(limit) - i128::from(value)).clamp(i128::from(i64::MIN), i128::from(i64::MAX))
+            as i64
+    };
+    let margin = signed_delta(limit, projected);
+    let target_margin = signed_delta(target, projected);
 
     Ok(gate_row!(
         RowId::VramBudget,

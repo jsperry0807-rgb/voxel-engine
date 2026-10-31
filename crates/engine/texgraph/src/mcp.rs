@@ -49,9 +49,25 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     let server = Server { workspace };
     let stdin = io::stdin();
     let mut stdout = BufWriter::new(io::stdout());
+    /// Largest request line the server will buffer (a graph RON is well under).
+    const MAX_REQUEST_BYTES: usize = 4 * 1024 * 1024;
     for line in stdin.lock().lines() {
         let line = line?;
         if line.trim().is_empty() {
+            continue;
+        }
+        if line.len() > MAX_REQUEST_BYTES {
+            let response = error_response(
+                Value::Null,
+                -32600,
+                format!(
+                    "request is {} bytes, above the {MAX_REQUEST_BYTES}-byte limit",
+                    line.len()
+                ),
+            );
+            serde_json::to_writer(&mut stdout, &response)?;
+            stdout.write_all(b"\n")?;
+            stdout.flush()?;
             continue;
         }
         let response = match serde_json::from_str::<Value>(&line) {
