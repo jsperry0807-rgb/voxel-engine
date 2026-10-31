@@ -71,7 +71,7 @@ pub use super::stat::{BudgetCheck, Term};
 use super::stat::{format_duration, format_signed_duration, grouped, mean, term};
 
 /// Schema version of the edits report itself.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// Measured edits. The task fixes this count; the report is not a microbenchmark
 /// that silently changes its sample size.
@@ -155,9 +155,11 @@ pub struct EditSample {
     pub light_ns: u64,
     /// `upload_ns + fence_ns + flip_ns`.
     pub fixed_ns: u64,
+    /// Periodic compaction charged to this edit (0 for 63 of 64 edits).
+    pub compact_ns: u64,
     /// `cow_ns + light_ns`.
     pub dirty_ns: u64,
-    /// `fixed_ns + dirty_ns`.
+    /// `fixed_ns + dirty_ns + compact_ns`.
     pub total_ns: u64,
 }
 
@@ -530,7 +532,7 @@ fn measure(
 ) -> Result<EditsReport, String> {
     let light_table = builtin_light_table();
     let mut dense = vec![0u16; CHUNK_VOLUME];
-    let mut states = Vec::with_capacity(manifest.observed.live_chunks);
+    let mut states = Vec::with_capacity(manifest.observed.live_chunks.min(4096));
     let mut total_voxels = 0u64;
     let mut overlay_entries = 0u64;
 
@@ -611,9 +613,13 @@ fn measure(
 
         // Keep the arena in a steady state: without periodic compaction the
         // retired band slots accumulate and p95 depends on the edit index.
+        let compact_start = Instant::now();
         if step.is_multiple_of(64) {
             let _ = state.dag.compact_if_needed();
         }
+        // Charged to the edit that triggered it. Without this the amortized
+        // O(arena) rebuild was invisible to the p95 and to the 128³ projection.
+        let compact_ns = elapsed_ns(compact_start);
         let before = BandSnapshot::capture(&state.dag);
 
         let cow_start = Instant::now();
@@ -669,8 +675,9 @@ fn measure(
                 flip_ns,
                 light_ns,
                 fixed_ns,
+                compact_ns,
                 dirty_ns,
-                total_ns: fixed_ns + dirty_ns,
+                total_ns: fixed_ns + dirty_ns + compact_ns,
             });
         }
     }

@@ -1153,7 +1153,13 @@ fn fallback_row(fallback: &Fallback) -> GateRow {
         },
         "pre-registration §4 fallback order".to_owned(),
         "n/a".to_owned(),
-        Verdict::Pass,
+        // A triggered rule is a consequence of a failed row, not a passing
+        // measurement; counting it in `summary.pass` overstated the gate.
+        if fallback.triggered {
+            Verdict::NotMeasured
+        } else {
+            Verdict::Pass
+        },
         "pre-registration §4",
         fallback.action.clone(),
         None,

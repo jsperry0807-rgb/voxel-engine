@@ -129,7 +129,7 @@ fn report_measures_an_incremental_update_for_every_fixture_edit() {
         );
         assert_eq!(
             sample.update_ns,
-            sample.select_ns + sample.bake_ns + sample.upload_ns,
+            sample.select_ns + sample.bake_ns + sample.upload_ns + sample.compact_ns,
             "edit {}: update is select + rebake + upload",
             sample.edit
         );

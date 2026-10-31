@@ -163,7 +163,9 @@ fn cli_writes_one_markdown_and_one_json_with_the_twelve_rows_and_machine() {
     // The synthetic fixture and the missing granularity run are not green.
     assert_eq!(rows[8]["verdict"], "not_measured");
     assert_eq!(rows[10]["verdict"], "not_measured");
-    assert_eq!(rows[11]["verdict"], "pass");
+    // Row 12 reports which fallback rule fired. This fixture fails rows 1/6,
+    // so the rule is triggered and the row is not a passing measurement.
+    assert_eq!(rows[11]["verdict"], "not_measured");
 
     let pass = rows.iter().filter(|row| row["verdict"] == "pass").count();
     let fail = rows.iter().filter(|row| row["verdict"] == "fail").count();

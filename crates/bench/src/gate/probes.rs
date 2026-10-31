@@ -65,7 +65,7 @@ use super::stat::{
 };
 
 /// Schema version of the probe-update report itself.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// Measured edits. The gate reports a distribution over edited chunks, not a
 /// microbenchmark with a mutable sample count.
@@ -128,7 +128,9 @@ pub struct ProbeSample {
     pub bake_ns: u64,
     /// Staging-copy latency.
     pub upload_ns: u64,
-    /// `select_ns + bake_ns + upload_ns`.
+    /// Periodic compaction charged to this update (0 for 63 of 64 edits).
+    pub compact_ns: u64,
+    /// `select_ns + bake_ns + upload_ns + compact_ns`.
     pub update_ns: u64,
 }
 
@@ -450,7 +452,7 @@ fn measure(
 ) -> Result<ProbesReport, String> {
     let grid = ProbeGrid::for_chunk(ProbeLod::Near);
     let mut dense = vec![0u16; CHUNK_VOLUME];
-    let mut states = Vec::with_capacity(manifest.observed.live_chunks);
+    let mut states = Vec::with_capacity(manifest.observed.live_chunks.min(4096));
     let mut total_voxels = 0u64;
     let mut overlay_entries = 0u64;
 
@@ -547,9 +549,12 @@ fn measure(
         // Keep the arena in a steady state across the sequence; otherwise
         // retired band slots accumulate and the measured edit depends on its
         // position in the run.
+        let compact_start = Instant::now();
         if step.is_multiple_of(64) {
             let _ = state.dag.compact_if_needed();
         }
+        // Charged to the update that triggered it (see `gate::edits`).
+        let compact_ns = elapsed_ns(compact_start);
 
         // The COW edit is the trigger, not probe work; M1-37 charges it.
         let stats = state.dag.apply_edits([(candidate.index, material)]);
@@ -572,7 +577,7 @@ fn measure(
 
         if record {
             edited_chunks[state_index] = true;
-            let update_ns = select_ns + bake_ns + upload_ns;
+            let update_ns = select_ns + bake_ns + upload_ns + compact_ns;
             updates.push(ProbeSample {
                 edit: (step - WARMUP_EDITS) as u32,
                 chunk: [state.pos.x, state.pos.y, state.pos.z],
@@ -590,6 +595,7 @@ fn measure(
                 select_ns,
                 bake_ns,
                 upload_ns,
+                compact_ns,
                 update_ns,
             });
         }

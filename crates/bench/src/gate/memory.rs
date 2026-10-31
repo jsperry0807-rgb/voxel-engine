@@ -309,7 +309,7 @@ fn measure(
     manifest: Manifest,
 ) -> Result<MemoryReport, String> {
     let mut dense = vec![0u16; CHUNK_VOLUME];
-    let mut chunks = Vec::with_capacity(manifest.observed.live_chunks);
+    let mut chunks = Vec::with_capacity(manifest.observed.live_chunks.min(4096));
     let mut total_voxels = 0u64;
     let mut overlay_entries = 0u64;
 
