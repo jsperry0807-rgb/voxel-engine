@@ -786,17 +786,21 @@ impl GpuStore {
     }
 
     /// Installs a whole overlay snapshot, e.g. when a chunk is loaded from disk.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any index is outside the chunk. The whole batch is validated
+    /// first, so a rejected batch leaves no half-installed overlay behind.
     pub fn set_chunk_overlay(&mut self, p: ChunkPos, edits: impl IntoIterator<Item = (u32, u16)>) {
-        let mut edits = edits.into_iter();
-        let Some((first_idx, first_value)) = edits.next() else {
+        let edits: Vec<(u32, u16)> = edits.into_iter().collect();
+        if edits.is_empty() {
             return;
-        };
+        }
         assert!(
-            (first_idx as usize) < CHUNK_VOLUME,
+            edits.iter().all(|(idx, _)| (*idx as usize) < CHUNK_VOLUME),
             "voxel index out of range"
         );
         let (_, table_slot) = self.ensure_block_table(p);
-        self.set_in_table(table_slot, first_idx, first_value);
         for (idx, v) in edits {
             self.set_in_table(table_slot, idx, v);
         }
@@ -829,8 +833,19 @@ impl GpuStore {
     /// voxels are rebuilt, untouched subtrees are reused by offset without being walked.
     /// `edits` are (local voxel index, material; 0 = air) applied on top of the chunk's current
     /// GPU DAG (air if the chunk is absent). Cost is O(edits * 6), independent of chunk size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any index is outside the chunk; the CPU tier asserts the same
+    /// thing, and silently masking the index here would corrupt only the GPU.
     pub fn apply_edits(&mut self, p: ChunkPos, edits: impl IntoIterator<Item = (u32, u16)>) {
-        let mut e: Vec<(u32, u16)> = edits.into_iter().map(|(i, v)| (morton(i), v)).collect();
+        let mut e: Vec<(u32, u16)> = edits
+            .into_iter()
+            .map(|(i, v)| {
+                assert!((i as usize) < CHUNK_VOLUME, "voxel index out of range");
+                (morton(i), v)
+            })
+            .collect();
         if e.is_empty() {
             return;
         }
