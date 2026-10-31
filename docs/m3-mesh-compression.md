@@ -306,7 +306,16 @@ charges production AO bytes + records/table. Measured: 128³ **3,650 KiB** p95
 (1,250 KiB / 52.1% over the 2,400 KiB cap) and **4.16 GiB** total; 64³ **925
 KiB** (325.5 KiB over 600) and **34.51 GiB**. Runs:
 `benchmarks/runs/20261031T163853Z-m2-production-mesh-128` and
-`...-64`. The M2 erratum is recorded; Phase 1 (instanced-quad spike) is next.
+`...-64`. The M2 erratum is recorded.
+
+**Phase 1 spike result (2026-10-31, partial):** the 8 B `QuadRecord` codec and
+Gate A pass (exhaustive faces/extents/AO; >10k mixed-chunk quads). The
+storage-pull example `quad_spike` passes Gate B1, B2 direct and indirect, and
+Gate D at **0 LSB** on both the RTX 4060 and the Radeon iGPU. Gate C (the
+pre-registered 64-chunk full-frame scene with timestamps) remains; the spike
+scene is 64 quads, so it is not a representative performance measurement.
+Run with `cargo run -p voxel-viewer --features chunk128 --example quad_spike`
+under the WSL GPU env.
 
 ---
 

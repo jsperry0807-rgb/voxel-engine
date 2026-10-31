@@ -33,6 +33,9 @@ pub use light::{
 mod mesh;
 pub use mesh::{Mesh, face_from_code, mesh_block, mesh_face};
 
+mod record;
+pub use record::QuadRecord;
+
 #[cfg(feature = "raytest")]
 pub mod raytest;
 #[cfg(feature = "raytest")]
