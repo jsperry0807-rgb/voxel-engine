@@ -585,8 +585,9 @@ fn provenance(fixture_root: &Path) -> Provenance {
         generated_at: utc_now(),
         source_commit: git(&["rev-parse", "--short=12", "HEAD"]),
         source_worktree_dirty: git_dirty(fixture_root),
-        worldgen: "Deterministic stand-in, not docs/worldgen-design.md; frozen for M1 measurement."
-            .to_owned(),
+        worldgen:
+            "Deterministic stand-in, not docs/worldgen-design.md; frozen for gate measurement."
+                .to_owned(),
     }
 }
 
