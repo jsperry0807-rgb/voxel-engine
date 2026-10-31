@@ -3,7 +3,7 @@
 **Status:** v1.6 — derived from spec v2.3 and roadmap v3.2
 **Date:** 2026-10-30
 **Owner:** engine
-**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 in progress: `M2-16` done; `M2-17` done (5.7% p95 at 128³, target ≤20%); `M2-18` done; `M2-19` next.
+**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 in progress: `M2-16` done; `M2-17` done (5.7% p95 at 128³, target ≤20%); `M2-18` done; `M2-19` done; `M2-20` next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -411,7 +411,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 **Goal:** deterministic mesh + AO + block light + probes, at the 128³ Minimum edge.
 **Exit:** M2-30. **Budget:** 27.0 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
-**Status:** In progress — M2-16 done; M2-17 done (5.7% p95 at 128³, target ≤20%); M2-18 done; M2-19 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
+**Status:** In progress — M2-16 done; M2-17 done (5.7% p95 at 128³, target ≤20%); M2-18 done; M2-19 done; M2-20 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
 **Art:** none beyond M1.5-14; M2 reuses the slice atlas.
 
 **M1 gate carry-over — blocks M2-30:**
@@ -524,6 +524,21 @@ grid is capped at 32,768). One 256-ray frame costs 120 µs (~475 ns/ray), so a
 full 128³ bake spreads over 96–128 frames. See
 `cargo bench -p voxel-mesh --bench probe`.
 
+**M2-19 measured (2026-10-30):** `ProbeVolume::sample` anchors its interpolation
+cell on the probe centres (a sample at a probe centre reproduces that probe, not
+the neighbouring blend), blends the eight corners when all are valid and, when
+any corner is invalid, selects the nearest valid probe in the 3×3×3 window
+around the sample's nearest lattice probe, clamped to this chunk's grid, with
+equal distances breaking to the lowest linear probe index; an empty window
+returns zero contribution. Ten `probe_fallback` tests pin each branch: the
+probe-centre identity, a blend against a hand-summed cell, a sample inside the
+floor fixture selecting probe 4 over the equidistant probe 5, the all-solid and
+far cases returning zero, a mid-grid window that must reach the nearer probe,
+the negative window case (a valid probe outside is not used), edge/outside
+clamping, the SH4 radiance against the basis, and a sweep over NaN/infinite
+positions and degenerate normals that stays finite. See
+`cargo test -p voxel-mesh probe_fallback`.
+
 ### 6.1 Apron and mesher
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -556,7 +571,7 @@ full 128³ bake spreads over 96–128 frames. See
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
 | M2-18 | Production SH4 bake at block centres, deterministic, budgeted across frames | M1-30 | Byte-equal to the reference on 3 fixtures | `cargo test -p voxel-mesh probe_bake` | 1.5 d | [x] |
-| M2-19 | Invalid-in-solid flag and 3×3×3 nearest-valid fallback | M2-18 | Sampling inside a wall returns the nearest valid probe; no NaNs | `cargo test -p voxel-mesh probe_fallback` | 0.5 d | [ ] |
+| M2-19 | Invalid-in-solid flag and 3×3×3 nearest-valid fallback | M2-18 | Sampling inside a wall returns the nearest valid probe; no NaNs | `cargo test -p voxel-mesh probe_fallback` | 0.5 d | [x] |
 | M2-20 | Probe LOD: near per block, mid half-res, far none; transition is a content event | M2-19 | Ring transition rebuilds once; counts match 512/64/0 per chunk | `cargo test -p voxel-mesh probe_lod` | 1.5 d | [ ] |
 | M2-21 | Probe determinism and update budget: p95 ≤ 4 ms per edited chunk | M2-18 | Measured on the fixture; recorded | `cargo run -p voxel-bench -- gate probes` | 0.5 d | [ ] |
 

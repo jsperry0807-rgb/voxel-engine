@@ -31,6 +31,17 @@
 //! how the budget splits the work: one frame, sixty frames or a budget of one
 //! ray produce the same SH payload and the same validity mask.
 //!
+//! # Sampling and the invalid-in-solid fallback
+//!
+//! [`ProbeVolume::sample`] (M2-19) takes a chunk-local voxel position. When all
+//! eight corners of the containing cell are valid it blends them trilinearly.
+//! When any corner is invalid — the usual case inside a wall — it selects the
+//! nearest valid probe in the 3×3×3 window around the sample, clamped to this
+//! chunk's grid, with equal distances breaking to the lowest linear index; if
+//! the window is empty the contribution is zero. No path returns a NaN:
+//! non-finite positions collapse to zero, and a zero-length or non-finite normal
+//! returns zero radiance.
+//!
 //! # A frozen oracle
 //!
 //! The grid, seed, ray fan, traversal and quantiser are deliberately a copy of
@@ -393,6 +404,246 @@ impl ProbeVolume {
             bytes.extend_from_slice(&probe.to_bytes());
         }
         bytes
+    }
+
+    /// Samples the volume at a chunk-local voxel position (M2-19).
+    ///
+    /// The position is clamped to this chunk's own grid: sampling never reads a
+    /// neighbour's probe volume, and a position outside the chunk (or a
+    /// non-finite one) cannot panic or produce a NaN.
+    ///
+    /// When all eight corners of the containing cell are valid, their SH
+    /// coefficients are blended trilinearly and the result is
+    /// [`SampleSource::Blend`]. If any corner is invalid — the common case for a
+    /// sample inside a wall, whose own block probe was flagged — the sample
+    /// falls back to the nearest valid probe in the 3×3×3 window around the
+    /// sample, clamped to the chunk's grid, with equal distances breaking to the
+    /// lowest linear probe index. If the window holds no valid probe the
+    /// contribution is zero ([`SampleSource::Zero`]) and shading uses direct
+    /// light plus vertex AO.
+    pub fn sample(&self, position: [f64; 3]) -> ProbeSample {
+        if self.probes.is_empty() || !position.iter().all(|axis| axis.is_finite()) {
+            return ProbeSample::ZERO;
+        }
+
+        let (cell, fraction) = self.cell_and_fraction(position);
+        let edge = self.grid.probes_per_edge();
+        let high = |coordinate: usize| (coordinate + 1).min(edge - 1);
+        let xs = [cell[0], high(cell[0])];
+        let ys = [cell[1], high(cell[1])];
+        let zs = [cell[2], high(cell[2])];
+
+        let mut blended = true;
+        'corners: for &x in &xs {
+            for &y in &ys {
+                for &z in &zs {
+                    if !self.is_valid(x + y * edge + z * edge * edge) {
+                        blended = false;
+                        break 'corners;
+                    }
+                }
+            }
+        }
+
+        if !blended {
+            return match self.nearest_valid(position) {
+                Some(probe) => ProbeSample {
+                    coefficients: self.probes[probe].coefficients(),
+                    source: SampleSource::Fallback { probe },
+                },
+                None => ProbeSample::ZERO,
+            };
+        }
+
+        let weights = [
+            [1.0 - fraction[0], fraction[0]],
+            [1.0 - fraction[1], fraction[1]],
+            [1.0 - fraction[2], fraction[2]],
+        ];
+        let mut coefficients = [[0.0; PROBE_CHANNELS]; SH_COEFFICIENTS];
+        for x in 0..2 {
+            for y in 0..2 {
+                for z in 0..2 {
+                    let weight = weights[0][x] * weights[1][y] * weights[2][z];
+                    if weight == 0.0 {
+                        continue;
+                    }
+                    let index = xs[x] + ys[y] * edge + zs[z] * edge * edge;
+                    let record = self.probes[index].coefficients();
+                    for (coefficient, corner) in coefficients.iter_mut().zip(record) {
+                        for (channel, value) in coefficient.iter_mut().zip(corner) {
+                            *channel += value * weight;
+                        }
+                    }
+                }
+            }
+        }
+
+        ProbeSample {
+            coefficients,
+            source: SampleSource::Blend,
+        }
+    }
+
+    /// The nearest valid probe to `position` within the 3×3×3 window around the
+    /// sample, on this volume's own grid.
+    ///
+    /// The window is centred on the nearest lattice probe on each axis, so it
+    /// is the 27 probes closest to the sample and always contains the eight
+    /// corners of the containing cell. Indices are clamped to the grid, so a
+    /// window on a face repeats edge probes instead of reading a neighbour's
+    /// volume.
+    ///
+    /// This is the selection behind [`Self::sample`]'s fallback. Distances are
+    /// measured from the position clamped to the chunk; ties break to the lowest
+    /// linear probe index. Returns `None` when the volume has no valid probe in
+    /// the window, which includes an empty (far) volume.
+    pub fn nearest_valid(&self, position: [f64; 3]) -> Option<usize> {
+        if self.probes.is_empty() || !position.iter().all(|axis| axis.is_finite()) {
+            return None;
+        }
+
+        let (cell, fraction) = self.cell_and_fraction(position);
+        let scene = self.grid.scene_edge_voxels() as f64;
+        let clamped = [
+            position[0].clamp(0.0, scene),
+            position[1].clamp(0.0, scene),
+            position[2].clamp(0.0, scene),
+        ];
+        let edge = self.grid.probes_per_edge() as i32;
+        let edge_usize = edge as usize;
+        let window = [0, 1, 2].map(|axis| {
+            if fraction[axis] < 0.5 {
+                cell[axis] as i32
+            } else {
+                (cell[axis] as i32 + 1).min(edge - 1)
+            }
+        });
+        let mut best: Option<(f64, usize)> = None;
+
+        for dz in -1..=1 {
+            for dy in -1..=1 {
+                for dx in -1..=1 {
+                    let x = (window[0] + dx).clamp(0, edge - 1) as usize;
+                    let y = (window[1] + dy).clamp(0, edge - 1) as usize;
+                    let z = (window[2] + dz).clamp(0, edge - 1) as usize;
+                    // Clamping duplicates edge indices; the distance and
+                    // index checks below make the repeats harmless.
+                    let index = x + y * edge_usize + z * edge_usize * edge_usize;
+                    if !self.is_valid(index) {
+                        continue;
+                    }
+                    let centre = self.grid.centre(index);
+                    let distance = (centre[0] - clamped[0]).powi(2)
+                        + (centre[1] - clamped[1]).powi(2)
+                        + (centre[2] - clamped[2]).powi(2);
+                    let replace = best.is_none_or(|(best_distance, best_index)| {
+                        distance < best_distance
+                            || (distance == best_distance && index < best_index)
+                    });
+                    if replace {
+                        best = Some((distance, index));
+                    }
+                }
+            }
+        }
+
+        best.map(|(_, index)| index)
+    }
+
+    /// The cell whose corners are the probe centres around `position`, plus the
+    /// position inside that cell.
+    ///
+    /// Probes sit at block centres, so the cell between probe `i` and `i + 1`
+    /// starts half a block before the block boundary: for the near grid that is
+    /// voxel `i · 16 + 8`. Anchoring on the block boundary instead would blend
+    /// the neighbouring probes and make a sample at a probe centre miss that
+    /// probe. Both the cell and the fraction are clamped, so a position outside
+    /// the chunk reads this chunk's edge probes rather than a neighbour's.
+    fn cell_and_fraction(&self, position: [f64; 3]) -> ([usize; 3], [f64; 3]) {
+        let edge = self.grid.probes_per_edge();
+        debug_assert!(edge > 0, "an empty grid has no cell to sample");
+        let cell_voxels = (self.grid.spacing_blocks() * BLOCK_DIM) as f64;
+        let half_block = (BLOCK_DIM / 2) as f64;
+        let scene = self.grid.scene_edge_voxels() as f64;
+        let mut cell = [0usize; 3];
+        let mut fraction = [0.0f64; 3];
+
+        for axis in 0..3 {
+            let clamped = position[axis].clamp(0.0, scene);
+            let raw = (clamped - half_block) / cell_voxels;
+            let base = raw.floor().clamp(0.0, (edge - 1) as f64);
+            cell[axis] = base as usize;
+            fraction[axis] = (raw - base).clamp(0.0, 1.0);
+        }
+
+        (cell, fraction)
+    }
+}
+
+/// How [`ProbeVolume::sample`] produced its coefficients.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SampleSource {
+    /// All eight corners of the containing cell were valid and were blended.
+    Blend,
+    /// At least one corner was invalid; this valid probe was selected instead.
+    ///
+    /// `probe` is a linear index into [`ProbeVolume::probes`] (`x` fastest, then
+    /// `y`, then `z`), so a caller can compare it or show it in a debug view.
+    Fallback { probe: usize },
+    /// No valid probe in the 3×3×3 window; the contribution is zero.
+    Zero,
+}
+
+/// One sampled probe contribution: linear SH4 coefficients plus their source.
+///
+/// The coefficients are decoded from RGB8, so they are linear radiance, not the
+/// stored bytes. Evaluate them with [`Self::radiance`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ProbeSample {
+    /// Four real SH coefficients per RGB channel, `[l0, l1m1, l10, l11]`.
+    pub coefficients: [[f64; PROBE_CHANNELS]; SH_COEFFICIENTS],
+    /// How the coefficients were chosen.
+    pub source: SampleSource,
+}
+
+impl ProbeSample {
+    /// No probe contribution; direct light plus vertex AO carry the surface.
+    pub const ZERO: Self = Self {
+        coefficients: [[0.0; PROBE_CHANNELS]; SH_COEFFICIENTS],
+        source: SampleSource::Zero,
+    };
+
+    /// Evaluates the SH4 coefficients along a surface normal.
+    ///
+    /// This is the SH radiance in that direction (the basis is evaluated at the
+    /// normal, with no cosine-band convolution), which is what the M1-30 bake
+    /// projects. The normal is normalised first. A zero-length, non-finite or
+    /// overflowing normal returns zero radiance instead of a NaN, so no shading
+    /// path can propagate one.
+    pub fn radiance(self, normal: [f64; 3]) -> [f64; PROBE_CHANNELS] {
+        let length_squared = normal.iter().map(|axis| axis * axis).sum::<f64>();
+        if !length_squared.is_finite() || length_squared <= 0.0 {
+            return [0.0; PROBE_CHANNELS];
+        }
+        let inverse = length_squared.sqrt().recip();
+        let direction = [
+            normal[0] * inverse,
+            normal[1] * inverse,
+            normal[2] * inverse,
+        ];
+        if !direction.iter().all(|axis| axis.is_finite()) {
+            return [0.0; PROBE_CHANNELS];
+        }
+
+        let basis = sh_basis(direction);
+        let mut radiance = [0.0; PROBE_CHANNELS];
+        for (coefficient, weight) in self.coefficients.iter().zip(basis) {
+            for (channel, value) in radiance.iter_mut().zip(coefficient) {
+                *channel += value * weight;
+            }
+        }
+        radiance
     }
 }
 
