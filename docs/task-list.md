@@ -3,7 +3,7 @@
 **Status:** v1.6 — derived from spec v2.3 and roadmap v3.2
 **Date:** 2026-10-30
 **Owner:** engine
-**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 in progress: `M2-16` done; `M2-17` done (5.7% p95 at 128³, target ≤20%); `M2-18` done; `M2-19` done; `M2-20` done; `M2-21` done; `M2-22` done; `M2-23` done; `M2-24` done; `M2-25` done; `M2-26` done; `M2-27` done; `M2-28` next.
+**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 in progress: `M2-16` done; `M2-17` done (5.7% p95 at 128³, target ≤20%); `M2-18` done; `M2-19` done; `M2-20` done; `M2-21` done; `M2-22` done; `M2-23` done; `M2-24` done; `M2-25` done; `M2-26` done; `M2-27` done; `M2-28` done; `M2-29` next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -411,7 +411,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 **Goal:** deterministic mesh + AO + block light + probes, at the 128³ Minimum edge.
 **Exit:** M2-30. **Budget:** 27.0 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
-**Status:** In progress — M2-16 done; M2-17 done (5.7% p95 at 128³, target ≤20%); M2-18 done; M2-19 done; M2-20 done; M2-21 done; M2-22 done; M2-23 done; M2-24 done; M2-25 done; M2-26 done; M2-27 done; M2-28 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
+**Status:** In progress — M2-16 done; M2-17 done (5.7% p95 at 128³, target ≤20%); M2-18 done; M2-19 done; M2-20 done; M2-21 done; M2-22 done; M2-23 done; M2-24 done; M2-25 done; M2-26 done; M2-27 done; M2-28 done; M2-29 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
 **Art:** none beyond M1.5-14; M2 reuses the slice atlas.
 
 **M1 gate carry-over — blocks M2-30:**
@@ -660,6 +660,17 @@ sampled yet. `cargo run -p voxel-viewer` on the development host
 The one-chunk `u16` index stream caps a mesh at 16,384 quads, so a fully
 populated 128³ chunk needs meshlets in M3. See [`m2-viewer.md`](m2-viewer.md).
 
+**M2-28 measured (2026-10-31):** `cargo bench -p voxel-mesh build` runs the
+production single-threaded chunk build (18³ scratch fill + `greedy_block` with
+AO + `mesh_block`) over 100 deterministic terrain chunks (hills, two ellipsoid
+caves and a floating shelf). Release throughput is **210.4 chunks/s at 64³**
+(5,535 quads/chunk) and **34.3 chunks/s at 128³** (18,180 quads/chunk) — both
+above the 20/s budget, which the bench asserts. Volumes are generated before
+timing, so the measurement is meshing rather than generation; the apron is
+empty (single-chunk build, not a border-seam run). The bench prints the summary
+before its criterion group, so the filtered verify command reports the number
+without running the long criterion sampling.
+
 ### 6.1 Apron and mesher
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -706,7 +717,7 @@ populated 128³ chunk needs meshlets in M3. See [`m2-viewer.md`](m2-viewer.md).
 | M2-25 | Ray-test occlusion behind `occlusion.raytest` flag, using the SVDAG; default off | M1-33 | Flag on/off produce comparable visible sets; documented delta | `cargo test -p voxel-mesh --features raytest` | 2 d | [x] |
 | M2-26 | Ray-test vs flood-fill comparison report: accuracy and cost on 100 poses | M2-25 | Table in `docs/` with the decision recommendation (still default flood-fill) | review | 0.5 d | [x] |
 | M2-27 | Wire M2 into the viewer: replace the naive mesher; light + probes uploaded | M2-12, M2-21 | Visual parity with M1.5 except better merge ratio; 60 Hz; no new material keys, the M1.5-14 atlas is unchanged | run | 1 d | [x] |
-| M2-28 | Throughput: ≥ 20 terrain chunks/s single-threaded | M2-27 | Measured over 100 chunks; recorded | `cargo bench -p voxel-mesh build` | 0.5 d | [ ] |
+| M2-28 | Throughput: ≥ 20 terrain chunks/s single-threaded | M2-27 | Measured over 100 chunks; recorded | `cargo bench -p voxel-mesh build` | 0.5 d | [x] |
 | M2-29 | Scratch-memory budget test: ≤ 64 KiB per worker, no chunk-wide densify anywhere | M2-03 | Counting allocator test fails if exceeded | `cargo test -p voxel-mesh scratch_budget` | 0.5 d | [ ] |
 | M2-30 | M2 exit: tag `m2`, update roadmap, freeze goldens as CI artifacts; record the 128³ Minimum run and close gate rows 9/11 | M2-29; M1 gate carry-over | Tag; CI runs the goldens; 128³ memory/edit/probe numbers and gate rows 9/11 recorded | `git tag -n m2`; gate report | 0.5 d | [ ] |
 
