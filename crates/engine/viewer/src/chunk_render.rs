@@ -5,7 +5,7 @@
 //! and the M2/M3 chunk data (light, probes, world-voxel origin) group 2.
 
 use wgpu::{
-    BindGroup, BindGroupLayout, BlendState, ColorTargetState, ColorWrites, CompareFunction,
+    BindGroup, BindGroupLayout, BlendState, Buffer, ColorTargetState, ColorWrites, CompareFunction,
     DepthStencilState, Device, FragmentState, IndexFormat, MultisampleState,
     PipelineLayoutDescriptor, PrimitiveState, PrimitiveTopology, RenderPass, RenderPipeline,
     RenderPipelineDescriptor, ShaderModuleDescriptor, ShaderSource, StencilState, TextureFormat,
@@ -16,6 +16,7 @@ use voxel_core::content_constants::LIGHT_CELLS_PER_EDGE;
 
 use crate::chunk_mesh::ChunkMesh;
 use crate::depth::DEPTH_FORMAT;
+use crate::mesh_pool::MeshAllocation;
 
 const CHUNK_WGSL: &str = include_str!("shaders/chunk.wgsl");
 
@@ -137,6 +138,10 @@ impl ChunkPipeline {
     }
 
     /// Draws `chunk` with the camera and atlas bind groups.
+    ///
+    /// This is the one-buffer-per-chunk path used by the M1.5 screenshot
+    /// example and the validation fixtures; the streaming viewer draws
+    /// [`MeshAllocation`]s out of the M3-02 pool instead.
     pub fn draw(
         &self,
         pass: &mut RenderPass<'_>,
@@ -149,12 +154,76 @@ impl ChunkPipeline {
             chunk.vertex_stride, VERTEX_LAYOUT.array_stride,
             "chunk mesh stride does not match the packed pipeline"
         );
+        self.draw_ranges(
+            pass,
+            &chunk.vertices,
+            0,
+            &chunk.indices,
+            0,
+            chunk.index_count,
+            camera,
+            atlas,
+            data,
+        );
+    }
+
+    /// Draws one mesh out of the M3-02 pool.
+    ///
+    /// The vertex and index slices share one page buffer; the draw starts each
+    /// at the mesh's offset, so no range crosses a page.
+    pub fn draw_pooled(
+        &self,
+        pass: &mut RenderPass<'_>,
+        mesh: &MeshAllocation,
+        camera: &BindGroup,
+        atlas: &BindGroup,
+        data: &BindGroup,
+    ) {
+        debug_assert_eq!(
+            u64::from(mesh.format().vertex_stride()),
+            VERTEX_LAYOUT.array_stride,
+            "pooled mesh stride does not match the packed pipeline"
+        );
+        let Some(indices) = &mesh.indices else {
+            debug_assert!(false, "the chunk pipeline needs an index stream");
+            return;
+        };
+        self.draw_ranges(
+            pass,
+            &mesh.vertices.buffer,
+            mesh.vertices.offset,
+            &indices.buffer,
+            indices.offset,
+            mesh.index_count(),
+            camera,
+            atlas,
+            data,
+        );
+    }
+
+    /// Binds the shared state and draws one vertex/index range.
+    #[allow(clippy::too_many_arguments)]
+    fn draw_ranges(
+        &self,
+        pass: &mut RenderPass<'_>,
+        vertices: &Buffer,
+        vertex_offset: u64,
+        indices: &Buffer,
+        index_offset: u64,
+        index_count: u32,
+        camera: &BindGroup,
+        atlas: &BindGroup,
+        data: &BindGroup,
+    ) {
+        // An empty range draws nothing without a validation error; both the
+        // pooled and the per-chunk install paths keep empty meshes out.
+        debug_assert!(index_count > 0, "a drawn mesh has at least one index");
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, camera, &[]);
         pass.set_bind_group(1, atlas, &[]);
         pass.set_bind_group(2, data, &[]);
-        pass.set_vertex_buffer(0, chunk.vertices.slice(..));
-        pass.set_index_buffer(chunk.indices.slice(..), IndexFormat::Uint16);
-        pass.draw_indexed(0..chunk.index_count, 0, 0..1);
+        pass.set_vertex_buffer(0, vertices.slice(vertex_offset..));
+        pass.set_index_buffer(indices.slice(index_offset..), IndexFormat::Uint16);
+        pass.draw_indexed(0..index_count, 0, 0..1);
     }
 }

@@ -16,6 +16,7 @@ pub mod depth;
 pub mod error;
 pub mod gpu;
 pub mod input;
+pub mod mesh_pool;
 pub mod naive_mesh;
 pub mod quads;
 pub mod streaming;

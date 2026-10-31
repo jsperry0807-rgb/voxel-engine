@@ -158,7 +158,7 @@ impl Gpu {
             &data_layout,
             config.format,
         );
-        let streaming = Streaming::new(device.clone(), data_layout);
+        let streaming = Streaming::new(device.clone(), queue.clone(), data_layout);
         log::info!(
             "streaming shell: {} chunk ring, {:.0} ms frame budget",
             streaming::RING_CHUNKS,
