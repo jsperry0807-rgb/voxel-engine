@@ -83,10 +83,10 @@ vertex buffer cannot be offset by `base_quad` in the shader; storage pull can.
 - The spike's direct draw sets `first_instance = base_quad`.
   **`INDIRECT_FIRST_INSTANCE` is a hard requirement for M3-05's indirect
   path**, not a soft check: without it, indirect draws must use
-  `first_instance == 0`, and the per-meshlet base cannot be expressed. Vulkan
-  (RTX 4060/Linux, Intel/AMD iGPU), DX12 (Windows) and Metal (macOS) expose the
-  feature in wgpu; WebGL2 does not. The spike records it on the discrete and
-  integrated adapters. If a target lacks it, the options are (a) one direct
+  `first_instance == 0`, and the per-meshlet base cannot be expressed. It is
+  **expected** on Vulkan (RTX 4060/Linux, Intel/AMD iGPU), DX12 (Windows) and
+  Metal (macOS); WebGL2 does not expose it. This is an expectation, not a
+  guarantee: the spike records the actual feature bit on each target adapter. If a target lacks it, the options are (a) one direct
   draw per meshlet with `first_instance = base_quad` (gives up the indirect
   path for that target) or (b) a per-draw base buffer with a target-specific
   draw id; neither is the planned M3-05 path, so a missing feature is a
@@ -153,12 +153,20 @@ four stored vertices.
 
 **Gate B2 — real-draw index test (catches the base double-count).** Gate B1's
 compute entry is handed the global index, so it cannot observe what
-`instance_index` does in a real draw. Add a render pass that issues nonzero
-`first_instance` draws over several meshlets; the vertex shader writes the
-fetched quad index as a flat varying and the fragment writes it to an
-`R32Uint` target, with a unique value per quad. Read back and assert every
-pixel equals the expected global index (`first_instance + local`). This is the
-test that fails if the base is added twice.
+`instance_index` does in a real draw. Use an orthographic top-down camera and
+non-overlapping quads on a grid so each pixel's quad is known; the vertex shader
+writes the fetched quad index as a flat varying and the fragment writes it to an
+`R32Uint` target. Assert each pixel equals the expected global index; if a
+non-overlapping layout is impractical, assert the observed multiset equals the
+expected set with **no missing or duplicate values**. Run both variants:
+
+- **direct** with `first_instance = base_quad`, and
+- **indirect** with the same nonzero base (the path M3-05 uses).
+
+Run both on the **discrete and integrated adapters**, not llvmpipe alone:
+Vulkan and DX12/Metal lower the instance-index base differently, so one
+backend is not evidence for another. This is the test that fails if the base is
+added twice.
 
 Because Gate B1 and production share `fetch_record`, Gate B1 covers the production
 record decode. It does **not** cover a `Uint8x4` vertex-attribute decode,
@@ -344,20 +352,21 @@ costs more than instanced (3–4 d) and abandons 64³ Minimum.
 
 ### Effort and calendar
 
-Request the iGPU on **day 1**; the Gate C wait overlaps Phase 0 and the
-functional spike.
+Request the iGPU on **day 1**; Phase 0 and the functional spike (2.5–3 d) finish
+inside the 5-day wait, so only the post-gate work is additive to the calendar.
 
 | Path | Effort | Calendar if the iGPU arrives early | Calendar if it takes the full 5 d |
 |---|---:|---:|---:|
-| Best (instanced passes) | 5.5–7 d | 5.5–7 d | up to **7.5–9.5 d** (Phase 0 + spike overlap 2.5–3 d, then 2–2.5 d remaining) |
-| Typical (spike fails, fallback passes) | 6.75–8 d | 6.75–8 d | up to **8.75–10.5 d** |
-| Worst (fallback misses 90%, third exit) | 7.75–11 d | 7.75–11 d | up to **9.75–13.5 d** |
+| Best (instanced passes) | 5.5–7 d | 5.5–7 d | **8–9 d** (5 d wait + 3–4 d instanced after the gate) |
+| Typical (spike fails, fallback passes) | 6.75–8 d | 6.75–8 d | **9.25–10 d** (5 d wait + 4.25–5 d fallback) |
+| Worst (fallback misses 90%, third exit) | 7.75–11 d | 7.75–11 d | **10.25–13 d** (5 + 4.25–5 + 1–3) |
 
 M3 needs **+1.0–1.5 d for M3-02** (format descriptor, ≤128 MiB binding pages,
 `max_buffer_size`, and no draw crossing a page), so the published 9 d becomes
 **15.5–17.5 d best and 17.75–21.5 d worst**, before any late-iGPU calendar
 slip. Quote effort and calendar separately; the wait is calendar, not effort,
-but it is still a schedule commitment.
+but it is still a schedule commitment. The full-wait column is
+`5 + post-gate effort`, not `effort + remaining wait`.
 
 ---
 
@@ -391,17 +400,25 @@ fail. **Choosing the fallback abandons 64³ Minimum.**
    - **4b. Re-plan row 6/cap** or accept another profile — an explicit ADR-002
      decision.
 
-**Gate C open:** request the iGPU on **day 1**. If it is unavailable after **5
-working days**, proceed on the discrete-only result with Gate C recorded open
-(or take the fallback if the discrete result fails). The open flag goes to
-M3-13; it does not block the decision indefinitely and it is not silently
-closed.
+**Real-GPU gates open:** the 5-day deadline and open-flag cover **Gate C, Gate
+D and Gate B2's real-GPU variants together**. Request the iGPU on **day 1**. If
+it is unavailable after **5 working days**, proceed on the discrete-only
+results with the affected gates recorded open (or take the fallback if the
+discrete result fails). The open flag goes to M3-13; it does not block the
+decision indefinitely and it is not silently closed.
 
 **Consequence and risk owner:** if the discrete-only result is accepted and a
 later iGPU check shows a regression, the response is the fallback (4.25–5 d,
 which also abandons 64³ Minimum) or a re-plan. The milestone owner accepts that
 risk in writing when the discrete-only decision is recorded; it is not an
 implicit acceptance.
+
+**64³ contingency:** if the 64³ row 1 measures between 3.20 and 4.80 GiB, the
+mesh format cannot close the gap. Record a dated pre-registration appendix that
+the 64³ target is breached **pending M6-09a** (v1 pool removal), with the
+milestone owner's sign-off and a resolution deadline at M6-09a. If the
+measurement is above 4.80 GiB, 64³ Minimum is rejected. Do not silently relax
+the target and do not pretend a format change can fix it.
 
 **Real-save trigger:** if the first real save's row 11 p95 is above 90% of the
 selected format's cap, re-open the format decision. Do not close row 11 on a
@@ -416,11 +433,15 @@ synthetic fixture.
 - Gate A: decoded corners equal `Mesh` exactly.
 - Gate B1: shader fetch/reconstruction exact for position, face, material and AO
   levels; coverage includes all faces, extents and AO levels.
+- Gate B2: direct and indirect draws on the discrete and integrated GPUs;
+  per-pixel expected index, or multiset equality with no missing/duplicate
+  quads.
 - Gate C: discrete + integrated GPUs, GPU timestamp queries, vsync off;
   full-frame ≤10% regression; vertex-bound reported informationally; reference
   discrete still 60 Hz at 1080p. If open after the deadline, recorded as open
   with a follow-up, not passed.
-- Gate D: RGBA difference ≤1 LSB.
+- Gate D: RGBA difference ≤1 LSB on the same discrete and integrated
+  GPUs.
 - Gate 128³ Minimum: row 6 PASS with p95 ≤ 2,400 KiB and ≤90% of cap; row 1 ≤
   3.20 GiB.
 - Gate 64³: row 6 ≤ **540 KiB** (90% rule), row 1 ≤ **3.20 GiB** and ≤ 4.80
@@ -441,11 +462,14 @@ synthetic fixture.
    more time and abandons 64³ Minimum.
 2. **Hardware access:** can the spike run on the RTX 4060 reference **and** an
    integrated GPU within 5 working days? If not, the default is discrete-only
-   with Gate C open; the milestone owner accepts in writing that a later iGPU
-   regression costs the fallback (4.25–5 d) and abandons 64³.
+   with the affected real-GPU gates (C, D and B2) recorded open; the milestone
+   owner accepts in writing that a later iGPU regression costs the fallback
+   (4.25–5 d) and abandons 64³.
 3. **64³ product decision:** if the fallback is ever chosen, accept that 64³
    Minimum is abandoned (5.86 GiB > 4.80 hard fail). If 64³ must stay viable,
-   the instanced path is required.
+   the instanced path is required. If the instanced 64³ row 1 measures
+   3.20–4.80 GiB, the dated appendix / owner sign-off / M6-09a contingency in
+   §7 applies; it is not a silent relaxation.
 4. **Schedule:** re-baseline M3 to best **15.5–17.5 d** / worst **17.75–21.5 d** (includes the +1.0–1.5 d M3-02 work), or move M3-08/M3-12.
 5. **Placement:** new `M3-00a`/`M3-00b` before `M3-01`.
 
@@ -469,8 +493,13 @@ synthetic fixture.
   arena made format-agnostic.
 - **rev 6:** one `first_instance` rule; effort/calendar split, risk owner, and
   the first storage-binding note.
-- **rev 7 (current):** real-draw index Gate B2; `INDIRECT_FIRST_INSTANCE` as a
+- **rev 7:** real-draw index Gate B2; `INDIRECT_FIRST_INSTANCE` as a
   hard requirement with the adapter list; page-boundary draws, 128 MiB binding
   and 256 MiB buffer limits; Gate D on real GPUs; 64³ target kept at 3.20 GiB
-  (0.6% p95 margin); 1.5–2 d spike; consistent worst-case arithmetic; 11%
-  noise example and spread definition.
+  (0.6% p95 margin); 1.5–2 d spike; 11% noise example and spread definition.
+- **rev 8 (current):** corrected the 5-day calendar arithmetic (`5 + post-gate
+  effort`); B2 now has known pixel mapping and direct + indirect variants on
+  real GPUs; the `INDIRECT_FIRST_INSTANCE` list is marked expected, not
+  guaranteed; added the 64³ 3.20–4.80 GiB contingency with owner sign-off and
+  M6-09a resolution; the real-GPU deadline now covers C, D and B2; acceptance
+  adds B2 and the Gate D GPU requirement.
