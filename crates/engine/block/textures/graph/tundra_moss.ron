@@ -1,0 +1,21 @@
+(
+    schema: 1,
+    key: "voxel:block/tundra_moss",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 16, octaves: 3), inputs: []),
+        (id: 1, op: ValueNoise(period: 32, octaves: 2), inputs: []),
+        (id: 2, op: Smoothstep(edge0: 32000, edge1: 48000), inputs: [0]),
+        (id: 3, op: Ramp(stops: [(0, "#6a6e6a"), (65535, "#8a8e88")]), inputs: [1]),
+        (id: 4, op: Ramp(stops: [(0, "#3a5a32"), (65535, "#557a42")]), inputs: [1]),
+        (id: 5, op: MixColor, inputs: [3, 4, 2]),
+        (id: 6, op: ValueNoise(period: 64, octaves: 1), inputs: []),
+        (id: 7, op: Threshold(at: 63000), inputs: [6]),
+        (id: 8, op: Ramp(stops: [(0, "#9aa48a"), (65535, "#c0c8b0")]), inputs: [6]),
+        (id: 9, op: MixColor, inputs: [5, 8, 7]),
+    ],
+    output: (color: 9, alpha: Const(65535)),
+)

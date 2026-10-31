@@ -23,8 +23,14 @@ cargo run -p voxel-texgen -- bake-atlas
 cargo test -p voxel-block texture_manifest
 ```
 
-Set `VOXEL_VIEWER_ATLAS` to an `atlas.png` path or a temporary atlas directory to
-override the committed one.
+Set `VOXEL_VIEWER_ATLAS` to an `atlas.png` path or a directory of
+`atlas-0.png`…`atlas-4.png` levels to override the committed one. Local texture
+sets (for example a resource pack) bake into that directory shape:
+
+```sh
+cargo run -p voxel-texgen -- bake-set resourcepack
+VOXEL_VIEWER_ATLAS=assets/atlas/resourcepack cargo run -p voxel-viewer
+```
 
 ## Controls
 

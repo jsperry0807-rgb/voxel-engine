@@ -589,7 +589,8 @@ impl TexgenApp {
                 let title = format!(
                     "{}  ·  slot {}  ·  {}{}",
                     self.graph.key,
-                    pipeline::slot_of(&self.graph.key)
+                    self.workspace
+                        .slot_of(&self.graph.key)
                         .map(|slot| slot.to_string())
                         .unwrap_or_else(|| "—".to_owned()),
                     match (self.graph.tiling, self.graph.alpha) {
@@ -1320,12 +1321,12 @@ impl eframe::App for TexgenApp {
 
 fn load_library(workspace: &Workspace) -> Vec<LibraryEntry> {
     let mut entries = Vec::new();
-    for (key, slot) in pipeline::SLICES {
+    for (key, slot) in workspace.faces().iter() {
         let path = workspace.graph_path(key);
         let graph = Graph::load(&path).ok();
         entries.push(LibraryEntry {
-            key: (*key).to_owned(),
-            slot: *slot,
+            key: key.to_owned(),
+            slot,
             path,
             alpha: graph.as_ref().map(|graph| graph.alpha),
             tiling: graph.as_ref().map(|graph| graph.tiling),

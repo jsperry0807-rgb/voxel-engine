@@ -600,7 +600,7 @@ mod tests {
             .load_ron_with_materials(blocks, materials)
             .expect("committed blocks and materials load");
         let registry = builder.freeze().expect("blocks freeze");
-        assert_eq!(registry.len(), 34);
+        assert_eq!(registry.len(), 56);
 
         let stone = registry.id_of("voxel:stone").expect("stone");
         assert_eq!(

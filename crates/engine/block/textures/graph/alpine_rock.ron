@@ -1,0 +1,21 @@
+(
+    schema: 1,
+    key: "voxel:block/alpine_rock",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 16, octaves: 3), inputs: []),
+        (id: 1, op: Fbm(period: 32, octaves: 2), inputs: []),
+        (id: 2, op: Smoothstep(edge0: 48000, edge1: 60000), inputs: [1]),
+        (id: 3, op: Ramp(stops: [(0, "#8e9296"), (65535, "#5e6266")]), inputs: [2]),
+        (id: 4, op: Ramp(stops: [(0, "#646a6e"), (65535, "#8a9094")]), inputs: [0]),
+        (id: 5, op: Multiply, inputs: [3, 4]),
+        (id: 6, op: ValueNoise(period: 64, octaves: 1), inputs: []),
+        (id: 7, op: Threshold(at: 63000), inputs: [6]),
+        (id: 8, op: Ramp(stops: [(0, "#dfe8ee"), (65535, "#ffffff")]), inputs: [6]),
+        (id: 9, op: MixColor, inputs: [5, 8, 7]),
+    ],
+    output: (color: 9, alpha: Const(65535)),
+)

@@ -186,7 +186,7 @@ mod tests {
         let input = include_str!("../data/blocks.ron");
         let mut builder = BlockRegistryBuilder::new();
         builder.load_ron(input).expect("blocks.ron should load");
-        // air (pre-registered) + 33 blocks
-        assert_eq!(builder.len(), 34);
+        // air (pre-registered) + 55 blocks
+        assert_eq!(builder.len(), 56);
     }
 }

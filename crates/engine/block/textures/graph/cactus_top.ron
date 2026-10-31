@@ -1,0 +1,23 @@
+(
+    schema: 1,
+    key: "voxel:block/cactus_top",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: ValueNoise(period: 8, octaves: 2), inputs: []),
+        (id: 1, op: Fbm(period: 16, octaves: 3), inputs: []),
+        (id: 2, op: Const(value: 28000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: Const(value: 32768), inputs: []),
+        (id: 5, op: Const(value: 36864), inputs: []),
+        (id: 6, op: Warp(amount: 65535), inputs: [3, 4, 5]),
+        (id: 7, op: Ramp(stops: [(0, "#2f6a2a"), (65535, "#4a8a3a")]), inputs: [6]),
+        (id: 8, op: ValueNoise(period: 16, octaves: 1), inputs: []),
+        (id: 9, op: Threshold(at: 63000), inputs: [8]),
+        (id: 10, op: Ramp(stops: [(0, "#e8f0d0"), (65535, "#ffffff")]), inputs: [8]),
+        (id: 11, op: MixColor, inputs: [7, 10, 9]),
+    ],
+    output: (color: 11, alpha: Const(65535)),
+)

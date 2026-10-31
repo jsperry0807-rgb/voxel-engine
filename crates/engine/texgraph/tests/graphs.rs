@@ -243,14 +243,69 @@ fn atlas_hash_ron_uses_the_expected_filter() {
 }
 
 #[test]
-fn every_slice_has_a_graph_with_a_matching_key() {
+fn every_face_has_a_graph_with_a_matching_key() {
     let workspace = workspace();
-    for (key, _) in pipeline::SLICES {
+    for (key, _) in workspace.faces().iter() {
         let path = workspace.graph_path(key);
         let graph = Graph::load(&path).unwrap_or_else(|error| panic!("{key}: {error}"));
-        assert_eq!(graph.key, *key);
+        assert_eq!(graph.key, key);
         graph
             .compile()
             .unwrap_or_else(|error| panic!("{key}: {error}"));
     }
+}
+
+/// A face added only to `data/faces.ron` (plus its graph file) is rendered,
+/// with no code change: this is the M2.5/M3.5 workflow.
+#[test]
+fn face_table_drives_the_render_set() {
+    let root = std::env::temp_dir().join(format!("texgen-faces-{}", std::process::id()));
+    std::fs::remove_dir_all(&root).ok();
+    let block = root.join("crates/engine/block");
+    std::fs::create_dir_all(block.join("data")).expect("data dir");
+    std::fs::create_dir_all(block.join("textures/graph")).expect("graph dir");
+    // `Workspace::at` only requires the file to exist; validation is separate.
+    std::fs::write(block.join("data/blocks.ron"), "").expect("blocks.ron");
+    std::fs::write(
+        block.join("data/faces.ron"),
+        r#"(
+            schema: 1,
+            faces: ["voxel:block/test"],
+        )"#,
+    )
+    .expect("faces.ron");
+
+    let graph = graph(
+        vec![
+            node(0, Op::Const { value: 1 }, vec![]),
+            node(
+                1,
+                Op::Palette {
+                    colors: vec!["#808080".to_owned()],
+                },
+                vec![0],
+            ),
+        ],
+        1,
+    );
+    graph
+        .save(&block.join("textures/graph/test.ron"))
+        .expect("graph file");
+
+    let workspace = Workspace::at(&root).expect("workspace");
+    let artifacts = pipeline::render_all(&workspace).expect("render set follows the table");
+    assert_eq!(artifacts.len(), 1);
+    assert_eq!(artifacts[0].key, "voxel:block/test");
+    assert_eq!(artifacts[0].slot, 1);
+
+    // A graph that the table does not list is an error, not a silent skip.
+    let mut extra = graph.clone();
+    extra.key = "voxel:block/extra".to_owned();
+    extra
+        .save(&block.join("textures/graph/extra.ron"))
+        .expect("extra graph file");
+    let error = pipeline::render_all(&workspace).expect_err("unlisted graph must fail");
+    assert!(error.to_string().contains("voxel:block/extra"), "{error}");
+
+    std::fs::remove_dir_all(&root).ok();
 }

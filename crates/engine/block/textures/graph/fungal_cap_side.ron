@@ -1,0 +1,23 @@
+(
+    schema: 1,
+    key: "voxel:block/fungal_cap_side",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Stripes(axis: X, count: 16, wobble: 2000), inputs: []),
+        (id: 1, op: Fbm(period: 16, octaves: 2), inputs: []),
+        (id: 2, op: Const(value: 14000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: Ramp(stops: [(0, "#2a0e34"), (65535, "#8a4aa0")]), inputs: [3]),
+        (id: 5, op: ValueNoise(period: 32, octaves: 1), inputs: []),
+        (id: 6, op: Threshold(at: 62000), inputs: [5]),
+        (id: 7, op: Ramp(stops: [(0, "#c88ae0"), (65535, "#e8c8f4")]), inputs: [5]),
+        (id: 8, op: MixColor, inputs: [4, 7, 6]),
+        (id: 9, op: ValueNoise(period: 128, octaves: 2), inputs: []),
+        (id: 10, op: Ramp(stops: [(0, "#ffffff"), (65535, "#d8d0e0")]), inputs: [9]),
+        (id: 11, op: Multiply, inputs: [8, 10]),
+    ],
+    output: (color: 11, alpha: Const(65535)),
+)

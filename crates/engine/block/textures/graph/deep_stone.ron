@@ -1,0 +1,21 @@
+(
+    schema: 1,
+    key: "voxel:block/deep_stone",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 16, octaves: 3), inputs: []),
+        (id: 1, op: Fbm(period: 32, octaves: 2), inputs: []),
+        (id: 2, op: Smoothstep(edge0: 46000, edge1: 60000), inputs: [1]),
+        (id: 3, op: Ramp(stops: [(0, "#343a42"), (65535, "#464e56")]), inputs: [2]),
+        (id: 4, op: Ramp(stops: [(0, "#1e2228"), (65535, "#2c323a")]), inputs: [0]),
+        (id: 5, op: MixColor, inputs: [4, 3, 2]),
+        (id: 6, op: ValueNoise(period: 64, octaves: 1), inputs: []),
+        (id: 7, op: Threshold(at: 63000), inputs: [6]),
+        (id: 8, op: Ramp(stops: [(0, "#ffffff"), (65535, "#9aa0a8")]), inputs: [7]),
+        (id: 9, op: Multiply, inputs: [5, 8]),
+    ],
+    output: (color: 9, alpha: Const(65535)),
+)

@@ -7,6 +7,7 @@
 pub mod bake;
 pub mod eval;
 pub mod graph;
+pub mod local_set;
 pub mod luts;
 pub mod mcp;
 pub mod pipeline;

@@ -19,9 +19,10 @@ fn texture_manifest_matches_graphs_and_blocks() {
     let manifest = TextureManifest::load(&root.join(texture_manifest::MANIFEST_PATH))
         .expect("textures.ron should parse");
     texture_manifest::validate(&manifest, &root).expect("textures.ron should validate");
+    let faces = texture_manifest::FaceTable::load(&root).expect("data/faces.ron should parse");
 
     assert_eq!(manifest.schema, 1);
-    assert_eq!(manifest.textures.len(), 40);
+    assert_eq!(manifest.textures.len(), faces.len());
     assert!(!manifest.license.trim().is_empty());
     assert!(!manifest.provenance.trim().is_empty());
     assert!(manifest.textures.iter().all(|entry| !entry.placeholder));
@@ -31,8 +32,11 @@ fn texture_manifest_matches_graphs_and_blocks() {
             .iter()
             .map(|entry| entry.slot)
             .collect::<Vec<_>>(),
-        (1..=40).collect::<Vec<_>>()
+        (1..=faces.len() as u16).collect::<Vec<_>>()
     );
+    for (key, slot) in faces.iter() {
+        assert_eq!(manifest.entry(key).map(|entry| entry.slot), Some(slot));
+    }
 }
 
 #[test]
@@ -57,6 +61,6 @@ fn materials_gen_is_current() {
         "materials.gen.ron is stale; run `cargo run -p voxel-texgen -- generate`"
     );
     assert_eq!(table.schema, 1);
-    assert_eq!(table.materials.len(), 40);
-    assert_eq!(table.faces.len(), 33);
+    assert_eq!(table.materials.len(), 69);
+    assert_eq!(table.faces.len(), 55);
 }

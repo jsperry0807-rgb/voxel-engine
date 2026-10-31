@@ -1,0 +1,21 @@
+(
+    schema: 1,
+    key: "voxel:block/deep_ocean_floor",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 16, octaves: 3), inputs: []),
+        (id: 1, op: ValueNoise(period: 16, octaves: 2), inputs: []),
+        (id: 2, op: Remap(from_lo: 0, from_hi: 32000, to_lo: 65535, to_hi: 0), inputs: [1]),
+        (id: 3, op: Ramp(stops: [(0, "#26303a"), (65535, "#3a4a56")]), inputs: [0]),
+        (id: 4, op: Ramp(stops: [(0, "#1e2a30"), (65535, "#4a5a62")]), inputs: [1]),
+        (id: 5, op: MixColor, inputs: [3, 4, 2]),
+        (id: 6, op: ValueNoise(period: 64, octaves: 1), inputs: []),
+        (id: 7, op: Threshold(at: 61000), inputs: [6]),
+        (id: 8, op: Ramp(stops: [(0, "#5a6a70"), (65535, "#7a8a90")]), inputs: [6]),
+        (id: 9, op: MixColor, inputs: [5, 8, 7]),
+    ],
+    output: (color: 9, alpha: Const(65535)),
+)

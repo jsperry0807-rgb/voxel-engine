@@ -130,36 +130,8 @@ pub fn build_atlas(workspace: &pipeline::Workspace) -> Result<AtlasBuild, BakeEr
         blit_tile(&mut base, entry.slot, &tile, TILE_SIZE)?;
     }
 
-    let mut levels = Vec::with_capacity(MIP_LEVELS as usize);
-    levels.push(Level {
-        width: ATLAS_SIZE,
-        height: ATLAS_SIZE,
-        pixels: base,
-    });
-    for level in 1..=MAX_MIP {
-        let edge = ATLAS_SIZE >> level;
-        let mut pixels = vec![0u8; (edge * edge * 4) as usize];
-        let tile_edge = TILE_SIZE >> level;
-        for entry in manifest.sorted() {
-            let origin = tile_origin(entry.slot);
-            let source_origin = (origin.0 >> (level - 1), origin.1 >> (level - 1));
-            let previous = &levels[(level - 1) as usize];
-            let tile = read_region(previous, source_origin, TILE_SIZE >> (level - 1))?;
-            let reduced = halve(&tile, TILE_SIZE >> (level - 1));
-            blit_region(
-                &mut pixels,
-                edge,
-                (origin.0 >> level, origin.1 >> level),
-                &reduced,
-                tile_edge,
-            )?;
-        }
-        levels.push(Level {
-            width: edge,
-            height: edge,
-            pixels,
-        });
-    }
+    let slots: Vec<u16> = manifest.sorted().iter().map(|entry| entry.slot).collect();
+    let levels = mip_chain(base, &slots)?;
 
     let png = encode_rgba(ATLAS_SIZE, ATLAS_SIZE, &levels[0].pixels).map_err(BakeError::Png)?;
     let atlas_png_blake3 = blake3::hash(&png).to_hex().to_string();
@@ -178,6 +150,45 @@ pub fn build_atlas(workspace: &pipeline::Workspace) -> Result<AtlasBuild, BakeEr
         manifest_blake3,
         tile_count: manifest.textures.len() as u32,
     })
+}
+
+/// Builds the full mip chain from a base level whose atlas tiles are at `slots`.
+///
+/// The base level is the 256x256 atlas, so the first call needs no padding.
+/// Each later level halves each tile separately and never filters across tile
+/// seams, which is what keeps neighbouring materials from bleeding.
+pub(crate) fn mip_chain(base: Vec<u8>, slots: &[u16]) -> Result<Vec<Level>, BakeError> {
+    let mut levels = Vec::with_capacity(MIP_LEVELS as usize);
+    levels.push(Level {
+        width: ATLAS_SIZE,
+        height: ATLAS_SIZE,
+        pixels: base,
+    });
+    for level in 1..=MAX_MIP {
+        let edge = ATLAS_SIZE >> level;
+        let mut pixels = vec![0u8; (edge * edge * 4) as usize];
+        let tile_edge = TILE_SIZE >> level;
+        for &slot in slots {
+            let origin = tile_origin(slot);
+            let source_origin = (origin.0 >> (level - 1), origin.1 >> (level - 1));
+            let previous = &levels[(level - 1) as usize];
+            let tile = read_region(previous, source_origin, TILE_SIZE >> (level - 1))?;
+            let reduced = halve(&tile, TILE_SIZE >> (level - 1));
+            blit_region(
+                &mut pixels,
+                edge,
+                (origin.0 >> level, origin.1 >> level),
+                &reduced,
+                tile_edge,
+            )?;
+        }
+        levels.push(Level {
+            width: edge,
+            height: edge,
+            pixels,
+        });
+    }
+    Ok(levels)
 }
 
 /// Returns the canonical `atlas.hash.ron` text.
@@ -328,7 +339,12 @@ pub fn downsample_edge(
     Ok(tile)
 }
 
-fn blit_tile(base: &mut [u8], slot: u16, tile: &[u8], tile_edge: u32) -> Result<(), BakeError> {
+pub(crate) fn blit_tile(
+    base: &mut [u8],
+    slot: u16,
+    tile: &[u8],
+    tile_edge: u32,
+) -> Result<(), BakeError> {
     let origin = tile_origin(slot);
     blit_region(base, ATLAS_SIZE, origin, tile, tile_edge)
 }

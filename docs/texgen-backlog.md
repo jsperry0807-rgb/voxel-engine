@@ -1,6 +1,6 @@
 # Texgen backlog
 
-Status: living document, 2026-10-29.
+Status: living document, 2026-10-31.
 
 This is the gap list for `apps/texgen` and `crates/engine/texgraph`. It records
 what the generator still needs, what is deliberately deferred, and why. When a
@@ -11,10 +11,8 @@ Priority order is the order a single engineer should take it. An item marked
 
 ## 1. Must-have before the next texture sets
 
-| # | Item | Why it matters | Status |
-| --- | --- | --- | --- |
-| 2 | **Remove the hard-coded face table** — drive `pipeline::SLICES` and `texture_manifest::SLICE_FACE_COUNT` from the manifest / a slot table | Every M2.5 and M3.5 art set currently requires code edits. New textures should be data-only. | open |
-| 3 | **Incremental generation** — `texgen generate --key stone`, write only changed PNGs, rebuild the atlas only if a source changed | One graph edit currently regenerates 23 PNGs, the manifest, the material table and the atlas. Fine at 23; painful at 100+. | open |
+Nothing open: the data-driven face table and incremental generation are both in
+the **Done** section. The MCP key-list form is item 14.
 
 ## 2. Editor and UX
 
@@ -34,13 +32,13 @@ Priority order is the order a single engineer should take it. An item marked
 | 10 | **Windows determinism job** — run `texgen check` on Linux and Windows | Spec 5.3 requires identical bytes on both. CI currently runs the texture job on Ubuntu only. | open |
 | 11 | **Cutout mip alpha decision** — alpha-coverage rescale in the mip filter, or accept thinning | Still open in generator spec §12.3. Leaves will thin at distance either way. | open |
 | 12 | **Lock the remaining spec open items** — face enum naming, tiling confirmation | `generator.spec.md` is Draft v0.2 with open questions. | open |
+| 17 | **Worley periodicity** — feature-point distance is not wrapped across tile edges | `worley` wraps the hash cell indices but computes distance to the unwrapped neighbour, so a face built on Worley can show a seam even though it declares `Tiling::Both`. New M2.5 tileable faces avoid it; fix the distance or forbid Worley on tiling faces. | open |
 
 ## 4. MCP / OpenCode
 
 | # | Item | Why it matters | Status |
 | --- | --- | --- | --- |
 | 13 | **Render arbitrary RON** — `render_graph` MCP tool for inline graph RON | `validate_graph` accepts inline RON but `render_preview` only accepts a slice key, so an agent cannot see a proposed graph before writing it. | open |
-| 14 | **Per-key generation** — `generate` with a key list | Same root cause as incremental generation. | open |
 | 15 | **MCP resource for the atlas PNG** — expose `texgen://atlas.png` as an image resource | Currently only the hash is a resource; the image is returned by `render_atlas`. | open |
 
 ## 5. Art
@@ -94,3 +92,7 @@ without a milestone that consumes them.
 | 17 post-M1.5 stone and tree faces (slots 24-40), 14 blocks, regenerated manifest, material table and atlas | this change |
 | M1.5-15 screenshot set and M1.5-17 before/after texel-density pair | `m1.5-15-*` / `m1.5-17-*` |
 | Backlog document with deferred work | this change |
+| Data-driven face table: `data/faces.ron` drives slots in the pipeline, editor and MCP; `FaceTable` validation replaces `SLICES`/`SLICE_FACE_COUNT` | this change |
+| Incremental generation: `texgen generate --key FACE` (repeatable) renders only the selected faces and writes PNG/manifest/materials/atlas only when their bytes change; `check --key` verifies the same subset | this change |
+| M2.5-30/31 art data: 29 biome-surface, underground, structure and flora faces (slots 41–69), 22 block rows, regenerated manifest, material table and atlas | this change |
+| MCP `generate`/`check` accept an optional `keys` array and route to the per-key pipeline | this change |

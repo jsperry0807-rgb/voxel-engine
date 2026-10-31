@@ -5,69 +5,25 @@
 //! and the CLI share exactly these functions, so a button press and a CI check
 //! cannot disagree about what "generate" means.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use voxel_block::texture_manifest::{
-    AlphaClass, TextureEntry, TextureManifest, Tiling, validate as validate_manifest,
+    AlphaClass, FaceTable, TextureEntry, TextureManifest, Tiling, validate as validate_manifest,
 };
 
 use crate::bake::{self, BakeError};
 use crate::graph::{Graph, GraphError, pretty_config};
 use crate::png::{self, PngError};
 
-/// The committed face set: key and atlas slot. Graph files are named after the
-/// part following `voxel:block/`.
-pub const SLICES: &[(&str, u16)] = &[
-    ("voxel:block/stone", 1),
-    ("voxel:block/dirt", 2),
-    ("voxel:block/grass_block_top", 3),
-    ("voxel:block/grass_block_side", 4),
-    ("voxel:block/cobblestone", 5),
-    ("voxel:block/sand", 6),
-    ("voxel:block/gravel", 7),
-    ("voxel:block/water_still", 8),
-    ("voxel:block/oak_log_top", 9),
-    ("voxel:block/oak_log", 10),
-    ("voxel:block/oak_leaves", 11),
-    ("voxel:block/bedrock", 12),
-    ("voxel:block/coal_ore", 13),
-    ("voxel:block/iron_ore", 14),
-    ("voxel:block/gold_ore", 15),
-    ("voxel:block/diamond_ore", 16),
-    ("voxel:block/tall_grass", 17),
-    ("voxel:block/red_flower", 18),
-    ("voxel:block/snow", 19),
-    ("voxel:block/ice", 20),
-    ("voxel:block/sandstone_top", 21),
-    ("voxel:block/sandstone_bottom", 22),
-    ("voxel:block/sandstone_side", 23),
-    ("voxel:block/stone_bricks", 24),
-    ("voxel:block/mossy_cobblestone", 25),
-    ("voxel:block/smooth_stone", 26),
-    ("voxel:block/granite", 27),
-    ("voxel:block/diorite", 28),
-    ("voxel:block/andesite", 29),
-    ("voxel:block/deepslate", 30),
-    ("voxel:block/tuff", 31),
-    ("voxel:block/birch_log_top", 32),
-    ("voxel:block/birch_log", 33),
-    ("voxel:block/birch_leaves", 34),
-    ("voxel:block/spruce_log_top", 35),
-    ("voxel:block/spruce_log", 36),
-    ("voxel:block/spruce_leaves", 37),
-    ("voxel:block/dark_oak_log_top", 38),
-    ("voxel:block/dark_oak_log", 39),
-    ("voxel:block/dark_oak_leaves", 40),
-];
-
 /// A workspace rooted at the repository that holds the block crate.
 #[derive(Clone, Debug)]
 pub struct Workspace {
     root: PathBuf,
+    faces: FaceTable,
 }
 
 impl Workspace {
@@ -82,7 +38,7 @@ impl Workspace {
                 .join("crates/engine/block/data/blocks.ron")
                 .is_file()
             {
-                return Ok(Self { root: directory });
+                return Self::at(directory);
             }
             if !directory.pop() {
                 return Err(PipelineError::Invalid(
@@ -95,17 +51,53 @@ impl Workspace {
     /// Creates a workspace at an explicit root.
     pub fn at(root: impl Into<PathBuf>) -> Result<Self, PipelineError> {
         let root = root.into();
-        if !root.join("crates/engine/block/data/blocks.ron").is_file() {
+        let block_crate = root.join("crates/engine/block");
+        if !block_crate.join("data/blocks.ron").is_file() {
             return Err(PipelineError::Invalid(format!(
                 "{} does not contain crates/engine/block/data/blocks.ron",
                 root.display()
             )));
         }
-        Ok(Self { root })
+        let faces = FaceTable::load(&block_crate).map_err(PipelineError::Manifest)?;
+        Ok(Self { root, faces })
     }
 
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// The committed face table, in atlas slot order.
+    pub fn faces(&self) -> &FaceTable {
+        &self.faces
+    }
+
+    /// Slot for a face key, or `None` when `data/faces.ron` does not list it.
+    pub fn slot_of(&self, key: &str) -> Option<u16> {
+        self.faces.slot_of(key)
+    }
+
+    /// Resolves `stone`, `voxel:stone` or `voxel:block/stone` to a table key.
+    pub fn key_from(&self, input: &str) -> Result<String, PipelineError> {
+        let key = if input.starts_with("voxel:block/") {
+            input.to_owned()
+        } else {
+            format!(
+                "voxel:block/{}",
+                input.trim_start_matches("voxel:").trim_start_matches('/')
+            )
+        };
+        if self.slot_of(&key).is_some() {
+            Ok(key)
+        } else {
+            Err(PipelineError::Invalid(format!(
+                "unknown face `{input}`; expected one of: {}",
+                self.faces
+                    .iter()
+                    .map(|(key, _)| name_of(key))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )))
+        }
     }
 
     pub fn block_crate(&self) -> PathBuf {
@@ -210,13 +202,6 @@ fn path_name(key: &str) -> String {
     }
 }
 
-/// Slot for a face key.
-pub fn slot_of(key: &str) -> Option<u16> {
-    SLICES
-        .iter()
-        .find_map(|(candidate, slot)| (*candidate == key).then_some(*slot))
-}
-
 /// A graph rendered in memory.
 #[derive(Clone, Debug)]
 pub struct Artifact {
@@ -230,18 +215,19 @@ pub struct Artifact {
     pub pixels: Vec<u8>,
 }
 
-/// Renders one graph file at full 256x256.
-pub fn render_graph(path: &Path) -> Result<Artifact, PipelineError> {
+/// Renders one graph file at full 256x256, taking its slot from the face table.
+pub fn render_graph(workspace: &Workspace, path: &Path) -> Result<Artifact, PipelineError> {
     let bytes = fs::read(path).map_err(|source| PipelineError::Io {
         path: path.to_owned(),
         source,
     })?;
     let graph = Graph::load(path)?;
-    let slot = slot_of(&graph.key).ok_or_else(|| {
+    let slot = workspace.slot_of(&graph.key).ok_or_else(|| {
         PipelineError::Invalid(format!(
-            "{}: key {} is not in the M1.5 slice table",
+            "{}: key {} is not listed in {}",
             path.display(),
-            graph.key
+            graph.key,
+            voxel_block::texture_manifest::FACES_PATH
         ))
     })?;
     let program = graph.compile()?;
@@ -265,7 +251,7 @@ pub fn render_graph(path: &Path) -> Result<Artifact, PipelineError> {
     })
 }
 
-/// Renders every committed slice graph, in slot order.
+/// Renders every committed face graph, in slot order.
 pub fn render_all(workspace: &Workspace) -> Result<Vec<Artifact>, PipelineError> {
     let files = workspace.graph_files()?;
     let mut by_key = BTreeMap::new();
@@ -280,51 +266,53 @@ pub fn render_all(workspace: &Workspace) -> Result<Vec<Artifact>, PipelineError>
         }
     }
 
-    let mut artifacts = Vec::with_capacity(SLICES.len());
-    for (key, slot) in SLICES {
-        let path = by_key.get(*key).ok_or_else(|| {
-            PipelineError::Invalid(format!("missing graph for {key} ({}.ron)", name_of(key)))
+    let faces = workspace.faces();
+    let mut artifacts = Vec::with_capacity(faces.len());
+    for (key, _) in faces.iter() {
+        let path = by_key.get(key).ok_or_else(|| {
+            PipelineError::Invalid(format!(
+                "missing graph for {key} ({}.ron is listed in {}, but the graph file is absent)",
+                name_of(key),
+                voxel_block::texture_manifest::FACES_PATH
+            ))
         })?;
-        let mut artifact = render_graph(path)?;
-        if artifact.slot != *slot {
-            return Err(PipelineError::Invalid(format!(
-                "{}: slot {} does not match the slice table ({slot})",
-                artifact.key, artifact.slot
-            )));
-        }
-        artifact.slot = *slot;
-        artifacts.push(artifact);
+        artifacts.push(render_graph(workspace, path)?);
     }
-    if by_key.len() != SLICES.len() {
-        let extra: Vec<&String> = by_key.keys().filter(|key| slot_of(key).is_none()).collect();
+    if by_key.len() != faces.len() {
+        let extra: Vec<&String> = by_key
+            .keys()
+            .filter(|key| faces.slot_of(key).is_none())
+            .collect();
         return Err(PipelineError::Invalid(format!(
-            "graph directory has {} graphs for {} slice faces; extra: {extra:?}",
+            "graph directory has {} graphs for {} faces; extra: {extra:?}",
             by_key.len(),
-            SLICES.len()
+            faces.len()
         )));
     }
     Ok(artifacts)
 }
 
+/// The manifest entry for one rendered artifact.
+fn entry_from(artifact: &Artifact) -> TextureEntry {
+    TextureEntry {
+        key: artifact.key.clone(),
+        slot: artifact.slot,
+        source: PathBuf::from(format!("textures/block/{}.png", name_of(&artifact.key))),
+        alpha: artifact.alpha,
+        tiling: artifact.tiling,
+        hash: blake3::hash(&artifact.png).to_hex().to_string(),
+        graph: Some(PathBuf::from(format!(
+            "textures/graph/{}.ron",
+            name_of(&artifact.key)
+        ))),
+        graph_hash: Some(artifact.graph_hash.clone()),
+        placeholder: false,
+    }
+}
+
 /// Builds the manifest value for a set of artifacts.
 pub fn manifest_from(artifacts: &[Artifact]) -> TextureManifest {
-    let mut textures: Vec<TextureEntry> = artifacts
-        .iter()
-        .map(|artifact| TextureEntry {
-            key: artifact.key.clone(),
-            slot: artifact.slot,
-            source: PathBuf::from(format!("textures/block/{}.png", name_of(&artifact.key))),
-            alpha: artifact.alpha,
-            tiling: artifact.tiling,
-            hash: blake3::hash(&artifact.png).to_hex().to_string(),
-            graph: Some(PathBuf::from(format!(
-                "textures/graph/{}.ron",
-                name_of(&artifact.key)
-            ))),
-            graph_hash: Some(artifact.graph_hash.clone()),
-            placeholder: false,
-        })
-        .collect();
+    let mut textures: Vec<TextureEntry> = artifacts.iter().map(entry_from).collect();
     textures.sort_by_key(|entry| entry.slot);
     TextureManifest {
         schema: 1,
@@ -363,10 +351,154 @@ pub fn generate_all(workspace: &Workspace) -> Result<String, PipelineError> {
     ))
 }
 
-/// Re-renders in memory and fails if any committed byte differs.
-pub fn check_all(workspace: &Workspace) -> Result<String, PipelineError> {
-    let artifacts = render_all(workspace)?;
+/// Resolves `--key` arguments to table keys, in slot order and without repeats.
+fn resolve_selection(
+    workspace: &Workspace,
+    inputs: &[String],
+) -> Result<Vec<String>, PipelineError> {
+    if inputs.is_empty() {
+        return Err(PipelineError::Invalid(
+            "--key needs at least one face name".to_owned(),
+        ));
+    }
+    let mut wanted = BTreeSet::new();
+    for input in inputs {
+        wanted.insert(workspace.key_from(input)?);
+    }
+    Ok(workspace
+        .faces()
+        .iter()
+        .map(|(key, _)| key.to_owned())
+        .filter(|key| wanted.contains(key))
+        .collect())
+}
+
+/// Renders the selected faces only; every graph must exist.
+fn render_selection(
+    workspace: &Workspace,
+    selected: &[String],
+) -> Result<Vec<Artifact>, PipelineError> {
+    let mut artifacts = Vec::with_capacity(selected.len());
+    for key in selected {
+        let path = workspace.graph_path(key);
+        if !path.is_file() {
+            return Err(PipelineError::Invalid(format!(
+                "missing graph for {key} ({}); add the graph before listing the face in {}",
+                path.display(),
+                voxel_block::texture_manifest::FACES_PATH
+            )));
+        }
+        artifacts.push(render_graph(workspace, &path)?);
+    }
+    Ok(artifacts)
+}
+
+fn read_if_exists(path: &Path) -> Result<Option<Vec<u8>>, PipelineError> {
+    match fs::read(path) {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(source) => Err(PipelineError::Io {
+            path: path.to_owned(),
+            source,
+        }),
+    }
+}
+
+/// Renders and writes only `inputs`, leaving every other face untouched.
+///
+/// A PNG is rewritten only when its bytes change, and the manifest and material
+/// table likewise. The atlas is rebaked only when the manifest changes, because
+/// `atlas.hash.ron` embeds the manifest hash: a graph edit that keeps the same
+/// pixels rewrites the atlas hash but leaves `atlas.png` byte-identical.
+pub fn generate_keys(workspace: &Workspace, inputs: &[String]) -> Result<String, PipelineError> {
+    let selected = resolve_selection(workspace, inputs)?;
+    let artifacts = render_selection(workspace, &selected)?;
+    let committed = TextureManifest::load(&workspace.manifest_path())?;
+
+    let texture_dir = workspace.texture_dir();
+    fs::create_dir_all(&texture_dir).map_err(|source| PipelineError::Io {
+        path: texture_dir.clone(),
+        source,
+    })?;
+    let mut written = 0usize;
     for artifact in &artifacts {
+        let path = workspace.texture_path(&artifact.key);
+        let changed = read_if_exists(&path)?.as_deref() != Some(artifact.png.as_slice());
+        if changed {
+            write_atomic(&path, &artifact.png)?;
+            written += 1;
+        }
+    }
+
+    // Replace only the selected faces' manifest entries; every other entry is
+    // kept as committed.
+    let new_entries: Vec<TextureEntry> = artifacts.iter().map(entry_from).collect();
+    let selected_keys: BTreeSet<String> =
+        new_entries.iter().map(|entry| entry.key.clone()).collect();
+    let mut manifest = committed;
+    manifest
+        .textures
+        .retain(|entry| !selected_keys.contains(&entry.key));
+    manifest.textures.extend(new_entries);
+    manifest.textures.sort_by_key(|entry| entry.slot);
+    let mut text =
+        ron::ser::to_string_pretty(&manifest, pretty_config()).map_err(PipelineError::Ron)?;
+    text.push('\n');
+    let manifest_path = workspace.manifest_path();
+    let manifest_changed = read_if_exists(&manifest_path)?.as_deref() != Some(text.as_bytes());
+    if manifest_changed {
+        write_atomic(&manifest_path, text.as_bytes())?;
+    }
+    validate_manifest(&manifest, &workspace.block_crate()).map_err(PipelineError::Manifest)?;
+
+    let materials_changed = write_materials_if_changed(workspace)?;
+    // `atlas.hash.ron` embeds the manifest hash, so any manifest change needs a
+    // rebake even when the pixels are identical. The bake is cheap next to the
+    // graph evaluation, which is already limited to the selected faces.
+    let atlas_changed = if written > 0 || manifest_changed {
+        bake::bake_atlas(workspace, false)?;
+        true
+    } else {
+        false
+    };
+
+    Ok(incremental_status(
+        artifacts.len(),
+        written,
+        manifest_changed,
+        materials_changed,
+        atlas_changed,
+    ))
+}
+
+fn incremental_status(
+    faces: usize,
+    written: usize,
+    manifest: bool,
+    materials: bool,
+    atlas: bool,
+) -> String {
+    let plural = if faces == 1 { "" } else { "s" };
+    let head = if written == 0 {
+        format!("{faces} texture{plural} already current")
+    } else {
+        format!("{faces} texture{plural} written ({written} changed)")
+    };
+    format!(
+        "{head}, manifest {}, materials {}, atlas {}",
+        if manifest { "updated" } else { "unchanged" },
+        if materials { "updated" } else { "unchanged" },
+        if atlas { "rebuilt" } else { "unchanged" }
+    )
+}
+
+/// Fails if a PNG or manifest entry disagrees with the re-rendered artifacts.
+fn check_artifacts(
+    workspace: &Workspace,
+    manifest: &TextureManifest,
+    artifacts: &[Artifact],
+) -> Result<(), PipelineError> {
+    for artifact in artifacts {
         let path = workspace.texture_path(&artifact.key);
         let committed = fs::read(&path).map_err(|source| PipelineError::Io {
             path: path.clone(),
@@ -380,9 +512,7 @@ pub fn check_all(workspace: &Workspace) -> Result<String, PipelineError> {
         }
     }
 
-    let manifest = TextureManifest::load(&workspace.manifest_path())?;
-    validate_manifest(&manifest, &workspace.block_crate()).map_err(PipelineError::Manifest)?;
-    for artifact in &artifacts {
+    for artifact in artifacts {
         let entry = manifest.entry(&artifact.key).ok_or_else(|| {
             PipelineError::Invalid(format!("manifest is missing {}", artifact.key))
         })?;
@@ -399,11 +529,37 @@ pub fn check_all(workspace: &Workspace) -> Result<String, PipelineError> {
             )));
         }
     }
+    Ok(())
+}
+
+/// Re-renders in memory and fails if any committed byte differs.
+pub fn check_all(workspace: &Workspace) -> Result<String, PipelineError> {
+    let artifacts = render_all(workspace)?;
+    let manifest = TextureManifest::load(&workspace.manifest_path())?;
+    validate_manifest(&manifest, &workspace.block_crate()).map_err(PipelineError::Manifest)?;
+    check_artifacts(workspace, &manifest, &artifacts)?;
 
     check_materials(workspace)?;
     bake::bake_atlas(workspace, true)?;
     Ok(format!(
         "{} textures, manifest, materials and atlas are current",
+        artifacts.len()
+    ))
+}
+
+/// `--check --key`: verifies only the named faces, plus the shared outputs.
+pub fn check_keys(workspace: &Workspace, inputs: &[String]) -> Result<String, PipelineError> {
+    let selected = resolve_selection(workspace, inputs)?;
+    let artifacts = render_selection(workspace, &selected)?;
+    let manifest = TextureManifest::load(&workspace.manifest_path())?;
+    validate_manifest(&manifest, &workspace.block_crate()).map_err(PipelineError::Manifest)?;
+    check_artifacts(workspace, &manifest, &artifacts)?;
+
+    check_materials(workspace)?;
+    bake::bake_atlas(workspace, true)?;
+    let plural = if artifacts.len() == 1 { "" } else { "s" };
+    Ok(format!(
+        "{} texture{plural}, materials and atlas are current",
         artifacts.len()
     ))
 }
@@ -431,6 +587,18 @@ pub fn write_materials(workspace: &Workspace) -> Result<String, PipelineError> {
         table.faces.len(),
         path.display()
     ))
+}
+
+/// Writes `materials.gen.ron` only when its bytes change; returns whether it did.
+pub fn write_materials_if_changed(workspace: &Workspace) -> Result<bool, PipelineError> {
+    let table = material_table(workspace)?;
+    let text = voxel_block::material_table::to_ron(&table).map_err(PipelineError::Material)?;
+    let path = workspace.materials_path();
+    if read_if_exists(&path)?.as_deref() == Some(text.as_bytes()) {
+        return Ok(false);
+    }
+    write_atomic(&path, text.as_bytes())?;
+    Ok(true)
 }
 
 /// Fails if `materials.gen.ron` is not exactly the regenerated output.

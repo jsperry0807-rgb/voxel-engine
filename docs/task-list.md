@@ -206,44 +206,44 @@ The deadline is the art task in the last column; its output must be ready before
 
 `water_still` is authored here even though transparency lands in M3.5; the slice draws it as a normal face.
 
-**Later sets.** Keys marked `*` are proposed; M2.5-30/M2.5-31 freeze the exact name. The deadline is the art task in the last column.
+**Later sets.** The M2.5 keys below are frozen in the manifest at slots 41–69; the M3.5 and UI keys remain proposed until their task lands. The deadline is the art task in the last column.
 
 | Texture / material | Applies to | Done in task |
 | --- | --- | --- |
-| `dry_grass_top`*, `dry_grass_side`* | plains and savanna dry grass | M2.5-30 |
-| `savanna_grass_top`*, `savanna_grass_side`* | savanna | M2.5-30 |
-| `taiga_grass_top`*, `taiga_grass_side`* | taiga | M2.5-30 |
-| `swamp_grass_top`*, `swamp_grass_side`* | swamp surface | M2.5-30 |
-| `swamp_mud`* | swamp filler | M2.5-30 |
-| `red_sand`* | desert | M2.5-30 |
-| `alpine_rock`* | mountains and alpine | M2.5-30 |
-| `tundra_moss`* | tundra | M2.5-30 |
-| `deep_ocean_floor`* | deep and trench | M2.5-30 |
-| `clay`* | shelf and swamp | M2.5-30 |
-| `deep_stone`* | deep caves and trench walls | M2.5-31 |
-| `fungal_cap_top`*, `fungal_cap_side`* | fungal deep cap | M2.5-31 |
-| `fungal_stem`* | fungal deep stem | M2.5-31 |
-| `lava_still`*, `lava_flow`* | water/lava caves and geothermal | M2.5-31 |
-| `geothermal_rock`* | geothermal | M2.5-31 |
-| `obsidian`* | geothermal and lava contact | M2.5-31 |
-| `oak_planks`* | towers, bridges, ruins | M2.5-31 |
-| `stone_bricks`* | ruins, dungeons | M2.5-31 |
-| `cracked_stone_bricks`* | ruins | M2.5-31 |
-| `mossy_cobblestone`* | ruins, dungeons | M2.5-31 |
-| `birch_log`*, `birch_log_top`*, `birch_leaves`* | birch ecotone | M2.5-31 |
-| `spruce_log`*, `spruce_log_top`*, `spruce_leaves`* | taiga and spruce | M2.5-31 |
-| `fern`* | forest and taiga undergrowth | M2.5-31 |
-| `cactus_top`*, `cactus_side`*, `cactus_bottom`* | desert | M2.5-31 |
-| `dead_bush`* | desert and savanna | M2.5-31 |
+| `dry_grass_top`, `dry_grass_side` | plains and savanna dry grass | M2.5-30 |
+| `savanna_grass_top`, `savanna_grass_side` | savanna | M2.5-30 |
+| `taiga_grass_top`, `taiga_grass_side` | taiga | M2.5-30 |
+| `swamp_grass_top`, `swamp_grass_side` | swamp surface | M2.5-30 |
+| `swamp_mud` | swamp filler | M2.5-30 |
+| `red_sand` | desert | M2.5-30 |
+| `alpine_rock` | mountains and alpine | M2.5-30 |
+| `tundra_moss` | tundra | M2.5-30 |
+| `deep_ocean_floor` | deep and trench | M2.5-30 |
+| `clay` | shelf and swamp | M2.5-30 |
+| `deep_stone` | deep caves and trench walls | M2.5-31 |
+| `fungal_cap_top`, `fungal_cap_side` | fungal deep cap | M2.5-31 |
+| `fungal_stem` | fungal deep stem | M2.5-31 |
+| `lava_still`, `lava_flow` | water/lava caves and geothermal | M2.5-31 |
+| `geothermal_rock` | geothermal | M2.5-31 |
+| `obsidian` | geothermal and lava contact | M2.5-31 |
+| `oak_planks` | towers, bridges, ruins | M2.5-31 |
+| `stone_bricks` | ruins, dungeons | M2.5-31 |
+| `cracked_stone_bricks` | ruins | M2.5-31 |
+| `mossy_cobblestone` | ruins, dungeons | M2.5-31 |
+| `birch_log`, `birch_log_top`, `birch_leaves` | birch ecotone | M2.5-31 |
+| `spruce_log`, `spruce_log_top`, `spruce_leaves` | taiga and spruce | M2.5-31 |
+| `fern` | forest and taiga undergrowth | M2.5-31 |
+| `cactus_top`, `cactus_side`, `cactus_bottom` | desert | M2.5-31 |
+| `dead_bush` | desert and savanna | M2.5-31 |
 | `water_flow`* | rivers and current | M3.5-15 |
 | `foam_strip`* | river foam | M3.5-15 |
 | `caustics`* | underwater light, only if not procedural | M3.5-15 |
 | `map_item_icon`* | map item icon (UI sprite) | M3.5-10 |
 | `player_marker`* | map marker (UI sprite) | M3.5-10 |
 
-**Biome surfaces (≤ 24 new tiles).** Top, filler, stone and beach faces for the 18 biome palettes, plus each biome's `map_color` (data, not a tile). Reuse the slice set first; add only what the palette cannot express. Transition blocks and debris reuse these parents and add zero slots. M2.5-30 freezes the proposed keys in the table.
+**Biome surfaces (≤ 24 new tiles).** Top, filler, stone and beach faces for the 18 biome palettes, plus each biome's `map_color` (data, not a tile). Reuse the slice set first; add only what the palette cannot express. Transition blocks and debris reuse these parents and add zero slots. The 14 M2.5-30 faces are frozen in `data/faces.ron`; the per-biome palette table and `map_color` values remain acceptance work.
 
-**Underground, structures and flora (≤ 32 new tiles).** The per-material rows above are the deadline list. Lava and geothermal tiles carry the emissive material flag; that is a property, not a texture rule. Giant-tree detail reuses the oak/spruce keys; transition and detail templates add zero slots.
+**Underground, structures and flora (≤ 32 new tiles).** The per-material rows above are the deadline list. Lava and geothermal tiles carry the emissive material flag; that is a property, not a texture rule. Giant-tree detail reuses the oak/spruce keys; transition and detail templates add zero slots. The 15 M2.5-31 faces and their block rows are frozen in the manifest; the flora, structure and underground tables and their fixtures remain acceptance work.
 
 **Water and current (≤ 3 new tiles).** `water_still` exists from M1.5-14; add `water_flow` and `foam_strip`. The flow axis and UV-scroll rate are documented with the tiles. Caustics are procedural unless M3.5-15 adds a `caustics` tile; the decision is recorded with M3.5-15, and no caustics texture is invented in the shader task.
 
