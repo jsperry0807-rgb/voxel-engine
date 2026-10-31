@@ -27,6 +27,11 @@ pub use light::{
 mod mesh;
 pub use mesh::{Mesh, face_from_code, mesh_block, mesh_face};
 
+pub mod probe;
+pub use probe::{
+    BakeStep, ProbeBake, ProbeGrid, ProbeLod, ProbeVolume, Sh4Probe, bake, bake_svdag,
+};
+
 mod vertex;
 pub use vertex::Vertex;
 

@@ -24,3 +24,7 @@ chunk128 = ["voxel-storage/chunk128"]
 [[bench]]
 name = "light"
 harness = false
+
+[[bench]]
+name = "probe"
+harness = false

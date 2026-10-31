@@ -1,9 +1,9 @@
 # Roadmap Task List
 
 **Status:** v1.6 — derived from spec v2.3 and roadmap v3.2
-**Date:** 2026-10-29
+**Date:** 2026-10-30
 **Owner:** engine
-**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 in progress: `M2-16` done; `M2-17` done (5.7% p95 at 128³, target ≤20%); `M2-18` next.
+**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 in progress: `M2-16` done; `M2-17` done (5.7% p95 at 128³, target ≤20%); `M2-18` done; `M2-19` next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -411,7 +411,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 **Goal:** deterministic mesh + AO + block light + probes, at the 128³ Minimum edge.
 **Exit:** M2-30. **Budget:** 27.0 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
-**Status:** In progress — M2-16 done; M2-17 done (5.7% p95 at 128³, target ≤20%); M2-18 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
+**Status:** In progress — M2-16 done; M2-17 done (5.7% p95 at 128³, target ≤20%); M2-18 done; M2-19 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
 **Art:** none beyond M1.5-14; M2 reuses the slice atlas.
 
 **M1 gate carry-over — blocks M2-30:**
@@ -512,6 +512,18 @@ including the 570-cell border-side edit. The edit changes 46/216 padded cells at
 [`m2-light-cost.md`](m2-light-cost.md) and the measured path in
 [`m2-light-20pct.md`](m2-light-20pct.md).
 
+**M2-18 measured (2026-10-30):** the production `voxel-mesh::probe` bake is
+byte-identical to the M1-30 oracle on floor, cave and terrain fixtures at the
+pre-registered 512-probe (8-block) edge, and on the SVDAG path at the compiled
+chunk edge. `ProbeBake::advance` is a strict ray budget: no call casts more than
+it is given, and budgets from 1 to 1,000 rays produce the same payload and
+validity mask; an invalid probe costs no rays. Criterion means are 439 µs for a
+64³ full bake and 11.57 ms for 128³; the bench terrain leaves 33/64 and 382/512
+probes valid, so those bakes cast 2,112 and 24,448 rays (a fully open 128³ near
+grid is capped at 32,768). One 256-ray frame costs 120 µs (~475 ns/ray), so a
+full 128³ bake spreads over 96–128 frames. See
+`cargo bench -p voxel-mesh --bench probe`.
+
 ### 6.1 Apron and mesher
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -543,7 +555,7 @@ including the 570-cell border-side edit. The edit changes 46/216 padded cells at
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| M2-18 | Production SH4 bake at block centres, deterministic, budgeted across frames | M1-30 | Byte-equal to the reference on 3 fixtures | `cargo test -p voxel-mesh probe_bake` | 1.5 d | [ ] |
+| M2-18 | Production SH4 bake at block centres, deterministic, budgeted across frames | M1-30 | Byte-equal to the reference on 3 fixtures | `cargo test -p voxel-mesh probe_bake` | 1.5 d | [x] |
 | M2-19 | Invalid-in-solid flag and 3×3×3 nearest-valid fallback | M2-18 | Sampling inside a wall returns the nearest valid probe; no NaNs | `cargo test -p voxel-mesh probe_fallback` | 0.5 d | [ ] |
 | M2-20 | Probe LOD: near per block, mid half-res, far none; transition is a content event | M2-19 | Ring transition rebuilds once; counts match 512/64/0 per chunk | `cargo test -p voxel-mesh probe_lod` | 1.5 d | [ ] |
 | M2-21 | Probe determinism and update budget: p95 ≤ 4 ms per edited chunk | M2-18 | Measured on the fixture; recorded | `cargo run -p voxel-bench -- gate probes` | 0.5 d | [ ] |
