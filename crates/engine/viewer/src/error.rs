@@ -27,6 +27,8 @@ pub enum ViewerError {
     UnsupportedSurface,
     /// Acquiring the next frame raised a validation error.
     SurfaceValidation,
+    /// The surface was lost repeatedly and recreating it did not help.
+    SurfaceLost,
     /// The committed atlas failed verification or is missing.
     Atlas(String),
 }
@@ -43,6 +45,7 @@ impl fmt::Display for ViewerError {
                 f.write_str("the graphics adapter cannot present to this surface")
             }
             Self::SurfaceValidation => f.write_str("surface acquisition failed validation"),
+            Self::SurfaceLost => f.write_str("the window surface was lost repeatedly; giving up"),
             Self::Atlas(message) => write!(f, "atlas: {message}"),
         }
     }
@@ -56,7 +59,10 @@ impl Error for ViewerError {
             Self::Surface(error) => Some(error),
             Self::Adapter(error) => Some(error),
             Self::Device(error) => Some(error),
-            Self::UnsupportedSurface | Self::SurfaceValidation | Self::Atlas(_) => None,
+            Self::UnsupportedSurface
+            | Self::SurfaceValidation
+            | Self::SurfaceLost
+            | Self::Atlas(_) => None,
         }
     }
 }

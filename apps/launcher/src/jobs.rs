@@ -403,6 +403,9 @@ fn terminate(child: &mut Child, grace: Duration) {
         let pid = child.id() as i32;
         // `process_group(0)` made the child a group leader, so a negative pid
         // reaches Cargo and anything it spawned (for example the viewer).
+        // SAFETY: `pid` is the live child's id and `process_group(0)` made it a
+        // group leader, so the negated pid names that group. `kill` takes no
+        // pointers and is safe to call with any integer.
         unsafe {
             libc::kill(-pid, libc::SIGTERM);
         }
@@ -420,8 +423,10 @@ fn terminate(child: &mut Child, grace: Duration) {
         }
         // `kill(-pid, 0)` probes the group: the leader can be gone while a
         // member that ignores SIGTERM is still alive.
+        // SAFETY: as above; signal 0 only probes for a live group.
         let group_alive = unsafe { libc::kill(-pid, 0) == 0 };
         if !reaped || group_alive {
+            // SAFETY: as above.
             unsafe {
                 libc::kill(-pid, libc::SIGKILL);
             }
