@@ -55,13 +55,14 @@ fn clipped_window_matches_full_recompute() {
             0,
             "set {set}: an interior edit must stay on the dirty-region path"
         );
-        // The padded volume is (EDGE + 2)³; a recompute that ignores the dirty
-        // window would exceed the chunk volume and fail here.
+        // The padded volume is (EDGE + 2)³; a region recompute that ignores the
+        // dirty window would exceed the chunk volume and fail here. Increase-only
+        // batches report their seeds (a handful), so only the upper bound is
+        // meaningful for every batch.
         assert!(
-            state.last_recomputed_cells() > 0
-                && state.last_recomputed_cells() <= WINDOW_EDGE.pow(3),
-            "set {set}: recomputed {} cells, at most {} expected",
-            state.last_recomputed_cells(),
+            state.last_touched_cells() <= WINDOW_EDGE.pow(3),
+            "set {set}: touched {} cells, at most {} expected",
+            state.last_touched_cells(),
             WINDOW_EDGE.pow(3)
         );
         assert_matches_full(&state, &grid, WINDOW_EDGE, &format!("window set {set}"));

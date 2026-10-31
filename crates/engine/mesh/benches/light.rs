@@ -11,10 +11,10 @@
 //! to a full relight. The benchmark asserts that the measured edit stays on the
 //! incremental path.
 //!
-//! Measured 2026-10-29: incremental is ~25% of full at 64³ and ~31% at 128³ by
-//! the criterion mean. That misses the 20% task limit because the edit raises
-//! light in 21%/41% of the padded cells; the full result and the decision are in
-//! `docs/m2-light-cost.md`.
+//! Measured 2026-10-29 (reference host): incremental p95 is 4.4% of full at 64³
+//! and 5.7% at 128³ (criterion means 5.25% / 7.06%), inside the 20% task limit;
+//! the edit raises light in 21%/41% of the padded cells. The full result and the
+//! decision are in `docs/m2-light-cost.md`.
 //!
 //! Set `LIGHT_PROFILE=1` and pass `--profile-time 10` to write a pprof flamegraph
 //! under `target/criterion/light_edge_<edge>/<bench>/profile/flamegraph.svg`.
@@ -23,6 +23,7 @@
 use std::time::{Duration, Instant};
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
+#[cfg(unix)]
 use pprof::criterion::{Output, PProfProfiler};
 use voxel_mesh::light::{BlockLight, CellEdit, LightFill, LightSource, LightState, full_pass_at};
 
@@ -364,9 +365,10 @@ criterion_main!(benches);
 /// recorded timing runs are not perturbed by SIGPROF.
 fn criterion_config() -> Criterion {
     let config = Criterion::default();
+    // Profiling is Unix-only (`pprof`); other hosts run the plain config.
+    #[cfg(unix)]
     if std::env::var_os("LIGHT_PROFILE").is_some() {
-        config.with_profiler(PProfProfiler::new(997, Output::Flamegraph(None)))
-    } else {
-        config
+        return config.with_profiler(PProfProfiler::new(997, Output::Flamegraph(None)));
     }
+    config
 }

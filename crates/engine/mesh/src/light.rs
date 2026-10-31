@@ -303,8 +303,8 @@ pub struct LightState {
     /// padded grid. Built once per state so the incremental inner loop has no
     /// coordinate math or bounds checks. One byte per padded cell.
     neighbour_mask: Vec<u8>,
-    /// Cells the last edit batch recomputed; see [`Self::last_recomputed_cells`].
-    recomputed_cells: usize,
+    /// Cells the last edit batch touched; see [`Self::last_touched_cells`].
+    touched_cells: usize,
 }
 
 impl Clone for LightState {
@@ -322,7 +322,7 @@ impl Clone for LightState {
             sky_seed_scratch: self.sky_seed_scratch.clone(),
             block_seed_scratch: self.block_seed_scratch.clone(),
             neighbour_mask: self.neighbour_mask.clone(),
-            recomputed_cells: self.recomputed_cells,
+            touched_cells: self.touched_cells,
         }
     }
 
@@ -348,7 +348,7 @@ impl Clone for LightState {
         if !same_grid {
             self.neighbour_mask.clone_from(&source.neighbour_mask);
         }
-        self.recomputed_cells = source.recomputed_cells;
+        self.touched_cells = source.touched_cells;
     }
 }
 
@@ -424,7 +424,7 @@ impl LightState {
             sky_seed_scratch: Vec::new(),
             block_seed_scratch: Vec::new(),
             neighbour_mask,
-            recomputed_cells: 0,
+            touched_cells: 0,
         }
     }
 
@@ -433,12 +433,18 @@ impl LightState {
         self.full_relights
     }
 
-    /// Cells the last edit batch recomputed, including a full relight.
+    /// Cells the last edit batch touched, with two different meanings:
     ///
-    /// Zero before the first edit. A test uses this to prove the dirty window
-    /// is really clipped instead of a whole-chunk pass in disguise.
-    pub fn last_recomputed_cells(&self) -> usize {
-        self.recomputed_cells
+    /// - a removal (region or full relight) reports the number of cells it
+    ///   cleared and reseeded;
+    /// - an increase-only batch reports the seed cells it pushed (at most seven
+    ///   per edit), not the cells the propagation later visited.
+    ///
+    /// Zero for a batch that changed nothing. The region figure is what proves a
+    /// dirty window is clipped; the seed figure is a small constant and cannot
+    /// make that proof on its own.
+    pub fn last_touched_cells(&self) -> usize {
+        self.touched_cells
     }
 
     /// Applies a batch of edits and recomputes only the dirty region.
@@ -452,6 +458,7 @@ impl LightState {
         if edits.is_empty() {
             return;
         }
+        self.touched_cells = 0;
         let indices: Vec<usize> = edits
             .iter()
             .map(|edit| self.checked_index(edit.x, edit.y, edit.z))
@@ -643,8 +650,8 @@ impl LightState {
             );
         }
         // Increase-only batches seed a handful of cells instead of clearing a
-        // region; report what was touched, not the padded volume.
-        self.recomputed_cells = self
+        // region; report the seeds, not the cells the propagation visits.
+        self.touched_cells = self
             .sky_seed_scratch
             .len()
             .max(self.block_seed_scratch.len());
@@ -669,7 +676,7 @@ impl LightState {
         }
         propagate_region(&self.blocks, &mut self.sky, self.padded_edge, min, max);
         propagate_region(&self.blocks, &mut self.block, self.padded_edge, min, max);
-        self.recomputed_cells = cells;
+        self.touched_cells = cells;
     }
 
     fn full_relight(&mut self) {
@@ -682,7 +689,7 @@ impl LightState {
         propagate(&self.blocks, &mut self.sky, self.padded_edge);
         propagate(&self.blocks, &mut self.block, self.padded_edge);
         self.full_relights += 1;
-        self.recomputed_cells = self.blocks.len();
+        self.touched_cells = self.blocks.len();
     }
 }
 
