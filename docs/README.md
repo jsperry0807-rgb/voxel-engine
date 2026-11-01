@@ -54,8 +54,12 @@ binding number is made in the spec and the pre-registration, never only in a tas
   [`m2.5-04-climate.md`](m2.5-04-climate.md). `M2.5-05` added the seeded macro
   tile generator, the `macro` CLI and the aggregated content hash: the whole
   4,096-tile world generates in **9.2 s** with a stable hash; see
-  [`m2.5-05-macro-generator.md`](m2.5-05-macro-generator.md). Hydrology
-  (`M2.5-06`) is next.
+  [`m2.5-05-macro-generator.md`](m2.5-05-macro-generator.md). `M2.5-06` added
+  priority-flood hydrology with D8 flow and accumulation, plus the `hydro`
+  command; see [`m2.5-06-hydrology.md`](m2.5-06-hydrology.md). It also
+  surfaced that the current shape field drains as domes (largest accumulation
+  48 cells), which river extraction will need fixed. River and lake extraction
+  (`M2.5-07/08`) is next.
 
 ## Tools
 
