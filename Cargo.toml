@@ -11,6 +11,7 @@ members = [
     "crates/engine/storage",
     "crates/engine/viewer",
     "crates/engine/texgraph",
+    "crates/engine/worldgen",
     "apps/texgen",
     "apps/launcher",
 ]

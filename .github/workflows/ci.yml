@@ -76,6 +76,8 @@ jobs:
       # The golden files are the frozen M2-11 mesh contract at both edges.
       - run: cargo test -p voxel-mesh --test golden
       - run: cargo test -p voxel-mesh --features chunk128 --test golden
+      # The worldgen goldens are the frozen M2.5-01 noise contract.
+      - run: cargo test -p voxel-worldgen noise
       - name: Checksum the frozen goldens
         run: sha256sum crates/engine/mesh/tests/golden/*.txt > target/golden-sha256.txt
       - name: Upload the frozen goldens
