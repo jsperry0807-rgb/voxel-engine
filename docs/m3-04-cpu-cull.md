@@ -118,5 +118,5 @@ the default-camera cases.
 
 ## Next
 
-M3-05: the draw loop over visible chunks as its own task — correct image and no
-double-draw on the stopped-and-moving camera.
+M3-05 extracted the draw loop (`draw_visible`) and proved the culled frame
+equals a draw-everything frame byte for byte; M3-06 adds the overlay.
