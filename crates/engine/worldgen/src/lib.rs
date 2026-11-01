@@ -18,6 +18,7 @@
 //! - [`generator`] — the seeded generator that fills a tile.
 //! - [`hydro`] — priority-flood depression fill, D8 flow and accumulation.
 //! - [`rivers`] — vector river segments, width/depth/order and delta detection.
+//! - [`lakes`] — lake components, spill levels and shorelines.
 //!
 //! # Example
 //!
@@ -38,6 +39,7 @@ pub mod fixed;
 pub mod generator;
 pub mod hash;
 pub mod hydro;
+pub mod lakes;
 pub mod macro_grid;
 pub mod noise;
 pub mod rivers;
@@ -48,6 +50,7 @@ pub use climate::{Climate, ClimateSample};
 pub use fixed::{Coord, ONE};
 pub use generator::MacroGenerator;
 pub use hydro::{FlowDir, Hydrology};
+pub use lakes::{Lake, Lakes};
 pub use macro_grid::{Cell, TileFlags, TilePos};
 pub use noise::Noise;
 pub use rivers::{Mouth, River, RiverNetwork, RiverPoint};

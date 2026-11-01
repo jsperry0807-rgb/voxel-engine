@@ -4,6 +4,7 @@
 //! voxel-worldgen macro   [--seed N] [--limit N] [--out DIR]
 //! voxel-worldgen hydro   [--seed N] [--size N]
 //! voxel-worldgen rivers  [--seed N] [--size N] [--threshold N]
+//! voxel-worldgen lakes   [--seed N] [--size N] [--min-cells N]
 //! ```
 //!
 //! `macro` generates the 4,096 tiles of the 1,024 km world at 128 m, prints a
@@ -14,8 +15,9 @@
 //! `hydro` builds the macro heightfield, runs the priority-flood pass and
 //! prints lake and accumulation statistics. `rivers` runs the same pass and
 //! extracts the river network: segment count, length, order, width range,
-//! delta count and mouth breakdown. Both accept `--size N` so a smoke run can
-//! use a small square.
+//! delta count and mouth breakdown. `lakes` extracts lake bodies, spill cells
+//! and shorelines. All commands accept `--size N` so a smoke run can use a
+//! small square.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -23,6 +25,7 @@ use std::time::Instant;
 
 use voxel_worldgen::generator::{MacroGenerator, SEA_LEVEL_UNITS};
 use voxel_worldgen::hydro::Hydrology;
+use voxel_worldgen::lakes::{LakeConfig, Lakes};
 use voxel_worldgen::macro_grid::{
     CELL_SIZE_M, TILE_COUNT, TILES_PER_AXIS, TilePos, WORLD_CELLS, height_from_q16,
 };
@@ -44,6 +47,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
         Some("macro") => macro_command(&args[1..]),
         Some("hydro") => hydro_command(&args[1..]),
         Some("rivers") => rivers_command(&args[1..]),
+        Some("lakes") => lakes_command(&args[1..]),
         Some("--help" | "-h") | None => {
             print_usage();
             Ok(())
@@ -60,13 +64,15 @@ fn print_usage() {
          \x20 voxel-worldgen macro [--seed N] [--limit N] [--out DIR]\n\
          \x20 voxel-worldgen hydro [--seed N] [--size N]\n\
          \x20 voxel-worldgen rivers [--seed N] [--size N] [--threshold N]\n\
+         \x20 voxel-worldgen lakes  [--seed N] [--size N] [--min-cells N]\n\
          \n\
          Options:\n\
          \x20 --seed N      world seed, decimal or 0x hex (default 1)\n\
          \x20 --limit N     macro: generate only the first N tiles, row-major\n\
          \x20 --out DIR     macro: write each tile to DIR/<x>_<z>.vxt\n\
          \x20 --size N      hydro/rivers: run on the first N × N cells (default 8000)\n\
-         \x20 --threshold N rivers: accumulation needed for a river (default 512)"
+         \x20 --threshold N rivers: accumulation needed for a river (default 512)\n\
+         \x20 --min-cells N lakes: smallest lake kept, in cells (default 8)"
     );
 }
 
@@ -285,6 +291,65 @@ fn parse_size(text: &str) -> Result<usize, String> {
         return Err(format!("--size must be 1..={WORLD_CELLS}, got {requested}"));
     }
     Ok(requested as usize)
+}
+
+fn lakes_command(args: &[String]) -> Result<(), String> {
+    let mut seed = 1u64;
+    let mut size = WORLD_CELLS as usize;
+    let mut config = LakeConfig::default();
+
+    let mut index = 0;
+    while index < args.len() {
+        let argument = &args[index];
+        let mut value = |name: &str| -> Result<String, String> {
+            index += 1;
+            args.get(index)
+                .cloned()
+                .ok_or_else(|| format!("{name} needs a value"))
+        };
+        match argument.as_str() {
+            "--seed" => seed = parse_u64(&value("--seed")?)?,
+            "--size" => size = parse_size(&value("--size")?)?,
+            "--min-cells" => {
+                let min_cells = parse_u32(&value("--min-cells")?)?;
+                if min_cells == 0 {
+                    return Err("--min-cells must be at least 1".to_owned());
+                }
+                config.min_cells = min_cells;
+            }
+            other => return Err(format!("unknown argument {other:?}; try --help")),
+        }
+        index += 1;
+    }
+
+    let started = Instant::now();
+    let heights = build_heights(seed, size);
+    let build_time = started.elapsed();
+    let started = Instant::now();
+    let hydro = Hydrology::compute(heights, size, size, SEA_LEVEL_UNITS);
+    let hydro_time = started.elapsed();
+    let started = Instant::now();
+    let lakes = Lakes::extract_with(&hydro, config);
+    let extract_time = started.elapsed();
+
+    let largest = lakes.largest();
+    println!(
+        "lakes seed={seed} cells={} min_cells={} lake_cells={} lakes={} area_cells={} largest_cells={} largest_surface={} largest_depth={} deepest_depth={} build_ms={} hydro_ms={} extract_ms={}",
+        size * size,
+        lakes.min_cells(),
+        lakes.lake_cells(),
+        lakes.len(),
+        lakes.area_cells(),
+        largest.map(|lake| lake.area_cells).unwrap_or(0),
+        largest.map(|lake| lake.surface).unwrap_or(0),
+        largest.map(|lake| lake.max_depth).unwrap_or(0),
+        lakes.deepest().map(|lake| lake.max_depth).unwrap_or(0),
+        build_time.as_millis(),
+        hydro_time.as_millis(),
+        extract_time.as_millis(),
+    );
+    println!("lakes_hash={:016x}", lakes.content_hash());
+    Ok(())
 }
 
 fn parse_u64(text: &str) -> Result<u64, String> {

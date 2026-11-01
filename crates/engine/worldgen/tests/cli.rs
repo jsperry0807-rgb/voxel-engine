@@ -132,3 +132,35 @@ fn cli_rivers_rejects_bad_threshold() {
     assert!(!run(&["rivers", "--threshold", "nope"]).status.success());
     assert!(!run(&["rivers", "--size", "0"]).status.success());
 }
+
+#[test]
+fn cli_lakes_reports_a_stable_hash() {
+    let first = stdout(&run(&[
+        "lakes",
+        "--seed",
+        "7",
+        "--size",
+        "96",
+        "--min-cells",
+        "2",
+    ]));
+    let second = stdout(&run(&[
+        "lakes",
+        "--seed",
+        "7",
+        "--size",
+        "96",
+        "--min-cells",
+        "2",
+    ]));
+
+    assert!(first.contains("lakes="), "{first}");
+    assert!(first.contains("largest_cells="), "{first}");
+    assert_eq!(hash_line(&first), hash_line(&second));
+}
+
+#[test]
+fn cli_lakes_rejects_a_bad_minimum() {
+    assert!(!run(&["lakes", "--min-cells", "0"]).status.success());
+    assert!(!run(&["lakes", "--min-cells", "nope"]).status.success());
+}
