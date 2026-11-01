@@ -45,8 +45,11 @@ binding number is made in the spec and the pre-registration, never only in a tas
   integer-hash, fixed-point noise contract with committed golden vectors; see
   [`m2.5-01-noise.md`](m2.5-01-noise.md). `M2.5-02` added the 128 m macro grid
   and the 16 km tile format (93.75 kB payload, CRC-32, format version 1); see
-  [`m2.5-02-macro-tile.md`](m2.5-02-macro-tile.md). The spline tables
-  (`M2.5-03`) are next.
+  [`m2.5-02-macro-tile.md`](m2.5-02-macro-tile.md). `M2.5-03` added the PCHIP
+  shape splines: continentalness and erosion to a surface elevation, exact sea
+  level at 6,600 m and a 12,000 m peak; see
+  [`m2.5-03-splines.md`](m2.5-03-splines.md). The climate fields (`M2.5-04`) are
+  next.
 
 ## Tools
 
