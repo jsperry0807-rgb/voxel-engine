@@ -70,8 +70,11 @@ binding number is made in the spec and the pre-registration, never only in a tas
   bilinear sampling across tile borders; see
   [`m2.5-09-tile-store.md`](m2.5-09-tile-store.md). `M2.5-10` added the softmax
   biome weights over the 18 centres: exact sums, a 348 m transition band and no
-  hard argmax switches; see [`m2.5-10-weights.md`](m2.5-10-weights.md). The RON
-  biome definitions (`M2.5-11`) are next.
+  hard argmax switches; see [`m2.5-10-weights.md`](m2.5-10-weights.md).
+  `M2.5-11` moved the 18 biome definitions into `data/biomes.ron` and validates
+  every palette key against the block manifest; the weight centres come from
+  the file. See [`m2.5-11-biomes.md`](m2.5-11-biomes.md). The surface rules
+  (`M2.5-12`) are next.
 
 ## Tools
 
