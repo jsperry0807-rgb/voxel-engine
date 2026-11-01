@@ -78,6 +78,13 @@ jobs:
       - run: cargo test -p voxel-mesh --features chunk128 --test golden
       # The worldgen goldens are the frozen M2.5-01 noise contract.
       - run: cargo test -p voxel-worldgen noise
+      - run: cargo test -p voxel-worldgen macro_generator
+      # M2.5-05: the whole macro world hashes to a pinned value. Update the
+      # constant here and in the task docs when a field change is intentional.
+      - name: Full macro world hash
+        run: |
+          cargo run -p voxel-worldgen -- macro --seed 1 | tee target/macro-world.txt
+          grep -q 'world_hash=615d6d05683c34ff' target/macro-world.txt
       - name: Checksum the frozen goldens
         run: sha256sum crates/engine/mesh/tests/golden/*.txt > target/golden-sha256.txt
       - name: Upload the frozen goldens

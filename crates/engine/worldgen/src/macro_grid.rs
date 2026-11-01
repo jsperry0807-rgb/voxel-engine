@@ -256,7 +256,7 @@ const fn height_from_mm_wide(mm: u64) -> u16 {
 /// The shape splines (`crate::splines::surface_height`) produce Q16.16 metres;
 /// the tile stores 0.25 m units. Negative values clamp to the floor and values
 /// above the channel's range saturate at [`u16::MAX`] rather than wrapping.
-pub fn height_from_q16(value: i32) -> u16 {
+pub const fn height_from_q16(value: i32) -> u16 {
     let one = crate::fixed::ONE as i64;
     let mm = ((value as i64 * 1_000) + one / 2) / one;
     if mm <= 0 {

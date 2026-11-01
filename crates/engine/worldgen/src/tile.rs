@@ -385,6 +385,49 @@ impl core::fmt::Debug for MacroTile {
     }
 }
 
+/// FNV-1a 64 offset basis.
+const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+
+/// FNV-1a 64 prime.
+const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
+
+/// Fold bytes into an FNV-1a 64 state.
+pub fn fnv_bytes(mut state: u64, bytes: &[u8]) -> u64 {
+    for &byte in bytes {
+        state ^= byte as u64;
+        state = state.wrapping_mul(FNV_PRIME);
+    }
+    state
+}
+
+/// Start a new FNV-1a 64 hash.
+pub const fn fnv_start() -> u64 {
+    FNV_OFFSET
+}
+
+/// Fold a `u64` into an FNV-1a 64 state, little-endian.
+pub fn fnv_u64(state: u64, value: u64) -> u64 {
+    fnv_bytes(state, &value.to_le_bytes())
+}
+
+impl MacroTile {
+    /// 64-bit content hash of the identity header and the payload.
+    ///
+    /// The range is the same bytes the CRC covers (header bytes `0..36` and the
+    /// payload), so the hash changes when the seed, a version, the position or
+    /// any cell changes. It is stable across runs, threads and platforms: FNV-1a
+    /// over the little-endian encoding.
+    ///
+    /// [`fnv_start`] and [`fnv_u64`] let a caller aggregate tile hashes into a
+    /// world hash without storing the tiles.
+    pub fn content_hash(&self) -> u64 {
+        let bytes = self.to_bytes();
+        let mut hash = fnv_bytes(FNV_OFFSET, &bytes[..CRC_OFFSET]);
+        hash = fnv_bytes(hash, &bytes[HEADER_BYTES..]);
+        hash
+    }
+}
+
 /// Why a tile could not be built or decoded.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TileError {

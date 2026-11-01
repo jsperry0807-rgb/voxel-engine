@@ -11,6 +11,11 @@
 //! - [`fixed`] — Q16.16 coordinates (48.16) and values (16.16).
 //! - [`hash`] — `splitmix64` finaliser and lattice hashing; no ordered RNG.
 //! - [`noise`] — 2D/3D gradient noise and fractal sums over it.
+//! - [`splines`] — continentalness/erosion shape tables.
+//! - [`macro_grid`] — 128 m grid geometry, cells and flags.
+//! - [`tile`] — the 16 km tile binary format.
+//! - [`climate`] — latitude, altitude and ocean-distance climate fields.
+//! - [`generator`] — the seeded generator that fills a tile.
 //!
 //! # Example
 //!
@@ -28,6 +33,7 @@
 
 pub mod climate;
 pub mod fixed;
+pub mod generator;
 pub mod hash;
 pub mod macro_grid;
 pub mod noise;
@@ -36,6 +42,7 @@ pub mod tile;
 
 pub use climate::{Climate, ClimateSample};
 pub use fixed::{Coord, ONE};
+pub use generator::MacroGenerator;
 pub use macro_grid::{Cell, TileFlags, TilePos};
 pub use noise::Noise;
 pub use splines::{PEAK, SEA_LEVEL, surface_height};
