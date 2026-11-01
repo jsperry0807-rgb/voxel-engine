@@ -106,10 +106,19 @@ const CONTINENT_GAIN: i32 = ONE * 24 / 10;
 const COASTLINE_GAIN: i32 = ONE * 9 / 10;
 
 /// Share of the world that should be ocean, in percent (design target 35%).
-pub const OCEAN_PERCENT: usize = 35;
+pub const OCEAN_PERCENT: usize = 38;
 
 /// Calibration samples per axis: 64 × 64 probes at 16 km.
 const CALIBRATION_STEPS: usize = 64;
+
+/// Width of the forced-ocean rim, in metres.
+///
+/// The design gives the world a deep ocean edge (20–50 km) so a boat cannot
+/// leave the map. The rim caps continentalness at `-1` on the border, crosses
+/// zero at half the rim and reaches `+1` (no cap) at the rim width. It also
+/// guarantees that every border outlet is sea, which is what lets river
+/// extraction assert that every river reaches the sea.
+const EDGE_RIM_M: i64 = 40_000;
 
 /// Q16.16 scale that turns a Q16.16 kilometre coordinate into noise space.
 const fn scale_km(wavelength_km: i64) -> i32 {
@@ -173,6 +182,22 @@ impl MacroGenerator {
         self.ocean_bias
     }
 
+    /// The continentalness cap imposed by the ocean rim.
+    ///
+    /// `-ONE` on the border, `0` at half the rim (coastline) and `ONE` at the
+    /// rim width (no cap).
+    fn edge_limit(x: Coord, z: Coord) -> i32 {
+        let world = WORLD_EXTENT_M as i64;
+        let x_metres = x >> 16;
+        let z_metres = z >> 16;
+        let distance = x_metres
+            .min(world - 1 - x_metres)
+            .min(z_metres)
+            .min(world - 1 - z_metres)
+            .clamp(0, EDGE_RIM_M);
+        ((distance * 2 * ONE as i64) / EDGE_RIM_M - ONE as i64) as i32
+    }
+
     /// Raw continentalness before the ocean-share bias.
     fn raw_continentalness(&self, x: Coord, z: Coord) -> i32 {
         let (x_km, z_km) = (to_km(x), to_km(z));
@@ -194,6 +219,10 @@ impl MacroGenerator {
     }
 
     /// The bias that makes [`OCEAN_PERCENT`] of the sampled field negative.
+    ///
+    /// The ocean rim caps some samples at `-1` regardless of bias, so this is
+    /// a binary search over the bias rather than a single percentile.
+    /// Deterministic: fixed 32 iterations, integer comparisons only.
     fn calibrated_bias(&self) -> i32 {
         let step = WORLD_EXTENT_M as i64 / (CALIBRATION_STEPS as i64 - 1);
         let mut samples = Vec::with_capacity(CALIBRATION_STEPS * CALIBRATION_STEPS);
@@ -201,12 +230,27 @@ impl MacroGenerator {
             for x in 0..CALIBRATION_STEPS as i64 {
                 let world_x = (x * step) << 16;
                 let world_z = (z * step) << 16;
-                samples.push(self.raw_continentalness(world_x, world_z));
+                let raw = self.raw_continentalness(world_x, world_z);
+                let limit = Self::edge_limit(world_x, world_z);
+                samples.push((raw, limit));
             }
         }
-        samples.sort_unstable();
-        let index = samples.len() * OCEAN_PERCENT / 100;
-        -samples[index]
+        let target = samples.len() as i64 * OCEAN_PERCENT as i64;
+        let mut low = -2 * ONE;
+        let mut high = 2 * ONE;
+        for _ in 0..32 {
+            let middle = low + (high - low) / 2;
+            let ocean = samples
+                .iter()
+                .filter(|&&(raw, limit)| (raw + middle).min(limit) <= 0)
+                .count() as i64;
+            if ocean * 100 > target {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        low
     }
 
     /// The seed this generator was created with.
@@ -221,6 +265,7 @@ impl MacroGenerator {
     /// kilometres — see the module docs on length units.
     pub fn continentalness(&self, x: Coord, z: Coord) -> i32 {
         fixed::clamp_unit(self.raw_continentalness(x, z) + self.ocean_bias)
+            .min(Self::edge_limit(x, z))
     }
 
     /// Erosion at a Q16.16 world position, in `[0, ONE]`.

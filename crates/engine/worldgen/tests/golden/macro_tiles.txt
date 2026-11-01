@@ -1,9 +1,9 @@
 # M2.5-05 macro tile content hashes.
 # Regenerate: UPDATE_GOLDEN=1 cargo test -p voxel-worldgen macro_generator
 # seed tile_x tile_z fnv1a64
-1 0 0 4a9f14325c8b1887
-1 1 0 34ab8820237ea1a6
-1 10 0 637f6b5c85ed61f4
-1 31 31 079d6cca0f279c12
-1 32 32 7f3fc23fa203d1d6
-1 63 63 0186d5b25aa3bd73
+1 0 0 25d2d752126bc228
+1 1 0 5a728d437f37fe66
+1 10 0 326e1f6c6f960f69
+1 31 31 d2bfcd3512032715
+1 32 32 2ea3289b131b02f6
+1 63 63 c50da7538b9d4a05

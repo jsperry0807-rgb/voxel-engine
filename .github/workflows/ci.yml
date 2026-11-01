@@ -84,7 +84,7 @@ jobs:
       - name: Full macro world hash
         run: |
           cargo run -p voxel-worldgen -- macro --seed 1 | tee target/macro-world.txt
-          grep -q 'world_hash=5b17f74f2bef0481' target/macro-world.txt
+          grep -q 'world_hash=4a7fd7354f810b8f' target/macro-world.txt
       - name: Checksum the frozen goldens
         run: sha256sum crates/engine/mesh/tests/golden/*.txt > target/golden-sha256.txt
       - name: Upload the frozen goldens

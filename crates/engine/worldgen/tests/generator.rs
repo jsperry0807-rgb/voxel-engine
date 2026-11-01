@@ -537,3 +537,30 @@ fn macro_generator_surface_has_valley_detail() {
         }
     }
 }
+
+#[test]
+fn macro_generator_border_is_ocean() {
+    // The design gives the world a deep-ocean rim; it also guarantees that a
+    // river reaching the border reaches the sea.
+    let generator = MacroGenerator::new(1);
+    let world = metres(WORLD_EXTENT_M as i64);
+    let steps = 256i64;
+    for step in 0..=steps {
+        let t = metres(WORLD_EXTENT_M as i64 * step / steps);
+        for (x, z) in [(t, 0), (t, world), (0, t), (world, t)] {
+            assert!(
+                generator.continentalness(x, z) <= 0,
+                "border cell {step} at ({x}, {z}) is land"
+            );
+        }
+    }
+
+    // The rim takes some ocean share, so the calibration must still land near
+    // the design's 35% overall.
+    let (continents, ocean) = continent_count(&generator, 256);
+    assert!((1..=7).contains(&continents), "{continents} continents");
+    assert!(
+        (0.30..=0.40).contains(&ocean),
+        "ocean fraction {ocean} is not ~0.35 after the rim"
+    );
+}

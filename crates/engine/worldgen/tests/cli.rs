@@ -99,3 +99,36 @@ fn cli_hydro_rejects_a_bad_size() {
     assert!(!run(&["hydro", "--size", "9000"]).status.success());
     assert!(!run(&["hydro", "--size", "nope"]).status.success());
 }
+
+#[test]
+fn cli_rivers_reports_a_stable_hash() {
+    let first = stdout(&run(&[
+        "rivers",
+        "--seed",
+        "7",
+        "--size",
+        "96",
+        "--threshold",
+        "8",
+    ]));
+    let second = stdout(&run(&[
+        "rivers",
+        "--seed",
+        "7",
+        "--size",
+        "96",
+        "--threshold",
+        "8",
+    ]));
+
+    assert!(first.contains("segments="), "{first}");
+    assert!(first.contains("width_m="), "{first}");
+    assert_eq!(hash_line(&first), hash_line(&second));
+}
+
+#[test]
+fn cli_rivers_rejects_bad_threshold() {
+    assert!(!run(&["rivers", "--threshold", "0"]).status.success());
+    assert!(!run(&["rivers", "--threshold", "nope"]).status.success());
+    assert!(!run(&["rivers", "--size", "0"]).status.success());
+}

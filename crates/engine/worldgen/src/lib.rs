@@ -17,6 +17,7 @@
 //! - [`climate`] — latitude, altitude and ocean-distance climate fields.
 //! - [`generator`] — the seeded generator that fills a tile.
 //! - [`hydro`] — priority-flood depression fill, D8 flow and accumulation.
+//! - [`rivers`] — vector river segments, width/depth/order and delta detection.
 //!
 //! # Example
 //!
@@ -39,6 +40,7 @@ pub mod hash;
 pub mod hydro;
 pub mod macro_grid;
 pub mod noise;
+pub mod rivers;
 pub mod splines;
 pub mod tile;
 
@@ -48,5 +50,6 @@ pub use generator::MacroGenerator;
 pub use hydro::{FlowDir, Hydrology};
 pub use macro_grid::{Cell, TileFlags, TilePos};
 pub use noise::Noise;
+pub use rivers::{Mouth, River, RiverNetwork, RiverPoint};
 pub use splines::{PEAK, SEA_LEVEL, surface_height};
 pub use tile::{MacroTile, TileError, TileHeader};
