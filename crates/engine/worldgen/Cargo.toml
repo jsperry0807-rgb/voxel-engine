@@ -6,5 +6,10 @@ publish.workspace = true
 description = "Deterministic terrain world generation for the voxel engine"
 
 [dependencies]
+voxel-core = { path = "../../core" }
+
+[features]
+# Forward the pre-registered 128³ chunk edge to `voxel-core`.
+chunk128 = ["voxel-core/chunk128"]
 
 [dev-dependencies]

@@ -3562,6 +3562,9 @@ dependencies = [
 [[package]]
 name = "voxel-worldgen"
 version = "0.1.0"
+dependencies = [
+ "voxel-core",
+]
 
 [[package]]
 name = "walkdir"

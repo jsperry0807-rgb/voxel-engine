@@ -28,7 +28,11 @@
 
 pub mod fixed;
 pub mod hash;
+pub mod macro_grid;
 pub mod noise;
+pub mod tile;
 
 pub use fixed::{Coord, ONE};
+pub use macro_grid::{Cell, TileFlags, TilePos};
 pub use noise::Noise;
+pub use tile::{MacroTile, TileError, TileHeader};

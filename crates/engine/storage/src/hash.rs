@@ -58,31 +58,9 @@ pub fn hash_words(words: &[u32]) -> u64 {
     h
 }
 
-const fn make_crc_table() -> [u32; 256] {
-    let mut t = [0u32; 256];
-    let mut i = 0;
-    while i < 256 {
-        let mut c = i as u32;
-        let mut k = 0;
-        while k < 8 {
-            c = if c & 1 != 0 {
-                0xEDB8_8320 ^ (c >> 1)
-            } else {
-                c >> 1
-            };
-            k += 1;
-        }
-        t[i] = c;
-        i += 1;
-    }
-    t
-}
-static CRC_TABLE: [u32; 256] = make_crc_table();
-
-pub fn crc32(d: &[u8]) -> u32 {
-    let mut c = !0u32;
-    for &b in d {
-        c = CRC_TABLE[((c ^ b as u32) & 0xff) as usize] ^ (c >> 8);
-    }
-    !c
-}
+/// CRC-32/ISO-HDLC for the region log's record framing.
+///
+/// The implementation lives in `voxel-core::checksum` so the worldgen macro
+/// tile uses exactly the same polynomial; this re-export keeps the storage
+/// call sites and tests unchanged.
+pub use voxel_core::checksum::crc32;
