@@ -447,6 +447,10 @@ pub enum TileError {
     Checksum { expected: u32, found: u32 },
     /// A flag cell uses a reserved bit.
     UnknownFlags { index: usize, bits: u8 },
+    /// A tile could not be read from its source.
+    Io { path: String, message: String },
+    /// A source had no tile at this position.
+    Missing { x: i32, z: i32 },
 }
 
 impl core::fmt::Display for TileError {
@@ -474,6 +478,8 @@ impl core::fmt::Display for TileError {
             Self::UnknownFlags { index, bits } => {
                 write!(f, "cell {index} has reserved flag bits {bits:#04x}")
             }
+            Self::Io { path, message } => write!(f, "cannot read {path}: {message}"),
+            Self::Missing { x, z } => write!(f, "no tile at ({x}, {z})"),
         }
     }
 }

@@ -13,3 +13,5 @@ voxel-core = { path = "../../core" }
 chunk128 = ["voxel-core/chunk128"]
 
 [dev-dependencies]
+# The terrain preview example renders the macro map to a PNG.
+png = "=0.17.16"

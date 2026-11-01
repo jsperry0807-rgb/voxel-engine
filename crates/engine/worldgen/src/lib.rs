@@ -14,6 +14,7 @@
 //! - [`splines`] — continentalness/erosion shape tables.
 //! - [`macro_grid`] — 128 m grid geometry, cells and flags.
 //! - [`tile`] — the 16 km tile binary format.
+//! - [`tile_store`] — streaming tile cache and seamless bilinear sampling.
 //! - [`climate`] — latitude, altitude and ocean-distance climate fields.
 //! - [`generator`] — the seeded generator that fills a tile.
 //! - [`hydro`] — priority-flood depression fill, D8 flow and accumulation.
@@ -45,6 +46,7 @@ pub mod noise;
 pub mod rivers;
 pub mod splines;
 pub mod tile;
+pub mod tile_store;
 
 pub use climate::{Climate, ClimateSample};
 pub use fixed::{Coord, ONE};
@@ -56,3 +58,4 @@ pub use noise::Noise;
 pub use rivers::{Mouth, River, RiverNetwork, RiverPoint};
 pub use splines::{PEAK, SEA_LEVEL, surface_height};
 pub use tile::{MacroTile, TileError, TileHeader};
+pub use tile_store::{Channel, DirectorySource, TileSource, TileStore};
