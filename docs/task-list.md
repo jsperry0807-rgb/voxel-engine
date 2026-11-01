@@ -3,7 +3,7 @@
 **Status:** v1.9 — derived from spec v2.3 and roadmap v3.5
 **Date:** 2026-10-31
 **Owner:** engine
-**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 complete — `M2-30` (measured exit) landed 2026-10-31; the 128³ Minimum run is recorded, the mesh row is 1,250 KiB over the cap (production AO 3,650 KiB) and mesh compression is the first M3 item, gate row 9 is measured and row 11 is carried. M3-00 (mesh compression) is complete: the 44 B packed path passes 128³ and 64³ is abandoned. M3-01 (streaming shell) is complete: 256 chunks load with max pump 0.09 ms and 0 hitches on both GPUs. M3-02 (mesh buffer pool) is complete: 256 chunks mesh into 16 × 8 MiB pages (128 MiB for 120.3 MiB of meshes, 0 holes) with no buffer created after warm-up on both GPUs. M3-03 (upload queue) is complete: the 120.3 MiB ring uploads in 160–166 frames at ≤1 MiB per frame with 0 overruns and the pump stays under 0.5 ms. M3-04 (CPU chunk cull) is complete: it equals the M1-32 reference on 100 poses and draws 93 of 256 chunks at the default camera. M3-05 (draw loop) is complete: a culled frame is byte-identical to a draw-everything frame and no chunk is drawn twice. M3-06 (instrumentation) is complete: the per-second line reports CPU submit 1.2 ms, GPU pass 1.7 ms, 93/256 chunks, 13,201 blocks, 1,032,763 quads and 43.3 MiB on the RTX 4060. M3-07 (frame breakdown) is complete: draw is 1.7 ms (4060) / 8.9 ms (iGPU), cull 0.05 ms, upload 0 steady, content 64.8 ms/chunk off-thread and 6.0 s to fill the ring. M3-08 (stress scene) is complete: a seed selects five terrain variants and two canopy densities, 256 chunks fill in 5 s with 0 hitches, and the viewer writes a 1920×1080 PNG of the presented frame. M3-09 (hitch test) is complete: over 1,000 frames of camera motion the upload p99 is 2.5–2.9 ms (4060) / 1.6–3.1 ms (iGPU) and the worst frame 6.2–6.4 ms, after the default upload budget was halved from 1 MiB to 512 KiB (1 MiB measured a 6.8 ms p99); M3-10 is next.
+**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 complete — `M2-30` (measured exit) landed 2026-10-31; the 128³ Minimum run is recorded, the mesh row is 1,250 KiB over the cap (production AO 3,650 KiB) and mesh compression is the first M3 item, gate row 9 is measured and row 11 is carried. M3-00 (mesh compression) is complete: the 44 B packed path passes 128³ and 64³ is abandoned. M3-01 (streaming shell) is complete: 256 chunks load with max pump 0.09 ms and 0 hitches on both GPUs. M3-02 (mesh buffer pool) is complete: 256 chunks mesh into 16 × 8 MiB pages (128 MiB for 120.3 MiB of meshes, 0 holes) with no buffer created after warm-up on both GPUs. M3-03 (upload queue) is complete: the 120.3 MiB ring uploads in 160–166 frames at ≤1 MiB per frame with 0 overruns and the pump stays under 0.5 ms. M3-04 (CPU chunk cull) is complete: it equals the M1-32 reference on 100 poses and draws 93 of 256 chunks at the default camera. M3-05 (draw loop) is complete: a culled frame is byte-identical to a draw-everything frame and no chunk is drawn twice. M3-06 (instrumentation) is complete: the per-second line reports CPU submit 1.2 ms, GPU pass 1.7 ms, 93/256 chunks, 13,201 blocks, 1,032,763 quads and 43.3 MiB on the RTX 4060. M3-07 (frame breakdown) is complete: draw is 1.7 ms (4060) / 8.9 ms (iGPU), cull 0.05 ms, upload 0 steady, content 64.8 ms/chunk off-thread and 6.0 s to fill the ring. M3-08 (stress scene) is complete: a seed selects five terrain variants and two canopy densities, 256 chunks fill in 5 s with 0 hitches, and the viewer writes a 1920×1080 PNG of the presented frame. M3-09 (hitch test) is complete: over 1,000 frames of camera motion the upload p99 is 2.5–2.9 ms (4060) / 1.6–3.1 ms (iGPU) and the worst frame 6.2–6.4 ms, after the default upload budget was halved from 1 MiB to 512 KiB (1 MiB measured a 6.8 ms p99). M3-10 (60 Hz) is complete: at 1080p and 128³ the RTX 4060 records 192–202 fps average and a 104–113 fps 1% low; the Radeon iGPU records 70–75 fps average but a 57–61 fps 1% low, so it misses the 60 Hz tail and carries that to M3-13; M3-11 is next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -929,6 +929,18 @@ instead of 141. The remaining tail is generator contention: with
 `VOXEL_STREAM_WORKERS=1` the worst warm-up copy falls from 15.8 ms to 7.1 ms.
 See [`m3-09-hitch-test.md`](m3-09-hitch-test.md).
 
+**M3-10 60 Hz (closed 2026-11-01):** `VOXEL_FRAMETIME` records the interval
+between presents for 1200 frames at a pinned pose and writes a JSON report with
+the average, the 1% / 0.1% lows and the frame percentiles. At 1080p and 128³ the
+**RTX 4060 records 192.0–202.5 fps average and a 104.3–113.0 fps 1% low**; the
+**Radeon iGPU records 70.2–75.1 fps average but a 56.6–61.2 fps 1% low**
+(p99 frame 15.9–17.3 ms against the 16.6 ms budget), i.e. it clears 60 Hz on
+average and straddles it in the tail. The 4060 is present-bound (0.4–1.8 ms
+pass), the iGPU draw-bound (8.2–8.5 ms pass). At 64³ the iGPU records 119 fps
+average / 87 fps 1% low, so the miss is specific to the 128³ gate. Front-to-back
+draw ordering was measured and reverted (no pass change). The iGPU tail is
+carried to M3-13. See [`m3-10-60hz.md`](m3-10-60hz.md).
+
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
 | M3-00 | Mesh compression: 44 B packed 8 B vertex, Gate C comparison, 64³ decision | M2-29 | 128³ row 6 ≤2,400 KiB and row 1 ≤3.20 GiB PASS; 64³ abandoned; 32 B deferred | `cargo test -p voxel-viewer --test validation`; gate report | 7 d | [x] |
@@ -941,7 +953,7 @@ See [`m3-09-hitch-test.md`](m3-09-hitch-test.md).
 | M3-07 | Frame breakdown report: where the 16.6 ms goes | M3-06 | Table in the PR; draw vs cull vs upload vs content | review | 0.5 d | [x] |
 | M3-08 | 256-chunk stress scene with terrain and canopy variants | M3-01 | Scene reproducible from a seed; screenshot; uses only M1.5-14 and, if M2.5 ran, M2.5-31 keys | run | 0.5 d | [x] |
 | M3-09 | Hitch test: upload p99 ≤ 4 ms over 1 000 frames of camera motion | M3-03 | Measured; no single frame > 8 ms | `cargo run -p voxel-bench -- hitch` | 1 d | [x] |
-| M3-10 | 60 Hz at 1080p at the gated edge on the reference machine | M3-09 | Recorded average and 1% low | run | 0.5 d | [ ] |
+| M3-10 | 60 Hz at 1080p at the gated edge on the reference machine | M3-09 | Recorded average and 1% low | run | 0.5 d | [x] |
 | M3-11 | Memory report: VRAM and host for the 256-chunk scene, rows split by DAG/mesh/overlay/light/probes | M3-10 | Fits the 40% VRAM budget with the 1.5× margin | run | 0.5 d | [ ] |
 | M3-12 | Visual regression screenshot committed | M3-10 | Image in `docs/images/`; diff threshold documented | review | 0.25 d | [ ] |
 | M3-13 | M3 exit: tag `m3`, freeze the scene config | M3-12 | Tag; config checked in | `git tag -n m3` | 0.25 d | [ ] |

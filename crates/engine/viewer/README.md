@@ -78,6 +78,24 @@ The test substitutes the `{{CELLS}}` light-cell edge into
 draw inside a wgpu validation error scope. Without an adapter it skips,
 unless `VOXEL_REQUIRE_GPU=1` is set; CI uses that with a software Vulkan driver.
 
+## Frame time
+
+Record the presented frame interval (what a player sees) for the 60 Hz gate:
+
+```sh
+VOXEL_FRAMETIME=target/frametime.json \
+VOXEL_FRAMETIME_EYE=14,6,20 \
+VOXEL_FRAMETIME_TARGET=2,1,2 \
+cargo run --release -p voxel-viewer --features chunk128
+```
+
+The viewer records 1200 frames once the ring is resident (`VOXEL_FRAMETIME_FRAMES`,
+default 1200; `VOXEL_FRAMETIME_SETTLE`, default 12), writes the JSON — average,
+1% / 0.1% lows, frame and stage percentiles, adapter, resolution, seed — and
+exits 0. `_EYE`/`_TARGET` pin the pose so runs are comparable; without them the
+interactive start camera is used. See
+[`docs/m3-10-60hz.md`](../../../docs/m3-10-60hz.md).
+
 ## Screenshots
 
 Capture the presented frame to a PNG once the ring is resident:

@@ -35,8 +35,10 @@ binding number is made in the spec and the pre-registration, never only in a tas
   benchmark landed and the optimized path now measures 5.7% p95 at 128³, under
   the 20% target. **M3-00 (mesh compression), M3-01 (streaming shell), M3-02 (mesh
   buffer pool), M3-03 (upload queue), M3-04 (CPU chunk cull), M3-05 (draw
-  loop), M3-06 (instrumentation), M3-07 (frame breakdown), M3-08 (stress scene)
-  and M3-09 (hitch test) are closed; M3-10 (60 Hz at the gated edge) is next.**
+  loop), M3-06 (instrumentation), M3-07 (frame breakdown), M3-08 (stress scene),
+  M3-09 (hitch test) and M3-10 (60 Hz at the gated edge) are closed; M3-11
+  (memory report) is next. The Radeon iGPU's 1% low at 128³ is carried to
+  M3-13 as an open condition.**
 
 ## Tools
 
