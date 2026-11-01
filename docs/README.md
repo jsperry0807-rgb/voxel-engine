@@ -68,8 +68,10 @@ binding number is made in the spec and the pre-registration, never only in a tas
   leaks; see [`m2.5-08-lakes.md`](m2.5-08-lakes.md). `M2.5-09` added the
   streaming tile store: an LRU cache, a 3 × 3 view in 843,750 B, and seam-free
   bilinear sampling across tile borders; see
-  [`m2.5-09-tile-store.md`](m2.5-09-tile-store.md). The biome weight function
-  (`M2.5-10`) is next.
+  [`m2.5-09-tile-store.md`](m2.5-09-tile-store.md). `M2.5-10` added the softmax
+  biome weights over the 18 centres: exact sums, a 348 m transition band and no
+  hard argmax switches; see [`m2.5-10-weights.md`](m2.5-10-weights.md). The RON
+  biome definitions (`M2.5-11`) are next.
 
 ## Tools
 

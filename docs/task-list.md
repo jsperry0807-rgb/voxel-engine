@@ -792,7 +792,7 @@ and uploads them as a 90-day artifact.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| M2.5-10 | Biome weight function: softmax over 18 centres in climate/erosion/continentalness; shape parameters blended before evaluation | M2.5-04, M2.5-05 | Weights sum to 1; transition width 300–500 m; no argmax curve in a map dump | `cargo test -p voxel-worldgen weights` | 2 d | [ ] |
+| M2.5-10 | Biome weight function: softmax over 18 centres in climate/erosion/continentalness; shape parameters blended before evaluation | M2.5-04, M2.5-05 | Weights sum to 1; transition width 300–500 m; no argmax curve in a map dump | `cargo test -p voxel-worldgen weights` | 2 d | [x] |
 | M2.5-11 | RON biome schema and the 18 definitions (11 land, 3 ocean, 3 underground, geothermal) | M2.5-30, M2.5-10 | All definitions validate; every climate cell resolves; every material key resolves in the manifest; content is data-only | `cargo test -p voxel-worldgen biome_ron` | 2 d | [ ] |
 | M2.5-12 | Surface rules: 3–6 block soil default, biome/altitude override, slope and underwater rules | M2.5-30 | Cliffs expose stone; beaches ring water; every top/filler/stone/beach key comes from M2.5-30; tests | `cargo test -p voxel-worldgen surface` | 2 d | [ ] |
 | M2.5-13 | 1 m material dither and canonical two-material + debris transition blocks | M2.5-12 | Seam is mixed, not a line; ≤ 4 variants per pair; zero new atlas slots, parents come from M2.5-30 | `cargo test -p voxel-worldgen transitions` | 2 d | [ ] |
