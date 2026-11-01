@@ -40,7 +40,11 @@ binding number is made in the spec and the pre-registration, never only in a tas
   M3-12 (visual regression) and M3-13 (the exit) are closed; `m3` is tagged. Two
   conditions are carried out of M3: the Radeon iGPU's 128³ 1% low (56.6–61.2 fps
   against 60) and 128³ being green only at the minimum residency profile (default
-  11.93 GiB, high 95.4 GiB). M3.5 is next.**
+  11.93 GiB, high 95.4 GiB). M2.5 runs before M3.5.**
+- **M2.5 has started.** `M2.5-01` created `voxel-worldgen` and froze the
+  integer-hash, fixed-point noise contract with committed golden vectors; see
+  [`m2.5-01-noise.md`](m2.5-01-noise.md). The macro grid (`M2.5-02`) and the
+  spline tables (`M2.5-03`) are next.
 
 ## Tools
 
