@@ -26,7 +26,6 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use voxel_core::constants::{CHUNK_DIM, CHUNK_VOLUME, VOXEL_SIZE};
-use voxel_storage::apron::{Face, SIDE};
 use voxel_storage::{Apron, ChunkPos};
 use wgpu::{BindGroup, BindGroupLayout, Device, RenderPass};
 
@@ -34,6 +33,7 @@ use crate::chunk_content::{self, ChunkContent};
 use crate::chunk_lighting::{self, ChunkLighting};
 use crate::chunk_render::ChunkPipeline;
 use crate::mesh_pool::{self, MeshAllocation, MeshFormat, MeshPool};
+use crate::scene::{self, Scene};
 use crate::upload::{self, UploadBytes, UploadQueue};
 
 /// Half the ring width. The ring spans `-RING_HALF ..= RING_HALF - 1` on each
@@ -227,138 +227,28 @@ pub struct PumpStats {
     pub hitches: u32,
 }
 
-/// A deterministic terrain volume for one chunk.
+/// The default scene's volume for one chunk.
 ///
-/// The height field is a smooth, world-coherent surface, so neighbouring
-/// chunks share edge columns and greedy meshing finds long runs. The surface is
-/// deliberately shallow near the viewer's start position so the default camera
-/// begins above it.
+/// The seeded M3-08 scene is the source of truth: this is
+/// [`Scene::default()`]`::volume`, kept as the entry point the tests and the
+/// pool checks already use. Pass an explicit [`Scene`] to reproduce a seed.
 pub fn stream_volume(chunk: ChunkPos) -> Vec<u16> {
-    let mut volume = vec![0u16; CHUNK_VOLUME];
-    fill_stream_volume(chunk, &mut volume);
-    volume
+    Scene::default().volume(chunk)
 }
 
-/// Fills `volume` with the chunk's terrain, clearing it first.
-///
-/// Workers reuse one volume buffer, which keeps a 16×16 ring from churning
-/// hundreds of 4 MiB allocations through the global allocator.
+/// Fills `volume` with the default scene's chunk, clearing it first.
 pub fn fill_stream_volume(chunk: ChunkPos, volume: &mut [u16]) {
-    assert_eq!(volume.len(), CHUNK_VOLUME, "a chunk volume is CHUNK_VOLUME");
-    volume.fill(0);
-    let base_x = chunk.x * CHUNK_DIM as i32;
-    let base_y = chunk.y * CHUNK_DIM as i32;
-    let base_z = chunk.z * CHUNK_DIM as i32;
-
-    for local_z in 0..CHUNK_DIM {
-        for local_x in 0..CHUNK_DIM {
-            let world_x = base_x + local_x as i32;
-            let world_z = base_z + local_z as i32;
-            let surface = terrain_height(world_x, world_z) as i32;
-            let top = (surface - base_y).clamp(0, CHUNK_DIM as i32) as usize;
-            for local_y in 0..top {
-                let world_y = base_y + local_y as i32;
-                let index = local_x
-                    | (local_y << voxel_core::constants::CHUNK_BITS)
-                    | (local_z << (2 * voxel_core::constants::CHUNK_BITS));
-                volume[index] = terrain_material(world_x, world_y, world_z);
-            }
-        }
-    }
+    Scene::default().fill_volume(chunk, volume);
 }
 
-/// The six face planes around `chunk`, sampled from the same height field as
-/// [`stream_volume`].
-///
-/// A chunk meshed with an all-air apron emits faces at every border and treats
-/// the chunk edge as air for AO. The analytic apron removes those false faces
-/// and makes the border AO match the neighbour. Corner samples still read air,
-/// which is the documented one-voxel-apron limitation.
+/// The six face planes around `chunk`, from the default scene.
 pub fn stream_apron(chunk: ChunkPos) -> Apron {
-    let base_x = chunk.x * CHUNK_DIM as i32;
-    let base_y = chunk.y * CHUNK_DIM as i32;
-    let base_z = chunk.z * CHUNK_DIM as i32;
-    let mut apron = Apron::new();
-    for face in Face::ALL {
-        for v in 0..SIDE {
-            for u in 0..SIDE {
-                let (dx, dy, dz) = face.offset(u, v);
-                apron.set(
-                    face,
-                    u,
-                    v,
-                    terrain_material(base_x + dx, base_y + dy, base_z + dz),
-                );
-            }
-        }
-    }
-    apron
+    Scene::default().apron(chunk)
 }
 
-/// The material at one world voxel, or air.
-fn terrain_material(world_x: i32, world_y: i32, world_z: i32) -> u16 {
-    let surface = terrain_height(world_x, world_z) as i32;
-    if world_y < 0 || world_y >= surface {
-        0
-    } else if world_y + 1 >= surface {
-        3
-    } else if world_y + 4 >= surface {
-        2
-    } else {
-        1
-    }
-}
-
-/// World-voxel surface height for a terrain column.
-///
-/// Pure and deterministic: integer-hash value noise plus a shallow basin around the
-/// viewer's start column.
+/// World-voxel surface height for the default scene's terrain column.
 pub fn terrain_height(world_x: i32, world_z: i32) -> usize {
-    let noise = value_noise(world_x as f32 / 48.0, world_z as f32 / 48.0, 0x5EED_1234);
-    let detail = value_noise(world_x as f32 / 19.0, world_z as f32 / 19.0, 0xC0FF_EE01);
-    let relief = 0.72 * noise + 0.28 * detail;
-
-    // The default camera starts at world voxel (72, 96). Flatten the terrain
-    // there so the view is not born inside a hill; the effect fades over
-    // roughly three chunks.
-    let dx = (world_x - 72) as f32;
-    let dz = (world_z - 96) as f32;
-    let distance_sq = dx * dx + dz * dz;
-    let basin = 1.0 - (distance_sq / (3.0 * CHUNK_DIM as f32).powi(2)).min(1.0);
-    let height = 12.0 + relief * 30.0 * (1.0 - 0.8 * basin);
-    height.round() as usize
-}
-
-/// Smooth 2D value noise in `0..=1`.
-fn value_noise(x: f32, z: f32, seed: u32) -> f32 {
-    let x0 = x.floor();
-    let z0 = z.floor();
-    let tx = smoothstep(x - x0);
-    let tz = smoothstep(z - z0);
-    let x0 = x0 as i32;
-    let z0 = z0 as i32;
-    let a = hash_to_unit(x0, z0, seed);
-    let b = hash_to_unit(x0 + 1, z0, seed);
-    let c = hash_to_unit(x0, z0 + 1, seed);
-    let d = hash_to_unit(x0 + 1, z0 + 1, seed);
-    let top = a + (b - a) * tx;
-    let bottom = c + (d - c) * tx;
-    top + (bottom - top) * tz
-}
-
-fn smoothstep(t: f32) -> f32 {
-    t * t * (3.0 - 2.0 * t)
-}
-
-fn hash_to_unit(x: i32, z: i32, seed: u32) -> f32 {
-    let mut hash = (x as u32)
-        .wrapping_mul(0x9E37_79B1)
-        .wrapping_add((z as u32).wrapping_mul(0x85EB_CA77))
-        .wrapping_add(seed);
-    hash ^= hash >> 15;
-    hash = hash.wrapping_mul(0x2C1B_3C6D);
-    hash ^= hash >> 12;
-    (hash & 0xFFFF) as f32 / 65_535.0
+    Scene::default().height(world_x, world_z) as usize
 }
 
 /// World-voxel origin of a chunk for the shader's `chunk_origin` uniform.
@@ -521,7 +411,12 @@ pub struct Streaming {
 impl Streaming {
     /// Starts the generator pool. Nothing is queued until the first
     /// [`Self::pump`] supplies a camera center.
-    pub fn new(device: Device, data_layout: BindGroupLayout, upload_budget: usize) -> Self {
+    pub fn new(
+        device: Device,
+        data_layout: BindGroupLayout,
+        upload_budget: usize,
+        scene: Scene,
+    ) -> Self {
         let page_bytes = pool_page_bytes(device.limits().max_buffer_size);
         let pool = Arc::new(Mutex::new(MeshPool::new(
             device.clone(),
@@ -550,7 +445,7 @@ impl Streaming {
                 let sender = content_sender.clone();
                 std::thread::Builder::new()
                     .name(format!("chunk-stream-{index}"))
-                    .spawn(move || worker_loop(&work, &sender))
+                    .spawn(move || worker_loop(&work, &sender, scene))
                     .expect("spawn chunk-stream worker")
             })
             .collect();
@@ -1013,15 +908,15 @@ fn reserve_mesh(
     )
 }
 
-fn worker_loop(work: &WorkQueue, sender: &SyncSender<Job>) {
+fn worker_loop(work: &WorkQueue, sender: &SyncSender<Job>, scene: Scene) {
     let mut volume = vec![0u16; CHUNK_VOLUME];
     while let Some((position, queued)) = work.take() {
         let queued_for = queued.elapsed();
         let started = Instant::now();
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            fill_stream_volume(position, &mut volume);
-            let apron = stream_apron(position);
-            chunk_content::build_with_apron(&volume, position, &apron)
+            scene.fill_volume(position, &mut volume);
+            let apron = scene.apron(position);
+            chunk_content::build_resolved_with_apron(&volume, position, &apron, scene::atlas_slot)
         }));
         let generated = started.elapsed();
         let content = match result {
@@ -1128,9 +1023,10 @@ mod tests {
     }
 
     #[test]
-    fn stream_volume_has_a_surface_and_no_floating_blocks() {
+    fn stream_volume_has_a_surface_and_no_stray_blocks() {
         let volume = stream_volume(ChunkPos::new(0, 0, 0));
         let mut solid = 0usize;
+        let mut canopy = 0usize;
         for z in 0..CHUNK_DIM {
             for x in 0..CHUNK_DIM {
                 let surface = terrain_height(x as i32, z as i32);
@@ -1147,15 +1043,22 @@ mod tests {
                         assert_ne!(material, 0, "hole at {x},{y},{z}");
                         solid += 1;
                     } else {
-                        if material != 0 {
-                            panic!("solid above the surface at {x},{y},{z}");
-                        }
                         below_air = true;
+                        // Above the terrain only the M3-08 canopy may be solid.
+                        if material != 0 {
+                            assert!(
+                                material == crate::scene::OAK_LOG
+                                    || material == crate::scene::OAK_LEAVES,
+                                "stray block {material} above the surface at {x},{y},{z}"
+                            );
+                            canopy += 1;
+                        }
                     }
                 }
             }
         }
         assert!(solid > 0);
+        assert!(canopy > 0, "the default chunk carries a canopy");
     }
 
     #[test]

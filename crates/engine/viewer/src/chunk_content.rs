@@ -118,9 +118,27 @@ pub fn build(volume: &[u16], chunk: ChunkPos) -> ChunkContent {
 /// as the volume, so border faces are culled against the real neighbour and AO
 /// does not treat the chunk edge as air.
 pub fn build_with_apron(volume: &[u16], chunk: ChunkPos, apron: &Apron) -> ChunkContent {
+    build_resolved_with_apron(volume, chunk, apron, |material, _face| material)
+}
+
+/// Like [`build_with_apron`], but resolves each vertex material before packing.
+///
+/// `resolve(block, face)` maps a scene block id to an atlas slot. The streaming
+/// path passes [`crate::scene::atlas_slot`], which gives a grass block its
+/// grass top and grass sides; the M2 demo volume already stores atlas slots and
+/// uses the identity resolver.
+pub fn build_resolved_with_apron<F>(
+    volume: &[u16],
+    chunk: ChunkPos,
+    apron: &Apron,
+    resolve: F,
+) -> ChunkContent
+where
+    F: FnMut(u16, voxel_core::Face) -> u16,
+{
     assert_eq!(volume.len(), CHUNK_VOLUME, "a chunk volume is CHUNK_VOLUME");
     ChunkContent {
-        mesh: mesh_with_apron(volume, apron),
+        mesh: mesh_resolved_with_apron(volume, apron, resolve),
         light: light(volume),
         probes: probes(volume, chunk),
     }

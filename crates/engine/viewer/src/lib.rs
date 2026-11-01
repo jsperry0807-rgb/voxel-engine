@@ -20,6 +20,8 @@ pub mod input;
 pub mod mesh_pool;
 pub mod naive_mesh;
 pub mod quads;
+pub mod scene;
+pub mod screenshot;
 pub mod stats;
 pub mod streaming;
 pub mod tracker;

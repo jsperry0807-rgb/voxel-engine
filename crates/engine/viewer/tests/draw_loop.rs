@@ -23,6 +23,7 @@ use voxel_viewer::chunk_render::ChunkPipeline;
 use voxel_viewer::cull::Frustum;
 use voxel_viewer::depth::DepthTarget;
 use voxel_viewer::mesh_pool::{MeshFormat, MeshPool};
+use voxel_viewer::scene::atlas_slot;
 use voxel_viewer::streaming::{
     ChunkResources, DrawCost, DrawStats, chunk_origin, draw_visible, stream_apron, stream_volume,
 };
@@ -252,8 +253,12 @@ fn a_culled_frame_matches_a_draw_everything_frame() {
         for x in -2..=2 {
             let position = ChunkPos::new(x, 0, z);
             let volume = stream_volume(position);
-            let content =
-                chunk_content::build_with_apron(&volume, position, &stream_apron(position));
+            let content = chunk_content::build_resolved_with_apron(
+                &volume,
+                position,
+                &stream_apron(position),
+                atlas_slot,
+            );
             let vertex_count = (content.mesh.vertices.len()
                 / MeshFormat::PACKED_8B.vertex_stride() as usize)
                 as u32;

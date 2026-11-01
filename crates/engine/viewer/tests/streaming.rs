@@ -11,6 +11,7 @@ use voxel_mesh::PackedVertex;
 use voxel_storage::apron::{Face, SIDE};
 use voxel_storage::{ChunkPos, local_index};
 use voxel_viewer::chunk_content;
+use voxel_viewer::scene::atlas_slot;
 use voxel_viewer::streaming::{
     RING_CHUNKS, RING_HALF, ring_chunks, ring_delta, stream_apron, stream_volume, terrain_height,
 };
@@ -131,8 +132,9 @@ fn analytic_apron_matches_the_neighbour_border() {
 fn analytic_apron_culls_the_chunk_border() {
     let position = ChunkPos::new(3, 0, -2);
     let volume = stream_volume(position);
-    let open = chunk_content::mesh(&volume);
-    let closed = chunk_content::mesh_with_apron(&volume, &stream_apron(position));
+    let open = chunk_content::mesh_resolved(&volume, atlas_slot);
+    let closed =
+        chunk_content::mesh_resolved_with_apron(&volume, &stream_apron(position), atlas_slot);
     assert!(
         closed.quads < open.quads,
         "an analytic apron must remove border faces: open {}, closed {}",
@@ -150,7 +152,8 @@ fn full_relief_chunks_fit_the_u16_index_stream() {
         ChunkPos::new(-5, 0, 12),
     ] {
         let volume = stream_volume(position);
-        let content = chunk_content::mesh_with_apron(&volume, &stream_apron(position));
+        let content =
+            chunk_content::mesh_resolved_with_apron(&volume, &stream_apron(position), atlas_slot);
         assert!(
             content.quads <= 16_384,
             "{position:?} has {} quads, over the u16 index stream",
@@ -162,7 +165,13 @@ fn full_relief_chunks_fit_the_u16_index_stream() {
 #[test]
 fn the_center_chunk_meshes_within_the_u16_index_stream() {
     let position = ChunkPos::new(0, 0, 0);
-    let content = chunk_content::build(&stream_volume(position), position);
+    let volume = stream_volume(position);
+    let content = chunk_content::build_resolved_with_apron(
+        &volume,
+        position,
+        &stream_apron(position),
+        atlas_slot,
+    );
     assert!(!content.mesh.indices.is_empty());
     let vertices = content.mesh.vertices.len() / PackedVertex::SIZE;
     assert!(vertices <= u16::MAX as usize + 1);

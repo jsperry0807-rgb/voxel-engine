@@ -30,6 +30,9 @@ use winit::dpi::PhysicalSize;
 use winit::event_loop::OwnedDisplayHandle;
 use winit::window::Window;
 
+use voxel_core::constants::CHUNK_DIM;
+use voxel_storage::ChunkPos;
+
 use crate::atlas::Atlas;
 use crate::atlas_texture::AtlasTexture;
 use crate::camera::{Camera, CameraUniform};
@@ -38,6 +41,8 @@ use crate::chunk_render::ChunkPipeline;
 use crate::cull::Frustum;
 use crate::depth::DepthTarget;
 use crate::error::ViewerError;
+use crate::scene::{Biome, Scene};
+use crate::screenshot::{self, Capture};
 use crate::stats::{FrameStats, GpuPassTimer, StatsWindow};
 use crate::streaming::{self, PUMP_BUDGET, PendingUpload, Streaming};
 use crate::upload;
@@ -83,6 +88,8 @@ pub struct Gpu {
     timers: Option<GpuPassTimer>,
     /// M3-06 once-per-second frame summary.
     stats: StatsWindow,
+    /// M3-08 one-shot screenshot request (`VOXEL_SCREENSHOT`).
+    capture: Option<Capture>,
 }
 
 impl Gpu {
@@ -163,13 +170,19 @@ impl Gpu {
         // The adapter's limit applies to the first configure too; a HiDPI window
         // larger than it otherwise fails validation before the first frame.
         let max = device.limits().max_texture_dimension_2d;
-        let config = surface
+        let capture = Capture::from_env();
+        let mut config = surface
             .get_default_config(
                 &adapter,
                 size.width.max(1).min(max),
                 size.height.max(1).min(max),
             )
             .ok_or(ViewerError::UnsupportedSurface)?;
+        // M3-08: the capture copies the presented frame, so the swap chain
+        // texture needs COPY_SRC on top of its render-attachment use.
+        if capture.is_some() {
+            config.usage |= wgpu::TextureUsages::COPY_SRC;
+        }
         log::debug!("surface: {config:?}");
         surface.configure(&device, &config);
 
@@ -183,8 +196,15 @@ impl Gpu {
             &data_layout,
             config.format,
         );
+        let scene = Scene::from_env();
+        log::info!(
+            "scene: seed 0x{:08X} ({}); {}",
+            scene.seed(),
+            scene.seed(),
+            scene_summary(scene)
+        );
         let upload_budget = upload_budget_bytes();
-        let streaming = Streaming::new(device.clone(), data_layout, upload_budget);
+        let streaming = Streaming::new(device.clone(), data_layout, upload_budget, scene);
         let timers = GpuPassTimer::new(&device, &queue);
         let upload_belt = StagingBelt::new(device.clone(), upload::STAGING_CHUNK_BYTES);
         log::info!(
@@ -193,6 +213,14 @@ impl Gpu {
             PUMP_BUDGET.as_secs_f64() * 1000.0,
             upload_budget as f64 / 1024.0
         );
+
+        if let Some(capture) = &capture {
+            log::info!(
+                "screenshot: will write {} after the ring loads ({} settle frames)",
+                capture.path().display(),
+                capture.settle()
+            );
+        }
 
         Ok(Self {
             instance,
@@ -212,6 +240,7 @@ impl Gpu {
             upload_budget,
             timers,
             stats: StatsWindow::new(),
+            capture,
         })
     }
 
@@ -256,6 +285,13 @@ impl Gpu {
     /// reconfigured all return `Ok(false)`, so the caller can wait for the
     /// platform to request the next frame instead of spinning.
     pub fn render(&mut self, clear: Color, camera: &Camera) -> Result<bool, ViewerError> {
+        // M3-08: a capture can pin its own pose, so the committed image does not
+        // depend on the interactive start camera.
+        let fixed = self
+            .capture
+            .as_ref()
+            .and_then(|capture| capture.camera(camera));
+        let camera = fixed.as_ref().unwrap_or(camera);
         let uniform = camera.uniform();
         self.queue
             .write_buffer(&self.camera_buffer, 0, bytemuck::bytes_of(&uniform));
@@ -393,6 +429,40 @@ impl Gpu {
         if measure_gpu && let Some(timer) = &self.timers {
             timer.resolve(&mut encoder);
         }
+
+        // M3-08: copy this frame's swap-chain image out if a screenshot is due.
+        let capturing = self
+            .capture
+            .as_ref()
+            .is_some_and(|capture| capture.wants_copy(self.streaming.loaded()));
+        let shot = if capturing {
+            let (buffer, padded) =
+                screenshot::readback_buffer(&self.device, self.config.width, self.config.height);
+            encoder.copy_texture_to_buffer(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &frame.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::TexelCopyBufferInfo {
+                    buffer: &buffer,
+                    layout: wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(padded),
+                        rows_per_image: Some(self.config.height),
+                    },
+                },
+                wgpu::Extent3d {
+                    width: self.config.width,
+                    height: self.config.height,
+                    depth_or_array_layers: 1,
+                },
+            );
+            Some((buffer, padded))
+        } else {
+            None
+        };
         // Unmaps the staging chunks and re-maps them when this submission
         // completes, so the next frame reuses the same buffers.
         let finish_started = std::time::Instant::now();
@@ -403,7 +473,33 @@ impl Gpu {
             timer.submitted();
         }
         let cpu_submit = cpu_started.elapsed();
+
+        // M3-08: one capture, one PNG, then exit. The poll waits for the copy
+        // (a single frame, not the steady state); the process is ending anyway.
+        if let Some((buffer, padded)) = shot {
+            let capture = self.capture.as_mut().expect("a copy implies a capture");
+            match capture.save(
+                &self.device,
+                &buffer,
+                self.config.width,
+                self.config.height,
+                padded,
+                self.config.format,
+            ) {
+                Ok(path) => log::info!(
+                    "screenshot: wrote {} ({}x{})",
+                    path.display(),
+                    self.config.width,
+                    self.config.height
+                ),
+                Err(error) => log::error!("screenshot: {error}"),
+            }
+            std::process::exit(0);
+        }
         self.queue.present(frame);
+        if let Some(capture) = &mut self.capture {
+            capture.tick();
+        }
 
         // M3-06: one frame's counters, then a once-per-second summary line.
         let frame = FrameStats {
@@ -475,6 +571,28 @@ fn stage_upload(belt: &mut StagingBelt, encoder: &mut CommandEncoder, upload: &P
 }
 
 /// Reads `VOXEL_UPLOAD_KIB`, clamped to a range that can still make progress.
+/// One line describing the scene's terrain variants across the ring.
+fn scene_summary(scene: Scene) -> String {
+    let mut counts = [0usize; Biome::ALL.len()];
+    let mut trees = 0usize;
+    for chunk in streaming::ring_chunks(ChunkPos::new(0, 0, 0)) {
+        let x = chunk.x * CHUNK_DIM as i32 + CHUNK_DIM as i32 / 2;
+        let z = chunk.z * CHUNK_DIM as i32 + CHUNK_DIM as i32 / 2;
+        let index = Biome::ALL
+            .iter()
+            .position(|biome| *biome == scene.biome(x, z))
+            .expect("every biome is in Biome::ALL");
+        counts[index] += 1;
+        trees += scene.trees_touching(chunk).len();
+    }
+    let variants: Vec<String> = Biome::ALL
+        .iter()
+        .zip(counts)
+        .map(|(biome, count)| format!("{} {count}", biome.name()))
+        .collect();
+    format!("{}; {trees} trees", variants.join(", "))
+}
+
 fn upload_budget_bytes() -> usize {
     const MIN_KIB: usize = 64;
     const MAX_KIB: usize = 16 * 1024;

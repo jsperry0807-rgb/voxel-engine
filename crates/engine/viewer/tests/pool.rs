@@ -26,6 +26,7 @@ use voxel_viewer::depth::DepthTarget;
 use voxel_viewer::mesh_pool::{
     Arena, DEFAULT_PAGE_BYTES, MAX_PAGE_BYTES, MIN_PAGE_BYTES, MeshFormat, MeshPool, Range,
 };
+use voxel_viewer::scene::atlas_slot;
 use voxel_viewer::streaming::{ring_chunks, stream_apron, stream_volume};
 
 /// One chunk's pooled record counts.
@@ -38,7 +39,8 @@ struct MeshSize {
 impl MeshSize {
     fn of(position: ChunkPos) -> Self {
         let volume = stream_volume(position);
-        let mesh = chunk_content::mesh_with_apron(&volume, &stream_apron(position));
+        let mesh =
+            chunk_content::mesh_resolved_with_apron(&volume, &stream_apron(position), atlas_slot);
         assert!(!mesh.indices.is_empty(), "{position:?} meshed empty");
         Self {
             vertices: (mesh.vertices.len() / MeshFormat::PACKED_8B.vertex_stride() as usize) as u32,
