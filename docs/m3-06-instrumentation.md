@@ -84,6 +84,9 @@ Sanity: 1,032,763 quads × 44 B = 45,441,572 B = 43.34 MiB, exactly the packed
 format, and 13,201 blocks over 93 chunks is 142 of the 512 blocks per 128³
 chunk.
 
+The usage and feature rules behind this are collected in
+[`wgpu-traps.md`](wgpu-traps.md).
+
 ## Tests
 
 ```bash

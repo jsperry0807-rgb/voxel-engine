@@ -45,6 +45,13 @@ binding number is made in the spec and the pre-registration, never only in a tas
 - [`apps/texgen/README.md`](../apps/texgen/README.md) — the standalone Material Maker-style texture and material editor.
 - [`texgen-backlog.md`](texgen-backlog.md) — what texgen still needs, what is deferred, and what is done.
 
+## Engineering notes
+
+- [`wgpu-traps.md`](wgpu-traps.md) — API rules that cost time in M3: buffer
+  usage combinations, feature gates, submission ordering, draw-binding
+  alignment and the surface texture lifetime. Read before touching uploads,
+  queries or buffer slices.
+
 ## Decision records
 
 | ADR | Decision | Status |

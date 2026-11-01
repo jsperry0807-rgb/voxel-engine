@@ -105,6 +105,9 @@ A 64 KiB budget stress run drains the 128³ ring in 257 frames with 251 overruns
 (each mesh is larger than the budget and is taken alone) and a 0.50 ms mean —
 the escape hatch works and the ring still completes.
 
+The staging-belt ordering and alignment rules are collected in
+[`wgpu-traps.md`](wgpu-traps.md).
+
 ## Tests
 
 ```bash
