@@ -48,8 +48,11 @@ binding number is made in the spec and the pre-registration, never only in a tas
   [`m2.5-02-macro-tile.md`](m2.5-02-macro-tile.md). `M2.5-03` added the PCHIP
   shape splines: continentalness and erosion to a surface elevation, exact sea
   level at 6,600 m and a 12,000 m peak; see
-  [`m2.5-03-splines.md`](m2.5-03-splines.md). The climate fields (`M2.5-04`) are
-  next.
+  [`m2.5-03-splines.md`](m2.5-03-splines.md). `M2.5-04` added the climate
+  fields — compressed latitude, an altitude lapse and an ocean-distance
+  humidity curve with an 8 km variation; see
+  [`m2.5-04-climate.md`](m2.5-04-climate.md). The macro tile generator
+  (`M2.5-05`) is next.
 
 ## Tools
 
