@@ -13,8 +13,11 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Instant;
 
-use voxel_worldgen::generator::MacroGenerator;
-use voxel_worldgen::macro_grid::{TILE_COUNT, TILES_PER_AXIS, TilePos};
+use voxel_worldgen::generator::{MacroGenerator, SEA_LEVEL_UNITS};
+use voxel_worldgen::hydro::Hydrology;
+use voxel_worldgen::macro_grid::{
+    CELL_SIZE_M, TILE_COUNT, TILES_PER_AXIS, TilePos, WORLD_CELLS, height_from_q16,
+};
 use voxel_worldgen::tile::{TILE_BYTES, fnv_start, fnv_u64};
 
 fn main() -> ExitCode {
@@ -30,6 +33,7 @@ fn main() -> ExitCode {
 fn run(args: Vec<String>) -> Result<(), String> {
     match args.first().map(String::as_str) {
         Some("macro") => macro_command(&args[1..]),
+        Some("hydro") => hydro_command(&args[1..]),
         Some("--help" | "-h") | None => {
             print_usage();
             Ok(())
@@ -44,11 +48,13 @@ fn print_usage() {
          \n\
          Usage:\n\
          \x20 voxel-worldgen macro [--seed N] [--limit N] [--out DIR]\n\
+         \x20 voxel-worldgen hydro [--seed N] [--size N]\n\
          \n\
          Options:\n\
          \x20 --seed N    world seed, decimal or 0x hex (default 1)\n\
-         \x20 --limit N   generate only the first N tiles, row-major (smoke runs)\n\
-         \x20 --out DIR   write each tile to DIR/<x>_<z>.vxt"
+         \x20 --limit N   macro: generate only the first N tiles, row-major\n\
+         \x20 --out DIR   macro: write each tile to DIR/<x>_<z>.vxt\n\
+         \x20 --size N    hydro: run on the first N × N cells (default 8000)"
     );
 }
 
@@ -109,6 +115,74 @@ fn macro_command(args: &[String]) -> Result<(), String> {
         tile_count as f64 / seconds.max(f64::MIN_POSITIVE),
     );
     println!("world_hash={world_hash:016x}");
+    Ok(())
+}
+
+fn hydro_command(args: &[String]) -> Result<(), String> {
+    let mut seed = 1u64;
+    let mut size = WORLD_CELLS as usize;
+
+    let mut index = 0;
+    while index < args.len() {
+        let argument = &args[index];
+        let mut value = |name: &str| -> Result<String, String> {
+            index += 1;
+            args.get(index)
+                .cloned()
+                .ok_or_else(|| format!("{name} needs a value"))
+        };
+        match argument.as_str() {
+            "--seed" => seed = parse_u64(&value("--seed")?)?,
+            "--size" => {
+                let requested = parse_u32(&value("--size")?)?;
+                if requested == 0 || requested > WORLD_CELLS {
+                    return Err(format!("--size must be 1..={WORLD_CELLS}, got {requested}"));
+                }
+                size = requested as usize;
+            }
+            other => return Err(format!("unknown argument {other:?}; try --help")),
+        }
+        index += 1;
+    }
+
+    let generator = MacroGenerator::new(seed);
+    let half_cell = CELL_SIZE_M as i64 / 2;
+    let started = Instant::now();
+    let mut heights = Vec::with_capacity(size * size);
+    for z in 0..size {
+        for x in 0..size {
+            let world_x = (x as i64 * CELL_SIZE_M as i64 + half_cell) << 16;
+            let world_z = (z as i64 * CELL_SIZE_M as i64 + half_cell) << 16;
+            heights.push(height_from_q16(generator.surface(world_x, world_z)));
+        }
+    }
+    let build_time = started.elapsed();
+
+    let started = Instant::now();
+    let hydro = Hydrology::compute(heights, size, size, SEA_LEVEL_UNITS);
+    let hydro_time = started.elapsed();
+
+    let mut hash = fnv_start();
+    for &value in hydro.filled() {
+        hash = fnv_u64(hash, value as u64);
+    }
+    for &value in hydro.accumulation() {
+        hash = fnv_u64(hash, value as u64);
+    }
+
+    let cells = (size * size) as f64;
+    println!(
+        "hydro seed={seed} cells={} sea_level_units={SEA_LEVEL_UNITS} build_ms={} hydro_ms={} outlets={} lake_cells={} lake_fraction={:.4} max_fill={} max_accumulation={}",
+        size * size,
+        build_time.as_millis(),
+        hydro_time.as_millis(),
+        hydro.outlets(),
+        hydro.lake_cells(),
+        hydro.lake_cells() as f64 / cells,
+        hydro.max_fill_depth(),
+        hydro.max_accumulation(),
+    );
+    println!("hydro_hash={hash:016x}");
     Ok(())
 }
 

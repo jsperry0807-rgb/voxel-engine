@@ -28,8 +28,8 @@ fn stdout(output: &Output) -> String {
 
 fn hash_line(text: &str) -> String {
     text.lines()
-        .find(|line| line.starts_with("world_hash="))
-        .unwrap_or_else(|| panic!("no world_hash line in {text:?}"))
+        .find(|line| line.contains("hash="))
+        .unwrap_or_else(|| panic!("no hash line in {text:?}"))
         .to_owned()
 }
 
@@ -82,4 +82,20 @@ fn cli_help_prints_usage() {
     let text = stdout(&run(&["--help"]));
     assert!(text.contains("voxel-worldgen macro"), "{text}");
     assert!(text.contains("--seed"), "{text}");
+}
+
+#[test]
+fn cli_hydro_reports_a_stable_hash() {
+    let first = stdout(&run(&["hydro", "--seed", "3", "--size", "32"]));
+    let second = stdout(&run(&["hydro", "--seed", "3", "--size", "32"]));
+
+    assert!(first.contains("lake_cells="), "{first}");
+    assert_eq!(hash_line(&first), hash_line(&second));
+}
+
+#[test]
+fn cli_hydro_rejects_a_bad_size() {
+    assert!(!run(&["hydro", "--size", "0"]).status.success());
+    assert!(!run(&["hydro", "--size", "9000"]).status.success());
+    assert!(!run(&["hydro", "--size", "nope"]).status.success());
 }
