@@ -949,8 +949,11 @@ worker dense volumes); rows split DAG (0 GPU / 16.0 MiB host), mesh, overlay (0)
 light, probes. Against the 3.20 GiB target (40% of 8 GiB) that is **3.4% used,
 29.8× headroom, ×1.5 = 161.3 MiB PASS**. The viewer adds ~10.3 MiB (atlas, depth,
 belt). This is a render-scene number: M3 uploads no DAG or overlay, so it is not
-comparable to the M1 gate's 5.29 MiB/chunk projection. See
-[`m3-11-memory.md`](m3-11-memory.md).
+comparable to the M1 gate's 5.29 MiB/chunk projection. The gate's 128³ storage
+projection, now recorded for all three residency profiles on every run, is
+**2.98 GiB at minimum (805 chunks, PASS)**, 11.93 GiB at default (3,217) and
+95.4 GiB at high (25,736) — green only at the minimum view, which is a
+view-distance decision for M5/M7. See [`m3-11-memory.md`](m3-11-memory.md).
 
 **M3-12 visual regression (closed 2026-11-01):**
 [`images/m3-12-reference.png`](images/m3-12-reference.png) is the M3-08 scene at

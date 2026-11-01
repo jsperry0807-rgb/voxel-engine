@@ -110,6 +110,28 @@ statement is:
   need ~338 MiB, under the target — but mesh size follows surface area, not chunk
   count, so that figure is an upper bound rather than a plan.
 
+### The storage projection by view distance
+
+`scripts/bench.sh` now records the 128³ projection for **all three** residency
+profiles on every gate run, not just the one named by `GATE_PROFILE`. That
+surfaced what a single-profile archive hides (run
+`benchmarks/runs/20261101T175113Z-m3-gate-128`):
+
+| Profile | Chunks | Projected | 3.20 GiB target | 4.80 GiB hard fail |
+|---|---:|---:|---|---|
+| minimum | 805 | **2.98 GiB** | pass | pass |
+| default | 3,217 | **11.93 GiB** | 3.7× over | 2.5× over |
+| high | 25,736 | **95.4 GiB** | 30× over | 20× over |
+
+The per-chunk term is 3.80 MiB: DAG 1.07, mesh 2.07 (44 B/quad), light + probes
+0.014, and the legacy v1 pool 0.64 that the gate's total still carries.
+
+**"128³ is green" therefore holds at the gated minimum view only.** The M3
+256-chunk scene sits far inside it, but the default and high views are not
+shippable on a 3.20 GiB budget with the current per-chunk cost. That is a
+view-distance decision for M5/M7 (and a reason to revisit the DAG and mesh terms,
+not the render path this milestone measured), not something M3 changes.
+
 ## Tests
 
 ```bash
