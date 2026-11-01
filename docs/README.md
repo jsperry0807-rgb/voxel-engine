@@ -63,8 +63,10 @@ binding number is made in the spec and the pre-registration, never only in a tas
   seed. See [`m2.5-shape-fix.md`](m2.5-shape-fix.md). `M2.5-07` extracted the
   river network — 48,722 segments, order 5, 10–200 m widths, 576 deltas, every
   river ending at sea or a lake; see
-  [`m2.5-07-rivers.md`](m2.5-07-rivers.md). Lake extraction (`M2.5-08`) is
-  next.
+  [`m2.5-07-rivers.md`](m2.5-07-rivers.md). `M2.5-08` extracted 4,003 lakes
+  with flat spill surfaces, spill cells and shorelines, and verified no basin
+  leaks; see [`m2.5-08-lakes.md`](m2.5-08-lakes.md). The macro tile store
+  (`M2.5-09`) is next.
 
 ## Tools
 
