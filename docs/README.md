@@ -65,8 +65,11 @@ binding number is made in the spec and the pre-registration, never only in a tas
   river ending at sea or a lake; see
   [`m2.5-07-rivers.md`](m2.5-07-rivers.md). `M2.5-08` extracted 4,003 lakes
   with flat spill surfaces, spill cells and shorelines, and verified no basin
-  leaks; see [`m2.5-08-lakes.md`](m2.5-08-lakes.md). The macro tile store
-  (`M2.5-09`) is next.
+  leaks; see [`m2.5-08-lakes.md`](m2.5-08-lakes.md). `M2.5-09` added the
+  streaming tile store: an LRU cache, a 3 × 3 view in 843,750 B, and seam-free
+  bilinear sampling across tile borders; see
+  [`m2.5-09-tile-store.md`](m2.5-09-tile-store.md). The biome weight function
+  (`M2.5-10`) is next.
 
 ## Tools
 

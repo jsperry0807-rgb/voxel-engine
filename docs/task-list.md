@@ -786,7 +786,7 @@ and uploads them as a 90-day artifact.
 | M2.5-06 | Hydrology: priority-flood depression fill, D8 flow, accumulation | M2.5-05 | Lakes at spill level; flow graph acyclic; hand-checked fixture | `cargo test -p voxel-worldgen hydro` | 2 d | [x] |
 | M2.5-07 | River extraction: vector polylines with width/depth/order from catchment; deltas | M2.5-06 | Every river reaches sea or a lake; width 10–200 m; no uphill segments | `cargo test -p voxel-worldgen rivers` | 2 d | [x] |
 | M2.5-08 | Lake extraction, spill levels, shoreline and underwater terrain | M2.5-06 | No leaking basins; shoreline continuous; tests | `cargo test -p voxel-worldgen lakes` | 1 d | [x] |
-| M2.5-09 | Macro tile store: tiled streaming, LRU, 3×3 border for interpolation | M2.5-02 | 32 km view holds ≤ 9 tiles; no seams at tile borders | `cargo test -p voxel-worldgen tile_store` | 1.5 d | [ ] |
+| M2.5-09 | Macro tile store: tiled streaming, LRU, 3×3 border for interpolation | M2.5-02 | 32 km view holds ≤ 9 tiles; no seams at tile borders | `cargo test -p voxel-worldgen tile_store` | 1.5 d | [x] |
 
 ### 7.2 Biomes, surface and transitions
 
