@@ -12,6 +12,7 @@ voxel-storage = { path = "../engine/storage" }
 voxel-mesh = { path = "../engine/mesh" }
 blake3 = "1"
 libc = "0.2"
+png = "0.17"
 pollster = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

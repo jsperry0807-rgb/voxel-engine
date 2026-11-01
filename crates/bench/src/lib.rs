@@ -31,6 +31,7 @@ pub mod fixture;
 pub mod fixtures;
 pub mod gate;
 pub mod history;
+pub mod image_diff;
 pub mod layout;
 pub mod mem;
 pub mod patterns;

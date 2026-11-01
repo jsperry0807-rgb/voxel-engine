@@ -58,6 +58,10 @@ fn main() {
         scene_memory_mode(&args[1..]);
         return;
     }
+    if args.first().is_some_and(|arg| arg == "image-diff") {
+        image_diff_mode(&args[1..]);
+        return;
+    }
 
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
@@ -173,6 +177,19 @@ fn main() {
                      --profile    residency profile: minimum, default or high\n\
                      --out        also write the JSON report to FILE\n\
                      --json       print the JSON report instead of the Markdown table\n\
+                     \n\
+                     voxel-bench image-diff --reference FILE --candidate FILE
+                     \x20          [--max-fraction F] [--tolerance N] [--max-delta N]
+                     \x20          [--max-mean-abs F] [--json]
+                     \n\
+                     image-diff   compare a capture against the committed reference
+                     \x20          (M3-12); exits 1 outside the documented threshold
+                     --reference  committed PNG
+                     --candidate  new capture to check
+                     --max-fraction  allowed differing fraction (default: 0.0001)
+                     --tolerance  per-channel delta treated as noise (default: 2)
+                     --max-delta  largest allowed channel delta (default: 32)
+                     --max-mean-abs largest allowed mean delta (default: 0.5)
                      \n\
                      voxel-bench scene-memory [--seed S] [--upload-kib K] [--json]
                      \n\
@@ -724,6 +741,124 @@ fn hitch_device() -> Option<(wgpu::Device, wgpu::Queue)> {
     std::mem::forget(adapter);
     std::mem::forget(instance);
     Some((device, queue))
+}
+
+/// `image-diff`: the M3-12 visual regression check.
+fn image_diff_mode(args: &[String]) {
+    let mut reference = None;
+    let mut candidate = None;
+    let mut threshold = voxel_bench::image_diff::Threshold::default();
+    let mut json = false;
+
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--reference" => {
+                index += 1;
+                reference = Some(PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--reference needs a file")),
+                ));
+            }
+            "--candidate" => {
+                index += 1;
+                candidate = Some(PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--candidate needs a file")),
+                ));
+            }
+            "--max-fraction" => {
+                index += 1;
+                threshold.max_fraction = args
+                    .get(index)
+                    .and_then(|text| text.parse().ok())
+                    .unwrap_or_else(|| usage("--max-fraction needs a number"));
+            }
+            "--tolerance" => {
+                index += 1;
+                threshold.channel_tolerance = args
+                    .get(index)
+                    .and_then(|text| text.parse().ok())
+                    .unwrap_or_else(|| usage("--tolerance needs an integer"));
+            }
+            "--max-delta" => {
+                index += 1;
+                threshold.max_delta = args
+                    .get(index)
+                    .and_then(|text| text.parse().ok())
+                    .unwrap_or_else(|| usage("--max-delta needs an integer"));
+            }
+            "--max-mean-abs" => {
+                index += 1;
+                threshold.max_mean_abs = args
+                    .get(index)
+                    .and_then(|text| text.parse().ok())
+                    .unwrap_or_else(|| usage("--max-mean-abs needs a number"));
+            }
+            "--json" => json = true,
+            other => usage(&format!("unknown image-diff argument `{other}`")),
+        }
+        index += 1;
+    }
+
+    let Some(reference_path) = reference else {
+        usage("image-diff needs --reference");
+    };
+    let Some(candidate_path) = candidate else {
+        usage("image-diff needs --candidate");
+    };
+    let reference = match voxel_bench::image_diff::Image::load(&reference_path) {
+        Ok(image) => image,
+        Err(error) => {
+            eprintln!("image-diff: {error}");
+            std::process::exit(1);
+        }
+    };
+    let candidate_image = match voxel_bench::image_diff::Image::load(&candidate_path) {
+        Ok(image) => image,
+        Err(error) => {
+            eprintln!("image-diff: {error}");
+            std::process::exit(1);
+        }
+    };
+    let diff = match voxel_bench::image_diff::compare(&reference, &candidate_image, &threshold) {
+        Ok(diff) => diff,
+        Err(error) => {
+            eprintln!("image-diff: {error}");
+            std::process::exit(1);
+        }
+    };
+
+    if json {
+        let report = serde_json::json!({
+            "reference": reference_path.display().to_string(),
+            "candidate": candidate_path.display().to_string(),
+            "width": reference.width,
+            "height": reference.height,
+            "pixels": diff.pixels,
+            "differing": diff.differing,
+            "differing_fraction": diff.differing_fraction,
+            "max_delta": diff.max_delta,
+            "mean_abs": diff.mean_abs,
+            "max_fraction": threshold.max_fraction,
+            "channel_tolerance": threshold.channel_tolerance,
+            "max_delta_limit": threshold.max_delta,
+            "max_mean_abs": threshold.max_mean_abs,
+            "passed": diff.passes(&threshold),
+        });
+        match serde_json::to_string_pretty(&report) {
+            Ok(serialized) => println!("{serialized}"),
+            Err(error) => {
+                eprintln!("failed to serialize the image diff: {error}");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        println!("{}", diff.line(&threshold));
+    }
+    if !diff.passes(&threshold) {
+        std::process::exit(1);
+    }
 }
 
 /// `scene-memory`: the M3-11 memory report for the 256-chunk scene.
