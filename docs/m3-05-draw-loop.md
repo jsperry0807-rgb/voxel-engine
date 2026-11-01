@@ -84,5 +84,5 @@ cargo test -p voxel-viewer --features chunk128
 
 ## Next
 
-M3-06: instrumentation — CPU submit, GPU pass, visible chunks/blocks/quads/bytes
-and upload bytes, with values that match the scene.
+M3-06 added the counters (`stats::FrameStats`) and the once-per-second line;
+M3-07 builds the frame breakdown from them.
