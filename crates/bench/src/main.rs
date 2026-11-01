@@ -54,6 +54,10 @@ fn main() {
         hitch_mode(&args[1..]);
         return;
     }
+    if args.first().is_some_and(|arg| arg == "scene-memory") {
+        scene_memory_mode(&args[1..]);
+        return;
+    }
 
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
@@ -169,6 +173,14 @@ fn main() {
                      --profile    residency profile: minimum, default or high\n\
                      --out        also write the JSON report to FILE\n\
                      --json       print the JSON report instead of the Markdown table\n\
+                     \n\
+                     voxel-bench scene-memory [--seed S] [--upload-kib K] [--json]
+                     \n\
+                     scene-memory  VRAM and host for the 256-chunk scene, split by
+                     \x20          DAG/mesh/overlay/light/probes (M3-11)
+                     --seed       scene seed, decimal or 0x hex
+                     --upload-kib per-frame upload budget (default: 1024)
+                     --json       print a JSON report instead of the Markdown table
                      \n\
                      voxel-bench gate report [--manifest FILE] [--profile NAME]\n\
                      \x20                  [--out DIR] [--json]\n\
@@ -712,6 +724,100 @@ fn hitch_device() -> Option<(wgpu::Device, wgpu::Queue)> {
     std::mem::forget(adapter);
     std::mem::forget(instance);
     Some((device, queue))
+}
+
+/// `scene-memory`: the M3-11 memory report for the 256-chunk scene.
+fn scene_memory_mode(args: &[String]) {
+    let mut seed = None;
+    let mut upload_kib = voxel_viewer::upload::DEFAULT_UPLOAD_BYTES / 1024;
+    let mut json = false;
+
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--seed" => {
+                index += 1;
+                let text = args
+                    .get(index)
+                    .unwrap_or_else(|| usage("--seed needs a value"));
+                seed = Some(
+                    voxel_viewer::scene::parse_seed(text)
+                        .unwrap_or_else(|| usage("--seed needs a u32, decimal or 0x hex")),
+                );
+            }
+            "--upload-kib" => {
+                index += 1;
+                upload_kib = args
+                    .get(index)
+                    .and_then(|text| text.parse().ok())
+                    .unwrap_or_else(|| usage("--upload-kib needs a positive integer"));
+            }
+            "--json" => json = true,
+            other => usage(&format!("unknown scene-memory argument `{other}`")),
+        }
+        index += 1;
+    }
+
+    let scene = seed.map_or_else(
+        voxel_viewer::scene::Scene::from_env,
+        voxel_viewer::scene::Scene::new,
+    );
+    let Some((device, queue)) = hitch_device() else {
+        eprintln!("no wgpu adapter; skipping the scene memory report");
+        std::process::exit(0);
+    };
+
+    // The heap counters include everything this process allocates after the
+    // baseline, which is the device, the scene and the streaming threads.
+    let baseline = voxel_bench::mem::reset();
+    let (_scene, usage) =
+        match voxel_viewer::memory::fill_scene(&device, &queue, scene, upload_kib * 1024) {
+            Ok(filled) => filled,
+            Err(error) => {
+                eprintln!("scene memory: {error}");
+                std::process::exit(1);
+            }
+        };
+    // Read the heap while the scene is still resident: dropping it first would
+    // report the streaming threads' buffers as already freed.
+    let live = voxel_bench::mem::live_bytes();
+    let peak = voxel_bench::mem::peak_since(baseline);
+
+    let mut report = voxel_viewer::memory::Report::new(
+        usage,
+        scene.seed(),
+        voxel_core::constants::CHUNK_DIM as u32,
+        upload_kib * 1024,
+    );
+    report.heap_live = Some(live);
+    report.heap_peak = Some(peak);
+    report.rss = voxel_bench::proc::rss_bytes();
+    report.peak_rss = voxel_bench::proc::peak_rss_bytes();
+
+    if json {
+        match serde_json::to_string_pretty(&report.to_json()) {
+            Ok(serialized) => println!("{serialized}"),
+            Err(error) => {
+                eprintln!("failed to serialize the scene memory report: {error}");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        print!("{}", report.markdown());
+        println!(
+            "host scene buffers: {} (worker volumes) + {} (upload backlog)",
+            human_bytes(usage.worker_volumes),
+            human_bytes(usage.upload_backlog_bytes as u64),
+        );
+    }
+    if !report.fits_with_margin() {
+        std::process::exit(1);
+    }
+}
+
+/// Formats bytes as MiB with one decimal.
+fn human_bytes(bytes: u64) -> String {
+    format!("{:.1} MiB", bytes as f64 / (1024.0 * 1024.0))
 }
 
 fn gate_mode(args: &[String]) {

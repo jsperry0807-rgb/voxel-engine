@@ -19,6 +19,7 @@ pub mod frametime;
 pub mod gpu;
 pub mod hitch;
 pub mod input;
+pub mod memory;
 pub mod mesh_pool;
 pub mod naive_mesh;
 pub mod pose;

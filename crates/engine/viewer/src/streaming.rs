@@ -118,6 +118,50 @@ pub trait DrawCost {
     }
 }
 
+/// Bytes of the per-chunk origin uniform (`vec4<f32>`).
+pub const ORIGIN_BYTES: u64 = 16;
+
+/// GPU and host bytes one streaming scene holds.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MemoryUsage {
+    /// Resident chunks.
+    pub chunks: usize,
+    /// Pool pages committed.
+    pub pool_pages: usize,
+    /// Bytes per pool page.
+    pub pool_page_bytes: u64,
+    /// `pool_pages * pool_page_bytes`: mesh VRAM committed.
+    pub pool_committed: u64,
+    /// Bytes inside live mesh allocations.
+    pub pool_live: u64,
+    /// Free bytes inside committed pages (slack plus holes).
+    pub pool_slack: u64,
+    /// Light-cell buffers across resident chunks.
+    pub light_bytes: u64,
+    /// Probe buffers across resident chunks.
+    pub probe_bytes: u64,
+    /// Origin uniforms across resident chunks.
+    pub origin_bytes: u64,
+    /// Finished uploads waiting for a frame budget (host).
+    pub upload_backlog_bytes: usize,
+    /// Dense volume buffers the generator workers reuse (host).
+    pub worker_volumes: u64,
+    /// Generator workers.
+    pub worker_count: usize,
+}
+
+impl MemoryUsage {
+    /// Total VRAM the scene requested from the device.
+    pub fn gpu_total(&self) -> u64 {
+        self.pool_committed + self.light_bytes + self.probe_bytes + self.origin_bytes
+    }
+
+    /// Total host bytes the streaming scene owns.
+    pub fn host_total(&self) -> u64 {
+        self.worker_volumes + self.upload_backlog_bytes as u64
+    }
+}
+
 /// What one frame's upload step moved into the pool.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FrameUpload {
@@ -418,6 +462,8 @@ pub struct Streaming {
     hitches: u32,
     complete_logged: bool,
     uploader_down: bool,
+    /// Generator workers, each holding one dense volume buffer.
+    worker_count: usize,
 }
 
 impl Streaming {
@@ -492,6 +538,7 @@ impl Streaming {
             hitches: 0,
             complete_logged: false,
             uploader_down: false,
+            worker_count,
         }
     }
 
@@ -809,6 +856,43 @@ impl Streaming {
                 true
             },
         )
+    }
+
+    /// A snapshot of the scene's GPU and host bytes.
+    ///
+    /// GPU rows are the bytes the streaming path requested from the device: the
+    /// mesh pool's committed pages (live plus slack) and the per-chunk light,
+    /// probe and origin buffers. Host rows are the dense volume each worker
+    /// reuses, the finished uploads waiting for a frame's budget, and the
+    /// chunk count. M3 stores no DAG and no overlay on the GPU: the viewer
+    /// generates dense volumes and meshes them, so those rows are zero by
+    /// construction rather than unmeasured.
+    pub fn memory_usage(&self) -> MemoryUsage {
+        let pool = self
+            .pool
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .stats();
+        let mut light = 0u64;
+        let mut probes = 0u64;
+        for resources in self.chunks.values() {
+            light += resources.lighting.light_bytes;
+            probes += resources.lighting.probe_bytes;
+        }
+        MemoryUsage {
+            chunks: self.chunks.len(),
+            pool_pages: pool.pages,
+            pool_page_bytes: pool.page_bytes,
+            pool_committed: pool.capacity_bytes,
+            pool_live: pool.used_bytes,
+            pool_slack: pool.free_bytes,
+            light_bytes: light,
+            probe_bytes: probes,
+            origin_bytes: self.chunks.len() as u64 * ORIGIN_BYTES,
+            upload_backlog_bytes: self.uploads.backlog_bytes(),
+            worker_volumes: self.worker_count as u64 * CHUNK_VOLUME as u64 * 2,
+            worker_count: self.worker_count,
+        }
     }
 
     /// A snapshot of the mesh pool: pages, live/free bytes and fragmentation.
