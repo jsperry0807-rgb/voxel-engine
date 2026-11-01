@@ -164,6 +164,21 @@ Pinned in: `crates/engine/viewer/src/mesh_pool.rs` (4 B range alignment),
 
 ## Surface
 
+### A swap-chain copy needs `COPY_SRC` on the surface configuration
+
+`Surface::get_default_config` enables `RENDER_ATTACHMENT` only. Copying the
+presented frame to a buffer (`copy_texture_to_buffer`) fails validation until
+`config.usage |= TextureUsages::COPY_SRC` is set **before**
+`Surface::configure`. Add it only when a capture is requested, so a normal run
+does not pay for a usage the driver may not optimise.
+
+The destination buffer row stride must be a multiple of
+`COPY_BYTES_PER_ROW_ALIGNMENT` (256), and the buffer must be
+`COPY_DST | MAP_READ`. The captured bytes are in the surface format, which is
+BGRA on the reference machine.
+
+Pinned in: `crates/engine/viewer/src/screenshot.rs`, `gpu.rs`.
+
 ### Drop the frame before reconfiguring
 
 A `SurfaceTexture` must not be alive across `Surface::configure`. On

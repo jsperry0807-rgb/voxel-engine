@@ -35,8 +35,8 @@ binding number is made in the spec and the pre-registration, never only in a tas
   benchmark landed and the optimized path now measures 5.7% p95 at 128³, under
   the 20% target. **M3-00 (mesh compression), M3-01 (streaming shell), M3-02 (mesh
   buffer pool), M3-03 (upload queue), M3-04 (CPU chunk cull), M3-05 (draw
-  loop), M3-06 (instrumentation) and M3-07 (frame breakdown) are closed;
-  M3-08 (stress scene) is next.**
+  loop), M3-06 (instrumentation), M3-07 (frame breakdown) and M3-08 (stress
+  scene) are closed; M3-09 (hitch test) is next.**
 
 ## Tools
 

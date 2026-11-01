@@ -103,9 +103,10 @@ the staging copy compete for the same cores. Steady state has none of this.
   seconds to fill, and it steals CPU from the submit path while it runs. M3-09's
   motion test is where that matters.
 
-M3-08 should use these to size the stress scene (draw-bound at 93–256 chunks),
-M3-09 to bound motion-time uploads, and M3-10 to decide whether the iGPU's
-8.9 ms pass leaves enough room for 60 Hz without M5's indirect path.
+M3-08 sized the stress scene from these numbers (see
+[`m3-08-stress-scene.md`](m3-08-stress-scene.md)); M3-09 bounds motion-time
+uploads, and M3-10 decides whether the iGPU's pass leaves enough room for 60 Hz
+without M5's indirect path.
 
 ## Limits
 
