@@ -190,17 +190,13 @@ impl HitchReport {
     }
 
     fn percentile_of(&self, stage: Stage, p: f64) -> Duration {
-        if self.samples.is_empty() {
-            return Duration::ZERO;
-        }
         let mut values: Vec<Duration> = self
             .samples
             .iter()
             .map(|sample| sample.stage(stage))
             .collect();
         values.sort_unstable();
-        let rank = ((values.len() as f64 - 1.0) * p.clamp(0.0, 1.0)).round() as usize;
-        values[rank]
+        crate::stats::percentile(&values, p)
     }
 }
 

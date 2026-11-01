@@ -40,6 +40,7 @@ use crate::chunk_render::ChunkPipeline;
 use crate::cull::Frustum;
 use crate::depth::DepthTarget;
 use crate::error::ViewerError;
+use crate::frametime::{Context, Recorder};
 use crate::scene::{Biome, Scene};
 use crate::screenshot::{self, Capture};
 use crate::stats::{FrameStats, GpuPassTimer, StatsWindow};
@@ -89,6 +90,10 @@ pub struct Gpu {
     stats: StatsWindow,
     /// M3-08 one-shot screenshot request (`VOXEL_SCREENSHOT`).
     capture: Option<Capture>,
+    /// M3-10 frame-time record (`VOXEL_FRAMETIME`).
+    frametime: Option<Recorder>,
+    /// What the frame-time report says the run measured.
+    run_context: Context,
 }
 
 impl Gpu {
@@ -170,6 +175,7 @@ impl Gpu {
         // larger than it otherwise fails validation before the first frame.
         let max = device.limits().max_texture_dimension_2d;
         let capture = Capture::from_env();
+        let frametime = Recorder::from_env();
         let mut config = surface
             .get_default_config(
                 &adapter,
@@ -220,6 +226,23 @@ impl Gpu {
                 capture.settle()
             );
         }
+        if let Some(frametime) = &frametime {
+            log::info!(
+                "frametime: will record {} frames to {} once the ring loads",
+                frametime.frames(),
+                frametime.path().display()
+            );
+        }
+        let run_context = Context {
+            adapter: info.name.clone(),
+            backend: format!("{:?}", info.backend),
+            device_type: format!("{:?}", info.device_type),
+            width: config.width,
+            height: config.height,
+            seed: scene.seed(),
+            chunk_dim: CHUNK_DIM as u32,
+            resident: 0,
+        };
 
         Ok(Self {
             instance,
@@ -240,6 +263,8 @@ impl Gpu {
             timers,
             stats: StatsWindow::new(),
             capture,
+            frametime,
+            run_context,
         })
     }
 
@@ -284,12 +309,18 @@ impl Gpu {
     /// reconfigured all return `Ok(false)`, so the caller can wait for the
     /// platform to request the next frame instead of spinning.
     pub fn render(&mut self, clear: Color, camera: &Camera) -> Result<bool, ViewerError> {
-        // M3-08: a capture can pin its own pose, so the committed image does not
-        // depend on the interactive start camera.
+        // M3-08/M3-10: a capture or a frame-time run can pin its own pose, so
+        // the committed image and the 60 Hz number do not depend on stale
+        // pointer events rotating the interactive start camera.
         let fixed = self
             .capture
             .as_ref()
-            .and_then(|capture| capture.camera(camera));
+            .and_then(|capture| capture.camera(camera))
+            .or_else(|| {
+                self.frametime
+                    .as_ref()
+                    .and_then(|recorder| recorder.camera(camera))
+            });
         let camera = fixed.as_ref().unwrap_or(camera);
         let uniform = camera.uniform();
         self.queue
@@ -494,6 +525,40 @@ impl Gpu {
         self.queue.present(frame);
         if let Some(capture) = &mut self.capture {
             capture.tick();
+        }
+
+        // M3-10: record the presented interval once the ring is resident. The
+        // report is written when the window is full, then the process exits.
+        if self.frametime.is_some() {
+            let mut done = false;
+            if let Some(frametime) = &mut self.frametime {
+                frametime.sample(self.streaming.loaded(), cpu_submit, gpu_pass);
+                done = frametime.finished();
+            }
+            if done {
+                let mut context = self.run_context.clone();
+                context.resident = self.streaming.loaded();
+                let result = self
+                    .frametime
+                    .as_ref()
+                    .expect("a finished recorder exists")
+                    .finish(context);
+                match result {
+                    Ok(summary) => {
+                        log::info!("{}", summary.line());
+                        log::info!(
+                            "frametime: wrote {}",
+                            self.frametime
+                                .as_ref()
+                                .expect("a recorder exists")
+                                .path()
+                                .display()
+                        );
+                    }
+                    Err(error) => log::error!("frametime: {error}"),
+                }
+                std::process::exit(0);
+            }
         }
 
         // M3-06: one frame's counters, then a once-per-second summary line.

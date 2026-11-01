@@ -218,6 +218,18 @@ fn ms(duration: Duration) -> f64 {
     duration.as_secs_f64() * 1000.0
 }
 
+/// Nearest-rank percentile over an ascending slice, `p` in `0.0..=1.0`.
+///
+/// The rank is `round((n - 1) * p)`, so `p = 0.99` over 100 samples is the 99th
+/// value and `p = 1.0` is the maximum. An empty slice is zero.
+pub fn percentile(sorted: &[Duration], p: f64) -> Duration {
+    if sorted.is_empty() {
+        return Duration::ZERO;
+    }
+    let rank = ((sorted.len() as f64 - 1.0) * p.clamp(0.0, 1.0)).round() as usize;
+    sorted[rank]
+}
+
 /// Timestamps around the render pass, read back a frame later.
 #[derive(Debug)]
 pub struct GpuPassTimer {
@@ -393,6 +405,16 @@ mod tests {
         let summary = window.record(stats).expect("the interval elapsed");
         assert_eq!(summary.gpu_pass, None);
         assert!(summary.line().contains("gpu pass n/a"));
+    }
+
+    #[test]
+    fn percentiles_are_nearest_rank() {
+        let values: Vec<Duration> = (1..=100).map(Duration::from_millis).collect();
+        assert_eq!(percentile(&values, 0.0), Duration::from_millis(1));
+        assert_eq!(percentile(&values, 0.5), Duration::from_millis(51));
+        assert_eq!(percentile(&values, 0.99), Duration::from_millis(99));
+        assert_eq!(percentile(&values, 1.0), Duration::from_millis(100));
+        assert_eq!(percentile(&[], 0.5), Duration::ZERO);
     }
 
     #[test]

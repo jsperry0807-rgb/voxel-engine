@@ -3548,6 +3548,7 @@ dependencies = [
  "pollster",
  "ron",
  "serde",
+ "serde_json",
  "voxel-app-support",
  "voxel-core",
  "voxel-mesh",

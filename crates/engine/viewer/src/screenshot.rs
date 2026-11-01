@@ -13,10 +13,10 @@
 
 use std::path::PathBuf;
 
-use glam::Vec3;
 use wgpu::{Buffer, BufferDescriptor, BufferUsages, Device, MapMode, PollType, TextureFormat};
 
 use crate::camera::Camera;
+use crate::pose::View;
 use crate::streaming::RING_CHUNKS;
 
 /// Path of the PNG to write, or unset for a normal run.
@@ -39,7 +39,7 @@ pub struct Capture {
     written: bool,
     /// Optional fixed pose, so the image does not depend on the interactive
     /// start camera.
-    view: Option<(Vec3, Vec3)>,
+    view: Option<View>,
 }
 
 impl Capture {
@@ -56,14 +56,8 @@ impl Capture {
             },
             Err(_) => DEFAULT_SETTLE_FRAMES,
         };
-        let view = match (std::env::var(EYE_ENV), std::env::var(TARGET_ENV)) {
-            (Ok(eye), Ok(target)) => {
-                Some((parse_vec3(EYE_ENV, &eye), parse_vec3(TARGET_ENV, &target)))
-            }
-            (Ok(_), Err(_)) => panic!("{EYE_ENV} is set but {TARGET_ENV} is not"),
-            (Err(_), Ok(_)) => panic!("{TARGET_ENV} is set but {EYE_ENV} is not"),
-            (Err(_), Err(_)) => None,
-        };
+        let view = View::from_env(EYE_ENV, TARGET_ENV)
+            .unwrap_or_else(|error| panic!("screenshot pose: {error}"));
         Some(Self {
             path: PathBuf::from(path),
             settle,
@@ -85,8 +79,7 @@ impl Capture {
 
     /// The fixed capture pose, or `None` to use the interactive camera.
     pub fn camera(&self, base: &Camera) -> Option<Camera> {
-        self.view
-            .map(|(eye, target)| Camera::looking_at(eye, target, base.aspect()))
+        self.view.as_ref().map(|view| view.camera(base))
     }
 
     /// Counts one successfully presented frame.
@@ -229,20 +222,6 @@ pub fn write_png(
         .finish()
         .map_err(|error| format!("finish {}: {error}", path.display()))?;
     Ok(())
-}
-
-/// Parses `"x,y,z"` into a point, panicking with the variable name on error.
-fn parse_vec3(name: &str, text: &str) -> Vec3 {
-    let parts: Vec<&str> = text.split(',').map(str::trim).collect();
-    let [x, y, z] = parts.as_slice() else {
-        panic!("{name}={text:?} is not x,y,z");
-    };
-    match (x.parse::<f32>(), y.parse::<f32>(), z.parse::<f32>()) {
-        (Ok(x), Ok(y), Ok(z)) if x.is_finite() && y.is_finite() && z.is_finite() => {
-            Vec3::new(x, y, z)
-        }
-        _ => panic!("{name}={text:?} is not three finite numbers"),
-    }
 }
 
 #[cfg(test)]
