@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "milestone": "M3",
+  "frozen": "2026-11-01",
+  "scene": {
+    "seed": 1592594996,
+    "seed_hex": "0x5EED1234",
+    "chunk_dim_gate": 128,
+    "chunk_dim_default": 64,
+    "ring_half": 8,
+    "ring_chunks": 256
+  },
+  "streaming": {
+    "pump_budget_ms": 4,
+    "upload_budget_kib": 512,
+    "staging_chunk_kib": 2048,
+    "max_backlog_kib": 32768
+  },
+  "gate": {
+    "resolution": [1920, 1080],
+    "eye": [14, 6, 20],
+    "target": [2, 1, 2],
+    "frametime_frames": 1200,
+    "settle_frames": 12,
+    "reference_image": "docs/images/m3-12-reference.png",
+    "image_threshold": {
+      "max_fraction": 0.0001,
+      "channel_tolerance": 2,
+      "max_delta": 32,
+      "max_mean_abs": 0.5
+    }
+  },
+  "budgets": {
+    "vram_margin": 1.5
+  }
+}
