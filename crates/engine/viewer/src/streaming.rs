@@ -76,7 +76,7 @@ fn pool_page_bytes(max_buffer_size: u64) -> u64 {
 /// The callback returns `true` when it submitted a draw. `visible` counts
 /// accepted chunks (including empty ones) and `drawn` counts the callbacks that
 /// returned `true`.
-pub fn draw_visible<'a, T: 'a>(
+pub fn draw_visible<'a, T: DrawCost + 'a>(
     chunks: impl IntoIterator<Item = (ChunkPos, &'a T)>,
     keep: impl Fn(ChunkPos) -> bool,
     mut draw: impl FnMut(ChunkPos, &'a T) -> bool,
@@ -87,6 +87,9 @@ pub fn draw_visible<'a, T: 'a>(
             continue;
         }
         stats.visible += 1;
+        stats.blocks += chunk.blocks();
+        stats.quads += chunk.quads();
+        stats.bytes += chunk.mesh_bytes();
         if draw(position, chunk) {
             stats.drawn += 1;
         }
@@ -94,13 +97,39 @@ pub fn draw_visible<'a, T: 'a>(
     stats
 }
 
-/// What one frame's draw loop kept and drew.
+/// Geometry a chunk contributes to the draw loop's counters.
+///
+/// Empty chunks report zeros, so `visible - drawn` chunks add nothing. The
+/// loop sums this for the accepted set; `tests/draw_loop.rs` pins that the
+/// totals equal the scene.
+pub trait DrawCost {
+    /// Blocks with at least one visible face.
+    fn blocks(&self) -> u64 {
+        0
+    }
+    /// Indexed quads.
+    fn quads(&self) -> u64 {
+        0
+    }
+    /// Vertex plus index bytes.
+    fn mesh_bytes(&self) -> u64 {
+        0
+    }
+}
+
+/// What one frame's draw loop kept, drew and covered.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DrawStats {
     /// Resident chunks inside the frustum, including empty ones.
     pub visible: usize,
     /// Chunks with a mesh drawn this frame.
     pub drawn: usize,
+    /// Blocks with visible faces across the accepted chunks.
+    pub blocks: u64,
+    /// Indexed quads across the accepted chunks.
+    pub quads: u64,
+    /// Vertex plus index bytes across the accepted chunks.
+    pub bytes: u64,
 }
 
 /// One chunk's uploaded resources.
@@ -109,6 +138,25 @@ pub struct ChunkResources {
     pub mesh: Option<MeshAllocation>,
     /// Light, probes and world-origin bind group.
     pub lighting: ChunkLighting,
+    /// Blocks that emitted at least one visible face (M3-06).
+    pub blocks: u32,
+}
+
+impl DrawCost for ChunkResources {
+    fn blocks(&self) -> u64 {
+        u64::from(self.blocks)
+    }
+
+    fn quads(&self) -> u64 {
+        match &self.mesh {
+            Some(mesh) => u64::from(mesh.index_count() / 6),
+            None => 0,
+        }
+    }
+
+    fn mesh_bytes(&self) -> u64 {
+        self.mesh.as_ref().map_or(0, MeshAllocation::byte_len)
+    }
 }
 
 /// The desired ring positions, nearest first.
@@ -356,6 +404,8 @@ pub struct PendingUpload {
     pub indices: Vec<u16>,
     /// Light, probes and world-origin bind group.
     pub lighting: ChunkLighting,
+    /// Blocks that emitted at least one visible face (M3-06).
+    pub blocks: u32,
 }
 
 impl UploadBytes for PendingUpload {
@@ -659,6 +709,7 @@ impl Streaming {
             let resources = ChunkResources {
                 mesh: upload.mesh,
                 lighting: upload.lighting,
+                blocks: upload.blocks,
             };
             if let Some(previous) = self.chunks.insert(upload.position, resources)
                 && let Some(mesh) = previous.mesh
@@ -935,6 +986,7 @@ fn prepare_upload(
         vertices: content.mesh.vertices,
         indices: content.mesh.indices,
         lighting,
+        blocks: content.mesh.blocks as u32,
     })
 }
 

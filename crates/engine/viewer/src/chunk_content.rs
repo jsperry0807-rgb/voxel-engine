@@ -41,6 +41,11 @@ pub struct ChunkMeshData {
     /// Exposed voxel faces covered by those quads; equal to the naive per-face
     /// mesh's quad count when the merge loses no coverage.
     pub faces: usize,
+    /// Blocks that emit at least one visible face.
+    ///
+    /// A fully enclosed non-empty block has no faces and is not counted: this
+    /// is the geometry the draw actually covers, which is what M3-06 reports.
+    pub blocks: usize,
 }
 
 impl ChunkMeshData {
@@ -154,9 +159,13 @@ where
     let mut quads = Vec::new();
     let mut quad_count = 0usize;
     let mut face_count = 0usize;
+    let mut block_count = 0usize;
 
     for_each_block(volume, apron, |block, scratch| {
         greedy_block(scratch, &mut quads);
+        if !quads.is_empty() {
+            block_count += 1;
+        }
         face_count += quads.iter().map(|quad| quad.area() as usize).sum::<usize>();
         let meshlet = mesh_block(&quads, block);
         let base = vertices.len() / PackedVertex::SIZE;
@@ -178,6 +187,7 @@ where
         indices,
         quads: quad_count,
         faces: face_count,
+        blocks: block_count,
     }
 }
 

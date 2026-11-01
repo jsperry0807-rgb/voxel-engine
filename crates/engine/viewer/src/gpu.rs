@@ -38,6 +38,7 @@ use crate::chunk_render::ChunkPipeline;
 use crate::cull::Frustum;
 use crate::depth::DepthTarget;
 use crate::error::ViewerError;
+use crate::stats::{FrameStats, GpuPassTimer, StatsWindow};
 use crate::streaming::{self, PUMP_BUDGET, PendingUpload, Streaming};
 use crate::upload;
 
@@ -78,6 +79,10 @@ pub struct Gpu {
     upload_belt: StagingBelt,
     /// Mesh bytes one frame may copy into the pool.
     upload_budget: usize,
+    /// M3-06 GPU pass timer; `None` when the adapter has no timestamp queries.
+    timers: Option<GpuPassTimer>,
+    /// M3-06 once-per-second frame summary.
+    stats: StatsWindow,
 }
 
 impl Gpu {
@@ -107,7 +112,18 @@ impl Gpu {
         );
         log::debug!("adapter details: {info:?}");
 
-        let (device, queue) = block_on(adapter.request_device(&DeviceDescriptor::default()))?;
+        // M3-06 measures the render pass with in-pass timestamps when the
+        // adapter has them; the device only gets features it asks for.
+        let timestamp =
+            wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES;
+        let mut required_features = wgpu::Features::empty();
+        if adapter.features().contains(timestamp) {
+            required_features |= timestamp;
+        }
+        let (device, queue) = block_on(adapter.request_device(&DeviceDescriptor {
+            required_features,
+            ..Default::default()
+        }))?;
         // Log instead of panicking inside a winit callback when a validation
         // error slips through (for example a surface larger than the adapter's
         // limit).
@@ -169,6 +185,7 @@ impl Gpu {
         );
         let upload_budget = upload_budget_bytes();
         let streaming = Streaming::new(device.clone(), data_layout, upload_budget);
+        let timers = GpuPassTimer::new(&device, &queue);
         let upload_belt = StagingBelt::new(device.clone(), upload::STAGING_CHUNK_BYTES);
         log::info!(
             "streaming shell: {} chunk ring, {:.0} ms frame budget, {:.0} KiB upload budget",
@@ -193,6 +210,8 @@ impl Gpu {
             chunk_pipeline,
             upload_belt,
             upload_budget,
+            timers,
+            stats: StatsWindow::new(),
         })
     }
 
@@ -292,11 +311,19 @@ impl Gpu {
         };
 
         let view = frame.texture.create_view(&TextureViewDescriptor::default());
+        let cpu_started = std::time::Instant::now();
         let mut encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
                 label: Some("main frame"),
             });
+        // M3-06: pick up the previous frame's GPU pass measurement before
+        // issuing a new pair of timestamps.
+        let gpu_pass = self
+            .timers
+            .as_mut()
+            .and_then(|timer| timer.poll(&self.device));
+        let measure_gpu = self.timers.as_ref().is_some_and(GpuPassTimer::ready);
 
         // M3-03: take at most the frame's upload budget, copy it through the
         // staging belt, then install the meshes so this frame's pass draws
@@ -346,6 +373,9 @@ impl Gpu {
                 }),
                 ..Default::default()
             });
+            if measure_gpu && let Some(timer) = &self.timers {
+                timer.begin(&mut pass);
+            }
             draw_stats = self.streaming.draw(
                 &mut pass,
                 &self.chunk_pipeline,
@@ -353,18 +383,53 @@ impl Gpu {
                 &self.atlas.bind_group,
                 frustum,
             );
+            if measure_gpu && let Some(timer) = &self.timers {
+                timer.end(&mut pass);
+            }
+        }
+        if measure_gpu && let Some(timer) = &self.timers {
+            timer.resolve(&mut encoder);
         }
         // Unmaps the staging chunks and re-maps them when this submission
         // completes, so the next frame reuses the same buffers.
         self.upload_belt.finish_and_recall_on_submit(&encoder);
         self.queue.submit([encoder.finish()]);
-        log::trace!(
-            "draw: {} visible, {} drawn, {} resident",
-            draw_stats.visible,
-            draw_stats.drawn,
-            self.streaming.loaded(),
-        );
+        if measure_gpu && let Some(timer) = &mut self.timers {
+            timer.submitted();
+        }
+        let cpu_submit = cpu_started.elapsed();
         self.queue.present(frame);
+
+        // M3-06: one frame's counters, then a once-per-second summary line.
+        let frame = FrameStats {
+            resident: self.streaming.loaded(),
+            visible: draw_stats.visible,
+            drawn: draw_stats.drawn,
+            blocks: draw_stats.blocks,
+            quads: draw_stats.quads,
+            mesh_bytes: draw_stats.bytes,
+            upload_meshes: installed,
+            upload_bytes,
+            cpu_submit,
+            gpu_pass,
+        };
+        log::debug!(
+            "frame: cpu {:.2} ms, gpu {}, {} visible / {} drawn of {}, {:.0} kquads, {:.1} MiB, upload {:.0} KiB",
+            frame.cpu_submit.as_secs_f64() * 1000.0,
+            frame.gpu_pass.map_or_else(
+                || "n/a".to_owned(),
+                |gpu| format!("{:.2} ms", gpu.as_secs_f64() * 1000.0)
+            ),
+            frame.visible,
+            frame.drawn,
+            frame.resident,
+            frame.quads as f64 / 1000.0,
+            frame.mesh_bytes as f64 / (1024.0 * 1024.0),
+            frame.upload_bytes as f64 / 1024.0,
+        );
+        if let Some(summary) = self.stats.record(frame) {
+            log::info!("{}", summary.line());
+        }
         self.lost_retries = 0;
         Ok(true)
     }

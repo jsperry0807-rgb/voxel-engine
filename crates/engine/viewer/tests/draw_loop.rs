@@ -24,16 +24,48 @@ use voxel_viewer::cull::Frustum;
 use voxel_viewer::depth::DepthTarget;
 use voxel_viewer::mesh_pool::{MeshFormat, MeshPool};
 use voxel_viewer::streaming::{
-    ChunkResources, DrawStats, chunk_origin, draw_visible, stream_apron, stream_volume,
+    ChunkResources, DrawCost, DrawStats, chunk_origin, draw_visible, stream_apron, stream_volume,
 };
 
 const WIDTH: u32 = 512;
 const HEIGHT: u32 = 512;
 
+/// A fake chunk with the geometry counters the loop sums.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Fake {
+    id: u32,
+    blocks: u64,
+    quads: u64,
+    bytes: u64,
+}
+
+impl DrawCost for Fake {
+    fn blocks(&self) -> u64 {
+        self.blocks
+    }
+
+    fn quads(&self) -> u64 {
+        self.quads
+    }
+
+    fn mesh_bytes(&self) -> u64 {
+        self.bytes
+    }
+}
+
+fn fake(id: u32) -> Fake {
+    Fake {
+        id,
+        blocks: 10,
+        quads: 100,
+        bytes: 4_400,
+    }
+}
+
 #[test]
 fn the_loop_visits_each_accepted_chunk_once() {
-    let chunks: Vec<(ChunkPos, u32)> = (0..6)
-        .map(|index| (ChunkPos::new(index - 3, 0, index % 2), index as u32))
+    let chunks: Vec<(ChunkPos, Fake)> = (0..6)
+        .map(|index| (ChunkPos::new(index - 3, 0, index % 2), fake(index as u32)))
         .collect();
     let mut visited = Vec::new();
     let stats = draw_visible(
@@ -45,7 +77,7 @@ fn the_loop_visits_each_accepted_chunk_once() {
         },
     );
 
-    let expected: Vec<(ChunkPos, u32)> = chunks
+    let expected: Vec<(ChunkPos, Fake)> = chunks
         .iter()
         .copied()
         .filter(|(position, _)| position.x >= 0)
@@ -56,14 +88,25 @@ fn the_loop_visits_each_accepted_chunk_once() {
 
     let unique: HashSet<ChunkPos> = visited.iter().map(|(position, _)| *position).collect();
     assert_eq!(unique.len(), visited.len(), "a chunk was drawn twice");
+
+    // The geometry counters cover exactly the accepted set (M3-06).
+    assert_eq!(stats.blocks, 10 * expected.len() as u64);
+    assert_eq!(stats.quads, 100 * expected.len() as u64);
+    assert_eq!(stats.bytes, 4_400 * expected.len() as u64);
 }
+
+/// A chunk with no geometry: it counts as visible but contributes nothing.
+#[derive(Clone, Copy, Debug)]
+struct Empty;
+
+impl DrawCost for Empty {}
 
 #[test]
 fn an_empty_chunk_counts_as_visible_but_not_drawn() {
     let chunks = [ChunkPos::new(0, 0, 0), ChunkPos::new(1, 0, 0)];
     let mut visited = 0;
     let stats = draw_visible(
-        chunks.iter().map(|position| (*position, position)),
+        chunks.iter().map(|position| (*position, &Empty)),
         |_| true,
         |position, _| {
             visited += 1;
@@ -73,6 +116,7 @@ fn an_empty_chunk_counts_as_visible_but_not_drawn() {
     );
     assert_eq!(stats.visible, 2);
     assert_eq!(stats.drawn, 1);
+    assert_eq!(stats.blocks, 0, "an empty chunk has no geometry");
     assert_eq!(visited, 2, "an empty chunk is still visited once");
 }
 
@@ -80,11 +124,11 @@ fn an_empty_chunk_counts_as_visible_but_not_drawn() {
 fn a_rejected_set_draws_nothing() {
     let chunks = [ChunkPos::new(0, 0, 0)];
     let stats = draw_visible(
-        chunks.iter().map(|position| (*position, position)),
+        chunks.iter().map(|position| (*position, &Empty)),
         |_| false,
         |_, _| panic!("a rejected chunk must not be visited"),
     );
-    assert_eq!(stats, DrawStats::default());
+    assert_eq!(stats, DrawStats::default(), "nothing is counted or drawn");
 }
 
 // ---------------------------------------------------------------------------
@@ -231,6 +275,7 @@ fn a_culled_frame_matches_a_draw_everything_frame() {
                 ChunkResources {
                     mesh: Some(mesh),
                     lighting,
+                    blocks: content.mesh.blocks as u32,
                 },
             ));
         }
@@ -326,6 +371,28 @@ fn a_culled_frame_matches_a_draw_everything_frame() {
         chunks.len()
     );
     assert_eq!(culled_stats.drawn, culled_stats.visible);
+
+    // The geometry totals must match the scene: sum over the chunks the cull
+    // accepted, not over the whole ring.
+    let mut expected_blocks = 0u64;
+    let mut expected_quads = 0u64;
+    let mut expected_bytes = 0u64;
+    for (position, resources) in &chunks {
+        if !frustum.chunk_visible(*position) {
+            continue;
+        }
+        expected_blocks += resources.blocks();
+        expected_quads += resources.quads();
+        expected_bytes += resources.mesh_bytes();
+    }
+    assert!(expected_blocks > 0 && expected_quads > 0 && expected_bytes > 0);
+    assert_eq!(culled_stats.blocks, expected_blocks, "visible blocks");
+    assert_eq!(culled_stats.quads, expected_quads, "visible quads");
+    assert_eq!(culled_stats.bytes, expected_bytes, "visible mesh bytes");
+    assert!(
+        all_stats.quads > culled_stats.quads,
+        "culling must reduce the drawn geometry"
+    );
 
     for (label, visited) in [("all", &all_visited), ("culled", &culled_visited)] {
         let unique: HashSet<ChunkPos> = visited.iter().copied().collect();
