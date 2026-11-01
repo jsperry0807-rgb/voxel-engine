@@ -43,8 +43,10 @@ binding number is made in the spec and the pre-registration, never only in a tas
   11.93 GiB, high 95.4 GiB). M2.5 runs before M3.5.**
 - **M2.5 has started.** `M2.5-01` created `voxel-worldgen` and froze the
   integer-hash, fixed-point noise contract with committed golden vectors; see
-  [`m2.5-01-noise.md`](m2.5-01-noise.md). The macro grid (`M2.5-02`) and the
-  spline tables (`M2.5-03`) are next.
+  [`m2.5-01-noise.md`](m2.5-01-noise.md). `M2.5-02` added the 128 m macro grid
+  and the 16 km tile format (93.75 kB payload, CRC-32, format version 1); see
+  [`m2.5-02-macro-tile.md`](m2.5-02-macro-tile.md). The spline tables
+  (`M2.5-03`) are next.
 
 ## Tools
 
