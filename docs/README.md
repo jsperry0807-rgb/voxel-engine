@@ -36,9 +36,11 @@ binding number is made in the spec and the pre-registration, never only in a tas
   the 20% target. **M3-00 (mesh compression), M3-01 (streaming shell), M3-02 (mesh
   buffer pool), M3-03 (upload queue), M3-04 (CPU chunk cull), M3-05 (draw
   loop), M3-06 (instrumentation), M3-07 (frame breakdown), M3-08 (stress scene),
-  M3-09 (hitch test), M3-10 (60 Hz at the gated edge), M3-11 (memory report) and
-  M3-12 (visual regression) are closed; M3-13 (the M3 exit tag) is next. The
-  Radeon iGPU's 1% low at 128³ is carried to M3-13 as an open condition.**
+  M3-09 (hitch test), M3-10 (60 Hz at the gated edge), M3-11 (memory report),
+  M3-12 (visual regression) and M3-13 (the exit) are closed; `m3` is tagged. Two
+  conditions are carried out of M3: the Radeon iGPU's 128³ 1% low (56.6–61.2 fps
+  against 60) and 128³ being green only at the minimum residency profile (default
+  11.93 GiB, high 95.4 GiB). M3.5 is next.**
 
 ## Tools
 
