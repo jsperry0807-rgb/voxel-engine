@@ -60,8 +60,11 @@ binding number is made in the spec and the pre-registration, never only in a tas
   metre/kilometre unit bug in the shape field; the follow-up shape fix added
   continents, per-seed ocean calibration and valley detail, raising the largest
   flow accumulation from 48 cells to **5.7M** and giving 1–2 continents per
-  seed. See [`m2.5-shape-fix.md`](m2.5-shape-fix.md). River and lake extraction
-  (`M2.5-07/08`) is next.
+  seed. See [`m2.5-shape-fix.md`](m2.5-shape-fix.md). `M2.5-07` extracted the
+  river network — 48,722 segments, order 5, 10–200 m widths, 576 deltas, every
+  river ending at sea or a lake; see
+  [`m2.5-07-rivers.md`](m2.5-07-rivers.md). Lake extraction (`M2.5-08`) is
+  next.
 
 ## Tools
 
