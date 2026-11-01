@@ -51,8 +51,11 @@ binding number is made in the spec and the pre-registration, never only in a tas
   [`m2.5-03-splines.md`](m2.5-03-splines.md). `M2.5-04` added the climate
   fields — compressed latitude, an altitude lapse and an ocean-distance
   humidity curve with an 8 km variation; see
-  [`m2.5-04-climate.md`](m2.5-04-climate.md). The macro tile generator
-  (`M2.5-05`) is next.
+  [`m2.5-04-climate.md`](m2.5-04-climate.md). `M2.5-05` added the seeded macro
+  tile generator, the `macro` CLI and the aggregated content hash: the whole
+  4,096-tile world generates in **9.2 s** with a stable hash; see
+  [`m2.5-05-macro-generator.md`](m2.5-05-macro-generator.md). Hydrology
+  (`M2.5-06`) is next.
 
 ## Tools
 
