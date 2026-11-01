@@ -66,11 +66,29 @@ cargo run -p voxel-bench -- gate scaleup
 cargo run -p voxel-bench -- gate scaleup --profile minimum
 cargo run -p voxel-bench -- gate scaleup --json
 
+# Streaming and upload hitch over 1,000 frames of camera motion (M3-09)
+cargo run --release -p voxel-bench -- hitch
+cargo run --release -p voxel-bench -- hitch --frames 300 --speed 24 --json
+
 # The twelve pre-registered rows as one gate.md + gate.json (M1-39)
 cargo run -p voxel-bench -- gate report
 cargo run -p voxel-bench -- gate report --profile minimum
 cargo run -p voxel-bench -- gate report --json
 ```
+
+## Hitch test (M3-09)
+
+`hitch` drives the viewer's real frame-thread streaming path — ring pump, the
+M3-03 take/staging-copy/install step and the encoder finish plus submit — for
+1,000 frames while the camera flies at 16 world units per second (two chunks a
+second at 128³). It is headless: no surface, no render pass, so it measures the
+CPU-side streaming path, not GPU draw time.
+
+It reports p50/p95/p99/max for `pump`, `upload`, `finish` and their `total`,
+the slowest five frames, upload frames, overruns and resident/pending chunks,
+and it exits 1 when the upload p99 exceeds 4 ms or any frame exceeds 8 ms
+(`--no-check` reports without failing). `--upload-kib`, `--speed`, `--seed` and
+`--frames` override the defaults.
 
 ## What is measured
 

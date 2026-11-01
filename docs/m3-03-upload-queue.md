@@ -143,6 +143,12 @@ overruns and the copy time.
 - **No cancellation.** A job already queued for a position the camera left is
   freed at take time, but it still consumed its staging slot for that frame.
 
+**Update (M3-09, 2026-10-31).** That sizing was too optimistic: at 1 MiB the
+upload stage measured a **6.79 ms p99** over 1,000 frames of motion, over the
+4 ms budget. The default is now **512 KiB** (1.6–3.1 ms p99), so the ring drains
+in 260 frames instead of 141. See
+[`m3-09-hitch-test.md`](m3-09-hitch-test.md).
+
 ## Next
 
 M3-04 landed the CPU chunk cull; M3-05 is the draw loop over the visible set.

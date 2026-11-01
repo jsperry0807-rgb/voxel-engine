@@ -118,6 +118,7 @@ Release viewer, `--features chunk128`, default seed, 1920×1080:
 | Geometry | 12,614 blocks, 864,706 quads, 36.3 MiB | same |
 | Ring | 13 pages × 8 MiB = 104.0 MiB for 100.5 MiB of meshes, 3.5 MiB slack, 0 holes | same |
 | Ring load | 5 s, 141 upload frames, 0 overruns, max pump 0.08 ms, 0 hitches | 7 s, 181 frames, max pump 0.06 ms, 0 hitches |
+| Ring load after M3-09 | 5–6 s, 260 upload frames at the 512 KiB default | — |
 | Generation | p50 62.8 ms, p99 130.5, max 137.9 per chunk | — |
 
 Seed `0xCAFE` produces a visibly different world (134 meadow, 38 forest, 27 sand,
