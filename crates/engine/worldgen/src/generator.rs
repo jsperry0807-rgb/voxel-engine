@@ -8,10 +8,19 @@
 //!
 //! | Field | Source | Range |
 //! |---|---|---|
-//! | continentalness | 4-octave fbm, 400 km base wavelength, gain and bias calibrated for ~35% ocean | `[-1, 1]` |
+//! | continentalness | 2-octave 900 km continent fbm + 3-octave 400 km coastline fbm, gain and bias calibrated for ~35% ocean | `[-1, 1]` |
 //! | erosion | 3-octave fbm, 180 km base wavelength | `[0, 1]` |
-//! | surface | [`surface_height`](crate::splines::surface_height) | 0–12,000 m |
+//! | surface | [`surface_height`](crate::splines::surface_height) plus 24 km and 8 km valley detail | 0–12,000 m |
 //! | temperature, humidity | [`Climate`](crate::climate::Climate) | `u8` |
+//!
+//! # Length units
+//!
+//! Noise wavelengths are named in **kilometres** and the coordinate is divided
+//! by 1,000 before scaling. A Q16.16 factor of `ONE / 400` encodes `1/400`, but
+//! the same factor in metres (`ONE * ONE / 400_000`) would encode `0.1638`,
+//! i.e. a 6 m wavelength — a whole-world salt-and-pepper field. The kilometre
+//! conversion is what makes `ONE / wavelength_km` meaningful, and the
+//! generator tests pin the resulting landmass structure.
 //!
 //! # Ocean distance before hydrology
 //!
@@ -40,7 +49,7 @@ use crate::macro_grid::{
     CELL_SIZE_M, Cell, TILE_CELLS_USIZE, TileFlags, TilePos, WORLD_EXTENT_M, height_from_q16,
 };
 use crate::noise::Noise;
-use crate::splines::{SEA_LEVEL, surface_height};
+use crate::splines::{PEAK, RELIEF_WEIGHT, SEA_LEVEL, surface_height};
 use crate::tile::{MacroTile, TileError, TileHeader};
 
 /// Version of the field generator, stored in every tile.
@@ -52,22 +61,65 @@ pub const MACRO_VERSION: u16 = 1;
 /// Version of the content definitions (biomes, surfaces, flora).
 pub const CONTENT_VERSION: u16 = 1;
 
-/// Salt for the continentalness stream.
-const CONTINENTAL_SALT: u64 = 0x434F_4E54_0001;
+/// Salt for the continent stream.
+const CONTINENT_SALT: u64 = 0x434F_4E54_0001;
+/// Salt for the coastline-detail stream.
+const COASTLINE_SALT: u64 = 0x4445_5441_0001;
 /// Salt for the erosion stream.
 const EROSION_SALT: u64 = 0x4552_4F53_0001;
+/// Salt for the 24 km valley stream.
+const VALLEY_SALT: u64 = 0x5348_5031_0001;
+/// Salt for the 8 km valley stream.
+const VALLEY_FINE_SALT: u64 = 0x5348_5032_0001;
 
-/// Continentalness base wavelength: 400 km, in Q16.16 cells per metre.
-const CONTINENTAL_SCALE: i32 = ((ONE as i64 * ONE as i64) / 400_000) as i32;
+/// Continent base wavelength: 900 km, so the 1,024 km world holds 1–7 landmasses.
+const CONTINENT_WAVELENGTH_KM: i64 = 900;
+/// Continent octaves: 900 km and 450 km.
+const CONTINENT_OCTAVES: u32 = 2;
 
-/// Erosion base wavelength: 180 km.
-const EROSION_SCALE: i32 = ((ONE as i64 * ONE as i64) / 180_000) as i32;
+/// Coastline detail wavelength: 400 km.
+const COASTLINE_WAVELENGTH_KM: i64 = 400;
+/// Coastline octaves: 400, 200 and 100 km.
+const COASTLINE_OCTAVES: u32 = 3;
 
-/// Gain applied to the raw continentalness fbm.
-const CONTINENTAL_GAIN: i32 = ONE * 2;
+/// Erosion base wavelength, 180 km.
+const EROSION_WAVELENGTH_KM: i64 = 180;
 
-/// Bias applied after the gain; calibrated so ~35% of the world is ocean.
-const CONTINENTAL_BIAS: i32 = ONE * 13 / 100;
+/// Coarse valley wavelength, 24 km.
+const VALLEY_WAVELENGTH_KM: i64 = 24;
+/// Coarse valley octaves: 24, 12 and 6 km.
+const VALLEY_OCTAVES: u32 = 3;
+/// Coarse valley amplitude in metres.
+const VALLEY_AMPLITUDE_M: i32 = 300;
+
+/// Fine valley wavelength, 8 km.
+const VALLEY_FINE_WAVELENGTH_KM: i64 = 8;
+/// Fine valley octaves: 8 and 4 km.
+const VALLEY_FINE_OCTAVES: u32 = 2;
+/// Fine valley amplitude in metres.
+const VALLEY_FINE_AMPLITUDE_M: i32 = 120;
+
+/// Gain applied to the continent fbm.
+const CONTINENT_GAIN: i32 = ONE * 24 / 10;
+
+/// Gain applied to the coastline fbm.
+const COASTLINE_GAIN: i32 = ONE * 9 / 10;
+
+/// Share of the world that should be ocean, in percent (design target 35%).
+pub const OCEAN_PERCENT: usize = 35;
+
+/// Calibration samples per axis: 64 × 64 probes at 16 km.
+const CALIBRATION_STEPS: usize = 64;
+
+/// Q16.16 scale that turns a Q16.16 kilometre coordinate into noise space.
+const fn scale_km(wavelength_km: i64) -> i32 {
+    (ONE as i64 / wavelength_km) as i32
+}
+
+/// Q16.16 metres to Q16.16 kilometres.
+const fn to_km(metres: Coord) -> Coord {
+    metres / 1_000
+}
 
 /// Half the world, the ocean-distance ramp's maximum, in metres.
 const HALF_WORLD_M: i64 = WORLD_EXTENT_M as i64 / 2;
@@ -82,20 +134,79 @@ pub const COAST_BAND_UNITS: u16 = height_from_q16(16 << 16);
 #[derive(Clone, Copy, Debug)]
 pub struct MacroGenerator {
     seed: u64,
-    continentalness: Noise,
+    continent: Noise,
+    coastline: Noise,
     erosion: Noise,
+    valley: Noise,
+    valley_fine: Noise,
     climate: Climate,
+    /// Bias that puts [`OCEAN_PERCENT`] of the raw field at or below zero.
+    ///
+    /// Derived from the seed, not stored: a tile regenerates with the same
+    /// bias on every machine.
+    ocean_bias: i32,
 }
 
 impl MacroGenerator {
     /// Create a generator from a world seed.
-    pub const fn new(seed: u64) -> Self {
-        Self {
+    ///
+    /// Calibrates the continent bias once by sampling the raw field on a
+    /// 64 × 64 grid at 16 km. Without calibration the ocean share swings with
+    /// the seed because the world spans barely one continent wavelength.
+    pub fn new(seed: u64) -> Self {
+        let mut generator = Self {
             seed,
-            continentalness: Noise::new(seed ^ CONTINENTAL_SALT),
+            continent: Noise::new(seed ^ CONTINENT_SALT),
+            coastline: Noise::new(seed ^ COASTLINE_SALT),
             erosion: Noise::new(seed ^ EROSION_SALT),
+            valley: Noise::new(seed ^ VALLEY_SALT),
+            valley_fine: Noise::new(seed ^ VALLEY_FINE_SALT),
             climate: Climate::new(seed),
+            ocean_bias: 0,
+        };
+        generator.ocean_bias = generator.calibrated_bias();
+        generator
+    }
+
+    /// The seed-derived continentalness bias.
+    pub const fn ocean_bias(&self) -> i32 {
+        self.ocean_bias
+    }
+
+    /// Raw continentalness before the ocean-share bias.
+    fn raw_continentalness(&self, x: Coord, z: Coord) -> i32 {
+        let (x_km, z_km) = (to_km(x), to_km(z));
+        let continent = self.continent.fbm_2d(
+            fixed::coord_scale(x_km, scale_km(CONTINENT_WAVELENGTH_KM)),
+            fixed::coord_scale(z_km, scale_km(CONTINENT_WAVELENGTH_KM)),
+            CONTINENT_OCTAVES,
+            2 * ONE,
+            ONE / 2,
+        );
+        let coastline = self.coastline.fbm_2d(
+            fixed::coord_scale(x_km, scale_km(COASTLINE_WAVELENGTH_KM)),
+            fixed::coord_scale(z_km, scale_km(COASTLINE_WAVELENGTH_KM)),
+            COASTLINE_OCTAVES,
+            2 * ONE,
+            ONE / 2,
+        );
+        fixed::mul(continent, CONTINENT_GAIN) + fixed::mul(coastline, COASTLINE_GAIN)
+    }
+
+    /// The bias that makes [`OCEAN_PERCENT`] of the sampled field negative.
+    fn calibrated_bias(&self) -> i32 {
+        let step = WORLD_EXTENT_M as i64 / (CALIBRATION_STEPS as i64 - 1);
+        let mut samples = Vec::with_capacity(CALIBRATION_STEPS * CALIBRATION_STEPS);
+        for z in 0..CALIBRATION_STEPS as i64 {
+            for x in 0..CALIBRATION_STEPS as i64 {
+                let world_x = (x * step) << 16;
+                let world_z = (z * step) << 16;
+                samples.push(self.raw_continentalness(world_x, world_z));
+            }
         }
+        samples.sort_unstable();
+        let index = samples.len() * OCEAN_PERCENT / 100;
+        -samples[index]
     }
 
     /// The seed this generator was created with.
@@ -104,22 +215,19 @@ impl MacroGenerator {
     }
 
     /// Continentalness at a Q16.16 world position, in `[-ONE, ONE]`.
+    ///
+    /// The continent component decides where land is; the coastline component
+    /// roughens the shore without moving the continents. Both are sampled in
+    /// kilometres — see the module docs on length units.
     pub fn continentalness(&self, x: Coord, z: Coord) -> i32 {
-        let raw = self.continentalness.fbm_2d(
-            fixed::coord_scale(x, CONTINENTAL_SCALE),
-            fixed::coord_scale(z, CONTINENTAL_SCALE),
-            4,
-            2 * ONE,
-            ONE / 2,
-        );
-        fixed::clamp_unit(fixed::mul(raw, CONTINENTAL_GAIN) + CONTINENTAL_BIAS)
+        fixed::clamp_unit(self.raw_continentalness(x, z) + self.ocean_bias)
     }
 
     /// Erosion at a Q16.16 world position, in `[0, ONE]`.
     pub fn erosion(&self, x: Coord, z: Coord) -> i32 {
         let raw = self.erosion.fbm_2d(
-            fixed::coord_scale(x, EROSION_SCALE),
-            fixed::coord_scale(z, EROSION_SCALE),
+            fixed::coord_scale(to_km(x), scale_km(EROSION_WAVELENGTH_KM)),
+            fixed::coord_scale(to_km(z), scale_km(EROSION_WAVELENGTH_KM)),
             3,
             2 * ONE,
             ONE / 2,
@@ -129,7 +237,44 @@ impl MacroGenerator {
 
     /// Surface elevation at a Q16.16 world position, in Q16.16 metres.
     pub fn surface(&self, x: Coord, z: Coord) -> i32 {
-        surface_height(self.continentalness(x, z), self.erosion(x, z))
+        let continentalness = self.continentalness(x, z);
+        let erosion = self.erosion(x, z);
+        self.surface_for(x, z, continentalness, erosion)
+    }
+
+    /// Surface elevation when the shape inputs are already sampled.
+    ///
+    /// Adds the valley detail to the shape spline result. The detail is
+    /// suppressed by the relief weight, so ocean floor and beaches stay flat
+    /// and only the land interior gets valleys. Without this term the surface
+    /// is a dome and water drains radially to the coast with no catchment.
+    pub fn surface_for(&self, x: Coord, z: Coord, continentalness: i32, erosion: i32) -> i32 {
+        let base = surface_height(continentalness, erosion) as i64;
+        let weight = RELIEF_WEIGHT.eval(continentalness);
+        let detail = self.valley_detail(x, z, weight);
+        (base + detail as i64).clamp(0, PEAK as i64) as i32
+    }
+
+    /// Signed valley detail at a position, already weighted for land.
+    fn valley_detail(&self, x: Coord, z: Coord, weight: i32) -> i32 {
+        let (x_km, z_km) = (to_km(x), to_km(z));
+        let coarse = self.valley.fbm_2d(
+            fixed::coord_scale(x_km, scale_km(VALLEY_WAVELENGTH_KM)),
+            fixed::coord_scale(z_km, scale_km(VALLEY_WAVELENGTH_KM)),
+            VALLEY_OCTAVES,
+            2 * ONE,
+            ONE / 2,
+        );
+        let fine = self.valley_fine.fbm_2d(
+            fixed::coord_scale(x_km, scale_km(VALLEY_FINE_WAVELENGTH_KM)),
+            fixed::coord_scale(z_km, scale_km(VALLEY_FINE_WAVELENGTH_KM)),
+            VALLEY_FINE_OCTAVES,
+            2 * ONE,
+            ONE / 2,
+        );
+        let metres = fixed::mul(coarse, VALLEY_AMPLITUDE_M << 16)
+            + fixed::mul(fine, VALLEY_FINE_AMPLITUDE_M << 16);
+        fixed::mul(metres, weight)
     }
 
     /// Temperature at a position, from the same climate stream the tiles use.
@@ -173,7 +318,7 @@ impl MacroGenerator {
                 let world_x = ((origin_x + cell_x as i64 * CELL_SIZE_M as i64) + half_cell) << 16;
                 let continentalness = self.continentalness(world_x, world_z);
                 let erosion = self.erosion(world_x, world_z);
-                let surface = surface_height(continentalness, erosion);
+                let surface = self.surface_for(world_x, world_z, continentalness, erosion);
                 let height = height_from_q16(surface);
                 let temperature = self.temperature(world_x, world_z, surface);
                 let humidity = self.humidity(world_x, world_z, continentalness);
