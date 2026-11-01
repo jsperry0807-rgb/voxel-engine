@@ -15,6 +15,7 @@
 //! - [`macro_grid`] — 128 m grid geometry, cells and flags.
 //! - [`tile`] — the 16 km tile binary format.
 //! - [`tile_store`] — streaming tile cache and seamless bilinear sampling.
+//! - [`biomes`] — the RON biome catalogue and its validation.
 //! - [`weights`] — softmax biome weights over the climate and shape axes.
 //! - [`climate`] — latitude, altitude and ocean-distance climate fields.
 //! - [`generator`] — the seeded generator that fills a tile.
@@ -36,6 +37,7 @@
 //! assert!((-1.0..=1.0).contains(&value_to_f32(value)));
 //! ```
 
+pub mod biomes;
 pub mod climate;
 pub mod fixed;
 pub mod generator;
@@ -50,6 +52,7 @@ pub mod tile;
 pub mod tile_store;
 pub mod weights;
 
+pub use biomes::{BiomeCatalog, BiomeClass, catalog};
 pub use climate::{Climate, ClimateSample};
 pub use fixed::{Coord, ONE};
 pub use generator::MacroGenerator;
@@ -61,4 +64,4 @@ pub use rivers::{Mouth, River, RiverNetwork, RiverPoint};
 pub use splines::{PEAK, SEA_LEVEL, surface_height};
 pub use tile::{MacroTile, TileError, TileHeader};
 pub use tile_store::{Channel, DirectorySource, TileSource, TileStore};
-pub use weights::{Axes, BIOMES, BiomeWeights};
+pub use weights::{Axes, BiomeWeights};

@@ -7,8 +7,9 @@
 //! the "weights vary over 300–500 m" assumption in worldgen-design §5.2; the
 //! third is checked wherever the dominant biome changes.
 
+use voxel_worldgen::biomes::{BiomeClass, catalog};
 use voxel_worldgen::fixed::ONE;
-use voxel_worldgen::weights::{Axes, BIOME_COUNT, BIOMES, BiomeClass, BiomeWeights};
+use voxel_worldgen::weights::{Axes, BIOME_COUNT, BiomeWeights};
 
 fn p(percent: i32) -> i32 {
     percent * ONE / 100
@@ -19,7 +20,8 @@ fn desert() -> usize {
 }
 
 fn biome(key: &str) -> usize {
-    BIOMES
+    catalog()
+        .biomes
         .iter()
         .position(|biome| biome.key == key)
         .unwrap_or_else(|| panic!("no biome {key}"))
@@ -65,15 +67,16 @@ fn weights_sum_to_one_everywhere() {
 
 #[test]
 fn weights_prefer_their_own_centre() {
-    for (index, biome) in BIOMES.iter().enumerate() {
+    for (index, biome) in catalog().biomes.iter().enumerate() {
         // Depth sentinels are only reachable with a depth term; for them use
         // their own depth centre.
+        let centre = biome.centre_q16();
         let axes = Axes {
-            continentalness: biome.centre[0],
-            temperature: biome.centre[1],
-            humidity: biome.centre[2],
-            erosion: biome.centre[3],
-            depth: biome.centre[4],
+            continentalness: centre[0],
+            temperature: centre[1],
+            humidity: centre[2],
+            erosion: centre[3],
+            depth: centre[4],
         };
         let weights = BiomeWeights::at(&axes);
         assert_eq!(
@@ -195,34 +198,35 @@ fn weights_blend_shape_parameters() {
 #[test]
 fn weights_underground_needs_depth() {
     let fungal = biome("voxel:fungal_deep");
+    let centre = catalog().biomes[fungal].centre_q16();
     let surface = BiomeWeights::at(&Axes {
-        continentalness: BIOMES[fungal].centre[0],
-        temperature: BIOMES[fungal].centre[1],
-        humidity: BIOMES[fungal].centre[2],
-        erosion: BIOMES[fungal].centre[3],
+        continentalness: centre[0],
+        temperature: centre[1],
+        humidity: centre[2],
+        erosion: centre[3],
         depth: 0,
     });
     assert!(
         !matches!(
-            BIOMES[surface.dominant()].class,
+            catalog().biomes[surface.dominant()].class,
             BiomeClass::Underground | BiomeClass::Rare
         ),
         "underground biome {} reached at the surface",
-        BIOMES[surface.dominant()].key
+        catalog().biomes[surface.dominant()].key
     );
 
     let deep = BiomeWeights::at(&Axes {
-        continentalness: BIOMES[fungal].centre[0],
-        temperature: BIOMES[fungal].centre[1],
-        humidity: BIOMES[fungal].centre[2],
-        erosion: BIOMES[fungal].centre[3],
+        continentalness: centre[0],
+        temperature: centre[1],
+        humidity: centre[2],
+        erosion: centre[3],
         depth: ONE,
     });
     assert_eq!(
         deep.dominant(),
         fungal,
         "expected fungal_deep at depth, got {}",
-        BIOMES[deep.dominant()].key
+        catalog().biomes[deep.dominant()].key
     );
 }
 
@@ -266,7 +270,7 @@ fn weights_ocean_biomes_own_the_sea() {
         erosion: p(40),
         depth: 0,
     });
-    assert_eq!(BIOMES[weights.dominant()].key, "voxel:trench");
+    assert_eq!(catalog().biomes[weights.dominant()].key, "voxel:trench");
 
     let shelf = BiomeWeights::at(&Axes {
         continentalness: p(45),
@@ -275,5 +279,5 @@ fn weights_ocean_biomes_own_the_sea() {
         erosion: p(40),
         depth: 0,
     });
-    assert_eq!(BIOMES[shelf.dominant()].key, "voxel:shelf");
+    assert_eq!(catalog().biomes[shelf.dominant()].key, "voxel:shelf");
 }

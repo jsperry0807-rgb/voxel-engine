@@ -1,6 +1,7 @@
 //! Biome weights: a softmax over the biome centres.
 //!
-//! Every biome has a centre in a normalised five-axis space:
+//! Every biome (defined in `data/biomes.ron`) has a centre in a normalised
+//! five-axis space:
 //!
 //! | Axis | Source | Range |
 //! |---|---|---|
@@ -22,7 +23,8 @@
 //! biome sit at a depth centre between 0.6 and 0.9. At the surface their
 //! distance includes the depth gap, so they carry a trace weight rather than
 //! competing; M2.5-15 samples with `depth > 0` to hand the underground over to
-//! them.
+//! them. The centres themselves are content: `crate::biomes` parses them from
+//! `data/biomes.ron`.
 //!
 //! # Blend shape parameters, not finished heights
 //!
@@ -34,6 +36,7 @@
 //! All arithmetic is Q16.16 integer. `exp` is a compile-time table, so the
 //! whole function is deterministic and platform-independent.
 
+use crate::biomes;
 use crate::fixed::ONE;
 
 /// Number of biomes.
@@ -51,133 +54,11 @@ const EXP_TABLE_LEN: usize = 129;
 /// The table of `exp(-x)` in Q16.16 for `x = index / 16`.
 static EXP_TABLE: [i32; EXP_TABLE_LEN] = build_exp_table();
 
-/// Broad class of a biome.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum BiomeClass {
-    /// Land surface biome.
-    Land,
-    /// Ocean depth band.
-    Ocean,
-    /// Underground biome; only reachable with a depth term.
-    Underground,
-    /// Rare geothermal biome.
-    Rare,
-}
-
-/// One biome centre, normalised to `[0, ONE]` on every axis.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Biome {
-    /// Stable content key, for example `voxel:plains`.
-    pub key: &'static str,
-    /// Broad class.
-    pub class: BiomeClass,
-    /// Centre in `(continentalness, temperature, humidity, erosion, depth)`.
-    pub centre: [i32; BIOME_COUNT_AXES],
-}
-
 /// Axes in the biome space.
 pub const BIOME_COUNT_AXES: usize = 5;
 
-const fn p(percent: i32) -> i32 {
-    percent * ONE / 100
-}
-
-/// The 18 biome centres from the design, as percentages of each axis.
-///
-/// These are the placeholder centres M2.5-11 moves into RON; the keys are
-/// already stable.
-pub const BIOMES: [Biome; BIOME_COUNT] = [
-    Biome {
-        key: "voxel:beach",
-        class: BiomeClass::Land,
-        centre: [p(52), p(50), p(50), p(40), 0],
-    },
-    Biome {
-        key: "voxel:plains",
-        class: BiomeClass::Land,
-        centre: [p(62), p(55), p(45), p(45), 0],
-    },
-    Biome {
-        key: "voxel:forest",
-        class: BiomeClass::Land,
-        centre: [p(62), p(50), p(70), p(35), 0],
-    },
-    Biome {
-        key: "voxel:taiga",
-        class: BiomeClass::Land,
-        centre: [p(65), p(25), p(60), p(35), 0],
-    },
-    Biome {
-        key: "voxel:swamp",
-        class: BiomeClass::Land,
-        centre: [p(55), p(65), p(85), p(70), 0],
-    },
-    Biome {
-        key: "voxel:hills",
-        class: BiomeClass::Land,
-        centre: [p(75), p(50), p(50), p(25), 0],
-    },
-    Biome {
-        key: "voxel:mountains",
-        class: BiomeClass::Land,
-        centre: [p(85), p(40), p(45), p(15), 0],
-    },
-    Biome {
-        key: "voxel:alpine",
-        class: BiomeClass::Land,
-        centre: [p(90), p(20), p(40), p(10), 0],
-    },
-    Biome {
-        key: "voxel:desert",
-        class: BiomeClass::Land,
-        centre: [p(60), p(85), p(15), p(50), 0],
-    },
-    Biome {
-        key: "voxel:savanna",
-        class: BiomeClass::Land,
-        centre: [p(60), p(80), p(40), p(45), 0],
-    },
-    Biome {
-        key: "voxel:tundra",
-        class: BiomeClass::Land,
-        centre: [p(60), p(10), p(40), p(40), 0],
-    },
-    Biome {
-        key: "voxel:shelf",
-        class: BiomeClass::Ocean,
-        centre: [p(45), p(50), p(50), p(40), 0],
-    },
-    Biome {
-        key: "voxel:deep",
-        class: BiomeClass::Ocean,
-        centre: [p(30), p(50), p(50), p(40), 0],
-    },
-    Biome {
-        key: "voxel:trench",
-        class: BiomeClass::Ocean,
-        centre: [p(10), p(50), p(50), p(40), 0],
-    },
-    Biome {
-        key: "voxel:aquifer",
-        class: BiomeClass::Underground,
-        centre: [p(50), p(50), p(60), p(40), p(60)],
-    },
-    Biome {
-        key: "voxel:fungal_deep",
-        class: BiomeClass::Underground,
-        centre: [p(50), p(50), p(50), p(30), p(75)],
-    },
-    Biome {
-        key: "voxel:cavern",
-        class: BiomeClass::Underground,
-        centre: [p(50), p(50), p(40), p(60), p(65)],
-    },
-    Biome {
-        key: "voxel:geothermal",
-        class: BiomeClass::Rare,
-        centre: [p(50), p(90), p(30), p(90), p(90)],
-    },
-];
+/// Every biome centre in Q16.16, in catalogue order.
+pub type Centres = [[i32; BIOME_COUNT_AXES]; BIOME_COUNT];
 
 /// Sample axes, normalised to `[0, ONE]`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -232,12 +113,17 @@ pub struct BiomeWeights {
 }
 
 impl BiomeWeights {
-    /// Weights for the given axes, summing to exactly [`ONE`].
+    /// Weights for the given axes, using the embedded biome catalogue.
     pub fn at(axes: &Axes) -> Self {
+        Self::at_with(axes, biomes::embedded_centres())
+    }
+
+    /// Weights for the given axes and centres, summing to exactly [`ONE`].
+    pub fn at_with(axes: &Axes, centres: &Centres) -> Self {
         let mut scores = [0i32; BIOME_COUNT];
         let mut total = 0i64;
-        for (index, biome) in BIOMES.iter().enumerate() {
-            let distance = axes.distance_squared(&biome.centre);
+        for (index, centre) in centres.iter().enumerate() {
+            let distance = axes.distance_squared(centre);
             // Score in Q16.16; the table has 1/16 steps and clamps at x = 8.
             let scaled = (distance * ONE as i64) / SOFTMAX_TEMPERATURE as i64;
             let step = (scaled >> EXP_STEP_SHIFT).clamp(0, (EXP_TABLE_LEN - 1) as i64) as usize;
@@ -349,49 +235,6 @@ mod tests {
         // Monotone decreasing.
         for pair in EXP_TABLE.windows(2) {
             assert!(pair[1] <= pair[0]);
-        }
-    }
-
-    #[test]
-    fn weights_biome_table_is_complete() {
-        assert_eq!(BIOMES.len(), BIOME_COUNT);
-        assert_eq!(
-            BIOMES
-                .iter()
-                .filter(|biome| biome.class == BiomeClass::Land)
-                .count(),
-            11
-        );
-        assert_eq!(
-            BIOMES
-                .iter()
-                .filter(|biome| biome.class == BiomeClass::Ocean)
-                .count(),
-            3
-        );
-        assert_eq!(
-            BIOMES
-                .iter()
-                .filter(|biome| biome.class == BiomeClass::Underground)
-                .count(),
-            3
-        );
-        assert_eq!(
-            BIOMES
-                .iter()
-                .filter(|biome| biome.class == BiomeClass::Rare)
-                .count(),
-            1
-        );
-        for biome in BIOMES {
-            for axis in biome.centre {
-                assert!((0..=ONE).contains(&axis), "{} axis {axis}", biome.key);
-            }
-        }
-        // Surface biomes have no depth term; underground biomes do.
-        for biome in BIOMES {
-            let surface = biome.class == BiomeClass::Land || biome.class == BiomeClass::Ocean;
-            assert_eq!(biome.centre[4] == 0, surface, "{}", biome.key);
         }
     }
 }

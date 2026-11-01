@@ -3564,6 +3564,9 @@ name = "voxel-worldgen"
 version = "0.1.0"
 dependencies = [
  "png 0.17.16",
+ "ron",
+ "serde",
+ "voxel-block",
  "voxel-core",
 ]
 
