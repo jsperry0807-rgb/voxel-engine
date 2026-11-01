@@ -3,7 +3,7 @@
 **Status:** v1.9 — derived from spec v2.3 and roadmap v3.5
 **Date:** 2026-10-31
 **Owner:** engine
-**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 complete — `M2-30` (measured exit) landed 2026-10-31; the 128³ Minimum run is recorded, the mesh row is 1,250 KiB over the cap (production AO 3,650 KiB) and mesh compression is the first M3 item, gate row 9 is measured and row 11 is carried. M3-00 (mesh compression) is complete: the 44 B packed path passes 128³ and 64³ is abandoned. M3-01 (streaming shell) is complete: 256 chunks load with max pump 0.09 ms and 0 hitches on both GPUs. M3-02 (mesh buffer pool) is complete: 256 chunks mesh into 16 × 8 MiB pages (128 MiB for 120.3 MiB of meshes, 0 holes) with no buffer created after warm-up on both GPUs. M3-03 (upload queue) is complete: the 120.3 MiB ring uploads in 160–166 frames at ≤1 MiB per frame with 0 overruns and the pump stays under 0.5 ms; M3-04 is next.
+**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 complete — `M2-30` (measured exit) landed 2026-10-31; the 128³ Minimum run is recorded, the mesh row is 1,250 KiB over the cap (production AO 3,650 KiB) and mesh compression is the first M3 item, gate row 9 is measured and row 11 is carried. M3-00 (mesh compression) is complete: the 44 B packed path passes 128³ and 64³ is abandoned. M3-01 (streaming shell) is complete: 256 chunks load with max pump 0.09 ms and 0 hitches on both GPUs. M3-02 (mesh buffer pool) is complete: 256 chunks mesh into 16 × 8 MiB pages (128 MiB for 120.3 MiB of meshes, 0 holes) with no buffer created after warm-up on both GPUs. M3-03 (upload queue) is complete: the 120.3 MiB ring uploads in 160–166 frames at ≤1 MiB per frame with 0 overruns and the pump stays under 0.5 ms. M3-04 (CPU chunk cull) is complete: it equals the M1-32 reference on 100 poses and draws 93 of 256 chunks at the default camera; M3-05 is next.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -870,13 +870,22 @@ frames. Max pump stays **0.42/0.24 ms** with 0 hitches. Copy mean is 2.9 ms
 (the 4 ms target), max 15.6 ms from the same driver tail that shows 261 ms page
 creations. See [`m3-03-upload-queue.md`](m3-03-upload-queue.md).
 
+**M3-04 CPU chunk cull (closed 2026-10-31):** the frame thread extracts six
+planes from the camera's view-projection matrix and skips any resident chunk
+whose world AABB is outside all of them. On **100 poses** the chunk set equals
+the M1-32 reference exactly (52–138 of 256 kept, mean **95.7**); the live viewer
+draws **93 of 256** at the default camera. Frame rate rose from 119 to
+**182–184 fps** on the RTX 4060 and from 39 to **72–75 fps** on the Radeon iGPU,
+which is the stopgap's 256-draw raster cost. See
+[`m3-04-cpu-cull.md`](m3-04-cpu-cull.md).
+
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
 | M3-00 | Mesh compression: 44 B packed 8 B vertex, Gate C comparison, 64³ decision | M2-29 | 128³ row 6 ≤2,400 KiB and row 1 ≤3.20 GiB PASS; 64³ abandoned; 32 B deferred | `cargo test -p voxel-viewer --test validation`; gate report | 7 d | [x] |
 | M3-01 | Streaming shell in the viewer: load ring, evict ring, budgeted per frame | M2-27 | 256 chunks load without a hitch > 4 ms | run + log | 1.5 d | [x] |
 | M3-02 | Mesh buffer pool: one arena with suballocation, or per-chunk buffers; document the choice | M3-01 | No per-frame allocation after warm-up; fragmentation reported | `cargo test -p voxel-viewer pool` | 1.5 d | [x] |
 | M3-03 | Upload queue with a per-frame byte budget | M3-02 | A 10 MB backlog drains without exceeding the budget | `cargo test -p voxel-viewer upload_budget` | 0.5 d | [x] |
-| M3-04 | CPU frustum cull of chunk AABBs — the stopgap and the M5 reference | M3-01 | Equals the M1-32 reference set on 100 poses | `cargo test -p voxel-viewer cpu_cull` | 1 d | [ ] |
+| M3-04 | CPU frustum cull of chunk AABBs — the stopgap and the M5 reference | M3-01 | Equals the M1-32 reference set on 100 poses | `cargo test -p voxel-viewer cpu_cull` | 1 d | [x] |
 | M3-05 | Draw loop over visible chunks with per-chunk draws | M3-04 | Correct image; no double-draw | run | 0.5 d | [ ] |
 | M3-06 | Instrumentation: CPU submit, GPU pass, visible chunks/blocks/quads/bytes, upload bytes | M3-05 | Overlay or log line per frame; values match the scene | run | 0.5 d | [ ] |
 | M3-07 | Frame breakdown report: where the 16.6 ms goes | M3-06 | Table in the PR; draw vs cull vs upload vs content | review | 0.5 d | [ ] |

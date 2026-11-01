@@ -142,5 +142,4 @@ overruns and the copy time.
 
 ## Next
 
-M3-04: CPU frustum cull of the 256 chunk AABBs, the stopgap before M5's GPU
-cull.
+M3-04 landed the CPU chunk cull; M3-05 is the draw loop over the visible set.

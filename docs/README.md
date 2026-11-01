@@ -34,8 +34,8 @@ binding number is made in the spec and the pre-registration, never only in a tas
   and removal-front escalation (`M2-16`) landed. The `M2-17` light cost
   benchmark landed and the optimized path now measures 5.7% p95 at 128³, under
   the 20% target. **M3-00 (mesh compression), M3-01 (streaming shell), M3-02 (mesh
-  buffer pool) and M3-03 (upload queue) are closed; M3-04 (CPU frustum cull)
-  is next.**
+  buffer pool), M3-03 (upload queue) and M3-04 (CPU chunk cull) are closed;
+  M3-05 (draw loop) is next.**
 
 ## Tools
 
