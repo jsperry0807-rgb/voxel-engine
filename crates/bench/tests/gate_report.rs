@@ -166,14 +166,30 @@ fn cli_writes_one_markdown_and_one_json_with_the_twelve_rows_and_machine() {
         }
     }
 
-    // Row 6 is the production AO mesh, not the no-AO reference.
-    assert_eq!(rows[5]["verdict"], "fail");
+    // Row 6 is the production AO mesh, not the no-AO reference. It passes at
+    // 64³ since M3-00's 44 B packed vertex brought the p95 under the 600 KiB
+    // cap (before that it was 925 KiB and failed). The 128³ row is
+    // pre-registered and measured by the chunk128 runs, not here.
+    assert_eq!(rows[5]["verdict"], "pass");
     assert!(
         rows[5]["measured"]
             .as_str()
             .is_some_and(|text| text.contains("production AO")),
         "row 6 must label the production measurement: {}",
         rows[5]["measured"]
+    );
+    let measured = rows[5]["numbers"]["measured"]
+        .as_f64()
+        .expect("the mesh row carries numbers");
+    let limit = rows[5]["numbers"]["limit"]
+        .as_f64()
+        .expect("a numeric limit");
+    let margin = rows[5]["numbers"]["margin"]
+        .as_f64()
+        .expect("a numeric margin");
+    assert!(
+        measured <= limit && (margin - (limit - measured)).abs() < 0.01,
+        "row 6 must pass on its numbers: {measured} <= {limit}, margin {margin}"
     );
 
     // The two latency rows are numeric and compare against the frozen budgets.
@@ -188,8 +204,9 @@ fn cli_writes_one_markdown_and_one_json_with_the_twelve_rows_and_machine() {
     assert_eq!(rows[8]["numbers"]["limit"], 15.0);
     assert_eq!(rows[8]["numbers"]["unit"], "%");
     assert_eq!(rows[10]["verdict"], "not_measured");
-    // Row 12 reports which fallback rule fired. This fixture fails rows 1/6,
-    // so the rule is triggered and the row is not a passing measurement.
+    // Row 12 reports which fallback rule fired. This fixture fails row 1 (the
+    // 64³ Default VRAM projection), so the rule is triggered and the row is not
+    // a passing measurement.
     assert_eq!(rows[11]["verdict"], "not_measured");
 
     let pass = rows.iter().filter(|row| row["verdict"] == "pass").count();
