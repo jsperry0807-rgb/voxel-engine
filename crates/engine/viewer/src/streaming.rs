@@ -63,6 +63,37 @@ fn pool_page_bytes(max_buffer_size: u64) -> u64 {
     requested.min(max_buffer_size)
 }
 
+/// Draws every resident chunk `keep` accepts, exactly once, and reports what
+/// happened.
+///
+/// This is the whole M3-05 draw loop: one pass over the resident set, a
+/// conservative filter (M3-04's frustum), and one draw per accepted chunk with
+/// a mesh. Iterating a map of positions makes a double draw impossible by
+/// construction; `tests/draw_loop.rs` pins the counts and the visit order with
+/// a fake payload and compares a culled frame with a draw-everything frame on
+/// the GPU.
+///
+/// The callback returns `true` when it submitted a draw. `visible` counts
+/// accepted chunks (including empty ones) and `drawn` counts the callbacks that
+/// returned `true`.
+pub fn draw_visible<'a, T: 'a>(
+    chunks: impl IntoIterator<Item = (ChunkPos, &'a T)>,
+    keep: impl Fn(ChunkPos) -> bool,
+    mut draw: impl FnMut(ChunkPos, &'a T) -> bool,
+) -> DrawStats {
+    let mut stats = DrawStats::default();
+    for (position, chunk) in chunks {
+        if !keep(position) {
+            continue;
+        }
+        stats.visible += 1;
+        if draw(position, chunk) {
+            stats.drawn += 1;
+        }
+    }
+    stats
+}
+
 /// What one frame's draw loop kept and drew.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DrawStats {
@@ -771,22 +802,21 @@ impl Streaming {
         atlas: &BindGroup,
         frustum: crate::cull::Frustum,
     ) -> DrawStats {
-        let mut visible = 0usize;
-        let mut drawn = 0usize;
-        for (position, resources) in &self.chunks {
+        draw_visible(
+            self.chunks
+                .iter()
+                .map(|(position, resources)| (*position, resources)),
             // M3-04: a conservative per-chunk AABB test. Chunks outside every
             // plane are skipped before their bind group is touched.
-            if !frustum.chunk_visible(*position) {
-                continue;
-            }
-            visible += 1;
-            let Some(mesh) = &resources.mesh else {
-                continue;
-            };
-            pipeline.draw_pooled(pass, mesh, camera, atlas, &resources.lighting.bind_group);
-            drawn += 1;
-        }
-        DrawStats { visible, drawn }
+            |position| frustum.chunk_visible(position),
+            |_, resources| {
+                let Some(mesh) = &resources.mesh else {
+                    return false;
+                };
+                pipeline.draw_pooled(pass, mesh, camera, atlas, &resources.lighting.bind_group);
+                true
+            },
+        )
     }
 
     /// A snapshot of the mesh pool: pages, live/free bytes and fragmentation.
