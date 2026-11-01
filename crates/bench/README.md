@@ -70,6 +70,10 @@ cargo run -p voxel-bench -- gate scaleup --json
 cargo run --release -p voxel-bench -- hitch
 cargo run --release -p voxel-bench -- hitch --frames 300 --speed 24 --json
 
+# VRAM and host for the 256-chunk scene, split by DAG/mesh/overlay/light/probes (M3-11)
+cargo run --release -p voxel-bench --features chunk128 -- scene-memory
+cargo run --release -p voxel-bench --features chunk128 -- scene-memory --json
+
 # The twelve pre-registered rows as one gate.md + gate.json (M1-39)
 cargo run -p voxel-bench -- gate report
 cargo run -p voxel-bench -- gate report --profile minimum
@@ -89,6 +93,17 @@ the slowest five frames, upload frames, overruns and resident/pending chunks,
 and it exits 1 when the upload p99 exceeds 4 ms or any frame exceeds 8 ms
 (`--no-check` reports without failing). `--upload-kib`, `--speed`, `--seed` and
 `--frames` override the defaults.
+
+## Scene memory (M3-11)
+
+`scene-memory` builds the viewer's real streaming scene headlessly, fills the
+256-chunk ring and reports the bytes it holds: the mesh pool's committed pages
+and the per-chunk light, probe and origin buffers on the GPU, each worker's dense
+volume and the finished uploads on the host, plus live/peak heap and RSS. It
+prints the DAG / mesh / overlay / light / probes rows, the per-chunk figure and
+the 40%-of-8-GiB budget check with the 1.5× margin, and exits 1 if the margin is
+missed. M3 stores no DAG or overlay on the GPU, so those rows are zero by
+construction; see [`docs/m3-11-memory.md`](../../docs/m3-11-memory.md).
 
 ## What is measured
 
