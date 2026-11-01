@@ -19,12 +19,11 @@ use pollster::block_on;
 use wgpu::util::StagingBelt;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferDescriptor, BufferSize,
-    BufferUsages, Color, CommandEncoder, CommandEncoderDescriptor, CurrentSurfaceTexture, Device,
-    DeviceDescriptor, Instance, InstanceDescriptor, LoadOp, Operations, Queue,
-    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
-    RequestAdapterOptions, ShaderStages, StoreOp, Surface, SurfaceConfiguration,
-    TextureViewDescriptor,
+    BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferDescriptor, BufferUsages,
+    Color, CommandEncoderDescriptor, CurrentSurfaceTexture, Device, DeviceDescriptor, Instance,
+    InstanceDescriptor, LoadOp, Operations, Queue, RenderPassColorAttachment,
+    RenderPassDepthStencilAttachment, RenderPassDescriptor, RequestAdapterOptions, ShaderStages,
+    StoreOp, Surface, SurfaceConfiguration, TextureViewDescriptor,
 };
 use winit::dpi::PhysicalSize;
 use winit::event_loop::OwnedDisplayHandle;
@@ -44,7 +43,7 @@ use crate::error::ViewerError;
 use crate::scene::{Biome, Scene};
 use crate::screenshot::{self, Capture};
 use crate::stats::{FrameStats, GpuPassTimer, StatsWindow};
-use crate::streaming::{self, PUMP_BUDGET, PendingUpload, Streaming};
+use crate::streaming::{self, PUMP_BUDGET, Streaming};
 use crate::upload;
 
 /// Consecutive `Lost` surfaces tolerated before the viewer gives up.
@@ -365,16 +364,12 @@ impl Gpu {
         // staging belt, then install the meshes so this frame's pass draws
         // them. The copies precede the pass in this encoder, so the GPU needs
         // no fence between them.
-        let upload_started = std::time::Instant::now();
-        let uploads = self.streaming.take_uploads(self.upload_budget);
-        let upload_bytes: usize = uploads.iter().map(upload::UploadBytes::upload_bytes).sum();
-        for upload in &uploads {
-            stage_upload(&mut self.upload_belt, &mut encoder, upload);
-        }
-        let installed = self.streaming.install_uploads(uploads);
-        let upload_elapsed = upload_started.elapsed();
-        self.streaming
-            .note_upload_frame(upload_bytes, upload_elapsed);
+        let upload =
+            self.streaming
+                .install_frame(&mut encoder, &mut self.upload_belt, self.upload_budget);
+        let upload_bytes = upload.bytes;
+        let installed = upload.meshes;
+        let upload_elapsed = upload.elapsed;
         if installed > 0 {
             log::trace!(
                 "upload: {installed} meshes, {:.0} KiB in {:.3} ms",
@@ -539,34 +534,6 @@ impl Gpu {
         }
         self.lost_retries = 0;
         Ok(true)
-    }
-}
-
-/// Defers one finished mesh into the staging belt and records the copy.
-///
-/// Both writes are padded to the 4 B copy alignment; the pool range already
-/// reserves the pad, so the tail never leaves the mesh's page.
-fn stage_upload(belt: &mut StagingBelt, encoder: &mut CommandEncoder, upload: &PendingUpload) {
-    let Some(mesh) = &upload.mesh else {
-        return;
-    };
-    let vertex_size = BufferSize::new(mesh.vertices.len).expect("a mesh has vertices");
-    let mut view = belt.write_buffer(
-        encoder,
-        &mesh.vertices.buffer,
-        mesh.vertices.offset,
-        vertex_size,
-    );
-    view.copy_from_slice(&upload.vertices);
-    drop(view);
-
-    if let Some(indices) = &mesh.indices {
-        let bytes = bytemuck::cast_slice(&upload.indices);
-        let index_size = BufferSize::new(indices.len).expect("an indexed mesh has indices");
-        let mut view = belt.write_buffer(encoder, &indices.buffer, indices.offset, index_size);
-        view.slice(..bytes.len()).copy_from_slice(bytes);
-        view.slice(bytes.len()..).fill(0);
-        drop(view);
     }
 }
 

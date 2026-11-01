@@ -19,15 +19,18 @@
 
 use std::collections::VecDeque;
 
-/// Mesh bytes one frame may upload: 1 MiB.
+/// Mesh bytes one frame may upload: 512 KiB.
 ///
-/// Sized from the measured copy rate on the reference machine: mapped staging
-/// memory takes ~3 µs/KiB there (a discrete GPU under WSL/Dozen), so 1 MiB is
-/// about 3 ms of frame-thread work, inside the 4 ms hitch budget (M3-09). It is
-/// also above the largest mesh the 256-chunk ring produced (585 KiB), so a
-/// frame of the real ring does not overrun. A mesh above the budget is taken
-/// alone and counted as an overrun rather than stalling the queue.
-pub const DEFAULT_UPLOAD_BYTES: usize = 1024 * 1024;
+/// Sized from the M3-09 hitch measurement on the reference machine. Mapped
+/// staging memory takes ~2.5 µs/KiB there (a discrete GPU under WSL/Dozen), so
+/// the copy dominates the frame-thread upload path: at 1 MiB the upload stage's
+/// p99 was 6.8 ms over 1,000 frames of motion, over the 4 ms budget; at 512 KiB
+/// it measured 1.7–1.8 ms p99 with a total-frame max under 8 ms. The cost is
+/// more upload frames to drain the same ring (about twice as many).
+///
+/// A mesh above the budget is taken alone and counted as an overrun rather than
+/// stalling the queue, so a chunk larger than 512 KiB still makes progress.
+pub const DEFAULT_UPLOAD_BYTES: usize = 512 * 1024;
 
 /// Staging-belt chunk size. A chunk is reused across frames; it is grown to fit
 /// a single write that is larger than this.

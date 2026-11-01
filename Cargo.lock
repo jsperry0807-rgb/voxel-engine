@@ -3447,6 +3447,7 @@ dependencies = [
  "voxel-mesh",
  "voxel-render",
  "voxel-storage",
+ "voxel-viewer",
  "wgpu 30.0.1",
 ]
 

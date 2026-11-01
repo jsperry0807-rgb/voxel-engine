@@ -16,6 +16,7 @@ pub mod cull;
 pub mod depth;
 pub mod error;
 pub mod gpu;
+pub mod hitch;
 pub mod input;
 pub mod mesh_pool;
 pub mod naive_mesh;

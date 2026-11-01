@@ -27,7 +27,8 @@ use std::time::{Duration, Instant};
 
 use voxel_core::constants::{CHUNK_DIM, CHUNK_VOLUME, VOXEL_SIZE};
 use voxel_storage::{Apron, ChunkPos};
-use wgpu::{BindGroup, BindGroupLayout, Device, RenderPass};
+use wgpu::util::StagingBelt;
+use wgpu::{BindGroup, BindGroupLayout, CommandEncoder, Device, RenderPass};
 
 use crate::chunk_content::{self, ChunkContent};
 use crate::chunk_lighting::{self, ChunkLighting};
@@ -115,6 +116,17 @@ pub trait DrawCost {
     fn mesh_bytes(&self) -> u64 {
         0
     }
+}
+
+/// What one frame's upload step moved into the pool.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FrameUpload {
+    /// Meshes installed this frame.
+    pub meshes: usize,
+    /// Mesh bytes copied this frame.
+    pub bytes: usize,
+    /// Time spent taking, staging and installing, including the staging copy.
+    pub elapsed: Duration,
 }
 
 /// What one frame's draw loop kept, drew and covered.
@@ -483,6 +495,11 @@ impl Streaming {
         }
     }
 
+    /// The ring centre last pumped, or `None` before the first pump.
+    pub fn center(&self) -> Option<ChunkPos> {
+        self.center
+    }
+
     /// Resident chunk count.
     pub fn loaded(&self) -> usize {
         self.chunks.len()
@@ -736,6 +753,35 @@ impl Streaming {
         }
     }
 
+    /// Takes at most `budget` bytes of finished meshes, copies them into the
+    /// pool through `belt`, and installs them so this frame's pass draws them.
+    ///
+    /// This is the whole frame-thread upload path (M3-03): the take, the
+    /// staging copies and the install. The copies are recorded in `encoder`
+    /// ahead of the draw, so no fence is needed. The M3-09 hitch test measures
+    /// exactly this call.
+    pub fn install_frame(
+        &mut self,
+        encoder: &mut CommandEncoder,
+        belt: &mut StagingBelt,
+        budget: usize,
+    ) -> FrameUpload {
+        let started = Instant::now();
+        let uploads = self.take_uploads(budget);
+        let bytes: usize = uploads.iter().map(UploadBytes::upload_bytes).sum();
+        for upload in &uploads {
+            stage_upload(belt, encoder, upload);
+        }
+        let meshes = self.install_uploads(uploads);
+        let elapsed = started.elapsed();
+        self.note_upload_frame(bytes, elapsed);
+        FrameUpload {
+            meshes,
+            bytes,
+            elapsed,
+        }
+    }
+
     /// Draws every resident chunk with its own data bind group.
     ///
     /// Meshes come out of the shared arena; a draw binds its two page ranges
@@ -786,6 +832,34 @@ impl Drop for Streaming {
         if let Some(uploader) = self.uploader.take() {
             let _ = uploader.join();
         }
+    }
+}
+
+/// Defers one finished mesh into the staging belt and records the copy.
+///
+/// Both writes are padded to the 4 B copy alignment; the pool range already
+/// reserves the pad, so the tail never leaves the mesh's page.
+fn stage_upload(belt: &mut StagingBelt, encoder: &mut CommandEncoder, upload: &PendingUpload) {
+    let Some(mesh) = &upload.mesh else {
+        return;
+    };
+    let vertex_size = wgpu::BufferSize::new(mesh.vertices.len).expect("a mesh has vertices");
+    let mut view = belt.write_buffer(
+        encoder,
+        &mesh.vertices.buffer,
+        mesh.vertices.offset,
+        vertex_size,
+    );
+    view.copy_from_slice(&upload.vertices);
+    drop(view);
+
+    if let Some(indices) = &mesh.indices {
+        let bytes = bytemuck::cast_slice(&upload.indices);
+        let index_size = wgpu::BufferSize::new(indices.len).expect("an indexed mesh has indices");
+        let mut view = belt.write_buffer(encoder, &indices.buffer, indices.offset, index_size);
+        view.slice(..bytes.len()).copy_from_slice(bytes);
+        view.slice(bytes.len()..).fill(0);
+        drop(view);
     }
 }
 

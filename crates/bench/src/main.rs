@@ -50,6 +50,10 @@ fn main() {
         gate_mode(&args[1..]);
         return;
     }
+    if args.first().is_some_and(|arg| arg == "hitch") {
+        hitch_mode(&args[1..]);
+        return;
+    }
 
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
@@ -547,6 +551,167 @@ fn fixture_verify(args: &[String]) {
             std::process::exit(1);
         }
     }
+}
+
+/// `hitch`: the M3-09 streaming hitch test.
+fn hitch_mode(args: &[String]) {
+    let mut config = voxel_viewer::hitch::HitchConfig::default();
+    let mut seed = None;
+    let mut json = false;
+    let mut check = true;
+
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--frames" => {
+                index += 1;
+                config.frames = args
+                    .get(index)
+                    .and_then(|text| text.parse().ok())
+                    .unwrap_or_else(|| usage("--frames needs a positive integer"));
+            }
+            "--speed" => {
+                index += 1;
+                config.speed = args
+                    .get(index)
+                    .and_then(|text| text.parse().ok())
+                    .unwrap_or_else(|| usage("--speed needs a number"));
+            }
+            "--seed" => {
+                index += 1;
+                let text = args
+                    .get(index)
+                    .unwrap_or_else(|| usage("--seed needs a value"));
+                seed = Some(
+                    voxel_viewer::scene::parse_seed(text)
+                        .unwrap_or_else(|| usage("--seed needs a u32, decimal or 0x hex")),
+                );
+            }
+            "--upload-kib" => {
+                index += 1;
+                let kib: usize = args
+                    .get(index)
+                    .and_then(|text| text.parse().ok())
+                    .unwrap_or_else(|| usage("--upload-kib needs a positive integer"));
+                config.upload_budget = kib * 1024;
+            }
+            "--json" => json = true,
+            "--no-check" => check = false,
+            other => usage(&format!("unknown hitch argument `{other}`")),
+        }
+        index += 1;
+    }
+    if config.frames == 0 {
+        usage("--frames must be at least 1");
+    }
+
+    let scene = seed.map_or_else(
+        voxel_viewer::scene::Scene::from_env,
+        voxel_viewer::scene::Scene::new,
+    );
+    let Some((device, queue)) = hitch_device() else {
+        eprintln!("no wgpu adapter; skipping the hitch test");
+        std::process::exit(0);
+    };
+    let report = voxel_viewer::hitch::run(&device, &queue, scene, &config);
+
+    if json {
+        let report = serde_json::json!({
+            "seed": scene.seed(),
+            "frames": report.frames(),
+            "recenters": report.recenters,
+            "upload_frames": report.upload_frames,
+            "uploaded_bytes": report.uploaded_bytes,
+            "overruns": report.overruns,
+            "pump_hitches": report.pump_hitches,
+            "warmup_frames": report.warmup_frames,
+            "warmup_upload_max_ms": report.warmup_upload_max.as_secs_f64() * 1000.0,
+            "warmup_total_max_ms": report.warmup_total_max.as_secs_f64() * 1000.0,
+            "resident": report.resident,
+            "pending": report.pending,
+            "upload_p50_ms": ms(voxel_viewer::hitch::Stage::Upload, &report, 0.50),
+            "upload_p95_ms": ms(voxel_viewer::hitch::Stage::Upload, &report, 0.95),
+            "upload_p99_ms": ms(voxel_viewer::hitch::Stage::Upload, &report, 0.99),
+            "upload_max_ms": ms(voxel_viewer::hitch::Stage::Upload, &report, 1.0),
+            "total_p50_ms": ms(voxel_viewer::hitch::Stage::Total, &report, 0.50),
+            "total_p95_ms": ms(voxel_viewer::hitch::Stage::Total, &report, 0.95),
+            "total_p99_ms": ms(voxel_viewer::hitch::Stage::Total, &report, 0.99),
+            "total_max_ms": ms(voxel_viewer::hitch::Stage::Total, &report, 1.0),
+            "passed": report.passed(),
+        });
+        match serde_json::to_string_pretty(&report) {
+            Ok(serialized) => println!("{serialized}"),
+            Err(error) => {
+                eprintln!("failed to serialize the hitch report: {error}");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        println!(
+            "hitch: seed 0x{:08X}, {} frames at {:.0} u/s ({} recenters); warm-up {} frames, worst upload {:.2} ms / frame {:.2} ms\n",
+            scene.seed(),
+            report.frames(),
+            config.speed,
+            report.recenters,
+            report.warmup_frames,
+            report.warmup_upload_max.as_secs_f64() * 1000.0,
+            report.warmup_total_max.as_secs_f64() * 1000.0,
+        );
+        print!("{}", report.table());
+        println!(
+            "\nupload frames {} / {} ({:.1} MiB), overruns {}, pump hitches {}, resident {} / pending {}",
+            report.upload_frames,
+            report.frames(),
+            report.uploaded_bytes as f64 / (1024.0 * 1024.0),
+            report.overruns,
+            report.pump_hitches,
+            report.resident,
+            report.pending,
+        );
+        for (frame, sample) in &report.slowest {
+            println!(
+                "slowest frame {frame}: pump {:.2} ms, upload {:.2} ms ({} KiB), finish {:.2} ms, total {:.2} ms",
+                sample.pump.as_secs_f64() * 1000.0,
+                sample.upload.as_secs_f64() * 1000.0,
+                sample.uploaded_bytes / 1024,
+                sample.finish.as_secs_f64() * 1000.0,
+                sample.total.as_secs_f64() * 1000.0,
+            );
+        }
+        println!(
+            "budget: upload p99 <= {:.0} ms, frame max <= {:.0} ms: {}",
+            voxel_viewer::hitch::UPLOAD_P99_BUDGET.as_secs_f64() * 1000.0,
+            voxel_viewer::hitch::FRAME_MAX_BUDGET.as_secs_f64() * 1000.0,
+            if report.passed() { "PASS" } else { "FAIL" },
+        );
+    }
+    if check && !report.passed() {
+        std::process::exit(1);
+    }
+}
+
+fn ms(stage: voxel_viewer::hitch::Stage, report: &voxel_viewer::hitch::HitchReport, p: f64) -> f64 {
+    report.percentile(stage, p).as_secs_f64() * 1000.0
+}
+
+/// One headless device for the GPU-driven bench modes.
+///
+/// The instance and adapter are leaked on purpose: llvmpipe and Dozen both
+/// crash when they are torn down while threads still reference the device, and
+/// the process is about to exit anyway.
+fn hitch_device() -> Option<(wgpu::Device, wgpu::Queue)> {
+    let instance =
+        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        compatible_surface: None,
+        ..Default::default()
+    }))
+    .ok()?;
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()?;
+    std::mem::forget(adapter);
+    std::mem::forget(instance);
+    Some((device, queue))
 }
 
 fn gate_mode(args: &[String]) {
