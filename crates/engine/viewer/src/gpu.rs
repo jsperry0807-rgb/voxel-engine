@@ -35,6 +35,7 @@ use crate::atlas_texture::AtlasTexture;
 use crate::camera::{Camera, CameraUniform};
 use crate::chunk_lighting;
 use crate::chunk_render::ChunkPipeline;
+use crate::cull::Frustum;
 use crate::depth::DepthTarget;
 use crate::error::ViewerError;
 use crate::streaming::{self, PUMP_BUDGET, PendingUpload, Streaming};
@@ -319,6 +320,10 @@ impl Gpu {
             );
         }
 
+        // M3-04: the stopgap broad phase. The cull is conservative, so the
+        // image is identical to drawing the whole ring.
+        let frustum = Frustum::from_view_projection(camera.view_projection());
+        let draw_stats;
         {
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("main frame"),
@@ -341,17 +346,24 @@ impl Gpu {
                 }),
                 ..Default::default()
             });
-            self.streaming.draw(
+            draw_stats = self.streaming.draw(
                 &mut pass,
                 &self.chunk_pipeline,
                 &self.camera_bind_group,
                 &self.atlas.bind_group,
+                frustum,
             );
         }
         // Unmaps the staging chunks and re-maps them when this submission
         // completes, so the next frame reuses the same buffers.
         self.upload_belt.finish_and_recall_on_submit(&encoder);
         self.queue.submit([encoder.finish()]);
+        log::trace!(
+            "draw: {} visible, {} drawn, {} resident",
+            draw_stats.visible,
+            draw_stats.drawn,
+            self.streaming.loaded(),
+        );
         self.queue.present(frame);
         self.lost_retries = 0;
         Ok(true)

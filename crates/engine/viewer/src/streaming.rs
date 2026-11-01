@@ -63,6 +63,15 @@ fn pool_page_bytes(max_buffer_size: u64) -> u64 {
     requested.min(max_buffer_size)
 }
 
+/// What one frame's draw loop kept and drew.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DrawStats {
+    /// Resident chunks inside the frustum, including empty ones.
+    pub visible: usize,
+    /// Chunks with a mesh drawn this frame.
+    pub drawn: usize,
+}
+
 /// One chunk's uploaded resources.
 pub struct ChunkResources {
     /// The chunk's pooled mesh ranges, or `None` for an empty volume.
@@ -760,13 +769,24 @@ impl Streaming {
         pipeline: &ChunkPipeline,
         camera: &BindGroup,
         atlas: &BindGroup,
-    ) {
-        for resources in self.chunks.values() {
+        frustum: crate::cull::Frustum,
+    ) -> DrawStats {
+        let mut visible = 0usize;
+        let mut drawn = 0usize;
+        for (position, resources) in &self.chunks {
+            // M3-04: a conservative per-chunk AABB test. Chunks outside every
+            // plane are skipped before their bind group is touched.
+            if !frustum.chunk_visible(*position) {
+                continue;
+            }
+            visible += 1;
             let Some(mesh) = &resources.mesh else {
                 continue;
             };
             pipeline.draw_pooled(pass, mesh, camera, atlas, &resources.lighting.bind_group);
+            drawn += 1;
         }
+        DrawStats { visible, drawn }
     }
 
     /// A snapshot of the mesh pool: pages, live/free bytes and fragmentation.
