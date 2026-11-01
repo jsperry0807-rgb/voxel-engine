@@ -26,6 +26,7 @@
 //! assert!((-1.0..=1.0).contains(&value_to_f32(value)));
 //! ```
 
+pub mod climate;
 pub mod fixed;
 pub mod hash;
 pub mod macro_grid;
@@ -33,6 +34,7 @@ pub mod noise;
 pub mod splines;
 pub mod tile;
 
+pub use climate::{Climate, ClimateSample};
 pub use fixed::{Coord, ONE};
 pub use macro_grid::{Cell, TileFlags, TilePos};
 pub use noise::Noise;
