@@ -348,7 +348,9 @@ impl Gpu {
         }
 
         // M3-04: the stopgap broad phase. The cull is conservative, so the
-        // image is identical to drawing the whole ring.
+        // image is identical to drawing the whole ring. M3-07 times this slice:
+        // the frustum build plus recording every visible chunk's draw.
+        let cull_started = std::time::Instant::now();
         let frustum = Frustum::from_view_projection(camera.view_projection());
         let draw_stats;
         {
@@ -387,13 +389,16 @@ impl Gpu {
                 timer.end(&mut pass);
             }
         }
+        let cpu_cull = cull_started.elapsed();
         if measure_gpu && let Some(timer) = &self.timers {
             timer.resolve(&mut encoder);
         }
         // Unmaps the staging chunks and re-maps them when this submission
         // completes, so the next frame reuses the same buffers.
+        let finish_started = std::time::Instant::now();
         self.upload_belt.finish_and_recall_on_submit(&encoder);
         self.queue.submit([encoder.finish()]);
+        let cpu_finish = finish_started.elapsed();
         if measure_gpu && let Some(timer) = &mut self.timers {
             timer.submitted();
         }
@@ -411,11 +416,17 @@ impl Gpu {
             upload_meshes: installed,
             upload_bytes,
             cpu_submit,
+            cpu_upload: upload_elapsed,
+            cpu_cull,
+            cpu_finish,
             gpu_pass,
         };
         log::debug!(
-            "frame: cpu {:.2} ms, gpu {}, {} visible / {} drawn of {}, {:.0} kquads, {:.1} MiB, upload {:.0} KiB",
+            "frame: cpu {:.2} ms (cull {:.2}, upload {:.2}, finish {:.2}), gpu {}, {} visible / {} drawn of {}, {:.0} kquads, {:.1} MiB, upload {:.0} KiB",
             frame.cpu_submit.as_secs_f64() * 1000.0,
+            frame.cpu_cull.as_secs_f64() * 1000.0,
+            frame.cpu_upload.as_secs_f64() * 1000.0,
+            frame.cpu_finish.as_secs_f64() * 1000.0,
             frame.gpu_pass.map_or_else(
                 || "n/a".to_owned(),
                 |gpu| format!("{:.2} ms", gpu.as_secs_f64() * 1000.0)

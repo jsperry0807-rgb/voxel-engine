@@ -42,6 +42,13 @@ pub struct FrameStats {
     pub upload_bytes: usize,
     /// Time from the start of frame encoding to `Queue::submit` returning.
     pub cpu_submit: Duration,
+    /// Part of `cpu_submit` spent staging upload copies and installing them.
+    pub cpu_upload: Duration,
+    /// Part of `cpu_submit` spent building the frustum and recording the draw
+    /// loop (the M3-04 cull and the M3-05 pass encoding).
+    pub cpu_cull: Duration,
+    /// Part of `cpu_submit` spent finishing the encoder and submitting it.
+    pub cpu_finish: Duration,
     /// GPU time inside the render pass, from timestamp queries.
     pub gpu_pass: Option<Duration>,
 }
@@ -52,6 +59,9 @@ pub struct StatsWindow {
     started: Instant,
     frames: u64,
     cpu: Duration,
+    cpu_upload: Duration,
+    cpu_cull: Duration,
+    cpu_finish: Duration,
     gpu: Duration,
     gpu_samples: u64,
     visible: u64,
@@ -77,8 +87,14 @@ pub struct Summary {
     pub fps: f64,
     /// Frames counted.
     pub frames: u64,
-    /// Mean CPU submit time.
+    /// Mean CPU submit time (the sum of the three parts).
     pub cpu_submit: Duration,
+    /// Mean upload staging time.
+    pub cpu_upload: Duration,
+    /// Mean cull and draw-recording time.
+    pub cpu_cull: Duration,
+    /// Mean encoder-finish and submit time.
+    pub cpu_finish: Duration,
     /// Mean GPU pass time, or `None` when no sample was collected.
     pub gpu_pass: Option<Duration>,
     /// Mean visible chunks.
@@ -107,6 +123,9 @@ impl StatsWindow {
             started: Instant::now(),
             frames: 0,
             cpu: Duration::ZERO,
+            cpu_upload: Duration::ZERO,
+            cpu_cull: Duration::ZERO,
+            cpu_finish: Duration::ZERO,
             gpu: Duration::ZERO,
             gpu_samples: 0,
             visible: 0,
@@ -124,6 +143,9 @@ impl StatsWindow {
     pub fn record(&mut self, stats: FrameStats) -> Option<Summary> {
         self.frames += 1;
         self.cpu += stats.cpu_submit;
+        self.cpu_upload += stats.cpu_upload;
+        self.cpu_cull += stats.cpu_cull;
+        self.cpu_finish += stats.cpu_finish;
         if let Some(gpu) = stats.gpu_pass {
             self.gpu += gpu;
             self.gpu_samples += 1;
@@ -146,6 +168,9 @@ impl StatsWindow {
             fps: frames / elapsed.as_secs_f64(),
             frames: self.frames,
             cpu_submit: self.cpu / self.frames as u32,
+            cpu_upload: self.cpu_upload / self.frames as u32,
+            cpu_cull: self.cpu_cull / self.frames as u32,
+            cpu_finish: self.cpu_finish / self.frames as u32,
             gpu_pass: (self.gpu_samples > 0).then(|| self.gpu / self.gpu_samples as u32),
             visible: self.visible as f64 / frames,
             drawn: self.drawn as f64 / frames,
@@ -172,9 +197,12 @@ impl Summary {
             .gpu_pass
             .map_or_else(|| "n/a".to_owned(), |gpu| format!("{:.2} ms", ms(gpu)));
         format!(
-            "frame: {:.0} fps | cpu submit {:.2} ms, gpu pass {gpu} | {}: {:.0} visible, {:.0} drawn | {:.0} blocks, {:.0} quads, {:.1} MiB | upload {:.0} KiB",
+            "frame: {:.0} fps | cpu submit {:.2} ms (cull {:.2}, upload {:.2}, finish {:.2}), gpu pass {gpu} | {}: {:.0} visible, {:.0} drawn | {:.0} blocks, {:.0} quads, {:.1} MiB | upload {:.0} KiB",
             self.fps,
             ms(self.cpu_submit),
+            ms(self.cpu_cull),
+            ms(self.cpu_upload),
+            ms(self.cpu_finish),
             self.resident,
             self.visible,
             self.drawn,
@@ -324,6 +352,9 @@ mod tests {
             upload_meshes: 1,
             upload_bytes: 1_024,
             cpu_submit: Duration::from_secs_f64(cpu_ms / 1000.0),
+            cpu_upload: Duration::from_secs_f64(cpu_ms * 0.25 / 1000.0),
+            cpu_cull: Duration::from_secs_f64(cpu_ms * 0.5 / 1000.0),
+            cpu_finish: Duration::from_secs_f64(cpu_ms * 0.25 / 1000.0),
             gpu_pass: Some(Duration::from_secs_f64(gpu_ms / 1000.0)),
         }
     }
@@ -339,6 +370,9 @@ mod tests {
             .expect("the interval elapsed");
         assert_eq!(summary.frames, 2);
         assert!((ms(summary.cpu_submit) - 2.0).abs() < 1e-6);
+        assert!((ms(summary.cpu_cull) - 1.0).abs() < 1e-6);
+        assert!((ms(summary.cpu_upload) - 0.5).abs() < 1e-6);
+        assert!((ms(summary.cpu_finish) - 0.5).abs() < 1e-6);
         assert!((ms(summary.gpu_pass.expect("gpu samples")) - 3.0).abs() < 1e-6);
         assert!((summary.visible - 92.0).abs() < 1e-6);
         assert!((summary.quads - 1_000.0).abs() < 1e-6);
