@@ -74,6 +74,10 @@ cargo run --release -p voxel-bench -- hitch --frames 300 --speed 24 --json
 cargo run --release -p voxel-bench --features chunk128 -- scene-memory
 cargo run --release -p voxel-bench --features chunk128 -- scene-memory --json
 
+# Compare a capture against the committed visual-regression reference (M3-12)
+cargo run --release -p voxel-bench -- image-diff \
+  --reference docs/images/m3-12-reference.png --candidate target/capture.png
+
 # The twelve pre-registered rows as one gate.md + gate.json (M1-39)
 cargo run -p voxel-bench -- gate report
 cargo run -p voxel-bench -- gate report --profile minimum
@@ -93,6 +97,15 @@ the slowest five frames, upload frames, overruns and resident/pending chunks,
 and it exits 1 when the upload p99 exceeds 4 ms or any frame exceeds 8 ms
 (`--no-check` reports without failing). `--upload-kib`, `--speed`, `--seed` and
 `--frames` override the defaults.
+
+## Image diff (M3-12)
+
+`image-diff` compares an RGBA8 PNG against the committed M3 scene reference and
+reports the differing-pixel fraction, the largest channel delta and the mean
+absolute delta against a documented threshold (0.01% beyond a 2/255 tolerance,
+max 32/255, mean 0.5/255). It exits 1 outside the threshold and prints JSON with
+`--json`. A capture at the wrong drawable size is a size-mismatch error, not a
+difference. See [`docs/m3-12-visual-regression.md`](../../docs/m3-12-visual-regression.md).
 
 ## Scene memory (M3-11)
 
