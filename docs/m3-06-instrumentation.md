@@ -116,5 +116,4 @@ to match, and requires culling to reduce the drawn geometry.
 
 ## Next
 
-M3-07: the frame breakdown — where the 16.6 ms goes, split by draw, cull,
-upload and content, using these counters.
+M3-07 read these counters for the frame breakdown; M3-08 is the stress scene.
