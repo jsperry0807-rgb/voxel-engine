@@ -237,8 +237,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: changes
-    # Docs-only pushes have nothing new to analyse.
-    if: (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') && needs.changes.outputs.code == 'true'
+    # Docs-only pushes have nothing new to analyse, and a fork's pull request
+    # never receives the token.
+    if: >-
+      (github.ref == 'refs/heads/main' || github.event_name == 'pull_request')
+      && github.event.pull_request.head.repo.fork != true
+      && needs.changes.outputs.code == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
