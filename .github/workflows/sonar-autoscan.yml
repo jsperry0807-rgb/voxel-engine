@@ -1,0 +1,41 @@
+name: Sonar analysis method
+
+# Temporary: flips SonarQube Cloud's automatic analysis for this project, which
+# cannot be done with the CI scanner and has no public Web API. Delete once the
+# project is on CI-based analysis.
+on:
+  workflow_dispatch:
+    inputs:
+      enable:
+        description: "true enables automatic analysis, false disables it"
+        required: true
+        default: "false"
+
+permissions:
+  contents: read
+
+jobs:
+  toggle:
+    name: set automatic analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: POST api/autoscan/activation
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          ENABLE: ${{ inputs.enable }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --user "${SONAR_TOKEN}:" \
+            --data-urlencode "projectKey=jsperry0807-rgb_voxel-engine" \
+            --data-urlencode "enable=${ENABLE}" \
+            https://sonarcloud.io/api/autoscan/activation
+          echo
+          curl --fail-with-body --silent --show-error \
+            --user "${SONAR_TOKEN}:" \
+            --get \
+            --data-urlencode "projectKey=jsperry0807-rgb_voxel-engine" \
+            https://sonarcloud.io/api/autoscan/activation
+          echo
