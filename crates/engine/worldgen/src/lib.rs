@@ -19,6 +19,7 @@
 //! - [`weights`] — softmax biome weights over the climate and shape axes.
 //! - [`surface`] — the top-block rules: soil, beach, seabed, cliff and altitude.
 //! - [`transitions`] — 1 m material dither and two-material + debris templates.
+//! - [`caves`] — the 3D cave field: tunnels, chambers, shafts, galleries, fluids.
 //! - [`climate`] — latitude, altitude and ocean-distance climate fields.
 //! - [`generator`] — the seeded generator that fills a tile.
 //! - [`hydro`] — priority-flood depression fill, D8 flow and accumulation.
@@ -40,6 +41,7 @@
 //! ```
 
 pub mod biomes;
+pub mod caves;
 pub mod climate;
 pub mod fixed;
 pub mod generator;
@@ -57,6 +59,7 @@ pub mod transitions;
 pub mod weights;
 
 pub use biomes::{BiomeCatalog, BiomeClass, catalog};
+pub use caves::{CaveContext, CaveField, CaveFill, CaveShape, CaveVoxel};
 pub use climate::{Climate, ClimateSample};
 pub use fixed::{Coord, ONE};
 pub use generator::MacroGenerator;
