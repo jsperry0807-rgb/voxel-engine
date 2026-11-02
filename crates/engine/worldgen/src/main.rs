@@ -5,6 +5,7 @@
 //! voxel-worldgen hydro   [--seed N] [--size N]
 //! voxel-worldgen rivers  [--seed N] [--size N] [--threshold N]
 //! voxel-worldgen lakes   [--seed N] [--size N] [--min-cells N]
+//! voxel-worldgen map     [--seed N] --landmarks
 //! ```
 //!
 //! `macro` generates the 4,096 tiles of the 1,024 km world at 128 m, prints a
@@ -16,8 +17,9 @@
 //! prints lake and accumulation statistics. `rivers` runs the same pass and
 //! extracts the river network: segment count, length, order, width range,
 //! delta count and mouth breakdown. `lakes` extracts lake bodies, spill cells
-//! and shorelines. All commands accept `--size N` so a smoke run can use a
-//! small square.
+//! and shorelines. `map --landmarks` prints the 32 × 32 landmark grid and the
+//! per-type counts. The hydro/river/lake commands accept `--size N` so a smoke
+//! run can use a small square.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -26,6 +28,9 @@ use std::time::Instant;
 use voxel_worldgen::generator::{MacroGenerator, SEA_LEVEL_UNITS};
 use voxel_worldgen::hydro::Hydrology;
 use voxel_worldgen::lakes::{LakeConfig, Lakes};
+use voxel_worldgen::landmarks::{
+    LANDMARK_CELL_M, LANDMARK_CELLS, LANDMARK_JITTER_M, LandmarkGrid, LandmarkKind,
+};
 use voxel_worldgen::macro_grid::{
     CELL_SIZE_M, TILE_COUNT, TILES_PER_AXIS, TilePos, WORLD_CELLS, height_from_q16,
 };
@@ -48,6 +53,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
         Some("hydro") => hydro_command(&args[1..]),
         Some("rivers") => rivers_command(&args[1..]),
         Some("lakes") => lakes_command(&args[1..]),
+        Some("map") => map_command(&args[1..]),
         Some("--help" | "-h") | None => {
             print_usage();
             Ok(())
@@ -65,6 +71,7 @@ fn print_usage() {
          \x20 voxel-worldgen hydro [--seed N] [--size N]\n\
          \x20 voxel-worldgen rivers [--seed N] [--size N] [--threshold N]\n\
          \x20 voxel-worldgen lakes  [--seed N] [--size N] [--min-cells N]\n\
+         \x20 voxel-worldgen map    [--seed N] --landmarks\n\
          \n\
          Options:\n\
          \x20 --seed N      world seed, decimal or 0x hex (default 1)\n\
@@ -72,7 +79,8 @@ fn print_usage() {
          \x20 --out DIR     macro: write each tile to DIR/<x>_<z>.vxt\n\
          \x20 --size N      hydro/rivers: run on the first N × N cells (default 8000)\n\
          \x20 --threshold N rivers: accumulation needed for a river (default 512)\n\
-         \x20 --min-cells N lakes: smallest lake kept, in cells (default 8)"
+         \x20 --min-cells N lakes: smallest lake kept, in cells (default 8)\n\
+         \x20 --landmarks   map: print the landmark grid and type counts"
     );
 }
 
@@ -291,6 +299,70 @@ fn parse_size(text: &str) -> Result<usize, String> {
         return Err(format!("--size must be 1..={WORLD_CELLS}, got {requested}"));
     }
     Ok(requested as usize)
+}
+
+fn map_command(args: &[String]) -> Result<(), String> {
+    let mut seed = 1u64;
+    let mut landmarks = false;
+
+    let mut index = 0;
+    while index < args.len() {
+        let argument = &args[index];
+        let mut value = |name: &str| -> Result<String, String> {
+            index += 1;
+            args.get(index)
+                .cloned()
+                .ok_or_else(|| format!("{name} needs a value"))
+        };
+        match argument.as_str() {
+            "--seed" => seed = parse_u64(&value("--seed")?)?,
+            "--landmarks" => landmarks = true,
+            other => return Err(format!("unknown argument {other:?}; try --help")),
+        }
+        index += 1;
+    }
+    if !landmarks {
+        return Err("map needs --landmarks".into());
+    }
+
+    let grid = LandmarkGrid::new(seed);
+    let mut counts = [0usize; 5];
+    println!(
+        "map seed={seed} cells={}x{} cell_m={} jitter_m={} landmarks={} spacing_m={}..{}",
+        LANDMARK_CELLS,
+        LANDMARK_CELLS,
+        LANDMARK_CELL_M,
+        LANDMARK_JITTER_M,
+        LANDMARK_CELLS as usize * LANDMARK_CELLS as usize,
+        (LANDMARK_CELL_M - 2 * LANDMARK_JITTER_M),
+        (LANDMARK_CELL_M + 2 * LANDMARK_JITTER_M),
+    );
+    for cell_z in 0..LANDMARK_CELLS {
+        let mut row = String::with_capacity(LANDMARK_CELLS as usize);
+        for cell_x in 0..LANDMARK_CELLS {
+            let landmark = grid.landmark(cell_x, cell_z);
+            counts[landmark.kind as usize] += 1;
+            row.push(landmark.kind.letter());
+        }
+        println!("{row}");
+    }
+    let mut type_line = String::from("types");
+    for kind in LandmarkKind::ALL {
+        type_line.push_str(&format!(" {}={}", kind.name(), counts[kind as usize]));
+    }
+    println!("{type_line}");
+
+    let sample = grid.landmark(16, 16);
+    let fields = grid.sample(16, 16);
+    println!(
+        "sample cell=(16,16) x_m={} z_m={} surface_m={} biome={} type={}",
+        sample.x >> 16,
+        sample.z >> 16,
+        sample.surface >> 16,
+        fields.biome_key(),
+        sample.kind.name()
+    );
+    Ok(())
 }
 
 fn lakes_command(args: &[String]) -> Result<(), String> {

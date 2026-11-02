@@ -81,6 +81,7 @@ fn cli_macro_rejects_bad_arguments() {
 fn cli_help_prints_usage() {
     let text = stdout(&run(&["--help"]));
     assert!(text.contains("voxel-worldgen macro"), "{text}");
+    assert!(text.contains("voxel-worldgen map"), "{text}");
     assert!(text.contains("--seed"), "{text}");
 }
 
@@ -163,4 +164,31 @@ fn cli_lakes_reports_a_stable_hash() {
 fn cli_lakes_rejects_a_bad_minimum() {
     assert!(!run(&["lakes", "--min-cells", "0"]).status.success());
     assert!(!run(&["lakes", "--min-cells", "nope"]).status.success());
+}
+
+#[test]
+fn cli_map_landmarks_reports_distribution() {
+    let text = stdout(&run(&["map", "--seed", "1", "--landmarks"]));
+    assert!(text.contains("map seed=1"), "{text}");
+    assert!(text.contains("cells=32x32"), "{text}");
+    for name in ["massif", "canyon", "volcano", "grove", "monolith"] {
+        assert!(text.contains(&format!(" {name}=")), "{text}");
+    }
+    let rows: Vec<&str> = text
+        .lines()
+        .filter(|line| line.len() == 32 && line.chars().all(|letter| "MCVGA".contains(letter)))
+        .collect();
+    assert_eq!(rows.len(), 32, "the dump must be a 32 x 32 map");
+    for letter in ['M', 'C', 'V', 'G', 'A'] {
+        assert!(
+            rows.iter().any(|row| row.contains(letter)),
+            "missing {letter}"
+        );
+    }
+}
+
+#[test]
+fn cli_map_requires_the_landmarks_flag() {
+    assert!(!run(&["map"]).status.success());
+    assert!(!run(&["map", "--unknown"]).status.success());
 }

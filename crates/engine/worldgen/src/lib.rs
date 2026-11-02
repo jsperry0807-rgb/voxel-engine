@@ -23,6 +23,7 @@
 //! - [`cave_depth`] — local-surface depth and underground biome assignment.
 //! - [`overhangs`] — occasional 3D shelves and arches, with floating-rock pruning.
 //! - [`ores`] — depth-tiered ore veins.
+//! - [`landmarks`] — one terrain-fitted landmark per 32 km cell.
 //! - [`climate`] — latitude, altitude and ocean-distance climate fields.
 //! - [`generator`] — the seeded generator that fills a tile.
 //! - [`hydro`] — priority-flood depression fill, D8 flow and accumulation.
@@ -52,6 +53,7 @@ pub mod generator;
 pub mod hash;
 pub mod hydro;
 pub mod lakes;
+pub mod landmarks;
 pub mod macro_grid;
 pub mod noise;
 pub mod ores;
@@ -72,6 +74,7 @@ pub use fixed::{Coord, ONE};
 pub use generator::MacroGenerator;
 pub use hydro::{FlowDir, Hydrology};
 pub use lakes::{Lake, Lakes};
+pub use landmarks::{Landmark, LandmarkGrid, LandmarkKind, LandmarkSample};
 pub use macro_grid::{Cell, TileFlags, TilePos};
 pub use noise::Noise;
 pub use ores::{OreField, OreKind};
