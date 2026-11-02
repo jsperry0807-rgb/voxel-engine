@@ -148,7 +148,7 @@ impl BiomeWeights {
         Self { weights }
     }
 
-    /// The weight vector, in [`BIOMES`] order, summing to [`ONE`].
+    /// The weight vector, in catalogue order, summing to [`ONE`].
     pub const fn weights(&self) -> &[i32; BIOME_COUNT] {
         &self.weights
     }

@@ -17,6 +17,7 @@
 //! - [`tile_store`] — streaming tile cache and seamless bilinear sampling.
 //! - [`biomes`] — the RON biome catalogue and its validation.
 //! - [`weights`] — softmax biome weights over the climate and shape axes.
+//! - [`surface`] — the top-block rules: soil, beach, seabed, cliff and altitude.
 //! - [`climate`] — latitude, altitude and ocean-distance climate fields.
 //! - [`generator`] — the seeded generator that fills a tile.
 //! - [`hydro`] — priority-flood depression fill, D8 flow and accumulation.
@@ -48,6 +49,7 @@ pub mod macro_grid;
 pub mod noise;
 pub mod rivers;
 pub mod splines;
+pub mod surface;
 pub mod tile;
 pub mod tile_store;
 pub mod weights;
@@ -62,6 +64,7 @@ pub use macro_grid::{Cell, TileFlags, TilePos};
 pub use noise::Noise;
 pub use rivers::{Mouth, River, RiverNetwork, RiverPoint};
 pub use splines::{PEAK, SEA_LEVEL, surface_height};
+pub use surface::{SurfaceColumn, SurfaceKind, SurfaceSample};
 pub use tile::{MacroTile, TileError, TileHeader};
 pub use tile_store::{Channel, DirectorySource, TileSource, TileStore};
 pub use weights::{Axes, BiomeWeights};
