@@ -1,0 +1,1612 @@
+   Compiling voxel-viewer v0.1.0 (/home/jace/Voxel-Stuff/voxel-approved/crates/engine/viewer)
+   Compiling voxel-bench v0.1.0 (/home/jace/Voxel-Stuff/voxel-approved/crates/bench)
+    Finished `bench` profile [optimized] target(s) in 9.97s
+warning: the following packages contain code that will be rejected by a future version of Rust: proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/lib.rs (target/release/deps/voxel_app_support-df542493be56956f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/release/deps/voxel_bench-ce0993e8c1c1213c)
+
+running 60 tests
+test fixture::tests::default_recipe_is_valid_and_covers_five_features ... ignored
+test fixture::tests::hash_changes_when_a_file_changes ... ignored
+test fixture::tests::manifest_limitation_names_the_first_real_save ... ignored
+test fixture::tests::save_root_rejects_traversal ... ignored
+test fixture::tests::utc_stamp_matches_a_known_date ... ignored
+test fixture::world::tests::noise_and_surface_are_deterministic ... ignored
+test fixture::world::tests::one_chunk_is_byte_stable_and_has_air_and_solid ... ignored
+test fixture::world::tests::palette_matches_the_builtin_registration_order ... ignored
+test gate::edits::tests::apron_reads_the_facing_neighbour_border ... ignored
+test gate::edits::tests::candidates_are_real_non_air_voxels_from_the_chunk_palette ... ignored
+test gate::edits::tests::fence_waits_for_the_matching_token ... ignored
+test gate::edits::tests::one_edit_relights_one_cell_and_its_apron ... ignored
+test gate::edits::tests::term_uses_nearest_rank_and_keeps_the_sum ... ignored
+test gate::edits::tests::the_builtin_light_table_blocks_solid_materials ... ignored
+test gate::edits::tests::upload_copies_only_the_appended_runs_and_level_start ... ignored
+test gate::memory::tests::component_distribution_keeps_percentiles_and_sum ... ignored
+test gate::memory::tests::fixed_components_follow_the_compiled_edge ... ignored
+test gate::memory::tests::overlay_memory_charges_one_slot_per_edited_block ... ignored
+test gate::probes::tests::a_first_solid_candidate_is_seen_by_at_least_one_probe ... ignored
+test gate::probes::tests::a_fixture_update_equals_a_full_bake_in_both_directions ... ignored
+test gate::probes::tests::candidates_are_real_solid_voxels_on_a_probe_ray ... ignored
+test gate::probes::tests::staging_copies_exactly_the_selected_records ... ignored
+test gate::probes::tests::the_near_grid_is_one_probe_per_block ... ignored
+test gate::report::tests::a_failure_makes_the_gate_fail_and_a_gap_makes_it_incomplete ... ignored
+test gate::report::tests::the_fallback_follows_the_failed_lens ... ignored
+test gate::report::tests::the_safety_factor_is_the_frozen_hard_fail_line ... ignored
+test gate::report::tests::the_twelve_rows_are_defined_once_in_table_order ... ignored
+test gate::report::tests::verdicts_are_computed_from_the_numbers_not_typed ... ignored
+test gate::residency::tests::default_profile_reproduces_the_frozen_64_count ... ignored
+test gate::residency::tests::every_gated_profile_holds_the_equal_volume_identity ... ignored
+test gate::residency::tests::grouping_is_readable_and_gate_numbers_keep_their_commas ... ignored
+test gate::residency::tests::invalid_configs_are_rejected ... ignored
+test gate::residency::tests::minimum_profile_follows_the_formula_and_reports_the_table_delta ... ignored
+test gate::residency::tests::names_parse_case_insensitively ... ignored
+test gate::residency::tests::overrides_are_measured_from_the_config_and_skip_the_table ... ignored
+test gate::scaleup::tests::a_budget_margin_is_computed_from_the_projected_total ... ignored
+test gate::scaleup::tests::memory_optimistic_scales_the_mesh_by_area_and_pessimistic_by_volume ... ignored
+test gate::scaleup::tests::optimistic_dirty_is_one_path_and_one_block_cell ... ignored
+test gate::scaleup::tests::pessimistic_dirty_spans_the_chunk ... ignored
+test gate::scaleup::tests::probe_optimistic_uses_area_and_pessimistic_uses_the_full_grid ... ignored
+test gate::scaleup::tests::ratios_scale_by_edge_volume_area_and_levels ... ignored
+test gate::scaleup::tests::same_edge_reproduces_the_measured_terms_exactly ... ignored
+test gate::scaleup::tests::the_fixed_term_is_shared_and_only_the_path_depth_scales ... ignored
+test gate::scaleup::tests::the_pessimistic_edit_is_never_cheaper_than_the_optimistic_one ... ignored
+test history::tests::change_reports_percentages ... ignored
+test history::tests::labels_become_stable_folder_names ... ignored
+test history::tests::layout_cost_is_rendered_when_a_run_recorded_it ... ignored
+test history::tests::process_metrics_are_kept_for_the_same_suite ... ignored
+test history::tests::process_metrics_are_omitted_when_the_suite_changes ... ignored
+test history::tests::suite_fingerprint_ignores_order_and_separates_names ... ignored
+test history::tests::utc_formatting_matches_known_dates ... ignored
+test image_diff::tests::a_size_change_is_an_error_not_a_difference ... ignored
+test image_diff::tests::a_small_delta_inside_the_tolerance_is_ignored ... ignored
+test image_diff::tests::a_whole_region_changing_fails ... ignored
+test image_diff::tests::identical_images_pass_with_zero_delta ... ignored
+test image_diff::tests::one_pixel_beyond_the_tolerance_is_allowed_by_the_fraction ... ignored
+test image_diff::tests::the_threshold_is_configurable ... ignored
+test layout::tests::expanded_positions_match_a_fully_unshared_octree ... ignored
+test layout::tests::layout_report_counts_padding_and_dedup_consistently ... ignored
+test save_scan::tests::nearest_rank_percentiles_cover_small_samples ... ignored
+
+test result: ok. 0 passed; 0 failed; 60 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/release/deps/voxel_bench-319e7ff569204c0a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running benches/block.rs (target/release/deps/block-55ffd49e2111c0d8)
+Gnuplot not found, using plotters backend
+Benchmarking registry/build+freeze/1024
+Benchmarking registry/build+freeze/1024: Warming up for 3.0000 s
+Benchmarking registry/build+freeze/1024: Collecting 100 samples in estimated 6.2753 s (15k iterations)
+Benchmarking registry/build+freeze/1024: Analyzing
+registry/build+freeze/1024
+                        time:   [413.66 µs 414.20 µs 414.81 µs]
+                        thrpt:  [2.4686 Melem/s 2.4722 Melem/s 2.4755 Melem/s]
+                 change:
+                        time:   [-2.3891% -2.0066% -1.6316%] (p = 0.00 < 0.05)
+                        thrpt:  [+1.6587% +2.0477% +2.4476%]
+                        Performance has improved.
+Found 9 outliers among 100 measurements (9.00%)
+  4 (4.00%) high mild
+  5 (5.00%) high severe
+Benchmarking registry/build+freeze/65536
+Benchmarking registry/build+freeze/65536: Warming up for 3.0000 s
+Benchmarking registry/build+freeze/65536: Collecting 100 samples in estimated 9.7091 s (200 iterations)
+Benchmarking registry/build+freeze/65536: Analyzing
+registry/build+freeze/65536
+                        time:   [49.323 ms 49.426 ms 49.535 ms]
+                        thrpt:  [1.3230 Melem/s 1.3259 Melem/s 1.3287 Melem/s]
+                 change:
+                        time:   [-0.6545% -0.2723% +0.0884%] (p = 0.17 > 0.05)
+                        thrpt:  [-0.0883% +0.2730% +0.6588%]
+                        No change in performance detected.
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high mild
+
+Benchmarking lookup/hot/random
+Benchmarking lookup/hot/random: Warming up for 3.0000 s
+Benchmarking lookup/hot/random: Collecting 100 samples in estimated 5.0570 s (354k iterations)
+Benchmarking lookup/hot/random: Analyzing
+lookup/hot/random       time:   [14.282 µs 14.319 µs 14.367 µs]
+                        thrpt:  [4.5615 Gelem/s 4.5768 Gelem/s 4.5886 Gelem/s]
+                 change:
+                        time:   [-4.7076% -3.6268% -2.6561%] (p = 0.00 < 0.05)
+                        thrpt:  [+2.7285% +3.7633% +4.9401%]
+                        Performance has improved.
+Found 14 outliers among 100 measurements (14.00%)
+  5 (5.00%) high mild
+  9 (9.00%) high severe
+Benchmarking lookup/hot/coherent
+Benchmarking lookup/hot/coherent: Warming up for 3.0000 s
+Benchmarking lookup/hot/coherent: Collecting 100 samples in estimated 5.0034 s (359k iterations)
+Benchmarking lookup/hot/coherent: Analyzing
+lookup/hot/coherent     time:   [13.940 µs 13.960 µs 13.984 µs]
+                        thrpt:  [4.6865 Gelem/s 4.6945 Gelem/s 4.7014 Gelem/s]
+                 change:
+                        time:   [-3.2574% -2.8786% -2.5300%] (p = 0.00 < 0.05)
+                        thrpt:  [+2.5957% +2.9640% +3.3670%]
+                        Performance has improved.
+Found 14 outliers among 100 measurements (14.00%)
+  9 (9.00%) high mild
+  5 (5.00%) high severe
+Benchmarking lookup/resolved/random
+Benchmarking lookup/resolved/random: Warming up for 3.0000 s
+Benchmarking lookup/resolved/random: Collecting 100 samples in estimated 6.2038 s (25k iterations)
+Benchmarking lookup/resolved/random: Analyzing
+lookup/resolved/random  time:   [246.63 µs 247.44 µs 248.61 µs]
+                        thrpt:  [263.61 Melem/s 264.85 Melem/s 265.72 Melem/s]
+                 change:
+                        time:   [+6.9243% +7.6873% +8.3777%] (p = 0.00 < 0.05)
+                        thrpt:  [-7.7301% -7.1386% -6.4759%]
+                        Performance has regressed.
+Found 8 outliers among 100 measurements (8.00%)
+  3 (3.00%) high mild
+  5 (5.00%) high severe
+Benchmarking lookup/key/random
+Benchmarking lookup/key/random: Warming up for 3.0000 s
+Benchmarking lookup/key/random: Collecting 100 samples in estimated 5.1023 s (96k iterations)
+Benchmarking lookup/key/random: Analyzing
+lookup/key/random       time:   [53.358 µs 53.676 µs 54.054 µs]
+                        thrpt:  [1.2124 Gelem/s 1.2210 Gelem/s 1.2282 Gelem/s]
+                 change:
+                        time:   [-4.7193% -3.9620% -3.2983%] (p = 0.00 < 0.05)
+                        thrpt:  [+3.4108% +4.1254% +4.9530%]
+                        Performance has improved.
+Found 12 outliers among 100 measurements (12.00%)
+  4 (4.00%) high mild
+  8 (8.00%) high severe
+
+     Running benches/render.rs (target/release/deps/render-d31589205dcb7d47)
+Gnuplot not found, using plotters backend
+Benchmarking render/hot_words/65536
+Benchmarking render/hot_words/65536: Warming up for 3.0000 s
+Benchmarking render/hot_words/65536: Collecting 100 samples in estimated 5.0130 s (626k iterations)
+Benchmarking render/hot_words/65536: Analyzing
+render/hot_words/65536  time:   [7.9953 µs 8.0189 µs 8.0490 µs]
+                        thrpt:  [8.1422 Gelem/s 8.1727 Gelem/s 8.1968 Gelem/s]
+                 change:
+                        time:   [-3.5404% -3.0106% -2.5543%] (p = 0.00 < 0.05)
+                        thrpt:  [+2.6212% +3.1041% +3.6704%]
+                        Performance has improved.
+Found 11 outliers among 100 measurements (11.00%)
+  4 (4.00%) high mild
+  7 (7.00%) high severe
+Benchmarking render/texture_set_words/65536
+Benchmarking render/texture_set_words/65536: Warming up for 3.0000 s
+Benchmarking render/texture_set_words/65536: Collecting 100 samples in estimated 5.0001 s (166M iterations)
+Benchmarking render/texture_set_words/65536: Analyzing
+render/texture_set_words/65536
+                        time:   [29.838 ns 29.868 ns 29.903 ns]
+                        thrpt:  [2.1402 Gelem/s 2.1428 Gelem/s 2.1449 Gelem/s]
+                 change:
+                        time:   [+4.3759% +5.1011% +5.6565%] (p = 0.00 < 0.05)
+                        thrpt:  [-5.3537% -4.8535% -4.1924%]
+                        Performance has regressed.
+Found 8 outliers among 100 measurements (8.00%)
+  1 (1.00%) low mild
+  3 (3.00%) high mild
+  4 (4.00%) high severe
+
+Benchmarking gpu_flush/import_64_chunks
+Benchmarking gpu_flush/import_64_chunks: Warming up for 3.0000 s
+Benchmarking gpu_flush/import_64_chunks: Collecting 20 samples in estimated 5.1924 s (630 iterations)
+Benchmarking gpu_flush/import_64_chunks: Analyzing
+gpu_flush/import_64_chunks
+                        time:   [8.2259 ms 8.3175 ms 8.4329 ms]
+                        thrpt:  [118.58  elem/s 120.23  elem/s 121.57  elem/s]
+                 change:
+                        time:   [-13.872% -11.614% -9.5389%] (p = 0.00 < 0.05)
+                        thrpt:  [+10.545% +13.141% +16.106%]
+                        Performance has improved.
+Found 2 outliers among 20 measurements (10.00%)
+  1 (5.00%) high mild
+  1 (5.00%) high severe
+Benchmarking gpu_flush/flush_after_edits
+Benchmarking gpu_flush/flush_after_edits: Warming up for 3.0000 s
+Benchmarking gpu_flush/flush_after_edits: Collecting 20 samples in estimated 5.0005 s (153k iterations)
+Benchmarking gpu_flush/flush_after_edits: Analyzing
+gpu_flush/flush_after_edits
+                        time:   [34.798 µs 35.063 µs 35.381 µs]
+                        thrpt:  [28.263 Kelem/s 28.520 Kelem/s 28.737 Kelem/s]
+                 change:
+                        time:   [-6.0660% -0.7792% +6.9126%] (p = 0.82 > 0.05)
+                        thrpt:  [-6.4656% +0.7853% +6.4578%]
+                        No change in performance detected.
+Found 3 outliers among 20 measurements (15.00%)
+  3 (15.00%) high severe
+
+Benchmarking overlay_gpu/set_one
+Benchmarking overlay_gpu/set_one: Warming up for 3.0000 s
+Benchmarking overlay_gpu/set_one: Collecting 100 samples in estimated 5.0000 s (476M iterations)
+Benchmarking overlay_gpu/set_one: Analyzing
+overlay_gpu/set_one     time:   [10.481 ns 10.499 ns 10.523 ns]
+                        change: [-3.9864% -3.4253% -2.9348%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 9 outliers among 100 measurements (9.00%)
+  3 (3.00%) high mild
+  6 (6.00%) high severe
+Benchmarking overlay_gpu/lookup_hit
+Benchmarking overlay_gpu/lookup_hit: Warming up for 3.0000 s
+Benchmarking overlay_gpu/lookup_hit: Collecting 100 samples in estimated 5.0000 s (682M iterations)
+Benchmarking overlay_gpu/lookup_hit: Analyzing
+overlay_gpu/lookup_hit  time:   [7.3492 ns 7.3730 ns 7.4060 ns]
+                        change: [-3.6464% -2.7728% -2.1006%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 11 outliers among 100 measurements (11.00%)
+  4 (4.00%) high mild
+  7 (7.00%) high severe
+Benchmarking overlay_gpu/flush_64
+Benchmarking overlay_gpu/flush_64: Warming up for 3.0000 s
+Benchmarking overlay_gpu/flush_64: Collecting 100 samples in estimated 5.0020 s (7.3M iterations)
+Benchmarking overlay_gpu/flush_64: Analyzing
+overlay_gpu/flush_64    time:   [868.45 ns 882.83 ns 901.28 ns]
+                        change: [-27.859% -10.209% +11.891%] (p = 0.35 > 0.05)
+                        No change in performance detected.
+Found 13 outliers among 100 measurements (13.00%)
+  5 (5.00%) high mild
+  8 (8.00%) high severe
+
+VOXEL_GPU_BENCH not set; skipping real wgpu upload benchmarks
+     Running unittests src/lib.rs (target/release/deps/voxel_block-5d7f1714d484d7cf)
+
+running 112 tests
+test hot::tests::all_five_defined_flags_fit_with_room_to_spare ... ignored
+test hot::tests::eight_records_fill_one_cache_line ... ignored
+test hot::tests::every_field_round_trips ... ignored
+test hot::tests::light_is_clamped_and_cold_flag_bits_are_dropped ... ignored
+test hot::tests::opaque_blocks_always_pack_full_opacity ... ignored
+test hot::tests::render_type_encoding_is_stable ... ignored
+test hot::tests::set_zero_is_distinct_from_no_textures ... ignored
+test hot::tests::spare_bits_stay_zero ... ignored
+test id::tests::all_block_kind_paths_are_valid ... ignored
+test id::tests::builtin_rejects_invalid_paths_even_in_release ... ignored
+test id::tests::builtin_shorthand_produces_canonical_key ... ignored
+test id::tests::distinct_keys_are_still_distinct ... ignored
+test id::tests::equal_keys_hash_equal_across_allocations ... ignored
+test id::tests::identity_ignores_the_sep_cache ... ignored
+test id::tests::is_air_is_exactly_the_zero_sentinel ... ignored
+test id::tests::key_allows_directories_in_path ... ignored
+test id::tests::key_parses_and_splits ... ignored
+test id::tests::key_rejects_invalid_input ... ignored
+test id::tests::long_namespaces_do_not_silently_truncate ... ignored
+test id::tests::material_id_is_layout_identical_to_u16 ... ignored
+test id::tests::material_id_roundtrips_through_raw ... ignored
+test id::tests::sep_widening_to_u32_is_free ... ignored
+test kind::tests::default_properties_are_sane ... ignored
+test kind::tests::keys_are_unique ... ignored
+test kind::tests::kind_display_shows_key ... ignored
+test material::tests::a_stale_material_table_is_rejected ... ignored
+test material::tests::cap_256_material_registry ... ignored
+test material::tests::face_materials_pack_in_face_all_order ... ignored
+test material::tests::fixture_64_blocks_freeze_after_m1_5_08 ... ignored
+test material::tests::material_registry_matches_committed_blocks ... ignored
+test material::tests::material_registry_rejects_duplicate_slots ... ignored
+test material::tests::material_registry_rejects_missing_and_unused_rows ... ignored
+test material::tests::material_registry_rejects_slot_256 ... ignored
+test material::tests::material_registry_rejects_slot_gaps ... ignored
+test material_table::tests::duplicate_slots_are_rejected ... ignored
+test palette::tests::a_bare_number_is_not_a_key_and_is_reported_with_its_line ... ignored
+test palette::tests::a_dropped_tag_member_leaves_the_list_and_is_recorded ... ignored
+test palette::tests::a_palette_is_built_from_keys_and_holds_nothing_else ... ignored
+test palette::tests::a_palette_round_trips_through_text ... ignored
+test palette::tests::a_reserved_slot_is_a_valid_substitute ... ignored
+test palette::tests::an_out_of_range_substitute_is_refused_even_when_nothing_is_missing ... ignored
+test palette::tests::dropping_is_refused_for_a_palette ... ignored
+test palette::tests::duplicate_entries_are_allowed_and_resolve_to_the_same_id ... ignored
+test palette::tests::parse_skips_comments_and_blank_lines ... ignored
+test palette::tests::the_canonical_text_is_one_key_per_line ... ignored
+test properties::tests::block_flags_are_layout_identical_to_u32 ... ignored
+test properties::tests::face_textures_all_and_column ... ignored
+test properties::tests::face_textures_all_shares_one_string_allocation ... ignored
+test properties::tests::flags_combine_and_test ... ignored
+test properties::tests::light_values_are_clamped_to_four_bits ... ignored
+test registry::tests::a_block_without_textures_resolves_to_none ... ignored
+test registry::tests::a_column_resolves_to_two_distinct_ids ... ignored
+test registry::tests::a_reserved_slot_resolves_to_a_texture_less_record ... ignored
+test registry::tests::a_save_remaps_through_keys_into_a_reverse_ordered_registry ... ignored
+test registry::tests::a_template_root_is_resolved_into_the_record ... ignored
+test registry::tests::a_texture_shared_by_two_blocks_resolves_to_one_id ... ignored
+test registry::tests::air_id_is_the_sentinel_zero ... ignored
+test registry::tests::air_is_always_id_zero ... ignored
+test registry::tests::blocks_with_the_same_six_textures_share_one_texture_set ... ignored
+test registry::tests::builder_duplicate_check_is_index_backed ... ignored
+test registry::tests::builder_refuses_non_air_at_id_zero ... ignored
+test registry::tests::custom_blocks_register_with_derived_display_name ... ignored
+test registry::tests::duplicate_keys_are_rejected ... ignored
+test registry::tests::every_distinct_face_texture_gets_its_own_id ... ignored
+test registry::tests::flag_bits_above_the_hot_mask_are_cold_only ... ignored
+test registry::tests::freezing_reports_a_texture_table_overflow_instead_of_panicking ... ignored
+test registry::tests::frozen_registry_stores_each_key_allocation_once ... ignored
+test registry::tests::gpu_words_match_the_typed_tables ... ignored
+test registry::tests::hot_lookup_of_an_unregistered_id_panics - should panic ... ignored
+test registry::tests::hot_records_mirror_the_authoring_properties_for_every_builtin ... ignored
+test registry::tests::ids_are_dense_and_lookup_by_key ... ignored
+test registry::tests::ids_are_session_local_because_registration_order_assigns_them ... ignored
+test registry::tests::iter_covers_every_id_in_order ... ignored
+test registry::tests::many_blocks_over_few_sets_keeps_the_set_table_small ... ignored
+test registry::tests::one_texture_on_every_face_costs_one_table_entry ... ignored
+test registry::tests::records_stay_parallel_to_properties ... ignored
+test registry::tests::reserve_detects_exhaustion ... ignored
+test registry::tests::reserve_holds_ids_and_register_lands_after_the_span ... ignored
+test registry::tests::reserve_requires_air_first ... ignored
+test registry::tests::reserve_zero_is_a_noop_that_returns_the_next_id ... ignored
+test registry::tests::reserved_slots_are_invisible_and_keyless ... ignored
+test registry::tests::resolving_an_unregistered_id_panics - should panic ... ignored
+test registry::tests::template_roots_are_sparse_and_cold ... ignored
+test registry::tests::texture_ids_are_deterministic_for_a_given_registration_order ... ignored
+test registry::tests::the_hot_record_stays_eight_bytes ... ignored
+test registry::tests::the_resolved_record_mirrors_the_authoring_properties ... ignored
+test registry::tests::the_texture_table_maps_ids_back_to_keys ... ignored
+test registry::tests::with_capacity_does_not_over_reserve_observable_state ... ignored
+test registry::tests::with_capacity_preserves_sentinel_and_dense_ids ... ignored
+test registry::tests::with_capacity_zero_still_accepts_air ... ignored
+test ron::tests::blocks_ron_loads ... ignored
+test tags::tests::duplicate_inserts_are_idempotent ... ignored
+test tags::tests::ids_iterate_in_ascending_order ... ignored
+test tags::tests::insert_and_query_membership ... ignored
+test tags::tests::remove_cleans_up_empty_tags ... ignored
+test tags::tests::reverse_index_lists_tags_of_a_block ... ignored
+test tags::tests::tag_names_must_be_valid_namespaced_keys ... ignored
+test tags::tests::with_capacity_behaves_like_new ... ignored
+test tags::tests::with_capacity_zero_is_valid ... ignored
+test texture::tests::distinct_keys_get_distinct_ids ... ignored
+test texture::tests::empty_table_answers_nothing ... ignored
+test texture::tests::face_texture_ids_answer_per_face ... ignored
+test texture::tests::face_texture_ids_pack_to_three_words ... ignored
+test texture::tests::inserting_a_known_key_reuses_its_id ... ignored
+test texture::tests::table_round_trips_key_to_id ... ignored
+test texture::tests::texture_id_is_layout_identical_to_u16 ... ignored
+test texture::tests::texture_set_id_is_layout_identical_to_u16 ... ignored
+test texture_manifest::tests::face_table_checks_slot_order ... ignored
+test texture_manifest::tests::face_table_positions_are_one_based ... ignored
+test texture_manifest::tests::face_table_rejects_bad_entries ... ignored
+test texture_manifest::tests::parent_paths_are_rejected ... ignored
+test texture_manifest::tests::render_types_map_to_alpha_classes ... ignored
+
+test result: ok. 0 passed; 0 failed; 112 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running benches/hot.rs (target/release/deps/hot-f44bef1019968a13)
+Gnuplot not found, using plotters backend
+n=16: old table 0 KiB | hot table 0 KiB + 15 texture sets (180 B)
+Benchmarking material/n16/random/meta/old40
+Benchmarking material/n16/random/meta/old40: Warming up for 500.00 ms
+Benchmarking material/n16/random/meta/old40: Collecting 10 samples in estimated 2.0063 s (13k iterations)
+Benchmarking material/n16/random/meta/old40: Analyzing
+material/n16/random/meta/old40
+                        time:   [150.46 µs 150.78 µs 151.25 µs]
+                        thrpt:  [1.7332 Gelem/s 1.7386 Gelem/s 1.7423 Gelem/s]
+                 change:
+                        time:   [-3.5465% -2.9359% -2.3317%] (p = 0.00 < 0.05)
+                        thrpt:  [+2.3874% +3.0247% +3.6769%]
+                        Performance has improved.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high mild
+Benchmarking material/n16/random/meta/hot8
+Benchmarking material/n16/random/meta/hot8: Warming up for 500.00 ms
+Benchmarking material/n16/random/meta/hot8: Collecting 10 samples in estimated 2.0089 s (11k iterations)
+Benchmarking material/n16/random/meta/hot8: Analyzing
+material/n16/random/meta/hot8
+                        time:   [186.66 µs 186.98 µs 187.41 µs]
+                        thrpt:  [1.3988 Gelem/s 1.4020 Gelem/s 1.4044 Gelem/s]
+                 change:
+                        time:   [-5.3034% -3.9845% -2.9966%] (p = 0.00 < 0.05)
+                        thrpt:  [+3.0891% +4.1499% +5.6005%]
+                        Performance has improved.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high mild
+Benchmarking material/n16/random/hit/old40
+Benchmarking material/n16/random/hit/old40: Warming up for 500.00 ms
+Benchmarking material/n16/random/hit/old40: Collecting 10 samples in estimated 2.0179 s (5775 iterations)
+Benchmarking material/n16/random/hit/old40: Analyzing
+material/n16/random/hit/old40
+                        time:   [347.58 µs 348.55 µs 349.74 µs]
+                        thrpt:  [749.54 Melem/s 752.11 Melem/s 754.20 Melem/s]
+                 change:
+                        time:   [-3.4772% -2.6179% -1.8703%] (p = 0.00 < 0.05)
+                        thrpt:  [+1.9059% +2.6883% +3.6024%]
+                        Performance has improved.
+Benchmarking material/n16/random/hit/hot8+sets
+Benchmarking material/n16/random/hit/hot8+sets: Warming up for 500.00 ms
+Benchmarking material/n16/random/hit/hot8+sets: Collecting 10 samples in estimated 2.0201 s (5445 iterations)
+Benchmarking material/n16/random/hit/hot8+sets: Analyzing
+material/n16/random/hit/hot8+sets
+                        time:   [368.85 µs 369.19 µs 369.86 µs]
+                        thrpt:  [708.77 Melem/s 710.05 Melem/s 710.70 Melem/s]
+                 change:
+                        time:   [-6.3373% -5.0614% -3.9222%] (p = 0.00 < 0.05)
+                        thrpt:  [+4.0823% +5.3313% +6.7661%]
+                        Performance has improved.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high mild
+
+Benchmarking material/n16/coherent/meta/old40
+Benchmarking material/n16/coherent/meta/old40: Warming up for 500.00 ms
+Benchmarking material/n16/coherent/meta/old40: Collecting 10 samples in estimated 2.0071 s (13k iterations)
+Benchmarking material/n16/coherent/meta/old40: Analyzing
+material/n16/coherent/meta/old40
+                        time:   [150.37 µs 150.62 µs 150.91 µs]
+                        thrpt:  [1.7371 Gelem/s 1.7404 Gelem/s 1.7433 Gelem/s]
+                 change:
+                        time:   [-4.9118% -3.5126% -2.4846%] (p = 0.00 < 0.05)
+                        thrpt:  [+2.5479% +3.6405% +5.1655%]
+                        Performance has improved.
+Found 2 outliers among 10 measurements (20.00%)
+  1 (10.00%) low severe
+  1 (10.00%) high mild
+Benchmarking material/n16/coherent/meta/hot8
+Benchmarking material/n16/coherent/meta/hot8: Warming up for 500.00 ms
+Benchmarking material/n16/coherent/meta/hot8: Collecting 10 samples in estimated 2.0016 s (11k iterations)
+Benchmarking material/n16/coherent/meta/hot8: Analyzing
+material/n16/coherent/meta/hot8
+                        time:   [187.35 µs 188.34 µs 189.61 µs]
+                        thrpt:  [1.3826 Gelem/s 1.3919 Gelem/s 1.3992 Gelem/s]
+                 change:
+                        time:   [-2.6377% -1.9652% -1.2000%] (p = 0.00 < 0.05)
+                        thrpt:  [+1.2146% +2.0046% +2.7092%]
+                        Performance has improved.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high mild
+Benchmarking material/n16/coherent/hit/old40
+Benchmarking material/n16/coherent/hit/old40: Warming up for 500.00 ms
+Benchmarking material/n16/coherent/hit/old40: Collecting 10 samples in estimated 2.0087 s (5665 iterations)
+Benchmarking material/n16/coherent/hit/old40: Analyzing
+material/n16/coherent/hit/old40
+                        time:   [346.09 µs 349.53 µs 353.73 µs]
+                        thrpt:  [741.08 Melem/s 749.98 Melem/s 757.45 Melem/s]
+                 change:
+                        time:   [-5.4619% -3.7338% -2.2096%] (p = 0.00 < 0.05)
+                        thrpt:  [+2.2595% +3.8786% +5.7774%]
+                        Performance has improved.
+Found 2 outliers among 10 measurements (20.00%)
+  2 (20.00%) high severe
+Benchmarking material/n16/coherent/hit/hot8+sets
+Benchmarking material/n16/coherent/hit/hot8+sets: Warming up for 500.00 ms
+Benchmarking material/n16/coherent/hit/hot8+sets: Collecting 10 samples in estimated 2.0143 s (5445 iterations)
+Benchmarking material/n16/coherent/hit/hot8+sets: Analyzing
+material/n16/coherent/hit/hot8+sets
+                        time:   [368.48 µs 368.73 µs 369.18 µs]
+                        thrpt:  [710.07 Melem/s 710.93 Melem/s 711.43 Melem/s]
+                 change:
+                        time:   [-6.5788% -5.4410% -4.4314%] (p = 0.00 < 0.05)
+                        thrpt:  [+4.6369% +5.7541% +7.0421%]
+                        Performance has improved.
+Found 2 outliers among 10 measurements (20.00%)
+  2 (20.00%) high severe
+
+n=512: old table 24 KiB | hot table 4 KiB + 426 texture sets (5112 B)
+Benchmarking material/n512/random/meta/old40
+Benchmarking material/n512/random/meta/old40: Warming up for 500.00 ms
+Benchmarking material/n512/random/meta/old40: Collecting 10 samples in estimated 2.0049 s (13k iterations)
+Benchmarking material/n512/random/meta/old40: Analyzing
+material/n512/random/meta/old40
+                        time:   [150.69 µs 150.97 µs 151.28 µs]
+                        thrpt:  [1.7329 Gelem/s 1.7365 Gelem/s 1.7396 Gelem/s]
+                 change:
+                        time:   [-6.3564% -5.0947% -3.8632%] (p = 0.00 < 0.05)
+                        thrpt:  [+4.0185% +5.3682% +6.7879%]
+                        Performance has improved.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high mild
+Benchmarking material/n512/random/meta/hot8
+Benchmarking material/n512/random/meta/hot8: Warming up for 500.00 ms
+Benchmarking material/n512/random/meta/hot8: Collecting 10 samples in estimated 2.0020 s (11k iterations)
+Benchmarking material/n512/random/meta/hot8: Analyzing
+material/n512/random/meta/hot8
+                        time:   [187.32 µs 187.64 µs 188.29 µs]
+                        thrpt:  [1.3922 Gelem/s 1.3971 Gelem/s 1.3995 Gelem/s]
+                 change:
+                        time:   [-3.0464% -2.6078% -2.1746%] (p = 0.00 < 0.05)
+                        thrpt:  [+2.2230% +2.6776% +3.1421%]
+                        Performance has improved.
+Found 2 outliers among 10 measurements (20.00%)
+  1 (10.00%) high mild
+  1 (10.00%) high severe
+Benchmarking material/n512/random/hit/old40
+Benchmarking material/n512/random/hit/old40: Warming up for 500.00 ms
+Benchmarking material/n512/random/hit/old40: Collecting 10 samples in estimated 2.0160 s (5775 iterations)
+Benchmarking material/n512/random/hit/old40: Analyzing
+material/n512/random/hit/old40
+                        time:   [347.84 µs 348.82 µs 349.85 µs]
+                        thrpt:  [749.31 Melem/s 751.51 Melem/s 753.63 Melem/s]
+                 change:
+                        time:   [-4.5318% -3.6281% -2.7615%] (p = 0.00 < 0.05)
+                        thrpt:  [+2.8400% +3.7647% +4.7469%]
+                        Performance has improved.
+Benchmarking material/n512/random/hit/hot8+sets
+Benchmarking material/n512/random/hit/hot8+sets: Warming up for 500.00 ms
+Benchmarking material/n512/random/hit/hot8+sets: Collecting 10 samples in estimated 2.0002 s (5390 iterations)
+Benchmarking material/n512/random/hit/hot8+sets: Analyzing
+material/n512/random/hit/hot8+sets
+                        time:   [371.39 µs 372.88 µs 375.52 µs]
+                        thrpt:  [698.08 Melem/s 703.02 Melem/s 705.84 Melem/s]
+                 change:
+                        time:   [-5.3278% -3.9820% -2.7593%] (p = 0.00 < 0.05)
+                        thrpt:  [+2.8376% +4.1471% +5.6276%]
+                        Performance has improved.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+
+Benchmarking material/n512/coherent/meta/old40
+Benchmarking material/n512/coherent/meta/old40: Warming up for 500.00 ms
+Benchmarking material/n512/coherent/meta/old40: Collecting 10 samples in estimated 2.0011 s (13k iterations)
+Benchmarking material/n512/coherent/meta/old40: Analyzing
+material/n512/coherent/meta/old40
+                        time:   [150.45 µs 150.66 µs 150.95 µs]
+                        thrpt:  [1.7366 Gelem/s 1.7400 Gelem/s 1.7424 Gelem/s]
+                 change:
+                        time:   [-3.0837% -2.4756% -1.8307%] (p = 0.00 < 0.05)
+                        thrpt:  [+1.8648% +2.5385% +3.1818%]
+                        Performance has improved.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+Benchmarking material/n512/coherent/meta/hot8
+Benchmarking material/n512/coherent/meta/hot8: Warming up for 500.00 ms
+Benchmarking material/n512/coherent/meta/hot8: Collecting 10 samples in estimated 2.0001 s (11k iterations)
+Benchmarking material/n512/coherent/meta/hot8: Analyzing
+material/n512/coherent/meta/hot8
+                        time:   [187.24 µs 188.10 µs 189.43 µs]
+                        thrpt:  [1.3839 Gelem/s 1.3937 Gelem/s 1.4000 Gelem/s]
+                 change:
+                        time:   [-2.3563% -1.8805% -1.3758%] (p = 0.00 < 0.05)
+                        thrpt:  [+1.3950% +1.9165% +2.4131%]
+                        Performance has improved.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high mild
+Benchmarking material/n512/coherent/hit/old40
+Benchmarking material/n512/coherent/hit/old40: Warming up for 500.00 ms
+Benchmarking material/n512/coherent/hit/old40: Collecting 10 samples in estimated 2.0166 s (5775 iterations)
+Benchmarking material/n512/coherent/hit/old40: Analyzing
+material/n512/coherent/hit/old40
+                        time:   [348.06 µs 348.59 µs 349.01 µs]
+                        thrpt:  [751.10 Melem/s 752.02 Melem/s 753.16 Melem/s]
+                 change:
+                        time:   [-2.4563% -2.1344% -1.7665%] (p = 0.00 < 0.05)
+                        thrpt:  [+1.7983% +2.1809% +2.5182%]
+                        Performance has improved.
+Benchmarking material/n512/coherent/hit/hot8+sets
+Benchmarking material/n512/coherent/hit/hot8+sets: Warming up for 500.00 ms
+Benchmarking material/n512/coherent/hit/hot8+sets: Collecting 10 samples in estimated 2.0002 s (5390 iterations)
+Benchmarking material/n512/coherent/hit/hot8+sets: Analyzing
+material/n512/coherent/hit/hot8+sets
+                        time:   [370.23 µs 370.59 µs 371.04 µs]
+                        thrpt:  [706.51 Melem/s 707.36 Melem/s 708.07 Melem/s]
+                 change:
+                        time:   [-3.7844% -3.3704% -2.9658%] (p = 0.00 < 0.05)
+                        thrpt:  [+3.0565% +3.4880% +3.9332%]
+                        Performance has improved.
+
+n=65536: old table 3072 KiB | hot table 512 KiB + 8192 texture sets (98304 B)
+Benchmarking material/n65536/random/meta/old40
+Benchmarking material/n65536/random/meta/old40: Warming up for 500.00 ms
+Benchmarking material/n65536/random/meta/old40: Collecting 10 samples in estimated 2.0040 s (4510 iterations)
+Benchmarking material/n65536/random/meta/old40: Analyzing
+material/n65536/random/meta/old40
+                        time:   [436.72 µs 438.63 µs 440.62 µs]
+                        thrpt:  [594.94 Melem/s 597.64 Melem/s 600.26 Melem/s]
+                 change:
+                        time:   [+15.665% +16.460% +17.217%] (p = 0.00 < 0.05)
+                        thrpt:  [-14.688% -14.133% -13.544%]
+                        Performance has regressed.
+Benchmarking material/n65536/random/meta/hot8
+Benchmarking material/n65536/random/meta/hot8: Warming up for 500.00 ms
+Benchmarking material/n65536/random/meta/hot8: Collecting 10 samples in estimated 2.0031 s (6875 iterations)
+Benchmarking material/n65536/random/meta/hot8: Analyzing
+material/n65536/random/meta/hot8
+                        time:   [289.52 µs 290.11 µs 290.99 µs]
+                        thrpt:  [900.86 Melem/s 903.60 Melem/s 905.45 Melem/s]
+                 change:
+                        time:   [-5.8264% -4.4022% -3.2212%] (p = 0.00 < 0.05)
+                        thrpt:  [+3.3284% +4.6050% +6.1869%]
+                        Performance has improved.
+Benchmarking material/n65536/random/hit/old40
+Benchmarking material/n65536/random/hit/old40: Warming up for 500.00 ms
+Benchmarking material/n65536/random/hit/old40: Collecting 10 samples in estimated 2.0260 s (3135 iterations)
+Benchmarking material/n65536/random/hit/old40: Analyzing
+material/n65536/random/hit/old40
+                        time:   [622.31 µs 629.15 µs 639.40 µs]
+                        thrpt:  [409.99 Melem/s 416.66 Melem/s 421.25 Melem/s]
+                 change:
+                        time:   [+0.0782% +1.8736% +3.6546%] (p = 0.05 > 0.05)
+                        thrpt:  [-3.5257% -1.8392% -0.0781%]
+                        No change in performance detected.
+Benchmarking material/n65536/random/hit/hot8+sets
+Benchmarking material/n65536/random/hit/hot8+sets: Warming up for 500.00 ms
+Benchmarking material/n65536/random/hit/hot8+sets: Collecting 10 samples in estimated 2.0009 s (3520 iterations)
+Benchmarking material/n65536/random/hit/hot8+sets: Analyzing
+material/n65536/random/hit/hot8+sets
+                        time:   [565.31 µs 566.75 µs 567.64 µs]
+                        thrpt:  [461.81 Melem/s 462.54 Melem/s 463.71 Melem/s]
+                 change:
+                        time:   [-5.9811% -5.0952% -4.2760%] (p = 0.00 < 0.05)
+                        thrpt:  [+4.4670% +5.3687% +6.3616%]
+                        Performance has improved.
+
+Benchmarking material/n65536/coherent/meta/old40
+Benchmarking material/n65536/coherent/meta/old40: Warming up for 500.00 ms
+Benchmarking material/n65536/coherent/meta/old40: Collecting 10 samples in estimated 2.0046 s (8965 iterations)
+Benchmarking material/n65536/coherent/meta/old40: Analyzing
+material/n65536/coherent/meta/old40
+                        time:   [223.60 µs 224.63 µs 226.46 µs]
+                        thrpt:  [1.1576 Gelem/s 1.1670 Gelem/s 1.1724 Gelem/s]
+                 change:
+                        time:   [+8.3068% +9.6691% +10.952%] (p = 0.00 < 0.05)
+                        thrpt:  [-9.8707% -8.8166% -7.6697%]
+                        Performance has regressed.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high mild
+Benchmarking material/n65536/coherent/meta/hot8
+Benchmarking material/n65536/coherent/meta/hot8: Warming up for 500.00 ms
+Benchmarking material/n65536/coherent/meta/hot8: Collecting 10 samples in estimated 2.0031 s (9075 iterations)
+Benchmarking material/n65536/coherent/meta/hot8: Analyzing
+material/n65536/coherent/meta/hot8
+                        time:   [219.97 µs 221.69 µs 222.88 µs]
+                        thrpt:  [1.1762 Gelem/s 1.1825 Gelem/s 1.1917 Gelem/s]
+                 change:
+                        time:   [-4.2401% -3.5021% -2.7187%] (p = 0.00 < 0.05)
+                        thrpt:  [+2.7946% +3.6292% +4.4279%]
+                        Performance has improved.
+Benchmarking material/n65536/coherent/hit/old40
+Benchmarking material/n65536/coherent/hit/old40: Warming up for 500.00 ms
+Benchmarking material/n65536/coherent/hit/old40: Collecting 10 samples in estimated 2.0030 s (4840 iterations)
+Benchmarking material/n65536/coherent/hit/old40: Analyzing
+material/n65536/coherent/hit/old40
+                        time:   [408.40 µs 409.06 µs 409.66 µs]
+                        thrpt:  [639.91 Melem/s 640.84 Melem/s 641.88 Melem/s]
+                 change:
+                        time:   [-10.126% -4.8751% -1.8559%] (p = 0.05 > 0.05)
+                        thrpt:  [+1.8910% +5.1250% +11.267%]
+                        No change in performance detected.
+Benchmarking material/n65536/coherent/hit/hot8+sets
+Benchmarking material/n65536/coherent/hit/hot8+sets: Warming up for 500.00 ms
+Benchmarking material/n65536/coherent/hit/hot8+sets: Collecting 10 samples in estimated 2.0063 s (4785 iterations)
+Benchmarking material/n65536/coherent/hit/hot8+sets: Analyzing
+material/n65536/coherent/hit/hot8+sets
+                        time:   [418.77 µs 420.14 µs 421.19 µs]
+                        thrpt:  [622.39 Melem/s 623.94 Melem/s 625.99 Melem/s]
+                 change:
+                        time:   [-4.1261% -3.6074% -3.0990%] (p = 0.00 < 0.05)
+                        thrpt:  [+3.1981% +3.7424% +4.3037%]
+                        Performance has improved.
+
+     Running unittests src/lib.rs (target/release/deps/voxel_core-6ad5d0a5ae309bd3)
+
+running 32 tests
+test atlas::tests::atlas_constants_match_the_locked_layout ... ignored
+test atlas::tests::atlas_helpers_work_in_const_context ... ignored
+test atlas::tests::atlas_mip_cap_keeps_every_tile_whole ... ignored
+test atlas::tests::atlas_tile_origins_are_row_major ... ignored
+test atlas::tests::atlas_tile_origins_cover_every_slot_in_bounds ... ignored
+test atlas::tests::atlas_uv_clamps_out_of_range_face_positions ... ignored
+test atlas::tests::atlas_uv_lands_on_texel_centres_at_voxel_boundaries ... ignored
+test atlas::tests::atlas_uv_stays_inside_its_tile ... ignored
+test constants::tests::aabb_extent_covers_each_level_in_metres ... ignored
+test constants::tests::baseline_and_target_edges_are_both_named ... ignored
+test constants::tests::constants_are_mutually_consistent ... ignored
+test constants::tests::constants_are_usable_in_const_context ... ignored
+test constants::tests::default_build_uses_the_64_edge ... ignored
+test constants::tests::level_sizes_halve_from_the_chunk_root ... ignored
+test content_constants::tests::content_constants_are_usable_in_const_context ... ignored
+test content_constants::tests::content_constants_lock_the_spec_values ... ignored
+test content_constants::tests::light_sizes_derive_from_the_block_grid ... ignored
+test content_constants::tests::occlusion_bytes_are_one_bit_per_block ... ignored
+test content_constants::tests::probe_rings_are_ordered_and_bound_the_default_lod_rings ... ignored
+test content_constants::tests::probe_sizes_derive_from_the_near_grid ... ignored
+test face::tests::face_index_matches_the_all_order ... ignored
+test face::tests::face_normals_point_outward_and_are_axis_aligned ... ignored
+test face::tests::face_opposite_roundtrips ... ignored
+test node_word::tests::node_word_decode_ignores_reserved_bits ... ignored
+test node_word::tests::node_word_fields_land_at_the_specified_bits ... ignored
+test node_word::tests::node_word_fields_tile_the_word ... ignored
+test node_word::tests::node_word_helpers_work_in_const_context ... ignored
+test node_word::tests::node_word_reserved_bits_stay_zero ... ignored
+test node_word::tests::node_word_roundtrips_all_levels ... ignored
+test node_word::tests::node_word_roundtrips_all_masks ... ignored
+test node_word::tests::node_word_roundtrips_base_extremes ... ignored
+test node_word::tests::node_word_roundtrips_every_field_combination ... ignored
+
+test result: ok. 0 passed; 0 failed; 32 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/release/deps/launcher-c38dbd2af2cfa8e9)
+
+running 9 tests
+test app::tests::log_text_grows_with_the_window_and_stops_at_the_cap ... ignored
+test app::tests::log_text_keeps_a_readable_floor ... ignored
+test app::tests::texture_source_picks_the_viewer_atlas ... ignored
+test app::tests::voxgen_does_not_set_an_atlas_override ... ignored
+test jobs::tests::display_quotes_environment_and_arguments ... ignored
+test jobs::tests::dropping_the_runner_kills_running_jobs ... ignored
+test jobs::tests::job_captures_both_streams_and_the_exit_status ... ignored
+test jobs::tests::running_status_is_the_only_live_one ... ignored
+test jobs::tests::stop_ends_a_running_job ... ignored
+
+test result: ok. 0 passed; 0 failed; 9 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/release/deps/voxel_mesh-e93ba808ad200965)
+
+running 21 tests
+test greedy::tests::merge_key_splits_on_any_difference ... ignored
+test probe::tests::probe_bake_open_sky_is_valid_and_has_the_dc_term ... ignored
+test probe::tests::probe_bake_record_round_trips_inside_one_quantisation_step ... ignored
+test probe::tests::probe_bake_seed_depends_only_on_chunk_index_and_lod ... ignored
+test probe::tests::probe_bake_trace_matches_first_solid_on_ray_for_air_origins ... ignored
+test probe::tests::probe_bake_zero_budget_makes_no_progress_and_a_positive_one_does ... ignored
+test record::tests::record_covers_every_face_extent_and_ao_level ... ignored
+test record::tests::record_matches_every_quad_of_a_mixed_chunk ... ignored
+test record::tests::record_rejects_a_material_above_14_bits - should panic ... ignored
+test tests::border_reads_the_matching_apron_face ... ignored
+test tests::scratch_budget ... ignored
+test tests::scratch_fill_rejects_a_block_outside_the_chunk - should panic ... ignored
+test tests::scratch_fill_rejects_a_short_chunk - should panic ... ignored
+test tests::visits_every_block_and_matches_the_chunk_interior ... ignored
+test vertex::packed_tests::packed_vertex_has_a_literal_byte_layout ... ignored
+test vertex::packed_tests::packed_vertex_is_eight_bytes ... ignored
+test vertex::packed_tests::packed_vertex_rejects_a_face_above_five - should panic ... ignored
+test vertex::packed_tests::packed_vertex_rejects_a_local_above_u8 - should panic ... ignored
+test vertex::packed_tests::packed_vertex_rejects_a_non_canonical_ao - should panic ... ignored
+test vertex::packed_tests::packed_vertex_round_trips_every_field ... ignored
+test vertex::tests::vertex_pack ... ignored
+
+test result: ok. 0 passed; 0 failed; 21 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running benches/build.rs (target/release/deps/build-3b2ec27c0092f350)
+Gnuplot not found, using plotters backend
+M2-28: 205.8 chunks/s single-threaded over 100 chunks (budget 20/s, 553571 quads, 2214284 vertices, 3321426 indices)
+Benchmarking terrain/chunks_100
+Benchmarking terrain/chunks_100: Warming up for 3.0000 s
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 48.6s, or reduce sample count to 10.
+Benchmarking terrain/chunks_100: Collecting 100 samples in estimated 48.647 s (100 iterations)
+Benchmarking terrain/chunks_100: Analyzing
+terrain/chunks_100      time:   [485.25 ms 485.60 ms 486.04 ms]
+                        thrpt:  [205.74  elem/s 205.93  elem/s 206.08  elem/s]
+                 change:
+                        time:   [-83.211% -83.185% -83.158%] (p = 0.00 < 0.05)
+                        thrpt:  [+493.74% +494.70% +495.64%]
+                        Performance has improved.
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high severe
+
+     Running benches/light.rs (target/release/deps/light-eb58376ba597a77c)
+Gnuplot not found, using plotters backend
+M2-17 edge=4: full p50 4.859µs p95 5.199µs; incremental p50 290ns p95 301ns; ratio p50 6.0% p95 5.8%; changed 46/216 cells
+Benchmarking light/edge_4/full_pass
+Benchmarking light/edge_4/full_pass: Warming up for 3.0000 s
+Benchmarking light/edge_4/full_pass: Collecting 100 samples in estimated 5.0210 s (1.0M iterations)
+Benchmarking light/edge_4/full_pass: Analyzing
+light/edge_4/full_pass  time:   [4.8734 µs 4.8852 µs 4.9063 µs]
+                        change: [-36.208% -32.266% -28.280%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 4 outliers among 100 measurements (4.00%)
+  2 (2.00%) high mild
+  2 (2.00%) high severe
+Benchmarking light/edge_4/incremental_edit
+Benchmarking light/edge_4/incremental_edit: Warming up for 3.0000 s
+Benchmarking light/edge_4/incremental_edit: Collecting 100 samples in estimated 5.0001 s (16M iterations)
+Benchmarking light/edge_4/incremental_edit: Analyzing
+light/edge_4/incremental_edit
+                        time:   [258.25 ns 258.50 ns 258.80 ns]
+                        change: [-35.768% -31.449% -26.963%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 11 outliers among 100 measurements (11.00%)
+  1 (1.00%) low mild
+  7 (7.00%) high mild
+  3 (3.00%) high severe
+
+M2-17 edge=8: full p50 27.993µs p95 30.377µs; incremental p50 1.933µs p95 1.954µs; ratio p50 6.9% p95 6.4%; changed 414/1000 cells
+Benchmarking light/edge_8/full_pass
+Benchmarking light/edge_8/full_pass: Warming up for 3.0000 s
+Benchmarking light/edge_8/full_pass: Collecting 100 samples in estimated 5.1392 s (182k iterations)
+Benchmarking light/edge_8/full_pass: Analyzing
+light/edge_8/full_pass  time:   [28.251 µs 28.317 µs 28.410 µs]
+                        change: [-22.356% -19.480% -16.598%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 8 outliers among 100 measurements (8.00%)
+  1 (1.00%) low mild
+  2 (2.00%) high mild
+  5 (5.00%) high severe
+Benchmarking light/edge_8/incremental_edit
+Benchmarking light/edge_8/incremental_edit: Warming up for 3.0000 s
+Benchmarking light/edge_8/incremental_edit: Collecting 100 samples in estimated 5.0045 s (2.5M iterations)
+Benchmarking light/edge_8/incremental_edit: Analyzing
+light/edge_8/incremental_edit
+                        time:   [1.9525 µs 1.9541 µs 1.9559 µs]
+                        change: [-24.554% -16.418% -8.3946%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 8 outliers among 100 measurements (8.00%)
+  2 (2.00%) low mild
+  3 (3.00%) high mild
+  3 (3.00%) high severe
+
+     Running benches/probe.rs (target/release/deps/probe-054e2614172caf3c)
+Gnuplot not found, using plotters backend
+Benchmarking probe/64cubed/full_bake
+Benchmarking probe/64cubed/full_bake: Warming up for 3.0000 s
+Benchmarking probe/64cubed/full_bake: Collecting 100 samples in estimated 6.5297 s (15k iterations)
+Benchmarking probe/64cubed/full_bake: Analyzing
+probe/64cubed/full_bake time:   [425.91 µs 426.22 µs 426.56 µs]
+                        change: [-6.8570% -6.0581% -5.2647%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 5 outliers among 100 measurements (5.00%)
+  3 (3.00%) high mild
+  2 (2.00%) high severe
+
+Benchmarking probe/128cubed/full_bake
+Benchmarking probe/128cubed/full_bake: Warming up for 3.0000 s
+Benchmarking probe/128cubed/full_bake: Collecting 100 samples in estimated 5.7508 s (500 iterations)
+Benchmarking probe/128cubed/full_bake: Analyzing
+probe/128cubed/full_bake
+                        time:   [11.537 ms 11.551 ms 11.567 ms]
+                        change: [-2.6645% -2.0853% -1.6051%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 4 outliers among 100 measurements (4.00%)
+  3 (3.00%) high mild
+  1 (1.00%) high severe
+
+Benchmarking probe/frame/advance_256_rays
+Benchmarking probe/frame/advance_256_rays: Warming up for 3.0000 s
+Benchmarking probe/frame/advance_256_rays: Collecting 100 samples in estimated 5.4799 s (45k iterations)
+Benchmarking probe/frame/advance_256_rays: Analyzing
+probe/frame/advance_256_rays
+                        time:   [119.91 µs 120.11 µs 120.33 µs]
+                        change: [-3.5932% -2.3498% -1.2508%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 6 outliers among 100 measurements (6.00%)
+  2 (2.00%) low severe
+  1 (1.00%) high mild
+  3 (3.00%) high severe
+
+     Running unittests src/lib.rs (target/release/deps/voxel_render-867aba629d566147)
+
+running 3 tests
+test materials::tests::stride_constants_match_the_packed_records ... ignored
+test sink::tests::initial_capacity_is_a_power_of_two ... ignored
+test sink::tests::initial_table_has_whole_slots_that_probe_as_empty ... ignored
+
+test result: ok. 0 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/release/deps/voxel_storage-324bc6ac7e08402a)
+
+running 153 tests
+test apron::tests::offsets_stay_inside_the_padded_volume ... ignored
+test apron::tests::set_and_get_round_trip_every_face ... ignored
+test bands::tests::bands_accepts_the_deepest_level ... ignored
+test bands::tests::bands_append_checks_the_level_bound - should panic ... ignored
+test bands::tests::bands_append_keeps_levels_and_indices_separate ... ignored
+test bands::tests::bands_append_rejects_a_word_from_another_level - should panic ... ignored
+test bands::tests::bands_band_checks_the_level_bound - should panic ... ignored
+test bands::tests::bands_clone_reestablish_alignment_and_compare_contents ... ignored
+test bands::tests::bands_get_returns_none_past_a_band_tail ... ignored
+test bands::tests::bands_iter_level_checks_the_level_bound - should panic ... ignored
+test bands::tests::bands_leaf_arena_appends_materials_and_keeps_air ... ignored
+test bands::tests::bands_len_checks_the_level_bound - should panic ... ignored
+test bands::tests::bands_level_start_tracks_band_growth ... ignored
+test bands::tests::bands_range_checks_the_level_bound - should panic ... ignored
+test bands::tests::bands_ranges_stay_contiguous_after_10k_appends ... ignored
+test bands::tests::bands_slot_zero_is_cache_line_aligned ... ignored
+test bands::tests::bands_start_empty_with_one_range_per_level ... ignored
+test chunk::tests::bfs_build_bands_are_numbered_in_breadth_first_order ... ignored
+test chunk::tests::bfs_build_fixtures_are_level_correct_and_rebuild_dense ... ignored
+test chunk::tests::bfs_build_rejects_a_dense_length_mismatch - should panic ... ignored
+test chunk::tests::expand_matches_dense_on_five_fixtures ... ignored
+test chunk::tests::expand_rejects_a_dense_length_mismatch - should panic ... ignored
+test chunk::tests::get_matches_dense_on_every_coordinate_of_three_fixtures ... ignored
+test chunk::tests::get_matches_dense_on_random_noise_coordinates ... ignored
+test chunk::tests::uniform_collapse_empty_build_allocates_zero_nodes ... ignored
+test chunk::tests::uniform_collapse_mask_zero_nodes_are_never_allocated ... ignored
+test chunk::tests::uniform_collapse_uniform_build_is_one_run_per_level ... ignored
+test compact::tests::compact_if_needed_panics_with_a_live_root - should panic ... ignored
+test compact::tests::compact_if_needed_panics_with_an_in_flight_frame - should panic ... ignored
+test compact::tests::compaction_band_renumbers_and_remaps_parent_bases ... ignored
+test compact::tests::compaction_empty_chunk_clears_every_arena ... ignored
+test compact::tests::compaction_get_sweep_matches_before_on_100k_coords ... ignored
+test compact::tests::compaction_guard_releases_on_drop ... ignored
+test compact::tests::compaction_leaves_rebuilds_level_one_refs ... ignored
+test compact::tests::compaction_panics_with_a_live_root - should panic ... ignored
+test compact::tests::compaction_panics_with_an_in_flight_frame - should panic ... ignored
+test compact::tests::compaction_repeated_cycles_match_dense ... ignored
+test compact::tests::compaction_trigger_ignores_clean_build_and_fires_after_dead_runs ... ignored
+test compact::tests::padding_alone_does_not_trigger_compaction ... ignored
+test dag::tests::svdag_api_stays_stable_over_the_banded_layout ... ignored
+test dag::tests::svdag_apply_edits_is_canonical_and_non_mutating ... ignored
+test dag::tests::svdag_empty_api_is_unchanged ... ignored
+test dag::tests::svdag_from_bytes_rejects_a_bad_child_reference ... ignored
+test disk::tests::a_bad_diff_falls_back_to_the_dag ... ignored
+test disk::tests::a_record_with_an_unknown_payload_tag_is_skipped ... ignored
+test disk::tests::abandoned_recovery_keeps_the_unscanned_tail ... ignored
+test disk::tests::append_rejects_a_payload_over_the_record_cap ... ignored
+test disk::tests::budgeted_read_rejects_a_payload_it_cannot_afford ... ignored
+test disk::tests::open_region_table_is_bounded ... ignored
+test disk::tests::read_record_rejects_an_over_cap_length_without_reading_it ... ignored
+test disk::tests::sync_flushes_a_new_region_directory_entry ... ignored
+test disk::tests::sync_only_flushes_regions_that_changed ... ignored
+test edit::tests::cow_paths_10k_random_batches_match_a_dense_apply ... ignored
+test edit::tests::cow_paths_a_batch_shares_one_run_per_touched_level ... ignored
+test edit::tests::cow_paths_duplicate_indices_keep_the_last_value ... ignored
+test edit::tests::cow_paths_empty_batch_is_a_noop ... ignored
+test edit::tests::cow_paths_empty_chunk_builds_and_collapses ... ignored
+test edit::tests::cow_paths_reject_an_out_of_range_index - should panic ... ignored
+test edit::tests::cow_paths_single_edit_appends_one_run_per_level ... ignored
+test gpu::tests::block_index_matches_cpu_at_both_chunk_edges ... ignored
+test gpu::tests::block_index_overlay_store_roundtrip ... ignored
+test gpu::tests::block_index_overlay_words_stay_fixed_per_block ... ignored
+test gpu::tests::block_index_uses_the_compiled_edge ... ignored
+test gpu::tests::chunk_table_1024_chunk_insert_lookup_remove_at_both_chunk_edges ... ignored
+test gpu::tests::chunk_table_churn_reuses_one_tombstone_without_growing ... ignored
+test gpu::tests::chunk_table_slot_words_and_positions_are_edge_independent ... ignored
+test gpu::tests::freeing_a_primary_promotes_the_colliding_sibling ... ignored
+test gpu::tests::intern_after_retiring_a_colliding_node_is_consistent ... ignored
+test gpu::tests::intern_reuses_content_after_a_hash_collision ... ignored
+test gpu::tests::reclaim_defers_a_newer_batch ... ignored
+test invariants::tests::invariants_compaction_preserves_the_invariants ... ignored
+test invariants::tests::invariants_cow_edits_pass_and_report_duplicates ... ignored
+test invariants::tests::invariants_detect_a_bad_base ... ignored
+test invariants::tests::invariants_detect_a_dedup_base_conflict ... ignored
+test invariants::tests::invariants_detect_air_in_the_leaf_arena ... ignored
+test invariants::tests::invariants_detect_an_unaligned_full_run ... ignored
+test invariants::tests::invariants_detect_reserved_flags ... ignored
+test invariants::tests::invariants_detect_wrong_level_words ... ignored
+test invariants::tests::invariants_empty_chunk_with_dead_bands_passes ... ignored
+test invariants::tests::invariants_fresh_builds_pass_on_five_fixtures ... ignored
+test invariants::tests::invariants_report_access_refcounts ... ignored
+test invariants::tests::invariants_serialization_roundtrip_passes ... ignored
+test invariants::tests::invariants_uniform_report_counts_shared_runs ... ignored
+test leaf::tests::leaf_runs_10k_calls_are_content_addressed ... ignored
+test leaf::tests::leaf_runs_air_is_absent_and_reads_as_zero ... ignored
+test leaf::tests::leaf_runs_all_air_allocates_nothing ... ignored
+test leaf::tests::leaf_runs_deallocate_retires_and_reintern_appends ... ignored
+test leaf::tests::leaf_runs_fetch_matches_popcount_addressing ... ignored
+test leaf::tests::leaf_runs_full_run_is_sixteen_bytes_and_partials_pack ... ignored
+test leaf::tests::leaf_runs_hash_collision_compares_full_content ... ignored
+test leaf::tests::leaf_runs_identical_materials_are_shared ... ignored
+test leaf::tests::leaf_runs_key_separates_order_and_length ... ignored
+test leaf::tests::leaf_runs_reject_more_than_eight_materials - should panic ... ignored
+test leaf::tests::leaf_runs_reject_stored_air - should panic ... ignored
+test leaf::tests::leaf_runs_share_across_different_masks ... ignored
+test node_word::tests::node_word_converts_to_and_from_the_raw_word ... ignored
+test node_word::tests::node_word_decode_ignores_reserved_bits ... ignored
+test node_word::tests::node_word_fields_land_at_the_m0_bit_positions ... ignored
+test node_word::tests::node_word_helpers_work_in_const_context ... ignored
+test node_word::tests::node_word_node_ref_keeps_level_and_index ... ignored
+test node_word::tests::node_word_node_ref_never_crosses_bands ... ignored
+test node_word::tests::node_word_node_ref_rejects_a_level_without_a_band - should panic ... ignored
+test node_word::tests::node_word_node_ref_rejects_an_index_past_the_u48_space - should panic ... ignored
+test node_word::tests::node_word_node_stays_one_word ... ignored
+test node_word::tests::node_word_roundtrips_every_field_combination ... ignored
+test overlay::tests::legacy_snapshots_still_load ... ignored
+test overlay::tests::set_rejects_an_index_outside_the_chunk - should panic ... ignored
+test overlay::tests::versioned_snapshot_round_trips_and_keeps_the_edge_tag ... ignored
+test run::tests::leaf_runs_interner_rejects_stored_air - should panic ... ignored
+test run::tests::leaf_runs_share_across_the_chunk_run_pool ... ignored
+test run::tests::popcount_slots_allocate_and_fetch_every_child ... ignored
+test run::tests::popcount_slots_match_naive_enumeration ... ignored
+test run::tests::popcount_slots_stay_inside_the_node_address_space ... ignored
+test run::tests::run_align_allocate_into_checks_the_band_cursor - should panic ... ignored
+test run::tests::run_align_allocate_into_checks_the_child_count - should panic ... ignored
+test run::tests::run_align_every_full_run_is_aligned_over_1k_random_masks ... ignored
+test run::tests::run_align_full_run_alignment_holds_at_every_padding_offset ... ignored
+test run::tests::run_align_full_run_pads_the_gap_before_it ... ignored
+test run::tests::run_align_full_run_starts_on_a_cache_line ... ignored
+test run::tests::run_align_partial_runs_are_packed_without_padding ... ignored
+test run::tests::run_align_records_padding_per_run ... ignored
+test run::tests::run_align_zero_mask_allocates_nothing ... ignored
+test run::tests::run_intern_10k_runs_are_content_addressed ... ignored
+test run::tests::run_intern_checks_the_child_count - should panic ... ignored
+test run::tests::run_intern_checks_the_child_levels - should panic ... ignored
+test run::tests::run_intern_checks_the_level_bound - should panic ... ignored
+test run::tests::run_intern_deallocate_includes_padding_in_dead_bytes ... ignored
+test run::tests::run_intern_deallocate_retires_a_run_and_reintern_appends ... ignored
+test run::tests::run_intern_different_masks_never_share_over_10k_runs ... ignored
+test run::tests::run_intern_empty_mask_allocates_nothing ... ignored
+test run::tests::run_intern_hash_collision_compares_full_content ... ignored
+test run::tests::run_intern_key_includes_mask_and_level ... ignored
+test run::tests::run_intern_same_key_twice_returns_the_same_base ... ignored
+test scan::tests::region_names_are_strict ... ignored
+test scan::tests::scan_caps_a_record_length_the_file_can_back ... ignored
+test scan::tests::scan_does_not_allocate_from_an_unbacked_record_length ... ignored
+test scan::tests::scan_empty_directory_is_empty_and_missing_directory_errors ... ignored
+test scan::tests::scan_keeps_a_torn_tail_and_warns ... ignored
+test scan::tests::scan_rejects_an_out_of_range_cell_without_panicking ... ignored
+test scan::tests::scan_reports_live_chunks_and_superseded_bytes ... ignored
+test serialize::tests::bytes_v2_rejects_a_root_outside_the_root_band ... ignored
+test serialize::tests::bytes_v2_rejects_chunk_bits_mismatch ... ignored
+test serialize::tests::bytes_v2_rejects_wrong_magic_and_version ... ignored
+test serialize::tests::bytes_v2_roundtrip_on_five_fixtures ... ignored
+test serialize::tests::bytes_v2_roundtrip_preserves_a_cow_root_index ... ignored
+test serialize::tests::bytes_v2_truncation_returns_none_never_panics ... ignored
+test tests::index_roundtrip_covers_both_chunk_edges ... ignored
+test tests::local_index_uses_the_compiled_edge ... ignored
+test tests::local_xyz_truncates_input_outside_the_index_space ... ignored
+test tests::morton_locality_covers_both_chunk_edges ... ignored
+test tests::morton_roundtrip_covers_both_chunk_edges ... ignored
+test tests::morton_uses_the_compiled_edge ... ignored
+test tests::region_cell_roundtrips_signed_chunks ... ignored
+
+test result: ok. 0 passed; 0 failed; 153 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running benches/apron.rs (target/release/deps/apron-406b96eb338e324c)
+Gnuplot not found, using plotters backend
+M2-02 edge=64: apron 49152 B / 429.226µs vs dense 574992 B / 4.629447ms; bytes 8.5%, time 9.3%
+Benchmarking apron/face_planes
+Benchmarking apron/face_planes: Warming up for 3.0000 s
+Benchmarking apron/face_planes: Collecting 100 samples in estimated 6.4791 s (15k iterations)
+Benchmarking apron/face_planes: Analyzing
+apron/face_planes       time:   [428.69 µs 429.26 µs 429.96 µs]
+                        thrpt:  [109.02 MiB/s 109.20 MiB/s 109.34 MiB/s]
+Found 11 outliers among 100 measurements (11.00%)
+  8 (8.00%) high mild
+  3 (3.00%) high severe
+Benchmarking apron/dense_padded
+Benchmarking apron/dense_padded: Warming up for 3.0000 s
+Benchmarking apron/dense_padded: Collecting 100 samples in estimated 5.0826 s (1100 iterations)
+Benchmarking apron/dense_padded: Analyzing
+apron/dense_padded      time:   [4.6446 ms 4.6493 ms 4.6546 ms]
+                        thrpt:  [117.81 MiB/s 117.94 MiB/s 118.06 MiB/s]
+Found 12 outliers among 100 measurements (12.00%)
+  5 (5.00%) high mild
+  7 (7.00%) high severe
+
+     Running benches/store.rs (target/release/deps/store-b737c1d194f8798a)
+Gnuplot not found, using plotters backend
+Benchmarking dag/from_dense/terrain
+Benchmarking dag/from_dense/terrain: Warming up for 3.0000 s
+Benchmarking dag/from_dense/terrain: Collecting 20 samples in estimated 5.2338 s (3780 iterations)
+Benchmarking dag/from_dense/terrain: Analyzing
+dag/from_dense/terrain  time:   [1.3876 ms 1.3932 ms 1.3982 ms]
+                        thrpt:  [187.49 Melem/s 188.16 Melem/s 188.92 Melem/s]
+                 change:
+                        time:   [-3.0203% -2.3313% -1.6846%] (p = 0.00 < 0.05)
+                        thrpt:  [+1.7134% +2.3869% +3.1144%]
+                        Performance has improved.
+Found 2 outliers among 20 measurements (10.00%)
+  2 (10.00%) high mild
+Benchmarking dag/from_dense/solid
+Benchmarking dag/from_dense/solid: Warming up for 3.0000 s
+Benchmarking dag/from_dense/solid: Collecting 20 samples in estimated 5.1054 s (4200 iterations)
+Benchmarking dag/from_dense/solid: Analyzing
+dag/from_dense/solid    time:   [1.2145 ms 1.2186 ms 1.2239 ms]
+                        thrpt:  [214.19 Melem/s 215.11 Melem/s 215.84 Melem/s]
+                 change:
+                        time:   [-4.5809% -1.1302% +1.0443%] (p = 0.65 > 0.05)
+                        thrpt:  [-1.0335% +1.1432% +4.8009%]
+                        No change in performance detected.
+Found 1 outliers among 20 measurements (5.00%)
+  1 (5.00%) high severe
+Benchmarking dag/from_dense/noise30pct_worst
+Benchmarking dag/from_dense/noise30pct_worst: Warming up for 3.0000 s
+Benchmarking dag/from_dense/noise30pct_worst: Collecting 20 samples in estimated 5.7095 s (1470 iterations)
+Benchmarking dag/from_dense/noise30pct_worst: Analyzing
+dag/from_dense/noise30pct_worst
+                        time:   [3.8626 ms 3.8669 ms 3.8728 ms]
+                        thrpt:  [67.689 Melem/s 67.791 Melem/s 67.868 Melem/s]
+                 change:
+                        time:   [-24.046% -23.635% -23.310%] (p = 0.00 < 0.05)
+                        thrpt:  [+30.395% +30.950% +31.658%]
+                        Performance has improved.
+terrain dag: 16843 words (65 KiB) vs dense 512 KiB
+noise   dag: 109026 words (425 KiB)
+Benchmarking dag/expand/terrain
+Benchmarking dag/expand/terrain: Warming up for 3.0000 s
+Benchmarking dag/expand/terrain: Collecting 20 samples in estimated 5.0091 s (31k iterations)
+Benchmarking dag/expand/terrain: Analyzing
+dag/expand/terrain      time:   [161.92 µs 162.16 µs 162.40 µs]
+                        thrpt:  [1.6142 Gelem/s 1.6166 Gelem/s 1.6189 Gelem/s]
+                 change:
+                        time:   [-4.2170% -3.1997% -2.3242%] (p = 0.00 < 0.05)
+                        thrpt:  [+2.3795% +3.3055% +4.4027%]
+                        Performance has improved.
+Found 1 outliers among 20 measurements (5.00%)
+  1 (5.00%) high mild
+Benchmarking dag/get/terrain_random
+Benchmarking dag/get/terrain_random: Warming up for 3.0000 s
+Benchmarking dag/get/terrain_random: Collecting 20 samples in estimated 5.0000 s (203M iterations)
+Benchmarking dag/get/terrain_random: Analyzing
+dag/get/terrain_random  time:   [24.539 ns 24.582 ns 24.618 ns]
+                        thrpt:  [40.620 Melem/s 40.680 Melem/s 40.752 Melem/s]
+                 change:
+                        time:   [-2.7923% -2.4651% -2.1638%] (p = 0.00 < 0.05)
+                        thrpt:  [+2.2116% +2.5274% +2.8725%]
+                        Performance has improved.
+Benchmarking dag/get/noise_random
+Benchmarking dag/get/noise_random: Warming up for 3.0000 s
+Benchmarking dag/get/noise_random: Collecting 20 samples in estimated 5.0000 s (155M iterations)
+Benchmarking dag/get/noise_random: Analyzing
+dag/get/noise_random    time:   [32.154 ns 32.324 ns 32.560 ns]
+                        thrpt:  [30.712 Melem/s 30.937 Melem/s 31.100 Melem/s]
+                 change:
+                        time:   [-3.1174% -2.7630% -2.3712%] (p = 0.00 < 0.05)
+                        thrpt:  [+2.4288% +2.8415% +3.2177%]
+                        Performance has improved.
+Found 2 outliers among 20 measurements (10.00%)
+  2 (10.00%) high severe
+Benchmarking dag/apply_edits/terrain_1
+Benchmarking dag/apply_edits/terrain_1: Warming up for 3.0000 s
+Benchmarking dag/apply_edits/terrain_1: Collecting 20 samples in estimated 5.1439 s (6510 iterations)
+Benchmarking dag/apply_edits/terrain_1: Analyzing
+dag/apply_edits/terrain_1
+                        time:   [783.57 µs 787.19 µs 791.71 µs]
+                        thrpt:  [1.2631 Kelem/s 1.2703 Kelem/s 1.2762 Kelem/s]
+                 change:
+                        time:   [-47.081% -45.690% -44.719%] (p = 0.00 < 0.05)
+                        thrpt:  [+80.895% +84.128% +88.968%]
+                        Performance has improved.
+Found 3 outliers among 20 measurements (15.00%)
+  1 (5.00%) high mild
+  2 (10.00%) high severe
+Benchmarking dag/apply_edits/terrain_100
+Benchmarking dag/apply_edits/terrain_100: Warming up for 3.0000 s
+Benchmarking dag/apply_edits/terrain_100: Collecting 20 samples in estimated 5.0958 s (6090 iterations)
+Benchmarking dag/apply_edits/terrain_100: Analyzing
+dag/apply_edits/terrain_100
+                        time:   [835.45 µs 836.55 µs 838.08 µs]
+                        thrpt:  [1.1932 Kelem/s 1.1954 Kelem/s 1.1970 Kelem/s]
+                 change:
+                        time:   [-46.696% -45.128% -44.100%] (p = 0.00 < 0.05)
+                        thrpt:  [+78.890% +82.242% +87.603%]
+                        Performance has improved.
+Found 3 outliers among 20 measurements (15.00%)
+  1 (5.00%) high mild
+  2 (10.00%) high severe
+Benchmarking dag/apply_edits/terrain_1000
+Benchmarking dag/apply_edits/terrain_1000: Warming up for 3.0000 s
+Benchmarking dag/apply_edits/terrain_1000: Collecting 20 samples in estimated 5.1203 s (4200 iterations)
+Benchmarking dag/apply_edits/terrain_1000: Analyzing
+dag/apply_edits/terrain_1000
+                        time:   [1.2087 ms 1.2108 ms 1.2132 ms]
+                        thrpt:  [824.25  elem/s 825.88  elem/s 827.35  elem/s]
+                 change:
+                        time:   [-38.810% -38.464% -38.149%] (p = 0.00 < 0.05)
+                        thrpt:  [+61.678% +62.507% +63.424%]
+                        Performance has improved.
+Found 1 outliers among 20 measurements (5.00%)
+  1 (5.00%) high mild
+Benchmarking dag/serialize/terrain
+Benchmarking dag/serialize/terrain: Warming up for 3.0000 s
+Benchmarking dag/serialize/terrain: Collecting 20 samples in estimated 5.0006 s (754k iterations)
+Benchmarking dag/serialize/terrain: Analyzing
+dag/serialize/terrain   time:   [6.5981 µs 6.6247 µs 6.6743 µs]
+                        thrpt:  [9.4022 GiB/s 9.4726 GiB/s 9.5107 GiB/s]
+                 change:
+                        time:   [-7.1821% -5.5498% -4.3669%] (p = 0.00 < 0.05)
+                        thrpt:  [+4.5663% +5.8759% +7.7378%]
+                        Performance has improved.
+Found 3 outliers among 20 measurements (15.00%)
+  1 (5.00%) high mild
+  2 (10.00%) high severe
+Benchmarking dag/deserialize/terrain
+Benchmarking dag/deserialize/terrain: Warming up for 3.0000 s
+Benchmarking dag/deserialize/terrain: Collecting 20 samples in estimated 5.0319 s (4620 iterations)
+Benchmarking dag/deserialize/terrain: Analyzing
+dag/deserialize/terrain time:   [1.0888 ms 1.0896 ms 1.0904 ms]
+                        thrpt:  [58.932 MiB/s 58.974 MiB/s 59.018 MiB/s]
+                 change:
+                        time:   [-2.1441% -1.7087% -1.2311%] (p = 0.00 < 0.05)
+                        thrpt:  [+1.2465% +1.7384% +2.1911%]
+                        Performance has improved.
+Found 1 outliers among 20 measurements (5.00%)
+  1 (5.00%) high severe
+
+Benchmarking edit/overlay/set
+Benchmarking edit/overlay/set: Warming up for 3.0000 s
+Benchmarking edit/overlay/set: Collecting 100 samples in estimated 5.0000 s (1.1B iterations)
+Benchmarking edit/overlay/set: Analyzing
+edit/overlay/set        time:   [4.7252 ns 4.7382 ns 4.7551 ns]
+                        thrpt:  [210.30 Melem/s 211.05 Melem/s 211.63 Melem/s]
+                 change:
+                        time:   [-5.2962% -4.8133% -4.3270%] (p = 0.00 < 0.05)
+                        thrpt:  [+4.5227% +5.0567% +5.5924%]
+                        Performance has improved.
+Found 16 outliers among 100 measurements (16.00%)
+  2 (2.00%) low mild
+  3 (3.00%) high mild
+  11 (11.00%) high severe
+Benchmarking edit/overlay/get
+Benchmarking edit/overlay/get: Warming up for 3.0000 s
+Benchmarking edit/overlay/get: Collecting 100 samples in estimated 5.0000 s (1.1B iterations)
+Benchmarking edit/overlay/get: Analyzing
+edit/overlay/get        time:   [4.4763 ns 4.4942 ns 4.5169 ns]
+                        thrpt:  [221.39 Melem/s 222.51 Melem/s 223.40 Melem/s]
+                 change:
+                        time:   [-4.3712% -3.9025% -3.4430%] (p = 0.00 < 0.05)
+                        thrpt:  [+3.5658% +4.0609% +4.5710%]
+                        Performance has improved.
+Found 16 outliers among 100 measurements (16.00%)
+  1 (1.00%) low mild
+  7 (7.00%) high mild
+  8 (8.00%) high severe
+Benchmarking edit/world/set(4x4 chunks resident)
+Benchmarking edit/world/set(4x4 chunks resident): Warming up for 3.0000 s
+Benchmarking edit/world/set(4x4 chunks resident): Collecting 100 samples in estimated 5.0006 s (38M iterations)
+Benchmarking edit/world/set(4x4 chunks resident): Analyzing
+edit/world/set(4x4 chunks resident)
+                        time:   [133.08 ns 136.15 ns 139.93 ns]
+                        thrpt:  [7.1467 Melem/s 7.3449 Melem/s 7.5144 Melem/s]
+                 change:
+                        time:   [-16.733% -14.599% -12.182%] (p = 0.00 < 0.05)
+                        thrpt:  [+13.871% +17.094% +20.095%]
+                        Performance has improved.
+Found 21 outliers among 100 measurements (21.00%)
+  13 (13.00%) high mild
+  8 (8.00%) high severe
+Benchmarking edit/world/get(overlay+dag)
+Benchmarking edit/world/get(overlay+dag): Warming up for 3.0000 s
+Benchmarking edit/world/get(overlay+dag): Collecting 100 samples in estimated 5.0001 s (203M iterations)
+Benchmarking edit/world/get(overlay+dag): Analyzing
+edit/world/get(overlay+dag)
+                        time:   [24.286 ns 24.376 ns 24.477 ns]
+                        thrpt:  [40.855 Melem/s 41.024 Melem/s 41.177 Melem/s]
+                 change:
+                        time:   [-16.824% -15.677% -14.534%] (p = 0.00 < 0.05)
+                        thrpt:  [+17.005% +18.592% +20.227%]
+                        Performance has improved.
+Found 8 outliers among 100 measurements (8.00%)
+  6 (6.00%) high mild
+  2 (2.00%) high severe
+
+Benchmarking consolidate/1chunks_x_1edits
+Benchmarking consolidate/1chunks_x_1edits: Warming up for 3.0000 s
+Benchmarking consolidate/1chunks_x_1edits: Collecting 10 samples in estimated 5.1377 s (1815 iterations)
+Benchmarking consolidate/1chunks_x_1edits: Analyzing
+consolidate/1chunks_x_1edits
+                        time:   [978.23 µs 980.98 µs 984.94 µs]
+                        thrpt:  [1.0153 Kelem/s 1.0194 Kelem/s 1.0223 Kelem/s]
+                 change:
+                        time:   [-39.245% -38.478% -37.271%] (p = 0.00 < 0.05)
+                        thrpt:  [+59.416% +62.544% +64.595%]
+                        Performance has improved.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+Benchmarking consolidate/1chunks_x_1000edits
+Benchmarking consolidate/1chunks_x_1000edits: Warming up for 3.0000 s
+Benchmarking consolidate/1chunks_x_1000edits: Collecting 10 samples in estimated 5.0595 s (1430 iterations)
+Benchmarking consolidate/1chunks_x_1000edits: Analyzing
+consolidate/1chunks_x_1000edits
+                        time:   [1.5326 ms 1.5362 ms 1.5401 ms]
+                        thrpt:  [649.33  elem/s 650.95  elem/s 652.48  elem/s]
+                 change:
+                        time:   [-32.979% -32.414% -31.907%] (p = 0.00 < 0.05)
+                        thrpt:  [+46.858% +47.960% +49.207%]
+                        Performance has improved.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high mild
+Benchmarking consolidate/16chunks_x_100edits
+Benchmarking consolidate/16chunks_x_100edits: Warming up for 3.0000 s
+Benchmarking consolidate/16chunks_x_100edits: Collecting 10 samples in estimated 6.0661 s (110 iterations)
+Benchmarking consolidate/16chunks_x_100edits: Analyzing
+consolidate/16chunks_x_100edits
+                        time:   [17.246 ms 17.406 ms 17.497 ms]
+                        thrpt:  [914.44  elem/s 919.22  elem/s 927.77  elem/s]
+                 change:
+                        time:   [-38.827% -38.168% -37.501%] (p = 0.00 < 0.05)
+                        thrpt:  [+60.003% +61.729% +63.472%]
+                        Performance has improved.
+Found 2 outliers among 10 measurements (20.00%)
+  2 (20.00%) low mild
+Benchmarking consolidate/64chunks_x_100edits
+Benchmarking consolidate/64chunks_x_100edits: Warming up for 3.0000 s
+Benchmarking consolidate/64chunks_x_100edits: Collecting 10 samples in estimated 6.5984 s (30 iterations)
+Benchmarking consolidate/64chunks_x_100edits: Analyzing
+consolidate/64chunks_x_100edits
+                        time:   [69.766 ms 70.245 ms 70.752 ms]
+                        thrpt:  [904.57  elem/s 911.09  elem/s 917.36  elem/s]
+                 change:
+                        time:   [-38.560% -38.066% -37.522%] (p = 0.00 < 0.05)
+                        thrpt:  [+60.057% +61.463% +62.761%]
+                        Performance has improved.
+
+Benchmarking gpu_tier/set_chunk/unique_import
+Benchmarking gpu_tier/set_chunk/unique_import: Warming up for 3.0000 s
+Benchmarking gpu_tier/set_chunk/unique_import: Collecting 20 samples in estimated 5.0171 s (38k iterations)
+Benchmarking gpu_tier/set_chunk/unique_import: Analyzing
+gpu_tier/set_chunk/unique_import
+                        time:   [130.37 µs 131.10 µs 131.87 µs]
+                        thrpt:  [7.5830 Kelem/s 7.6277 Kelem/s 7.6707 Kelem/s]
+                 change:
+                        time:   [-2.3212% -1.5383% -0.7370%] (p = 0.00 < 0.05)
+                        thrpt:  [+0.7425% +1.5623% +2.3763%]
+                        Change within noise threshold.
+Benchmarking gpu_tier/set_chunk/full_dedup_hit(new pos, same dag)
+Benchmarking gpu_tier/set_chunk/full_dedup_hit(new pos, same dag): Warming up for 3.0000 s
+Benchmarking gpu_tier/set_chunk/full_dedup_hit(new pos, same dag): Collecting 20 samples in estimated 5.0044 s (73k iterations)
+Benchmarking gpu_tier/set_chunk/full_dedup_hit(new pos, same dag): Analyzing
+gpu_tier/set_chunk/full_dedup_hit(new pos, same dag)
+                        time:   [69.524 µs 69.700 µs 69.932 µs]
+                        thrpt:  [14.300 Kelem/s 14.347 Kelem/s 14.383 Kelem/s]
+                 change:
+                        time:   [-0.6802% +0.9824% +2.6467%] (p = 0.28 > 0.05)
+                        thrpt:  [-2.5784% -0.9729% +0.6849%]
+                        No change in performance detected.
+Found 1 outliers among 20 measurements (5.00%)
+  1 (5.00%) high severe
+Benchmarking gpu_tier/cow_swap+reclaim+flush (100-edit diff)
+Benchmarking gpu_tier/cow_swap+reclaim+flush (100-edit diff): Warming up for 3.0000 s
+Benchmarking gpu_tier/cow_swap+reclaim+flush (100-edit diff): Collecting 20 samples in estimated 5.0093 s (60k iterations)
+Benchmarking gpu_tier/cow_swap+reclaim+flush (100-edit diff): Analyzing
+gpu_tier/cow_swap+reclaim+flush (100-edit diff)
+                        time:   [85.257 µs 85.396 µs 85.524 µs]
+                        thrpt:  [11.693 Kelem/s 11.710 Kelem/s 11.729 Kelem/s]
+                 change:
+                        time:   [-0.5299% -0.0846% +0.3724%] (p = 0.73 > 0.05)
+                        thrpt:  [-0.3710% +0.0846% +0.5327%]
+                        No change in performance detected.
+Benchmarking gpu_tier/apply_edits+reclaim+flush (1 edits)
+Benchmarking gpu_tier/apply_edits+reclaim+flush (1 edits): Warming up for 3.0000 s
+Benchmarking gpu_tier/apply_edits+reclaim+flush (1 edits): Collecting 20 samples in estimated 5.0000 s (9.5M iterations)
+Benchmarking gpu_tier/apply_edits+reclaim+flush (1 edits): Analyzing
+gpu_tier/apply_edits+reclaim+flush (1 edits)
+                        time:   [525.42 ns 526.14 ns 527.16 ns]
+                        thrpt:  [1.8970 Melem/s 1.9006 Melem/s 1.9032 Melem/s]
+                 change:
+                        time:   [-5.5680% -5.1044% -4.6230%] (p = 0.00 < 0.05)
+                        thrpt:  [+4.8471% +5.3790% +5.8963%]
+                        Performance has improved.
+Found 2 outliers among 20 measurements (10.00%)
+  2 (10.00%) high mild
+Benchmarking gpu_tier/apply_edits+reclaim+flush (100 edits)
+Benchmarking gpu_tier/apply_edits+reclaim+flush (100 edits): Warming up for 3.0000 s
+Benchmarking gpu_tier/apply_edits+reclaim+flush (100 edits): Collecting 20 samples in estimated 5.0013 s (167k iterations)
+Benchmarking gpu_tier/apply_edits+reclaim+flush (100 edits): Analyzing
+gpu_tier/apply_edits+reclaim+flush (100 edits)
+                        time:   [28.913 µs 29.969 µs 30.939 µs]
+                        thrpt:  [32.321 Kelem/s 33.368 Kelem/s 34.586 Kelem/s]
+                 change:
+                        time:   [-6.5034% -0.9047% +4.8594%] (p = 0.76 > 0.05)
+                        thrpt:  [-4.6342% +0.9130% +6.9558%]
+                        No change in performance detected.
+Benchmarking gpu_tier/lookup(table probe + dag walk)
+Benchmarking gpu_tier/lookup(table probe + dag walk): Warming up for 3.0000 s
+Benchmarking gpu_tier/lookup(table probe + dag walk): Collecting 20 samples in estimated 5.0000 s (237M iterations)
+Benchmarking gpu_tier/lookup(table probe + dag walk): Analyzing
+gpu_tier/lookup(table probe + dag walk)
+                        time:   [21.128 ns 21.142 ns 21.164 ns]
+                        thrpt:  [47.251 Melem/s 47.298 Melem/s 47.330 Melem/s]
+                 change:
+                        time:   [-1.4494% -1.1592% -0.8794%] (p = 0.00 < 0.05)
+                        thrpt:  [+0.8872% +1.1728% +1.4707%]
+                        Change within noise threshold.
+Found 3 outliers among 20 measurements (15.00%)
+  2 (10.00%) high mild
+  1 (5.00%) high severe
+Benchmarking gpu_tier/table_insert_10k_chunks(grow+rehash)
+Benchmarking gpu_tier/table_insert_10k_chunks(grow+rehash): Warming up for 3.0000 s
+
+Warning: Unable to complete 20 samples in 5.0s. You may wish to increase target time to 13.8s, or reduce sample count to 10.
+Benchmarking gpu_tier/table_insert_10k_chunks(grow+rehash): Collecting 20 samples in estimated 13.804 s (20 iterations)
+Benchmarking gpu_tier/table_insert_10k_chunks(grow+rehash): Analyzing
+gpu_tier/table_insert_10k_chunks(grow+rehash)
+                        time:   [689.06 ms 691.56 ms 694.74 ms]
+                        thrpt:  [1.4394  elem/s 1.4460  elem/s 1.4513  elem/s]
+                 change:
+                        time:   [-0.3740% +0.2549% +0.8744%] (p = 0.45 > 0.05)
+                        thrpt:  [-0.8668% -0.2542% +0.3754%]
+                        No change in performance detected.
+Found 2 outliers among 20 measurements (10.00%)
+  2 (10.00%) high severe
+
+Benchmarking disk/put_dag/terrain(no fsync)
+Benchmarking disk/put_dag/terrain(no fsync): Warming up for 3.0000 s
+Benchmarking disk/put_dag/terrain(no fsync): Collecting 20 samples in estimated 5.0279 s (37k iterations)
+Benchmarking disk/put_dag/terrain(no fsync): Analyzing
+disk/put_dag/terrain(no fsync)
+                        time:   [126.00 µs 126.50 µs 127.12 µs]
+                        thrpt:  [505.50 MiB/s 507.99 MiB/s 509.99 MiB/s]
+                 change:
+                        time:   [-4.7813% -4.3164% -3.8536%] (p = 0.00 < 0.05)
+                        thrpt:  [+4.0080% +4.5112% +5.0214%]
+                        Performance has improved.
+Found 3 outliers among 20 measurements (15.00%)
+  3 (15.00%) high mild
+Benchmarking disk/load/terrain
+Benchmarking disk/load/terrain: Warming up for 3.0000 s
+Benchmarking disk/load/terrain: Collecting 20 samples in estimated 5.3522 s (2310 iterations)
+Benchmarking disk/load/terrain: Analyzing
+disk/load/terrain       time:   [2.3119 ms 2.3139 ms 2.3156 ms]
+                        thrpt:  [27.750 MiB/s 27.771 MiB/s 27.795 MiB/s]
+                 change:
+                        time:   [+106.40% +107.13% +107.86%] (p = 0.00 < 0.05)
+                        thrpt:  [-51.891% -51.720% -51.551%]
+                        Performance has regressed.
+Found 1 outliers among 20 measurements (5.00%)
+  1 (5.00%) high severe
+Benchmarking disk/put_diff/1000_edits(no fsync)
+Benchmarking disk/put_diff/1000_edits(no fsync): Warming up for 3.0000 s
+Benchmarking disk/put_diff/1000_edits(no fsync): Collecting 20 samples in estimated 5.0015 s (266k iterations)
+Benchmarking disk/put_diff/1000_edits(no fsync): Analyzing
+disk/put_diff/1000_edits(no fsync)
+                        time:   [13.843 µs 13.885 µs 13.928 µs]
+                        thrpt:  [71.798 Melem/s 72.018 Melem/s 72.240 Melem/s]
+                 change:
+                        time:   [-15.159% -13.930% -12.958%] (p = 0.00 < 0.05)
+                        thrpt:  [+14.888% +16.184% +17.868%]
+                        Performance has improved.
+Found 2 outliers among 20 measurements (10.00%)
+  1 (5.00%) high mild
+  1 (5.00%) high severe
+Benchmarking disk/fsync_after_put_diff
+Benchmarking disk/fsync_after_put_diff: Warming up for 3.0000 s
+Benchmarking disk/fsync_after_put_diff: Collecting 20 samples in estimated 5.0034 s (260k iterations)
+Benchmarking disk/fsync_after_put_diff: Analyzing
+disk/fsync_after_put_diff
+                        time:   [14.273 µs 14.317 µs 14.359 µs]
+                        thrpt:  [69.641 Melem/s 69.847 Melem/s 70.062 Melem/s]
+                 change:
+                        time:   [-12.530% -12.048% -11.589%] (p = 0.00 < 0.05)
+                        thrpt:  [+13.108% +13.698% +14.324%]
+                        Performance has improved.
+
+     Running unittests src/lib.rs (target/release/deps/voxel_texgen-756daaad3de87c07)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/release/deps/texgen-85fa4a86a0b33198)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/release/deps/voxel_texgraph-1d01b474f805aca4)
+
+running 19 tests
+test bake::tests::cutout_coverage_threshold_is_half ... ignored
+test bake::tests::downsample_edge_rejects_invalid_geometry ... ignored
+test bake::tests::opaque_box_is_the_alpha_weighted_mean ... ignored
+test eval::tests::byte_mapping_is_round_half_up ... ignored
+test eval::tests::integer_sqrt_matches_squares ... ignored
+test eval::tests::repeated_inputs_are_evaluated_once_per_pixel ... ignored
+test eval::tests::smoothstep_is_monotonic_and_clamped ... ignored
+test graph::tests::parse_color_accepts_six_and_eight_digit_hex ... ignored
+test graph::tests::parse_color_rejects_non_ascii_channels ... ignored
+test local_set::tests::set_names_cannot_escape_the_folder ... ignored
+test mcp::tests::generate_and_check_accept_an_optional_key_list ... ignored
+test mcp::tests::graph_resource_reads_the_committed_ron ... ignored
+test mcp::tests::initialize_and_tools_list_are_protocol_shaped ... ignored
+test mcp::tests::key_normalization_accepts_short_and_full_keys ... ignored
+test mcp::tests::preview_tool_returns_text_and_images ... ignored
+test mcp::tests::tool_catalog_has_unique_names ... ignored
+test mcp::tests::upscale_repeats_pixels ... ignored
+test png::tests::encodes_exactly_one_idat_and_no_ancillary_chunks ... ignored
+test png::tests::rejects_wrong_length ... ignored
+
+test result: ok. 0 passed; 0 failed; 19 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/texgen-mcp.rs (target/release/deps/texgen_mcp-edaadadd327cc492)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/release/deps/voxel_viewer-fc770d1999f3abfb)
+
+running 105 tests
+test atlas::tests::all_256_tiles_are_addressable_at_every_level ... ignored
+test atlas::tests::atlas_has_the_locked_size_and_mip_count ... ignored
+test atlas::tests::committed_atlas_verifies_against_its_hash_and_manifest ... ignored
+test atlas::tests::downsample_averages_each_2x2_block ... ignored
+test atlas::tests::mips_do_not_bleed_between_tiles ... ignored
+test atlas::tests::no_tile_crosses_a_mip_boundary ... ignored
+test atlas::tests::out_of_range_tiles_are_rejected ... ignored
+test camera::tests::aspect_ignores_invalid_values ... ignored
+test camera::tests::center_of_view_projects_to_the_screen_center ... ignored
+test camera::tests::looking_at_faces_the_target ... ignored
+test camera::tests::projection_maps_near_and_far_to_zero_and_one ... ignored
+test camera::tests::translate_moves_the_position ... ignored
+test camera::tests::uniform_matches_the_camera ... ignored
+test camera::tests::view_matches_the_known_look_at_case ... ignored
+test camera::tests::view_places_the_camera_at_the_origin ... ignored
+test camera::tests::yaw_turns_right_and_pitch_is_clamped ... ignored
+test chunk_mesh::tests::empty_mesh_needs_no_buffers ... ignored
+test chunk_mesh::tests::mesh_bytes_are_seventy_six_per_quad ... ignored
+test cull::tests::chunk_aabbs_are_world_aligned ... ignored
+test cull::tests::plane_test_keeps_tangent_boxes ... ignored
+test cull::tests::the_default_camera_sees_the_chunk_at_its_feet ... ignored
+test frametime::tests::a_steady_sixty_hertz_run_clears_the_gate ... ignored
+test frametime::tests::the_one_percent_low_is_the_slowest_hundredth_of_frames ... ignored
+test frametime::tests::the_report_carries_the_context ... ignored
+test frametime::tests::the_slowest_mean_uses_the_rounded_up_one_percent ... ignored
+test hitch::tests::a_run_passes_only_within_both_budgets ... ignored
+test hitch::tests::percentiles_use_the_nearest_rank ... ignored
+test hitch::tests::the_table_names_every_stage ... ignored
+test input::action::tests::default_keys_are_distinct ... ignored
+test input::action::tests::escape_frees_the_pointer_and_q_quits ... ignored
+test input::action::tests::index_matches_all_order ... ignored
+test input::action::tests::names_round_trip_and_are_unique ... ignored
+test input::bindings::tests::conflicts_are_reported_once_per_pair ... ignored
+test input::bindings::tests::defaults_are_the_actions_own_keys ... ignored
+test input::bindings::tests::mouse_names_round_trip ... ignored
+test input::bindings::tests::one_key_can_drive_two_actions ... ignored
+test input::bindings::tests::sample_edits_apply_and_comment_out ... ignored
+test input::bindings::tests::text_round_trips ... ignored
+test input::bindings::tests::unbound_actions_do_not_conflict ... ignored
+test input::bindings::tests::unbound_and_unknown_entries_are_reported ... ignored
+test input::keynames::tests::every_name_round_trips ... ignored
+test input::keynames::tests::names_are_unique ... ignored
+test input::keynames::tests::unknown_names_are_rejected ... ignored
+test input::mouse::tests::default_sensitivity_turns_point_fifteen_degrees_per_count ... ignored
+test input::mouse::tests::direction_change_drops_the_old_fraction ... ignored
+test input::mouse::tests::horizontal_motion_counts_only_without_vertical ... ignored
+test input::mouse::tests::inactive_frames_drop_motion ... ignored
+test input::mouse::tests::inversion_flips_one_axis ... ignored
+test input::mouse::tests::pitch_is_positive_up ... ignored
+test input::mouse::tests::sensitivity_curve_matches_vanilla_at_the_ends ... ignored
+test input::mouse::tests::smoothing_spreads_the_same_total_over_frames ... ignored
+test input::mouse::tests::sweep_sensitivity_turns_the_requested_angle ... ignored
+test input::mouse::tests::wheel_accumulates_fractions_and_whole_steps ... ignored
+test input::tests::a_key_holds_until_release ... ignored
+test input::tests::look_only_turns_while_captured ... ignored
+test input::tests::mouse_buttons_are_bindings_too ... ignored
+test input::tests::one_key_drives_every_action_bound_to_it ... ignored
+test input::tests::only_continuous_actions_can_be_toggleable ... ignored
+test input::tests::release_all_drops_holds_clicks_and_latches ... ignored
+test input::tests::repeats_do_not_queue_more_clicks ... ignored
+test input::tests::toggleable_actions_latch_until_pressed_again ... ignored
+test input::tests::unbound_keys_do_nothing ... ignored
+test memory::tests::a_scene_that_breaks_the_margin_fails ... ignored
+test memory::tests::per_chunk_is_the_row_total_over_the_resident_chunks ... ignored
+test memory::tests::the_host_rows_carry_the_worker_volumes_and_the_backlog ... ignored
+test memory::tests::the_rows_are_the_five_the_milestone_asks_for ... ignored
+test memory::tests::the_total_is_the_sum_and_the_margin_is_checked ... ignored
+test mesh_pool::tests::a_tail_free_returns_the_bump_pointer ... ignored
+test mesh_pool::tests::adjacent_frees_coalesce ... ignored
+test mesh_pool::tests::allocation_is_aligned_and_inside_one_page ... ignored
+test mesh_pool::tests::an_over_page_request_is_rejected ... ignored
+test mesh_pool::tests::double_free_is_rejected ... ignored
+test mesh_pool::tests::formats_describe_the_shipped_streams ... ignored
+test mesh_pool::tests::fragmentation_is_reported ... ignored
+test mesh_pool::tests::free_space_is_reused_before_a_page_is_added ... ignored
+test mesh_pool::tests::stats_account_for_every_byte ... ignored
+test naive_mesh::tests::adjacent_voxels_remove_the_shared_pair ... ignored
+test naive_mesh::tests::block_vertices_cover_the_block_edges ... ignored
+test naive_mesh::tests::isolated_voxel_has_one_quad_per_face ... ignored
+test naive_mesh::tests::mesh_indices_offset_each_quad ... ignored
+test naive_mesh::tests::naive_mesh_emits_nothing_for_an_enclosed_voxel ... ignored
+test naive_mesh::tests::naive_mesh_emits_six_quads_for_one_isolated_voxel ... ignored
+test naive_mesh::tests::quad_winding_points_outward ... ignored
+test naive_mesh::tests::vertex_layout_matches_adr_010 ... ignored
+test pose::tests::a_pose_applies_the_eye_and_target ... ignored
+test pose::tests::parsing_accepts_spaces_and_rejects_junk ... ignored
+test screenshot::tests::a_capture_waits_for_the_ring_and_the_settle_frames ... ignored
+test screenshot::tests::bgra_is_swizzled_and_padding_is_dropped ... ignored
+test screenshot::tests::rgba_is_copied_through ... ignored
+test screenshot::tests::rows_are_padded_to_the_copy_alignment ... ignored
+test stats::tests::a_window_reports_means_after_the_interval ... ignored
+test stats::tests::a_window_without_gpu_samples_reports_none ... ignored
+test stats::tests::percentiles_are_nearest_rank ... ignored
+test stats::tests::the_window_resets_after_a_summary ... ignored
+test streaming::tests::center_rounds_down_to_the_chunk_edge ... ignored
+test streaming::tests::closing_discards_queued_jobs ... ignored
+test streaming::tests::neighbouring_columns_see_the_same_surface ... ignored
+test streaming::tests::ring_delta_loads_and_evicts ... ignored
+test streaming::tests::ring_has_256_unique_chunks ... ignored
+test streaming::tests::ring_is_nearest_first ... ignored
+test streaming::tests::stream_volume_has_a_surface_and_no_stray_blocks ... ignored
+test streaming::tests::stream_volume_is_deterministic ... ignored
+test upload::tests::a_frame_stops_before_it_would_exceed_the_budget ... ignored
+test upload::tests::an_empty_queue_takes_nothing ... ignored
+test upload::tests::one_oversized_job_drains_alone ... ignored
+
+test result: ok. 0 passed; 0 failed; 105 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/release/deps/voxel_viewer-f57df5663b0bbce9)
+
+running 3 tests
+test tests::cursor_wins_when_raw_is_in_device_units ... ignored
+test tests::raw_wins_when_it_matches_the_cursor ... ignored
+test tests::small_cursor_deltas_do_not_reject_raw ... ignored
+
+test result: ok. 0 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/release/deps/xtask-99e3c2e9546623b5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

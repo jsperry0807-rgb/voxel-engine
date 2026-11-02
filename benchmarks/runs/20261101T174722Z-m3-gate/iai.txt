@@ -1,0 +1,82 @@
+   Compiling ahash v0.8.12
+   Compiling x11rb v0.13.2
+   Compiling naga v30.0.1
+   Compiling smithay-client-toolkit v0.19.2
+   Compiling wgpu-types v30.0.1
+   Compiling epaint v0.32.3
+   Compiling sctk-adwaita v0.10.1
+   Compiling winit v0.30.13
+   Compiling egui v0.32.3
+   Compiling smithay-client-toolkit v0.20.0
+   Compiling wgpu-naga-bridge v30.0.1
+   Compiling wgpu-hal v30.0.1
+   Compiling glutin v0.32.3
+   Compiling wgpu-core-deps-windows-linux-android v30.0.1
+   Compiling smithay-clipboard v0.7.3
+   Compiling arboard v3.7.0
+   Compiling egui_glow v0.32.3
+   Compiling egui-winit v0.32.3
+   Compiling wgpu-core v30.0.1
+   Compiling glutin-winit v0.5.0
+   Compiling eframe v0.32.3
+   Compiling voxel-app-support v0.1.0 (/home/jace/Voxel-Stuff/voxel-approved/crates/app-support)
+   Compiling voxel-texgraph v0.1.0 (/home/jace/Voxel-Stuff/voxel-approved/crates/engine/texgraph)
+   Compiling wgpu v30.0.1
+   Compiling voxel-viewer v0.1.0 (/home/jace/Voxel-Stuff/voxel-approved/crates/engine/viewer)
+   Compiling voxel-bench v0.1.0 (/home/jace/Voxel-Stuff/voxel-approved/crates/bench)
+   Compiling voxel-render v0.1.0 (/home/jace/Voxel-Stuff/voxel-approved/crates/engine/render)
+    Finished `bench` profile [optimized] target(s) in 33.92s
+warning: the following packages contain code that will be rejected by a future version of Rust: proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running benches/iai.rs (target/release/deps/iai-42a773ccb834f953)
+iai::voxel::hot_lookup hot_lookup:lookup_scene()
+  Instructions:                       23584|23584                (No change)
+  L1 Hits:                            31662|31662                (No change)
+  LL Hits:                              122|122                  (No change)
+  RAM Hits:                               5|5                    (No change)
+  Total read+write:                   31789|31789                (No change)
+  Estimated Cycles:                   32447|32447                (No change)
+iai::voxel::resolved_lookup resolved_lookup:lookup_scene()
+  Instructions:                      339988|339988               (No change)
+  L1 Hits:                           533388|533388               (No change)
+  LL Hits:                             3208|3208                 (No change)
+  RAM Hits:                              11|11                   (No change)
+  Total read+write:                  536607|536607               (No change)
+  Estimated Cycles:                  549813|549813               (No change)
+iai::voxel::dag_get dag_get:dag_scene()
+  Instructions:                     1321502|1321502              (No change)
+  L1 Hits:                          1630092|1630091              (+0.00006%) [+1.00000x]
+  LL Hits:                             3295|3296                 (-0.03034%) [-1.00030x]
+  RAM Hits:                              12|12                   (No change)
+  Total read+write:                 1633399|1633399              (No change)
+  Estimated Cycles:                 1646987|1646991              (-0.00024%) [-1.00000x]
+iai::voxel::dag_build dag_build:Box :: leak(patterns :: terrain(0, 0).into_boxed_s...
+  Instructions:                    26416160|25862502             (+2.14078%) [+1.02141x]
+  L1 Hits:                         34358408|33750330             (+1.80169%) [+1.01802x]
+  LL Hits:                           115178|115210               (-0.02778%) [-1.00028x]
+  RAM Hits:                           23403|23401                (+0.00855%) [+1.00009x]
+  Total read+write:                34496989|33888941             (+1.79424%) [+1.01794x]
+  Estimated Cycles:                35753403|35145415             (+1.72992%) [+1.01730x]
+iai::voxel::gpu_lookup gpu_lookup:gpu_scene()
+  Instructions:                      983113|983113               (No change)
+  L1 Hits:                          1224389|1224389              (No change)
+  LL Hits:                             3735|3736                 (-0.02677%) [-1.00027x]
+  RAM Hits:                              17|16                   (+6.25000%) [+1.06250x]
+  Total read+write:                 1228141|1228141              (No change)
+  Estimated Cycles:                 1243659|1243629              (+0.00241%) [+1.00002x]
+iai::voxel::gpu_lookup_overlay gpu_lookup_overlay:gpu_overlay_scene()
+  Instructions:                     1087731|1087731              (No change)
+  L1 Hits:                          1339828|1339830              (-0.00015%) [-1.00000x]
+  LL Hits:                             3816|3813                 (+0.07868%) [+1.00079x]
+  RAM Hits:                              19|20                   (-5.00000%) [-1.05263x]
+  Total read+write:                 1343663|1343663              (No change)
+  Estimated Cycles:                 1359573|1359595              (-0.00162%) [-1.00002x]
+iai::voxel::material_words material_words:material_scene()
+  Instructions:                      116569|116584               (-0.01287%) [-1.00013x]
+  L1 Hits:                           166389|166408               (-0.01142%) [-1.00011x]
+  LL Hits:                             4131|4129                 (+0.04844%) [+1.00048x]
+  RAM Hits:                           12371|12370                (+0.00808%) [+1.00008x]
+  Total read+write:                  182891|182907               (-0.00875%) [-1.00009x]
+  Estimated Cycles:                  620029|620003               (+0.00419%) [+1.00004x]
+
+Iai-Callgrind result: Ok. 7 without regressions; 0 regressed; 7 benchmarks finished in 5.81143s
