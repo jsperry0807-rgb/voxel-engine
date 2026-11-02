@@ -45,7 +45,7 @@
 //! assert_eq!(BLOCK_OCCLUSION_BYTES, BLOCKS_PER_CHUNK.div_ceil(8));
 //! ```
 
-use crate::constants::{aabb_extent, BLOCKS_PER_CHUNK, BLOCK_DIM, BLOCK_LEVEL, CHUNK_DIM};
+use crate::constants::{BLOCK_DIM, BLOCK_LEVEL, BLOCKS_PER_CHUNK, CHUNK_DIM, aabb_extent};
 
 /// Voxels per edge of one light cell.
 ///
