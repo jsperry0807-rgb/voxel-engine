@@ -73,8 +73,12 @@ binding number is made in the spec and the pre-registration, never only in a tas
   hard argmax switches; see [`m2.5-10-weights.md`](m2.5-10-weights.md).
   `M2.5-11` moved the 18 biome definitions into `data/biomes.ron` and validates
   every palette key against the block manifest; the weight centres come from
-  the file. See [`m2.5-11-biomes.md`](m2.5-11-biomes.md). The surface rules
-  (`M2.5-12`) are next.
+  the file. See [`m2.5-11-biomes.md`](m2.5-11-biomes.md). `M2.5-12` added the
+  surface rules — 3–6 block default soil, cliff stone, underwater beds,
+  universal rock and snow, and beaches that require a shore — with every
+  emitted key checked against the manifest; see
+  [`m2.5-12-surface.md`](m2.5-12-surface.md). The material dither
+  (`M2.5-13`) is next.
 
 ## Tools
 
