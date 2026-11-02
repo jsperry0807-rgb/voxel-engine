@@ -32,6 +32,7 @@ shaders=false
 viewer=false
 bench=false
 docs=false
+code=false
 all=false
 
 files=""
@@ -55,11 +56,16 @@ while IFS= read -r path; do
 
   # Dependency, toolchain and workflow changes can move any job's outcome.
   case $path in
-    Cargo.toml | Cargo.lock | rust-toolchain | rust-toolchain.toml | .cargo/* | .github/* | scripts/changed-areas.sh)
+    Cargo.toml | Cargo.lock | rust-toolchain | rust-toolchain.toml | .cargo/* | .github/* | rustfmt.toml | clippy.toml | ron.toml | scripts/changed-areas.sh)
       all=true
       continue
       ;;
   esac
+
+  # The analysis configuration only affects the scan, not the build jobs.
+  if [[ $path == sonar-project.properties ]]; then
+    code=true
+  fi
 
   # The helper scripts are shelled out to by the Rust jobs.
   if [[ $path == scripts/*.sh ]]; then
@@ -105,9 +111,8 @@ if [[ $all == true ]]; then
   docs=true
 fi
 
-code=false
-if [[ $rust == true || $textures == true || $mesh == true || $worldgen == true ||
-  $shaders == true || $viewer == true || $bench == true ]]; then
+if [[ $all == true || $rust == true || $textures == true || $mesh == true ||
+  $worldgen == true || $shaders == true || $viewer == true || $bench == true ]]; then
   code=true
 fi
 
