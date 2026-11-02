@@ -7,8 +7,12 @@ below. This directory is the source for the documentation site;
 
 ## Layout
 
+The documentation has two areas. **Guides** explain the engine in plain
+language; **Reference** is the dense source of truth.
+
 | Directory | Contents |
 |---|---|
+| [`guides/`](guides) | Start here, architecture, worldgen, rendering, measurement, glossary |
 | [`specs/`](specs) | Normative specifications: architecture, roadmap, task list, worldgen, budgets |
 | [`design/`](design) | Game-level field specs and the worldgen preview |
 | [`adr/`](adr) | Architecture decision records |
@@ -16,6 +20,22 @@ below. This directory is the source for the documentation site;
 | [`notes/`](notes) | Engineering notes, backlog and interim scope |
 | [`reference/`](reference) | Superseded designs kept for their reasoning |
 | [`images/`](images) | Screenshots and figures used by the reports |
+
+## Guides
+
+If you are new, read these first. They summarise the reference documents and
+link back to the exact rules.
+
+- [`guides/README.md`](guides/README.md) — what this is and where to start.
+- [`guides/architecture-tour.md`](guides/architecture-tour.md) — chunks, storage,
+  meshing, light and state.
+- [`guides/worldgen-tour.md`](guides/worldgen-tour.md) — how a seed becomes a
+  1,024 km world.
+- [`guides/rendering-and-streaming.md`](guides/rendering-and-streaming.md) — the
+  ring, the pipeline and the frame.
+- [`guides/performance-and-measurement.md`](guides/performance-and-measurement.md)
+  — the gates and how to read them.
+- [`guides/glossary.md`](guides/glossary.md) — the jargon.
 
 ## Normative (read in this order)
 

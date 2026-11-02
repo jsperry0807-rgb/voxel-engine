@@ -85,6 +85,7 @@ class Node:
     pages: list[Path] = field(default_factory=list)
     match: list[str] = field(default_factory=list)
     group_by: str | None = None
+    area: str = "reference"
     children: list["Node"] = field(default_factory=list)
 
 
@@ -253,11 +254,21 @@ def load_taxonomy() -> list[Node]:
             pages=[Path(page) for page in raw.get("pages", [])],
             match=raw.get("match", []),
             group_by=raw.get("group_by"),
+            area=raw.get("area", "reference"),
         )
         node.children = [build(child) for child in raw.get("child", [])]
         return node
 
     return [build(raw) for raw in data.get("section", [])]
+
+
+def load_areas() -> list[tuple[str, str, str]]:
+    """Top-level areas, in file order: (id, title, description)."""
+    data = tomllib.loads(TAXONOMY.read_text(encoding="utf-8"))
+    return [
+        (area_id, raw.get("title", area_id), raw.get("description", ""))
+        for area_id, raw in data.get("area", {}).items()
+    ]
 
 
 def walk_nodes(nodes: list[Node]):
@@ -516,8 +527,34 @@ def write_generated_config(nav: list) -> None:
     GENERATED_CONFIG.write_text("\n".join(lines), encoding="utf-8")
 
 
+def _section_block(
+    section: Node,
+    level: int,
+    placement: dict[Path, Node],
+    labels: dict[Path, str],
+    staged_by_source: dict[Path, Path],
+) -> list[str]:
+    sources = descendant_sources(section, placement)
+    if not sources:
+        return []
+    prefix = "#" * level
+    lines = [f"{prefix} {section.title}", ""]
+    if section.description:
+        lines += [section.description, ""]
+    lines += ["| Document | Source |", "|---|---|"]
+    for source in sources:
+        label = labels[source].replace("|", "\\|")
+        lines.append(
+            f"| [{label}]({staged_by_source[source].as_posix()}) "
+            f"| `{source.as_posix()}` |"
+        )
+    lines.append("")
+    return lines
+
+
 def landing_page(
     taxonomy: list[Node],
+    areas: list[tuple[str, str, str]],
     placement: dict[Path, Node],
     labels: dict[Path, str],
     staged_by_source: dict[Path, Path],
@@ -525,30 +562,38 @@ def landing_page(
     lines = [
         "# Voxel Engine documentation",
         "",
-        "Every document in the repository, grouped by purpose. The landing page",
-        "and the navigation are generated from `docs/site.toml`; the sources stay",
-        "next to the code they describe.",
+        "The repository has two documentation areas. **Guides** explain the engine",
+        "in plain language; **Reference** holds the precise specifications, decision",
+        "records and measured reports. Both are generated from `docs/site.toml`; the",
+        "sources stay next to the code they describe.",
         "",
     ]
     repo_url = repository_url()
     if repo_url:
         lines += [f"Source: [{repo_url.removeprefix('https://')}]({repo_url})", ""]
 
-    for section in taxonomy:
-        sources = descendant_sources(section, placement)
-        if not sources:
+    if not areas:
+        for section in taxonomy:
+            lines += _section_block(section, 2, placement, labels, staged_by_source)
+        return "\n".join(lines)
+
+    rendered: set[str] = set()
+    for area_id, title, description in areas:
+        sections = [section for section in taxonomy if section.area == area_id]
+        if not sections:
             continue
-        lines += [f"## {section.title}", ""]
-        if section.description:
-            lines += [section.description, ""]
-        lines += ["| Document | Source |", "|---|---|"]
-        for source in sources:
-            label = labels[source].replace("|", "\\|")
-            lines.append(
-                f"| [{label}]({staged_by_source[source].as_posix()}) "
-                f"| `{source.as_posix()}` |"
-            )
-        lines.append("")
+        lines += [f"## {title}", ""]
+        if description:
+            lines += [description, ""]
+        for section in sections:
+            rendered.add(section.id)
+            lines += _section_block(section, 3, placement, labels, staged_by_source)
+
+    leftover = [section for section in taxonomy if section.id not in rendered]
+    if leftover:
+        lines += ["## Other", ""]
+        for section in leftover:
+            lines += _section_block(section, 3, placement, labels, staged_by_source)
     return "\n".join(lines)
 
 
@@ -584,6 +629,7 @@ def stage() -> dict[Path, Path]:
         raise SystemExit("error: two documents map to the same staged path")
 
     taxonomy = load_taxonomy()
+    areas = load_areas()
     placement = classify(sources, taxonomy)
     title_of = {source: document_title(source) for source in sources}
     labels = unique_labels(sources, title_of)
@@ -611,7 +657,8 @@ def stage() -> dict[Path, Path]:
         shutil.copy2(ROOT / asset, destination)
 
     (STAGING / "index.md").write_text(
-        landing_page(taxonomy, placement, labels, staged_by_source), encoding="utf-8"
+        landing_page(taxonomy, areas, placement, labels, staged_by_source),
+        encoding="utf-8",
     )
 
     check_links(staged_by_source)

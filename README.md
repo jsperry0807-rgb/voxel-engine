@@ -37,6 +37,7 @@ site by [`scripts/build-docs-site.py`](scripts/build-docs-site.py), curated by
 
 | Start here | |
 |---|---|
+| [`docs/guides/`](docs/guides) | Plain-language tours: start here, architecture, worldgen, rendering, measurement |
 | [`docs/status.md`](docs/status.md) | Where the project is now |
 | [`docs/README.md`](docs/README.md) | The documentation index |
 | [`docs/specs/voxel-engine-architecture-spec.md`](docs/specs/voxel-engine-architecture-spec.md) | What the engine is (normative) |

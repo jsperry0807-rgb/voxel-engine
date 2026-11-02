@@ -9,15 +9,39 @@
 #   match      shell-style globs, appended after `pages` in numeric order
 #   group_by   "directory" nests the matched pages under their parent directory
 #              (used for benchmark runs, which are created automatically)
+#   area       which top-level area a section belongs to (default "reference")
 #
 # `[[section.child]]` adds a nested group. A new section or document that is
 # not listed here still appears under "Other", so nothing silently disappears.
 
+[area.guides]
+title = "Guides"
+description = "Plain-language tours and explanations. Start here if you are new; each guide links to the precise reference document."
+
+[area.reference]
+title = "Reference"
+description = "The dense source of truth: specifications, decision records, measured reports and the run archive."
+
 [[section]]
 id = "overview"
+area = "guides"
 title = "Overview"
-description = "Where the project is, what to read first, and how the documents fit together."
+description = "Where the project is and how the documents fit together."
 pages = ["docs/README.md", "docs/status.md"]
+
+[[section]]
+id = "guides"
+area = "guides"
+title = "Guides"
+description = "Plain-language tours of the engine, the world, the frame and the measurements."
+pages = [
+  "docs/guides/README.md",
+  "docs/guides/architecture-tour.md",
+  "docs/guides/worldgen-tour.md",
+  "docs/guides/rendering-and-streaming.md",
+  "docs/guides/performance-and-measurement.md",
+  "docs/guides/glossary.md",
+]
 
 [[section]]
 id = "specifications"
