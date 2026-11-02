@@ -69,7 +69,7 @@ while IFS= read -r path; do
   if [[ $path == *.rs || $path == */Cargo.toml ]]; then
     rust=true
   fi
-  if [[ $path == textures/* || $path == crates/engine/block/* || $path == crates/engine/texgraph/* ]]; then
+  if [[ $path == textures/* || $path == apps/texgen/* || $path == crates/engine/block/* || $path == crates/engine/texgraph/* ]]; then
     textures=true
   fi
   if [[ $path == crates/engine/mesh/* ]]; then
