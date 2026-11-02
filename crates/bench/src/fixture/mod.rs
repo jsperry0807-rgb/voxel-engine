@@ -1093,8 +1093,10 @@ mod tests {
 
     #[test]
     fn recipe_validate_rejects_an_unknown_generator() {
-        let mut recipe = Recipe::default();
-        recipe.generator = "other".to_owned();
+        let recipe = Recipe {
+            generator: "other".to_owned(),
+            ..Recipe::default()
+        };
         let error = recipe.validate().unwrap_err();
         assert!(
             error.contains("unknown fixture generator `other`"),
@@ -1105,8 +1107,10 @@ mod tests {
 
     #[test]
     fn recipe_validate_rejects_an_unsupported_generator_version() {
-        let mut recipe = Recipe::default();
-        recipe.generator_version = GENERATOR_VERSION + 1;
+        let recipe = Recipe {
+            generator_version: GENERATOR_VERSION + 1,
+            ..Recipe::default()
+        };
         let error = recipe.validate().unwrap_err();
         assert!(error.contains("generator version"), "{error}");
         assert!(
@@ -1159,8 +1163,10 @@ mod tests {
 
     #[test]
     fn recipe_validate_rejects_sea_level_outside_the_world() {
-        let mut recipe = Recipe::default();
-        recipe.sea_level = -1;
+        let mut recipe = Recipe {
+            sea_level: -1,
+            ..Recipe::default()
+        };
         let error = recipe.validate().unwrap_err();
         assert!(error.contains("sea level must stay in 0..=120"), "{error}");
 
@@ -1171,9 +1177,11 @@ mod tests {
 
     #[test]
     fn recipe_validate_rejects_more_than_1024_chunks() {
-        let mut recipe = Recipe::default();
-        recipe.chunk_min = [0, 0, 0];
-        recipe.chunk_max = [1_024, 0, 0];
+        let recipe = Recipe {
+            chunk_min: [0, 0, 0],
+            chunk_max: [1_024, 0, 0],
+            ..Recipe::default()
+        };
         assert_eq!(recipe.chunk_volume(), 1_025);
         let error = recipe.validate().unwrap_err();
         assert!(error.contains("covers 1025 chunks"), "{error}");
