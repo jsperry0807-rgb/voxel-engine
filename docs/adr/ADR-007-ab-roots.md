@@ -5,7 +5,7 @@
 **Supersedes:** the single-root pointer and per-chunk-interner position in
 [`../reference/adr-three-tier-store-v2.md`](../reference/adr-three-tier-store-v2.md)
 **Related:** spec §2, §3, §8, §10.1–10.3, §11, §12;
-[`../pre-registration.md`](../pre-registration.md); ADR-011 node layout;
+[`../pre-registration.md`](../specs/pre-registration.md); ADR-011 node layout;
 ADR-012 traversal; M1-04, M1-12, M4-01…M4-17
 
 ## Context

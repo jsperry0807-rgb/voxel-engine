@@ -3,7 +3,7 @@
   "id": "m1-representative",
   "status": "provisional",
   "provisional_until_first_real_save": true,
-  "limitation": "Provisional until the first real save. This world is synthetic: it exercises the shape of a save (terrain, caves, overhangs, structures and mixed materials) but was not produced by gameplay, by docs/worldgen-design.md, or by the save path on the reference machine. Its byte sizes, material histograms and distributions are illustrative only and must not be quoted as gate results (M1-35, M1-37) until a real save is captured and this fixture is re-frozen.",
+  "limitation": "Provisional until the first real save. This world is synthetic: it exercises the shape of a save (terrain, caves, overhangs, structures and mixed materials) but was not produced by gameplay, by docs/specs/worldgen-design.md, or by the save path on the reference machine. Its byte sizes, material histograms and distributions are illustrative only and must not be quoted as gate results (M1-35, M1-37) until a real save is captured and this fixture is re-frozen.",
   "save_root": "save",
   "provenance": {
     "kind": "synthetic-engine-generated",
@@ -15,7 +15,7 @@
     "generated_at": "20261027T001550Z",
     "source_commit": "ec840e68a270",
     "source_worktree_dirty": false,
-    "worldgen": "Deterministic stand-in, not docs/worldgen-design.md; frozen for M1 measurement."
+    "worldgen": "Deterministic stand-in, not docs/specs/worldgen-design.md; frozen for M1 measurement."
   },
   "format": {
     "chunk_format": "VXV2",

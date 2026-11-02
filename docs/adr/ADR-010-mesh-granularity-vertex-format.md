@@ -4,8 +4,8 @@
 **Decision owner:** engine
 **Supersedes:** the "greedy quads merge across block boundaries" position in
 [`ADR-003`](ADR-003-material-atlas.md); this ADR confines merging to the 16³ block
-**Related:** spec §1.1, §1.2, §4.1, §6, §7, §8; [`../pre-registration.md`](../pre-registration.md)
-§3; [`../performance-targets.md`](../performance-targets.md) §1.4; ADR-001 raster;
+**Related:** spec §1.1, §1.2, §4.1, §6, §7, §8; [`../pre-registration.md`](../specs/pre-registration.md)
+§3; [`../performance-targets.md`](../specs/performance-targets.md) §1.4; ADR-001 raster;
 ADR-002 chunk edge; ADR-003 atlas; ADR-004 light; ADR-009 LOD; ADR-012 traversal;
 M1.5-10…M1.5-17, M2-01…M2-12, M3-02, M4-10, M5-06, M5-15, M5-17
 
@@ -20,7 +20,7 @@ drawn. That unit is not free:
 
 - Mesh memory is the dominant per-chunk cost: **150–600 KB at 64³ and
   600 KB–2.4 MB at 128³**, assuming **76 B per indexed quad**
-  ([`../pre-registration.md`](../pre-registration.md) §3). A format that adds a UV,
+  ([`../pre-registration.md`](../specs/pre-registration.md) §3). A format that adds a UV,
   a normal, per-vertex light or a second AO path moves every memory row in the gate.
 - Edit latency is 16 ms p95. A one-voxel edit must dirty **one block plus its AO/light
   apron**, not a whole chunk, or the tail scales with chunk volume (M2-22, M2-23).
@@ -113,7 +113,7 @@ attribute.**
    meshlet ranges and keep allocation off the frame path. **Decided (M3-02):** one
    paged byte arena with suballocation, 8 MiB pages, one contiguous range per mesh,
    strides from a `MeshFormat` descriptor; see
-   [`../m3-02-mesh-pool.md`](../m3-02-mesh-pool.md).
+   [`../m3-02-mesh-pool.md`](../milestones/m3/m3-02-mesh-pool.md).
 
 4. **Vertex: 16 B, four-byte aligned.** The byte layout is fixed:
 

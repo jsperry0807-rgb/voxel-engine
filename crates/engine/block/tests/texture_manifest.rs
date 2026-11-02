@@ -1,6 +1,6 @@
 //! Committed texture manifest and generated material table tests.
 //!
-//! These are the checks named by `docs/generator.spec.md` section 10. They
+//! These are the checks named by `docs/specs/generator.spec.md` section 10. They
 //! read the files from the block crate as a clean checkout sees them; nothing
 //! is generated in the test process except the in-memory material table.
 

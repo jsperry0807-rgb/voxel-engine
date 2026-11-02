@@ -9,7 +9,7 @@
 //! | [`edits`] (M1-37) | edit p95 |
 //! | [`probes`] (M1-38) | probe-update p95 |
 //!
-//! The rows are the twelve frozen rows in `docs/pre-registration.md` §3. A
+//! The rows are the twelve frozen rows in `docs/specs/pre-registration.md` §3. A
 //! verdict is computed from a measured value, from an invariant the measurement
 //! already asserts (the loaded-count identity, the fixed light/probe volume), or
 //! is `not_measured` with the evidence that still has to be attached. No row is
@@ -18,7 +18,7 @@
 //! # What is a gate run
 //!
 //! The report is generated on the reference machine named in
-//! `docs/reference-machine.md`. The headless harness does not open a wgpu
+//! `docs/specs/reference-machine.md`. The headless harness does not open a wgpu
 //! adapter, so the GPU identity is quoted from that document and flagged as not
 //! re-probed; the host CPU/OS/architecture are read from the running process.
 //! The fixture is the frozen M1 placeholder until the first real save, so the
@@ -65,7 +65,7 @@ use super::stat::{format_duration, format_signed_duration, grouped};
 /// Schema version of the gate report itself.
 pub const SCHEMA_VERSION: u32 = 2;
 
-/// Number of pre-registered rows in `docs/pre-registration.md` §3.
+/// Number of pre-registered rows in `docs/specs/pre-registration.md` §3.
 pub const ROW_COUNT: usize = 12;
 
 /// Total VRAM on the reference machine, in MiB.
@@ -355,7 +355,7 @@ pub struct Fallback {
     pub action: String,
 }
 
-/// The reference machine named by `docs/reference-machine.md`.
+/// The reference machine named by `docs/specs/reference-machine.md`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReferenceMachine {
     /// Short name used in the report header.
@@ -387,7 +387,7 @@ impl ReferenceMachine {
             ram_gib: 32,
             display: "1920 × 1080".to_owned(),
             os: "Linux (primary)".to_owned(),
-            source: "docs/reference-machine.md".to_owned(),
+            source: "docs/specs/reference-machine.md".to_owned(),
         }
     }
 }
@@ -448,7 +448,7 @@ pub struct GateReport {
     pub machine: Machine,
     /// Gated profile.
     pub profile: String,
-    /// True when `docs/reference-machine.md` gates this profile.
+    /// True when `docs/specs/reference-machine.md` gates this profile.
     pub profile_gated: bool,
     /// Fixture identity and provenance.
     pub fixture: FixtureInfo,
@@ -510,7 +510,7 @@ impl GateReport {
 
         let summary = summarize(&rows);
         let notes = vec![
-            "The twelve rows are the frozen table in docs/pre-registration.md §3. Every verdict is \
+            "The twelve rows are the frozen table in docs/specs/pre-registration.md §3. Every verdict is \
              computed from a measured value, a checked invariant, or is not_measured; no row is typed PASS. A row the M1-35…\
              M1-38 harnesses do not measure is NOT MEASURED, not green."
                 .to_owned(),
@@ -520,7 +520,7 @@ impl GateReport {
              twice."
                 .to_owned(),
             "The headless gate does not open a wgpu adapter. GPU identity is quoted from \
-             docs/reference-machine.md and is not re-probed; the host CPU, OS and architecture are \
+             docs/specs/reference-machine.md and is not re-probed; the host CPU, OS and architecture are \
              read from the running process."
                 .to_owned(),
             "The fixture is provisional until the first real save. Its distributions are a \

@@ -74,7 +74,7 @@ fn manifest_records_provenance_limitation_and_files() {
         provenance["worldgen"]
             .as_str()
             .unwrap()
-            .contains("not docs/worldgen-design.md")
+            .contains("not docs/specs/worldgen-design.md")
     );
 
     let recipe = &manifest["recipe"];

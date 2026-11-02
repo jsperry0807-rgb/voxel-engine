@@ -1,6 +1,6 @@
 //! Deterministic atlas bake: 256x256 sources -> 16x16 tiles -> 256x256 atlas.
 //!
-//! The filter is `box16-linear-premul-v1` (docs/generator.spec.md section
+//! The filter is `box16-linear-premul-v1` (docs/specs/generator.spec.md section
 //! 6.2): exact 16x16 boxes, alpha-weighted averaging in linear light, integer
 //! math only, and an alpha rule per [`AlphaClass`].
 

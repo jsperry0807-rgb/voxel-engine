@@ -37,11 +37,12 @@ site by [`scripts/build-docs-site.py`](scripts/build-docs-site.py), curated by
 
 | Start here | |
 |---|---|
+| [`docs/guides/`](docs/guides) | Plain-language tours: start here, architecture, worldgen, rendering, measurement |
 | [`docs/status.md`](docs/status.md) | Where the project is now |
 | [`docs/README.md`](docs/README.md) | The documentation index |
-| [`docs/voxel-engine-architecture-spec.md`](docs/voxel-engine-architecture-spec.md) | What the engine is (normative) |
-| [`docs/voxel-engine-roadmap.md`](docs/voxel-engine-roadmap.md) | Why the work is ordered this way |
-| [`docs/task-list.md`](docs/task-list.md) | Every task, its dependency and verification |
+| [`docs/specs/voxel-engine-architecture-spec.md`](docs/specs/voxel-engine-architecture-spec.md) | What the engine is (normative) |
+| [`docs/specs/voxel-engine-roadmap.md`](docs/specs/voxel-engine-roadmap.md) | Why the work is ordered this way |
+| [`docs/specs/task-list.md`](docs/specs/task-list.md) | Every task, its dependency and verification |
 | [`docs/adr/`](docs/adr) | Architecture decision records |
 
 Build the site locally:

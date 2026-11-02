@@ -1,6 +1,6 @@
 //! The one PNG encoder used by every tool in the pipeline.
 //!
-//! Settings are fixed by `docs/generator.spec.md` section 5.4: RGBA8,
+//! Settings are fixed by `docs/specs/generator.spec.md` section 5.4: RGBA8,
 //! non-interlaced, `Compression::Best`, Paeth filtering, adaptive filtering
 //! off, and no ancillary chunks. If a `png` bump changes bytes,
 //! `texgen update-manifest` is the only sanctioned fix.

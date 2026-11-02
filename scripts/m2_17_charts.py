@@ -173,7 +173,7 @@ def changed_cells_chart() -> None:
     body.append(text(width - 138, legend_y + 4, "final", 12, "start", MUTED))
 
     (DATA / "m2-17-changed-cells.svg").write_text(document(width, height, body))
-    print("wrote docs/profile/m2-17-changed-cells.svg")
+    print("wrote docs/milestones/m2/profile/m2-17-changed-cells.svg")
 
 
 def phase_chart() -> None:
@@ -221,7 +221,7 @@ def phase_chart() -> None:
     body.append(text(56, height - 10, "The full-pass p95 varies 35–44 µs on this host, so the last two ratios are conservative.", 12, fill=MUTED))
 
     (DATA / "m2-17-phases.svg").write_text(document(width, height, body))
-    print("wrote docs/profile/m2-17-phases.svg")
+    print("wrote docs/milestones/m2/profile/m2-17-phases.svg")
 
 
 def main() -> None:

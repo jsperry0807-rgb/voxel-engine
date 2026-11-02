@@ -1,7 +1,7 @@
 # M3-12 visual regression screenshot
 
 **Status:** landed 2026-11-01. The reference is
-[`images/m3-12-reference.png`](images/m3-12-reference.png) — the M3-08 stress
+[`images/m3-12-reference.png`](../../images/m3-12-reference.png) — the M3-08 stress
 scene at the pinned pose, 1920×1080 — and `voxel-bench image-diff` checks a new
 capture against it with a documented threshold. Two captures from the same build
 are **byte-identical**; a capture from the M3-08 build differs in **one pixel**.
@@ -10,7 +10,7 @@ are **byte-identical**; a capture from the M3-08 build differs in **one pixel**.
 
 | Requirement | How |
 |---|---|
-| Image in `docs/images/` | [`m3-12-reference.png`](images/m3-12-reference.png), 1920×1080 RGBA8 (1.4 MiB) |
+| Image in `docs/images/` | [`m3-12-reference.png`](../../images/m3-12-reference.png), 1920×1080 RGBA8 (1.4 MiB) |
 | Diff threshold documented | table below, enforced by `voxel-bench image-diff` (exit 1 outside it) |
 
 ## Reproducing the reference

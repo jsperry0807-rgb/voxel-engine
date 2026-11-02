@@ -4,8 +4,8 @@
 **Decision owner:** engine
 **Supersedes:** the "64³ as the final chunk edge" position in
 [`../reference/material-spec-v1.md`](../reference/material-spec-v1.md)
-**Related:** spec §1.2, §9.1, §10; [`../pre-registration.md`](../pre-registration.md);
-[`../performance-targets.md`](../performance-targets.md); ADR-001, ADR-010
+**Related:** spec §1.2, §9.1, §10; [`../pre-registration.md`](../specs/pre-registration.md);
+[`../performance-targets.md`](../specs/performance-targets.md); ADR-001, ADR-010
 
 ## Context
 
@@ -19,7 +19,7 @@ the larger edge gets worse exactly where the 16 ms and 15% gates bite.
 The frozen prediction makes neither edge obviously safe. At Default, 64³ holds 25,736
 chunks at 0.24–0.70 MiB = **6.0–17.2 GiB**; 128³ holds 3,216 at 1.2–3.2 MiB =
 **3.8–9.8 GiB**. Both are measured against a 3,275 MiB target and a 4,913 MiB fail
-line ([`../pre-registration.md`](../pre-registration.md) §2–3). The gate, not intuition,
+line ([`../pre-registration.md`](../specs/pre-registration.md) §2–3). The gate, not intuition,
 must choose.
 
 ## Decision
@@ -54,7 +54,7 @@ must choose.
 
 The M1 gate ran on the reference machine and **failed at the measured 64³ Default
 profile: 8 pass, 2 fail, 2 not measured**
-([`../m1-gate-decision.md`](../m1-gate-decision.md);
+([`../m1-gate-decision.md`](../milestones/m1/m1-gate-decision.md);
 [`gate.md`](../../benchmarks/runs/20261027T204626Z-m1-gate/gate.md)). The failures are
 the VRAM budget (24.76 GiB projected against the 4.80 GiB hard-fail line) and the mesh
 buffer (p95 753 KiB against 600 KiB). The 24.76 GiB is the known 64³ Default risk
@@ -112,7 +112,7 @@ import) before the 128³ edge is confirmed. Thresholds are unchanged.
 - **Choose by intuition or synthetic chunks.** Forbidden by the pre-registration:
   synthetic chunks hide the populated-save distribution the gate exists to measure.
 - **Shrink the far clip to fix memory.** The 8 km horizon is game identity
-  ([`../performance-targets.md`](../performance-targets.md) §4); memory failures follow
+  ([`../performance-targets.md`](../specs/performance-targets.md) §4); memory failures follow
   the sacrifice ladder instead.
 
 ## Status of open questions

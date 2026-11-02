@@ -51,7 +51,7 @@ synthetic object, not evidence of gameplay.
 ### Limitation
 
 This fixture is **provisional until the first real save**. It was not produced
-by gameplay, by `docs/worldgen-design.md`, or by the save path on the reference
+by gameplay, by `docs/specs/worldgen-design.md`, or by the save path on the reference
 machine. Do not quote its file sizes, material histogram or per-chunk
 distributions as gate results. Capture a real save, re-freeze this fixture
 against it, and only then treat the numbers as evidence.
@@ -122,7 +122,7 @@ the milestone that uses it.
 ### Limitation
 
 The same limitation as `m1-representative` applies: this is synthetic content,
-not a gameplay save and not `docs/worldgen-design.md`. The M2 gate quotes it as
+not a gameplay save and not `docs/specs/worldgen-design.md`. The M2 gate quotes it as
 the **128³ measurement fixture**, with the dataset row (11) carried as not
 measured until a real populated save exists. Its per-chunk distributions are a
 measurement of this fixture, not a shipping estimate.

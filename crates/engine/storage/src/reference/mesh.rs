@@ -12,7 +12,7 @@
 //! A non-air voxel face is exposed when the voxel on its outward side is air or
 //! outside the scene. Any non-zero material is treated as solid; this reference
 //! does not model transparency because water is a separate renderer at launch
-//! (`docs/voxel-engine-architecture-spec.md` §14.2). Faces between two different
+//! (`docs/specs/voxel-engine-architecture-spec.md` §14.2). Faces between two different
 //! solid materials are interior and are not emitted.
 //!
 //! # Merge rule

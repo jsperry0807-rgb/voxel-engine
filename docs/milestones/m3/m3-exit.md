@@ -3,9 +3,9 @@
 **Date:** 2026-11-01
 **Milestone:** M3 (streaming slice), tasks M3-00…M3-13
 **Tag:** `m3`
-**Frozen config:** [`benchmarks/m3-scene.json`](../benchmarks/m3-scene.json) — enforced by `tests/scene_config.rs` in both crates
-**Gate archive:** [`benchmarks/runs/20261101T175113Z-m3-gate-128`](../benchmarks/runs/20261101T175113Z-m3-gate-128) (minimum profile, plus all three scale-up profiles)
-**Reference image:** [`images/m3-12-reference.png`](images/m3-12-reference.png)
+**Frozen config:** [`benchmarks/m3-scene.json`](../../../benchmarks/m3-scene.json) — enforced by `tests/scene_config.rs` in both crates
+**Gate archive:** [`benchmarks/runs/20261101T175113Z-m3-gate-128`](../../../benchmarks/runs/20261101T175113Z-m3-gate-128) (minimum profile, plus all three scale-up profiles)
+**Reference image:** [`images/m3-12-reference.png`](../../images/m3-12-reference.png)
 
 ## 1. Verdict
 

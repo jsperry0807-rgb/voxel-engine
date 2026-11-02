@@ -38,7 +38,7 @@ ID | Task | Depends | Done when | Verify | Est | Done
 
 ### Reference machine
 
-The machine that produced `benchmarks/HISTORY.md` (AMD Ryzen 5 7600; GPU model to be recorded in `docs/reference-machine.md` by M0-02). Every number quoted by a gate must name this machine. Record GPU, driver, RAM and OS at the top of the gate report.
+The machine that produced `benchmarks/HISTORY.md` (AMD Ryzen 5 7600; GPU model to be recorded in `docs/specs/reference-machine.md` by M0-02). Every number quoted by a gate must name this machine. Record GPU, driver, RAM and OS at the top of the gate report.
 
 ### Benchmark cadence and stop-the-line rule
 
@@ -104,7 +104,7 @@ Nightly jobs are advisory until the machine has 10 stable runs, then required. A
 
 1. **Stop.** Do not tick the task, do not merge the PR, and do not start the next task or milestone.
 2. **Archive the failure.** Record the run with a label that names the task and the miss, and attach the report to the PR.
-3. **Classify it.** Use the lenses in [`benchmarks/README.md`](../benchmarks/README.md): memory, CPU, latency, GPU or throughput. Do not optimize before you know which one missed.
+3. **Classify it.** Use the lenses in [`benchmarks/README.md`](../../benchmarks/README.md): memory, CPU, latency, GPU or throughput. Do not optimize before you know which one missed.
 4. **Optimize now, in this milestone.** Open a new task with the next free ID that cites the failing bench and the budget; do not widen the original task. Profile first, then take the cheapest lever. The sacrifice ladder (performance-targets §4) is the fallback after code-level levers, not the first move.
 5. **Re-run the identical bench** on the same host with the same case set, and record a separate run. A different bench is not evidence.
 6. **Continue only when both are true:** the missed metric is on the passing side of its budget, and no other lens regressed by more than 10%. A second regression is a second stop.
@@ -245,7 +245,7 @@ The deadline is the art task in the last column; its output must be ready before
 
 **Underground, structures and flora (≤ 32 new tiles).** The per-material rows above are the deadline list. Lava and geothermal tiles carry the emissive material flag; that is a property, not a texture rule. Giant-tree detail reuses the oak/spruce keys; transition and detail templates add zero slots. The 15 M2.5-31 faces and their block rows are frozen in the manifest; the flora, structure and underground tables and their fixtures remain acceptance work.
 
-**Water and current (≤ 3 new tiles).** `water_still` exists from M1.5-14; `water_flow` and `foam_strip` are frozen at slots 70–71. Both are Translucent and tile on both axes, flow along +X, and use a nominal 0.25 tile/s UV scroll that M3.5-08 scales by current speed. Caustics are procedural; no `caustics` tile enters the atlas. The flow axis, alpha policy and scroll rate are recorded in `docs/water-textures.md`.
+**Water and current (≤ 3 new tiles).** `water_still` exists from M1.5-14; `water_flow` and `foam_strip` are frozen at slots 70–71. Both are Translucent and tile on both axes, flow along +X, and use a nominal 0.25 tile/s UV scroll that M3.5-08 scales by current speed. Caustics are procedural; no `caustics` tile enters the atlas. The flow axis, alpha policy and scroll rate are recorded in `docs/specs/water-textures.md`.
 
 **Map UI (0 slots).** The atlas item icon and player marker are UI sprites, not material tiles. They are authored inside M3.5-10 and never enter the 256-slot table.
 
@@ -271,7 +271,7 @@ Art tasks are milestone tasks, not a separate track: **M1.5-14** (slice), **M2.5
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
 | M0-01 | Consolidate docs into `docs/` with `docs/README.md` index; move external ADR, material spec and cost model to `docs/reference/`; commit them | — | `docs/` contains spec, roadmap, task list, README, reference; nothing doc-like remains outside the repo; `git log` shows the docs commit | `git status --short` clean for `docs/`; links resolve | 0.25 d | [x] |
-| M0-02 | Freeze the pre-registration into `docs/pre-registration.md`: profiles, budgets, residency model, fallback rules, amendment rule, reference machine | M0-01 | Frozen and dated; reference machine named; fallback rules separate memory from latency; amendment rule stated | `git log -1 -- docs/pre-registration.md`; doc review | 0.5 d | [x] |
+| M0-02 | Freeze the pre-registration into `docs/specs/pre-registration.md`: profiles, budgets, residency model, fallback rules, amendment rule, reference machine | M0-01 | Frozen and dated; reference machine named; fallback rules separate memory from latency; amendment rule stated | `git log -1 -- docs/specs/pre-registration.md`; doc review | 0.5 d | [x] |
 | M0-03 | Residency model `N(edge, R, V)`, equal-volume rule, and the per-edge/per-profile table | M0-02 | Formula and table in the pre-registration; 64³ vs 128³ chunk counts shown; labelled as prediction, not result | arithmetic checked in the doc | 0.25 d | [x] |
 | M0-04 | Create `voxel-core::constants` with `VOXEL_SIZE`, `BLOCK_DIM/BITS`, `CHUNK_BITS`, `ROOT_LEVEL`, `BLOCK_LEVEL`, `CHUNK_DIM`, `CHUNK_VOLUME`, `BLOCKS_PER_CHUNK`, `LEVEL_SIZE`, `aabb_extent(level)`; add `voxel-core` to `voxel-storage` deps; use it in at least one call site | M0-03 | Consts compile in a `const` context; `const` assertions cover every relationship; storage imports them | `cargo test -p voxel-core constants`; `cargo check -p voxel-storage` | 1 d | [x] |
 | M0-05 | Node-word layout constants and helpers: `NODE_MASK_SHIFT/BITS`, `NODE_LEVEL_SHIFT/BITS`, `NODE_BASE_SHIFT/BITS`, `encode_node`, `decode_node`; bit-field tests | M0-04 | Round-trips all masks 0–255, levels 0–7, bases 0, 1, 2^48−1; reserved bits stay zero | `cargo test -p voxel-core node_word` | 0.5 d | [x] |
@@ -411,7 +411,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 **Goal:** deterministic mesh + AO + block light + probes, at the 128³ Minimum edge.
 **Exit:** M2-30. **Budget:** 27.0 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
-**Status:** Complete — `M2-16`…`M2-30` done. The measured 128³ Minimum exit is in [`m2-exit.md`](m2-exit.md): **9 pass, 1 fail, 2 not measured**. The mesh-buffer row misses by 1,250 KiB (production AO 3,650 KiB), so 128³ Minimum is a measured candidate pending mesh compression; row 9 is measured, row 11 is carried until a real save. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
+**Status:** Complete — `M2-16`…`M2-30` done. The measured 128³ Minimum exit is in [`m2-exit.md`](../milestones/m2/m2-exit.md): **9 pass, 1 fail, 2 not measured**. The mesh-buffer row misses by 1,250 KiB (production AO 3,650 KiB), so 128³ Minimum is a measured candidate pending mesh compression; row 9 is measured, row 11 is carried until a real save. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](../milestones/m1/m1-gate-decision.md)); 128³ Default is not greenlit.
 **Art:** none beyond M1.5-14; M2 reuses the slice atlas.
 
 **M1 gate carry-over — blocks M2-30:**
@@ -427,7 +427,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
   fallback: 64³ Minimum, then mesh compression, near radius, vertical shell.
 
 **M2-30 resolution (2026-10-31):** the measured run is recorded in
-[`m2-exit.md`](m2-exit.md). Row 9 is closed by the M1-34 reference over 100
+[`m2-exit.md`](../milestones/m2/m2-exit.md). Row 9 is closed by the M1-34 reference over 100
 poses on the save (p95 0.00%); row 11 is **carried**, not closed, because no real
 save exists until M2.5/worldgen or gameplay. The 128³ memory row is 4.16 GiB
 (passes the 4.80 GiB hard fail, over the 3.20 GiB target), and the mesh row
@@ -438,7 +438,7 @@ remains the first rule-3 lever and 128³ Minimum is a measured candidate.
 and 445 µs versus 574,992 B and 4.90 ms for a dense padded copy at 64³
 (8.5% / 9.1%); at 128³ they used 196,608 B and 1.57 ms versus 4,394,000 B and
 27.4 ms (4.5% / 5.7%). Apron wins; method and caveats are in
-[`m2-apron-cost.md`](m2-apron-cost.md).
+[`m2-apron-cost.md`](../milestones/m2/m2-apron-cost.md).
 
 **M2-03 measured (2026-10-29):** `BlockScratch` is `18³ × 2 B = 11,664 B` per
 worker, reused for all 64 blocks at 64³ or 512 blocks at 128³. The
@@ -517,8 +517,8 @@ mask, criterion means are 4.905–4.931 µs full / 256.8–260.8 ns incremental 
 is 4.4% / 5.7%; the six-position sweep puts every edit under 10% p95 at 128³,
 including the 570-cell border-side edit. The edit changes 46/216 padded cells at
 64³ and 414/1,000 at 128³. Removals still escalate (M2-16). See
-[`m2-light-cost.md`](m2-light-cost.md) and the measured path in
-[`m2-light-20pct.md`](m2-light-20pct.md).
+[`m2-light-cost.md`](../milestones/m2/m2-light-cost.md) and the measured path in
+[`m2-light-20pct.md`](../milestones/m2/m2-light-20pct.md).
 
 **M2-18 measured (2026-10-30):** the production `voxel-mesh::probe` bake is
 byte-identical to the M1-30 oracle on floor, cave and terrain fixtures at the
@@ -636,12 +636,12 @@ delta. The scene-comparison tests assert the ray set is a subset of the fill
 (line of sight implies connectivity). A material-aware `SvdagScene` keeps water
 transparent, and the suite also covers negative chunks, multiple chunks, a
 camera inside solid and a camera on a block boundary. The 100-pose accuracy/cost
-table and the decision recommendation are M2-26. See [`m2-raytest.md`](m2-raytest.md) and
+table and the decision recommendation are M2-26. See [`m2-raytest.md`](../milestones/m2/m2-raytest.md) and
 `cargo test -p voxel-mesh --features raytest`.
 
 **M2-26 measured (2026-10-31):** the 100-pose comparison runs on a 16³-block
 SVDAG world (terrain, slit wall, pillar, sealed cave) with horizon 4 and is
-recorded in [`m2-raytest.md`](m2-raytest.md). Release p50/p95 per pose is
+recorded in [`m2-raytest.md`](../milestones/m2/m2-raytest.md). Release p50/p95 per pose is
 24.8/28.3 µs for the flood fill and 799.1/892.9 µs for the ray-test — a 32.3× /
 31.5× cost ratio at 64³ (33.4× / 37.2× at 128³) — with the ray set a subset of
 the fill on every pose and an in-world delta of 20,227 blocks (35.3% of in-world
@@ -666,7 +666,7 @@ sampled yet. `cargo run -p voxel-viewer` on the development host
 (llvmpipe/software Vulkan, 1920×1080) logs the M2 upload and runs at 166–172 fps
 (5.8–6.0 ms/frame); the reference-GPU 60 Hz run is the manual acceptance step.
 The one-chunk `u16` index stream caps a mesh at 16,384 quads, so a fully
-populated 128³ chunk needs meshlets in M3. See [`m2-viewer.md`](m2-viewer.md).
+populated 128³ chunk needs meshlets in M3. See [`m2-viewer.md`](../milestones/m2/m2-viewer.md).
 
 **M2-28 measured (2026-10-31):** `cargo bench -p voxel-mesh build` runs the
 production single-threaded chunk build (18³ scratch fill + `greedy_block` with
@@ -694,7 +694,7 @@ buffers are per-block outputs bounded by `3 × 16³` quads, not scratch. Both
 edges pass `cargo test -p voxel-mesh scratch_budget`.
 
 **M2-30 measured (2026-10-31):** the M2 exit is recorded in
-[`m2-exit.md`](m2-exit.md) and archived as
+[`m2-exit.md`](../milestones/m2/m2-exit.md) and archived as
 `benchmarks/runs/20261031T152718Z-m2-gate-128`. The `m2-128` fixture (9 chunks,
 128³ edge) was frozen and verified. The M2 run reported edit p95 **8.136 µs**,
 probe-update p95 **765.844 µs**, nodes max **138,636**, granularity p95
@@ -849,7 +849,7 @@ M3-09/M3-10 own the latter. The 256-chunk trace measures an upload at 6.2 ms
 mean / 20.9 ms max, which is why upload is a separate stage; M3-02's arena is
 the follow-up. `stream_apron` culls chunk borders against the analytic
 neighbour; runtime camera motion/eviction is M3-09. See
-[`m3-01-streaming.md`](m3-01-streaming.md).
+[`m3-01-streaming.md`](../milestones/m3/m3-01-streaming.md).
 
 **M3-02 mesh pool (closed 2026-10-31):** one 8 MiB paged arena with byte-range
 suballocation; a mesh is one contiguous range and the arena takes its strides
@@ -859,7 +859,7 @@ page creation **0.04–0.05 s** once. Max pump stays **0.09 ms with 0 hitches** 
 both GPUs and no buffer is created after warm-up. Per-mesh arena allocation is
 ~0.2 ms; the remaining `write_buffer` cost is wgpu's staging path and moves to
 M3-03. A 64-column flight adds at most one page, reported by `tests/pool.rs`.
-See [`m3-02-mesh-pool.md`](m3-02-mesh-pool.md).
+See [`m3-02-mesh-pool.md`](../milestones/m3/m3-02-mesh-pool.md).
 
 **M3-03 upload queue (closed 2026-10-31):** finished meshes queue on the CPU
 behind a **32 MiB backlog cap**; a frame copies at most **1 MiB** through one
@@ -868,7 +868,7 @@ them. The 128³ ring uploads **120.3 MiB in 160–166 frames** with a max frame 
 **1,023–1,024 KiB of 1,024 KiB and 0 overruns** on both GPUs; 64³ takes 35
 frames. Max pump stays **0.42/0.24 ms** with 0 hitches. Copy mean is 2.9 ms
 (the 4 ms target), max 15.6 ms from the same driver tail that shows 261 ms page
-creations. See [`m3-03-upload-queue.md`](m3-03-upload-queue.md).
+creations. See [`m3-03-upload-queue.md`](../milestones/m3/m3-03-upload-queue.md).
 
 **M3-04 CPU chunk cull (closed 2026-10-31):** the frame thread extracts six
 planes from the camera's view-projection matrix and skips any resident chunk
@@ -877,7 +877,7 @@ the M1-32 reference exactly (52–138 of 256 kept, mean **95.7**); the live view
 draws **93 of 256** at the default camera. Frame rate rose from 119 to
 **182–184 fps** on the RTX 4060 and from 39 to **72–75 fps** on the Radeon iGPU,
 which is the stopgap's 256-draw raster cost. See
-[`m3-04-cpu-cull.md`](m3-04-cpu-cull.md).
+[`m3-04-cpu-cull.md`](../milestones/m3/m3-04-cpu-cull.md).
 
 **M3-05 draw loop (closed 2026-10-31):** `streaming::draw_visible` makes one
 pass over the resident map, filters with the M3-04 frustum, and issues one
@@ -885,7 +885,7 @@ indexed draw per accepted chunk with a mesh. `DrawStats` separates visible from
 drawn. A 5×5 patch rendered with the cull and with every chunk accepted is
 **byte-identical**, and both visit lists are duplicate-free; the viewer logs
 **93 visible, 93 drawn, 256 resident** on both GPUs. See
-[`m3-05-draw-loop.md`](m3-05-draw-loop.md).
+[`m3-05-draw-loop.md`](../milestones/m3/m3-05-draw-loop.md).
 
 **M3-06 instrumentation (closed 2026-10-31):** `stats.rs` reports a
 `FrameStats` per frame (CPU submit, GPU pass from in-pass timestamp queries,
@@ -894,7 +894,7 @@ summary line. Steady state on the RTX 4060: **180 fps, CPU 1.23 ms, GPU pass
 1.66 ms, 93/256 chunks, 13,201 blocks, 1,032,763 quads, 43.3 MiB** (exactly
 44 B/quad); Radeon iGPU: 73 fps, GPU pass 8.9 ms. Upload bytes read 0 KiB in
 steady state and ~0.75 MiB per frame during the load. See
-[`m3-06-instrumentation.md`](m3-06-instrumentation.md).
+[`m3-06-instrumentation.md`](../milestones/m3/m3-06-instrumentation.md).
 
 **M3-07 frame breakdown (closed 2026-10-31):** at 1080p and the default pose
 the frame is **5.5 ms on the RTX 4060** (GPU pass 1.7, CPU 1.2 of which cull
@@ -903,7 +903,7 @@ residual 4.8). The iGPU is draw-bound at 54% of its frame; the 4060 is
 present-bound with ~11 ms of 16.6 ms headroom. Load phase: generation
 **64.8 ms/chunk**, ring fill **6.0 s**, upload **3.15 ms/frame**, submit
 22–29 ms under worker contention. See
-[`m3-07-frame-breakdown.md`](m3-07-frame-breakdown.md).
+[`m3-07-frame-breakdown.md`](../milestones/m3/m3-07-frame-breakdown.md).
 
 **M3-08 stress scene (closed 2026-10-31):** `scene.rs` makes the ring a pure
 function of `VOXEL_SCENE_SEED`. Five terrain variants (meadow 110, forest 67,
@@ -914,8 +914,8 @@ slots. Forest floors blend flat so the ring peaks at 13.5k quads against the
 16,384 u16 index budget. The ring fills in 5 s / 100.5 MiB in 13 pages with 0
 hitches; RTX 4060 runs 180 fps (GPU pass 1.6 ms) and the Radeon iGPU 80 fps
 (7.8 ms). `VOXEL_SCREENSHOT` writes a PNG of the presented frame;
-[`images/m3-08-stress-scene.png`](images/m3-08-stress-scene.png) is the
-committed capture. See [`m3-08-stress-scene.md`](m3-08-stress-scene.md).
+[`images/m3-08-stress-scene.png`](../images/m3-08-stress-scene.png) is the
+committed capture. See [`m3-08-stress-scene.md`](../milestones/m3/m3-08-stress-scene.md).
 
 **M3-09 hitch test (closed 2026-10-31):** `cargo run -p voxel-bench -- hitch`
 drives the viewer's real frame-thread path headlessly — pump, the M3-03
@@ -927,7 +927,7 @@ worst frame is **6.16–6.42 ms** and **5.72–6.13 ms**. At the M3-03 default o
 **512 KiB**: p99 drops ~2.5× and the 256-chunk ring uploads in 260 frames
 instead of 141. The remaining tail is generator contention: with
 `VOXEL_STREAM_WORKERS=1` the worst warm-up copy falls from 15.8 ms to 7.1 ms.
-See [`m3-09-hitch-test.md`](m3-09-hitch-test.md).
+See [`m3-09-hitch-test.md`](../milestones/m3/m3-09-hitch-test.md).
 
 **M3-10 60 Hz (closed 2026-11-01):** `VOXEL_FRAMETIME` records the interval
 between presents for 1200 frames at a pinned pose and writes a JSON report with
@@ -939,7 +939,7 @@ average and straddles it in the tail. The 4060 is present-bound (0.4–1.8 ms
 pass), the iGPU draw-bound (8.2–8.5 ms pass). At 64³ the iGPU records 119 fps
 average / 87 fps 1% low, so the miss is specific to the 128³ gate. Front-to-back
 draw ordering was measured and reverted (no pass change). The iGPU tail is
-carried to M3-13. See [`m3-10-60hz.md`](m3-10-60hz.md).
+carried to M3-13. See [`m3-10-60hz.md`](../milestones/m3/m3-10-60hz.md).
 
 **M3-11 memory report (closed 2026-11-01):** `cargo run --release -p voxel-bench
 --features chunk128 -- scene-memory` fills the real 256-chunk ring headlessly and
@@ -953,25 +953,25 @@ comparable to the M1 gate's 5.29 MiB/chunk projection. The gate's 128³ storage
 projection, now recorded for all three residency profiles on every run, is
 **2.98 GiB at minimum (805 chunks, PASS)**, 11.93 GiB at default (3,217) and
 95.4 GiB at high (25,736) — green only at the minimum view, which is a
-view-distance decision for M5/M7. See [`m3-11-memory.md`](m3-11-memory.md).
+view-distance decision for M5/M7. See [`m3-11-memory.md`](../milestones/m3/m3-11-memory.md).
 
 **M3-12 visual regression (closed 2026-11-01):**
-[`images/m3-12-reference.png`](images/m3-12-reference.png) is the M3-08 scene at
+[`images/m3-12-reference.png`](../images/m3-12-reference.png) is the M3-08 scene at
 the pinned pose (1920×1080, default seed, 128³), regenerable with the
 `VOXEL_SCREENSHOT` command in the doc. `cargo run -p voxel-bench -- image-diff
 --reference … --candidate …` compares a capture against it and exits 1 outside
 the threshold: ≤0.01% of pixels beyond a 2/255 channel tolerance, no channel
 delta above 32/255, mean absolute delta ≤ 0.5/255. Two captures from the current
 build are **byte-identical**; the M3-08 capture differs by **one pixel** (18/255).
-See [`m3-12-visual-regression.md`](m3-12-visual-regression.md).
+See [`m3-12-visual-regression.md`](../milestones/m3/m3-12-visual-regression.md).
 
 **M3-13 exit (closed 2026-11-01):** the scene config is frozen in
-[`benchmarks/m3-scene.json`](../benchmarks/m3-scene.json) — seed `0x5EED1234`,
+[`benchmarks/m3-scene.json`](../../benchmarks/m3-scene.json) — seed `0x5EED1234`,
 128³ gate / 64³ default, 256-chunk ring, 4 ms pump budget, 512 KiB upload budget,
 1920×1080 at the `(14, 6, 20) → (2, 1, 2)` gate pose, 1200-frame window,
 reference image and image threshold — and both crates' `scene_config` tests fail
 if the code and the file disagree. The exit record is
-[`m3-exit.md`](m3-exit.md) and `m3` is tagged. **Two open conditions: the Radeon
+[`m3-exit.md`](../milestones/m3/m3-exit.md) and `m3` is tagged. **Two open conditions: the Radeon
 iGPU's 128³ 1% low (56.6–61.2 fps against 60) and 128³ being green only at the
 minimum residency profile (default 11.93 GiB, high 95.4 GiB).**
 
@@ -1107,7 +1107,7 @@ minimum residency profile (default 11.93 GiB, high 95.4 GiB).**
 | M6-07 | Per-frame streaming budget and backlog accounting | M6-05 | Backlog drains; p99 frame ≤ 16 ms | run | 0.5 d | [ ] |
 | M6-08 | Disk header v2: magic, version, `CHUNK_BITS`, level table, compression flag, CRC | M1-13 | Old files rejected with a clear error; new round-trip | `cargo test -p voxel-storage header_v2` | 1 d | [ ] |
 | M6-09 | Band serialization with level lengths and leaf arena; zstd optional | M6-08 | Round-trip on 5 fixtures; sizes recorded | `cargo test -p voxel-storage band_serde` | 1.5 d | [ ] |
-| M6-09a | Retire the transitional v1 `Svdag` pool: disk records and GPU import read bands; delete `pool`/`root`/`LegacyPool` (interim lifetime change scoped in `docs/v1-pool-residency.md`) | M6-09, M4-09 | `Svdag` holds only `ChunkDag`; no v1 bytes resident; save round-trip and the shader mirror tests pass | `cargo test -p voxel-storage band_only` + `cargo run -p voxel-bench -- gate memory` | 3 d | [ ] |
+| M6-09a | Retire the transitional v1 `Svdag` pool: disk records and GPU import read bands; delete `pool`/`root`/`LegacyPool` (interim lifetime change scoped in `docs/notes/v1-pool-residency.md`) | M6-09, M4-09 | `Svdag` holds only `ChunkDag`; no v1 bytes resident; save round-trip and the shader mirror tests pass | `cargo test -p voxel-storage band_only` + `cargo run -p voxel-bench -- gate memory` | 3 d | [ ] |
 | M6-10 | Persist block light cells with the chunk | M6-09 | Reload equals the pre-save light on 5 fixtures | `cargo test -p voxel-storage light_persist` | 1 d | [ ] |
 | M6-11 | Persist probes at the current LOD with the chunk | M6-09 | Reload equals pre-save bytes; LOD tag stored | `cargo test -p voxel-storage probe_persist` | 1 d | [ ] |
 | M6-12 | Dirty-region journal: record edited block cells so reopen can skip full relight | M6-10 | Journal replay equals a full relight on 20 random edit sets | `cargo test -p voxel-storage journal_light` | 2 d | [ ] |

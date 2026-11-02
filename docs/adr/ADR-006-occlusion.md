@@ -4,8 +4,8 @@
 **Decision owner:** engine
 **Supersedes:** none — closes the occlusion row in spec §9
 **Related:** spec §4.2, §4.3, §5, §8, §11, §12; ADR-001, ADR-002;
-[`../pre-registration.md`](../pre-registration.md);
-[`../performance-targets.md`](../performance-targets.md)
+[`../pre-registration.md`](../specs/pre-registration.md);
+[`../performance-targets.md`](../specs/performance-targets.md)
 
 ## Context
 

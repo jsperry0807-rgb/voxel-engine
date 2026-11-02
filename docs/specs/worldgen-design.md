@@ -225,4 +225,4 @@ This design adds two workstreams to the roadmap:
 
 Planning with contingency: **+63 days for worldgen, +27 days for far field/water**, taking the one-engineer plan from ~41 weeks to **~59 weeks (~14 months)**. With two engineers, roughly 9–10 months. The 12 km vertical and 16–32 km view are the two decisions that buy most of that cost; both are reversible only by shrinking the world.
 
-The task tables live in `docs/task-list.md` (M2.5 and M3.5), and the spec is amended in v2.3.
+The task tables live in `docs/specs/task-list.md` (M2.5 and M3.5), and the spec is amended in v2.3.

@@ -13,7 +13,7 @@ pass/fail measurement, not a build-out.
 
 M0, M1 and M2 are complete. The M1 gate selected the **128³ Minimum** profile for
 M2, conditional on mesh compression and a measured 128³ run. The M2 exit is
-measured ([`m2-exit.md`](m2-exit.md)): production VRAM clears the hard-fail line
+measured ([`m2-exit.md`](../milestones/m2/m2-exit.md)): production VRAM clears the hard-fail line
 at **4.16 GiB**, edit/probe/light/probe-grid rows pass, and the **production
 mesh row misses the 2.4 MiB cap by 1,250 KiB**. Mesh compression is therefore
 the first M3 item and 128³ Minimum remains a measured candidate, not a confirmed
@@ -100,7 +100,7 @@ is done only when its gate passes on the reference machine.
 ### M0 — Pre-registration, constants, ADRs (1 week)
 
 **Status:** Complete — tagged `m0` on 2026-10-26. Exit checklist:
-[`m0-exit.md`](m0-exit.md).
+[`m0-exit.md`](../milestones/m0/m0-exit.md).
 
 Write the gate before anything is measured.
 
@@ -153,7 +153,7 @@ was projected to clear the hard-fail line at 3.88 GiB optimistic, but the model
 excluded the resident v1 pool: counted, it projects **4.89 GiB**, above the line.
 M2 is greenlit to implement and measure 128³ Minimum conditional on mesh
 compression and removing the v1 pool (M6-09a):
-[`m1-gate-decision.md`](m1-gate-decision.md).
+[`m1-gate-decision.md`](../milestones/m1/m1-gate-decision.md).
 
 **Goal:** the layout is the spec's, and the pre-registered table has real numbers.
 
@@ -255,7 +255,7 @@ Runs at the **128³ Minimum** edge (ADR-002). Default is not greenlit.
   edit 8.136 µs (PASS), probe 765.844 µs (PASS), throughput 34.3 chunks/s. The
   production mesh row is 3,650 KiB against the 2,400 KiB cap, so the run
   records an open rule-3 lever rather than a confirmed edge. See
-  [`m2-exit.md`](m2-exit.md).
+  [`m2-exit.md`](../milestones/m2/m2-exit.md).
 - Gate row 9 measured by the M1-34 reference over 100 poses (0.00% p95 reference
   granularity); row 11 **carried** because no real populated save exists before
   M2.5/worldgen or gameplay.
@@ -432,7 +432,7 @@ Critical path (one engineer): M0 → M1 → M2 → M3 → M4 → M5 → M6 = **3
 worldgen. M2.5 and M3.5 add 63 and 27 planning days, taking the one-engineer plan to
 **~59 weeks (~14 months)**. With two engineers M2.5 runs beside M2–M3 and the effort
 drops to **~9–10 months**. The bottom-up task list puts the M1 gate at the end of
-week 8; see `docs/task-list.md` §2 for the sprint map.
+week 8; see `docs/specs/task-list.md` §2 for the sprint map.
 
 - **A — Storage and sync:** M1 layout, M4, M6 persistence.
 - **B — Content and renderer:** M1 references, M1.5, M2, M3, M5.

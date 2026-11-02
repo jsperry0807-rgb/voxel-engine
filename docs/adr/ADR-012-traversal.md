@@ -23,7 +23,7 @@ Only execution mechanics remain: workgroup and warp mapping, level
 synchronisation, frontier overflow and dispatch order. Budgets are **1.0 ms** for
 broad phase plus traversal, **1.5 ms** for fill plus traversal at 4,096 chunks,
 **≥ 3×** draw-work reduction, zero false negatives and **< 0.1%** overflow (spec
-§11; [`../performance-targets.md`](../performance-targets.md); roadmap M5).
+§11; [`../performance-targets.md`](../specs/performance-targets.md); roadmap M5).
 
 ## Decision
 

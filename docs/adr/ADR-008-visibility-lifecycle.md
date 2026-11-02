@@ -4,7 +4,7 @@
 **Decision owner:** engine
 **Supersedes:** the implicit single-axis chunk state (`resident` / `clean` / `dirty` /
 `visible`) in the current store and shader
-**Related:** spec §2, §3, §5, §8, §12; [`../pre-registration.md`](../pre-registration.md);
+**Related:** spec §2, §3, §5, §8, §12; [`../pre-registration.md`](../specs/pre-registration.md);
 ADR-007 A/B roots; ADR-013 state ownership; roadmap risk R5
 
 ## Context

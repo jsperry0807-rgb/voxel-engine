@@ -45,7 +45,7 @@ VOXEL_SCENE_SEED=0xCAFE cargo run -p voxel-viewer
 ```
 
 The same seed always produces the same world; `VOXEL_SCENE_SEED` accepts decimal
-or `0x` hex. See [`docs/m3-08-stress-scene.md`](../../../docs/m3-08-stress-scene.md)
+or `0x` hex. See [`docs/milestones/m3/m3-08-stress-scene.md`](../../../docs/milestones/m3/m3-08-stress-scene.md)
 for the variants, the canopy rules and the u16 index budget.
 
 ## Controls
@@ -83,7 +83,7 @@ writes one `frame,t_ns,frame_ns` row per presented frame. The default one-second
 line stays at `debug` because it is noise on a display that does not pace
 presents. Use `--warmup` on the bench command to discard startup frames, and run
 the scripted flight from
-[`docs/reference-machine.md`](../../../docs/reference-machine.md) before
+[`docs/specs/reference-machine.md`](../../../docs/specs/reference-machine.md) before
 quoting a 60 Hz result. `VOXEL_FRAME_PROFILE=0` disables the collector.
 
 ## Validation
@@ -113,7 +113,7 @@ default 1200; `VOXEL_FRAMETIME_SETTLE`, default 12), writes the JSON — average
 1% / 0.1% lows, frame and stage percentiles, adapter, resolution, seed — and
 exits 0. `_EYE`/`_TARGET` pin the pose so runs are comparable; without them the
 interactive start camera is used. See
-[`docs/m3-10-60hz.md`](../../../docs/m3-10-60hz.md).
+[`docs/milestones/m3/m3-10-60hz.md`](../../../docs/milestones/m3/m3-10-60hz.md).
 
 ## Screenshots
 

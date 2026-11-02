@@ -85,7 +85,7 @@ format, and 13,201 blocks over 93 chunks is 142 of the 512 blocks per 128³
 chunk.
 
 The usage and feature rules behind this are collected in
-[`wgpu-traps.md`](wgpu-traps.md).
+[`wgpu-traps.md`](../../notes/wgpu-traps.md).
 
 ## Tests
 
