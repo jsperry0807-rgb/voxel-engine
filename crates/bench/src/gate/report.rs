@@ -1399,7 +1399,14 @@ mod tests {
         )];
         let selected = fallback(&memory);
         assert!(selected.triggered);
-        assert_eq!(selected.rule, Some(2));
+        // MeshBuffer is a voxel-memory row: rule 2 at 64³, rule 3 at the
+        // 128³ target edge.
+        let memory_rule = if CHUNK_BITS == TARGET_CHUNK_BITS {
+            3
+        } else {
+            2
+        };
+        assert_eq!(selected.rule, Some(memory_rule));
 
         let latency = vec![gate_row!(
             RowId::ProbeUpdate,
