@@ -55,9 +55,9 @@ frozen at 64³ and the gate will not measure across an edge.
 
 The scale-up must be read per profile, because the per-chunk term is shared but
 the loaded count is not. The twelve rows and the fallback order are frozen in
-[`../docs/pre-registration.md`](../docs/pre-registration.md); the gate report
+[`../docs/specs/pre-registration.md`](../docs/specs/pre-registration.md); the gate report
 computes every verdict from a measured value and does not type `PASS`. The M1
-outcome is recorded in [`../docs/m1-gate-decision.md`](../docs/m1-gate-decision.md).
+outcome is recorded in [`../docs/milestones/m1/m1-gate-decision.md`](../docs/milestones/m1/m1-gate-decision.md).
 
 
 ## Recording a run

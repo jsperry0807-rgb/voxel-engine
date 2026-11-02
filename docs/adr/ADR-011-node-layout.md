@@ -5,7 +5,7 @@
 **Supersedes:** the per-node `u32 [header, children…]` hash-consed encoding in
 [`../reference/adr-three-tier-store-v2.md`](../reference/adr-three-tier-store-v2.md)
 **Related:** spec §1.2, §2, §3, §10.1–10.4, §11;
-[`../pre-registration.md`](../pre-registration.md); ADR-002 chunk edge; ADR-007 A/B
+[`../pre-registration.md`](../specs/pre-registration.md); ADR-002 chunk edge; ADR-007 A/B
 roots; ADR-012 traversal; `voxel-core::node_word`; M0-05, M1-01…M1-18, M4-09, M4-12
 
 ## Context

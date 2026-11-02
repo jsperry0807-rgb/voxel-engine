@@ -4,7 +4,7 @@
 **Decision owner:** engine
 **Supersedes:** none; ADR-008 owns the axis split, this record owns the ECS event ABI
 **Related:** spec §2, §5, §8, §12; ADR-007 A/B roots; ADR-008 lifecycle;
-ADR-012 traversal; [`../performance-targets.md`](../performance-targets.md);
+ADR-012 traversal; [`../performance-targets.md`](../specs/performance-targets.md);
 M0-21, M3-04, M4-13, M4-14
 
 ## Context

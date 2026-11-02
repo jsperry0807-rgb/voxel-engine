@@ -2,7 +2,7 @@
 
 **Status:** captured 2026-11-01 from the real generator, not an illustration.
 
-![Seed 1 macro terrain, 2,048 px](images/m2.5-world-preview-seed1-2048.png)
+![Seed 1 macro terrain, 2,048 px](../images/m2.5-world-preview-seed1-2048.png)
 
 A full-world view of seed 1: the 8,000 × 8,000 cell macro heightfield at 128 m,
 after the priority-flood hydrology pass, rasterised at 2,048 × 2,048 with

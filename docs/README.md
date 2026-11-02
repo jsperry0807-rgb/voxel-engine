@@ -5,19 +5,31 @@ below. This directory is the source for the documentation site;
 [`site.toml`](site.toml) curates its navigation and
 [`scripts/build-docs-site.py`](../scripts/build-docs-site.py) renders it.
 
+## Layout
+
+| Directory | Contents |
+|---|---|
+| [`specs/`](specs) | Normative specifications: architecture, roadmap, task list, worldgen, budgets |
+| [`design/`](design) | Game-level field specs and the worldgen preview |
+| [`adr/`](adr) | Architecture decision records |
+| [`milestones/`](milestones) | Measured reports, grouped by milestone (`m0` … `m3`) |
+| [`notes/`](notes) | Engineering notes, backlog and interim scope |
+| [`reference/`](reference) | Superseded designs kept for their reasoning |
+| [`images/`](images) | Screenshots and figures used by the reports |
+
 ## Normative (read in this order)
 
 | Document | Purpose |
 |---|---|
-| [`voxel-engine-architecture-spec.md`](voxel-engine-architecture-spec.md) | What the engine is: units, tiers, protocols, layout, traversal, state |
-| [`voxel-engine-roadmap.md`](voxel-engine-roadmap.md) | Why the work is ordered this way; milestone gates |
-| [`task-list.md`](task-list.md) | Executable breakdown: every task, its dependency, done condition and verification |
-| [`worldgen-design.md`](worldgen-design.md) | World scale, macro map, biomes, blending, caves, rivers, far field, water |
-| [`pre-registration.md`](pre-registration.md) | **Frozen 2026-10-26.** M1 gate: profiles, budgets, residency model, fallback rules |
-| [`reference-machine.md`](reference-machine.md) | The machine every gate number is measured on; gated profiles |
-| [`performance-targets.md`](performance-targets.md) | Frame, VRAM, RAM and CPU budgets; sacrifice ladder; CI policy |
-| [`generator.spec.md`](generator.spec.md) | Material and texture pipeline: graphs, manifest, bake filter, atlas, material table |
-| [`water-textures.md`](water-textures.md) | M3.5-15 water/current faces: flow axis, UV scroll, alpha policy, caustics decision |
+| [`voxel-engine-architecture-spec.md`](specs/voxel-engine-architecture-spec.md) | What the engine is: units, tiers, protocols, layout, traversal, state |
+| [`voxel-engine-roadmap.md`](specs/voxel-engine-roadmap.md) | Why the work is ordered this way; milestone gates |
+| [`task-list.md`](specs/task-list.md) | Executable breakdown: every task, its dependency, done condition and verification |
+| [`worldgen-design.md`](specs/worldgen-design.md) | World scale, macro map, biomes, blending, caves, rivers, far field, water |
+| [`pre-registration.md`](specs/pre-registration.md) | **Frozen 2026-10-26.** M1 gate: profiles, budgets, residency model, fallback rules |
+| [`reference-machine.md`](specs/reference-machine.md) | The machine every gate number is measured on; gated profiles |
+| [`performance-targets.md`](specs/performance-targets.md) | Frame, VRAM, RAM and CPU budgets; sacrifice ladder; CI policy |
+| [`generator.spec.md`](specs/generator.spec.md) | Material and texture pipeline: graphs, manifest, bake filter, atlas, material table |
+| [`water-textures.md`](specs/water-textures.md) | M3.5-15 water/current faces: flow axis, UV scroll, alpha policy, caustics decision |
 
 When these disagree, the spec wins, then the roadmap, then the task list. Any change to a
 binding number is made in the spec and the pre-registration, never only in a task.
@@ -37,17 +49,17 @@ and the open conditions.
 - [`apps/launcher/README.md`](../apps/launcher/README.md) — the desktop launcher: viewer, texture tools, checks and the Linux/Windows builds.
 - [`crates/engine/viewer/README.md`](../crates/engine/viewer/README.md) — the M1.5 viewer: run instructions, controls and the slice screenshot.
 - [`apps/texgen/README.md`](../apps/texgen/README.md) — the standalone Material Maker-style texture and material editor.
-- [`texgen-backlog.md`](texgen-backlog.md) — what texgen still needs, what is deferred, and what is done.
+- [`texgen-backlog.md`](notes/texgen-backlog.md) — what texgen still needs, what is deferred, and what is done.
 
 ## Previews
 
-- [`worldgen-preview.md`](worldgen-preview.md) — a real seed-1 macro map from
+- [`worldgen-preview.md`](design/worldgen-preview.md) — a real seed-1 macro map from
   the current generator and hydrology, with the measured elevation, land and
   lake statistics.
 
 ## Engineering notes
 
-- [`wgpu-traps.md`](wgpu-traps.md) — API rules that cost time in M3: buffer
+- [`wgpu-traps.md`](notes/wgpu-traps.md) — API rules that cost time in M3: buffer
   usage combinations, feature gates, submission ordering, draw-binding
   alignment and the surface texture lifetime. Read before touching uploads,
   queries or buffer slices.
@@ -93,14 +105,14 @@ where they conflict with the spec.
 
 ## Measurement
 
-- [`m0-exit.md`](m0-exit.md) — M0 exit checklist, command evidence and tag `m0`
-- [`m1-gate-decision.md`](m1-gate-decision.md) — M1 gate verdict, all twelve rows and the fallback decision
-- [`m2-apron-cost.md`](m2-apron-cost.md) — M2-02 apron vs dense padded-copy measurement
-- [`m2-exit.md`](m2-exit.md) — M2-30 measured 128³ Minimum exit: twelve rows, the mesh miss, rows 9/11
-- [`m3-mesh-compression.md`](m3-mesh-compression.md) — proposed instanced-quad (8 B/quad) plan, with an 8 B vertex fallback, for the 128³ mesh cap
-- [`m3-packed-8b.md`](m3-packed-8b.md) — landed 44 B/quad packed-vertex fallback and its 128³/64³ gate numbers
-- [`m3-01-streaming.md`](m3-01-streaming.md) — 256-chunk streaming ring: three-stage pipeline, origin uniform and the 0.09 ms pump measurement
-- [`reference-machine.md`](reference-machine.md) — the 60 Hz frame-time target and the viewer trace command
+- [`m0-exit.md`](milestones/m0/m0-exit.md) — M0 exit checklist, command evidence and tag `m0`
+- [`m1-gate-decision.md`](milestones/m1/m1-gate-decision.md) — M1 gate verdict, all twelve rows and the fallback decision
+- [`m2-apron-cost.md`](milestones/m2/m2-apron-cost.md) — M2-02 apron vs dense padded-copy measurement
+- [`m2-exit.md`](milestones/m2/m2-exit.md) — M2-30 measured 128³ Minimum exit: twelve rows, the mesh miss, rows 9/11
+- [`m3-mesh-compression.md`](milestones/m3/m3-mesh-compression.md) — proposed instanced-quad (8 B/quad) plan, with an 8 B vertex fallback, for the 128³ mesh cap
+- [`m3-packed-8b.md`](milestones/m3/m3-packed-8b.md) — landed 44 B/quad packed-vertex fallback and its 128³/64³ gate numbers
+- [`m3-01-streaming.md`](milestones/m3/m3-01-streaming.md) — 256-chunk streaming ring: three-stage pipeline, origin uniform and the 0.09 ms pump measurement
+- [`reference-machine.md`](specs/reference-machine.md) — the 60 Hz frame-time target and the viewer trace command
 - [`../benchmarks/README.md`](../benchmarks/README.md) — run archive, lenses, caveats
 - [`../benchmarks/HISTORY.md`](../benchmarks/HISTORY.md) — every recorded run with deltas
 - [`../crates/bench/README.md`](../crates/bench/README.md) — harness internals

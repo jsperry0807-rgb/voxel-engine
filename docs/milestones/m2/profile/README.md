@@ -18,9 +18,9 @@ The SVGs are standalone and interactive (hover, click-to-zoom, search). Open the
 HTML in a browser:
 
 ```sh
-explorer.exe "$(wslpath -w docs/profile/m2-17-20pct.html)"
+explorer.exe "$(wslpath -w docs/milestones/m2/profile/m2-17-20pct.html)"
 # or
-python3 -m http.server 8100 --directory docs/profile
+python3 -m http.server 8100 --directory docs/milestones/m2/profile
 # http://localhost:8100/m2-17-20pct.html
 ```
 

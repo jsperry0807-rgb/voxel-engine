@@ -10,7 +10,7 @@
       "ram_gib": 32,
       "display": "1920 × 1080",
       "os": "Linux (primary)",
-      "source": "docs/reference-machine.md"
+      "source": "docs/specs/reference-machine.md"
     },
     "host": {
       "cpu_model": "AMD Ryzen 5 7600 6-Core Processor",
@@ -26,7 +26,7 @@
     "id": "m1-representative",
     "status": "provisional",
     "provisional_until_first_real_save": true,
-    "limitation": "Provisional until the first real save. This world is synthetic: it exercises the shape of a save (terrain, caves, overhangs, structures and mixed materials) but was not produced by gameplay, by docs/worldgen-design.md, or by the save path on the reference machine. Its byte sizes, material histograms and distributions are illustrative only and must not be quoted as gate results (M1-35, M1-37) until a real save is captured and this fixture is re-frozen.",
+    "limitation": "Provisional until the first real save. This world is synthetic: it exercises the shape of a save (terrain, caves, overhangs, structures and mixed materials) but was not produced by gameplay, by docs/specs/worldgen-design.md, or by the save path on the reference machine. Its byte sizes, material histograms and distributions are illustrative only and must not be quoted as gate results (M1-35, M1-37) until a real save is captured and this fixture is re-frozen.",
     "manifest": "benchmarks/fixtures/m1-representative/manifest.json",
     "save_dir": "benchmarks/fixtures/m1-representative/save",
     "world_hash": "d077250c2a84b0b42f3fd852c76ed7e43c61d21d21c41381fc8808331d8332e5",
@@ -211,7 +211,7 @@
       "margin": "n/a",
       "verdict": "not_measured",
       "source": "gate memory fixture (M1-28/M1-35)",
-      "note": "Provisional until the first real save. This world is synthetic: it exercises the shape of a save (terrain, caves, overhangs, structures and mixed materials) but was not produced by gameplay, by docs/worldgen-design.md, or by the save path on the reference machine. Its byte sizes, material histograms and distributions are illustrative only and must not be quoted as gate results (M1-35, M1-37) until a real save is captured and this fixture is re-frozen. The distributions are measured (p50/p95/max per chunk), but the dataset is not admissible as the M1 gate result until a real populated save replaces it."
+      "note": "Provisional until the first real save. This world is synthetic: it exercises the shape of a save (terrain, caves, overhangs, structures and mixed materials) but was not produced by gameplay, by docs/specs/worldgen-design.md, or by the save path on the reference machine. Its byte sizes, material histograms and distributions are illustrative only and must not be quoted as gate results (M1-35, M1-37) until a real save is captured and this fixture is re-frozen. The distributions are measured (p50/p95/max per chunk), but the dataset is not admissible as the M1 gate result until a real populated save replaces it."
     },
     {
       "id": "fallback_trigger",
@@ -238,9 +238,9 @@
     "action": "Rule 2: a voxel-memory row failed at 64³. Do not automatically stay at 64³. Run the M1-40 analytic 128³ projection; if 128³ clears, the failure is an argument for the upgrade, not against it."
   },
   "notes": [
-    "The twelve rows are the frozen table in docs/pre-registration.md §3. Every verdict is computed from a measured value and its limit; no row is typed PASS. A row the M1-35…M1-38 harnesses do not measure is NOT MEASURED, not green.",
+    "The twelve rows are the frozen table in docs/specs/pre-registration.md §3. Every verdict is computed from a measured value and its limit; no row is typed PASS. A row the M1-35…M1-38 harnesses do not measure is NOT MEASURED, not green.",
     "The memory projection is the measured p95 per-chunk total multiplied by the loaded chunk count at the edge this build uses. It applies the frozen 60% hard-fail line (4,913 MiB); the 1.5× safety factor is already inside that line, so it is not applied twice.",
-    "The headless gate does not open a wgpu adapter. GPU identity is quoted from docs/reference-machine.md and is not re-probed; the host CPU, OS and architecture are read from the running process.",
+    "The headless gate does not open a wgpu adapter. GPU identity is quoted from docs/specs/reference-machine.md and is not re-probed; the host CPU, OS and architecture are read from the running process.",
     "The fixture is provisional until the first real save. Its distributions are a rehearsal for the gate and must not be quoted as the M1 result; the dataset row stays not measured until a real save replaces it.",
     "Culling granularity has the M1-34 reference and its 100-pose test, but this generator consumes M1-35…M1-38 only. Attach a granularity run before M1-41 or that row keeps the gate incomplete.",
     "The fallback is computed from the measured rows with the pre-registration §4 order. It is a preview for M1-42, not a renegotiation of any threshold."

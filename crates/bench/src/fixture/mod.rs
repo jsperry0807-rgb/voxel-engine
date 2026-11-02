@@ -52,7 +52,7 @@ pub const GENERATOR_VERSION: u32 = 1;
 pub const DEFAULT_DIR: &str = "benchmarks/fixtures/m1-representative";
 
 /// The distinctive limitation, kept verbatim in the manifest.
-pub const LIMITATION: &str = "Provisional until the first real save. This world is synthetic: it exercises the shape of a save (terrain, caves, overhangs, structures and mixed materials) but was not produced by gameplay, by docs/worldgen-design.md, or by the save path on the reference machine. Its byte sizes, material histograms and distributions are illustrative only and must not be quoted as gate results (M1-35, M1-37) until a real save is captured and this fixture is re-frozen.";
+pub const LIMITATION: &str = "Provisional until the first real save. This world is synthetic: it exercises the shape of a save (terrain, caves, overhangs, structures and mixed materials) but was not produced by gameplay, by docs/specs/worldgen-design.md, or by the save path on the reference machine. Its byte sizes, material histograms and distributions are illustrative only and must not be quoted as gate results (M1-35, M1-37) until a real save is captured and this fixture is re-frozen.";
 
 /// The five feature families the fixture is required to contain.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -586,7 +586,7 @@ fn provenance(fixture_root: &Path) -> Provenance {
         source_commit: git(&["rev-parse", "--short=12", "HEAD"]),
         source_worktree_dirty: git_dirty(fixture_root),
         worldgen:
-            "Deterministic stand-in, not docs/worldgen-design.md; frozen for gate measurement."
+            "Deterministic stand-in, not docs/specs/worldgen-design.md; frozen for gate measurement."
                 .to_owned(),
     }
 }

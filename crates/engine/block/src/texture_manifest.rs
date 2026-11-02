@@ -7,7 +7,7 @@
 //!
 //! Validation lives here rather than in the generator or the bake tool so the
 //! committed files are checked by the same code that reads them. See
-//! `docs/generator.spec.md` section 4.3 for the list this module enforces.
+//! `docs/specs/generator.spec.md` section 4.3 for the list this module enforces.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;

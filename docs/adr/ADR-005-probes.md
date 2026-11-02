@@ -4,7 +4,7 @@
 **Decision owner:** engine
 **Supersedes:** none; this is the first probe decision. Records the scheme fixed by
 spec §7 and `voxel-core::content_constants` (M0-07).
-**Related:** spec §2, §7, §8, §12, §13.5; [`../pre-registration.md`](../pre-registration.md)
+**Related:** spec §2, §7, §8, §12, §13.5; [`../pre-registration.md`](../specs/pre-registration.md)
 §3; ADR-002 chunk edge; ADR-004 light; ADR-009 LOD; M0-07, M1-30, M1-38, M2-18…M2-21,
 M6-11
 
@@ -82,7 +82,7 @@ Past 256 m there is no probe volume; shading uses direct light and vertex AO onl
    target is built, so a transition rebuilds once.
 
 7. **Budget and gate.** Probe update p95 ≤ **16 ms per edited chunk**
-   ([`../pre-registration.md`](../pre-registration.md) §3), with the same budget
+   ([`../pre-registration.md`](../specs/pre-registration.md) §3), with the same budget
    applied to the 128³ projection. Full-view bake is amortised across the content
    timeline, not charged to a frame. Probe bytes are part of the per-chunk memory
    gate; determinism, the invalid flag, the LOD transition and the budget are

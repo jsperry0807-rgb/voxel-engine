@@ -166,7 +166,7 @@ versioned resources / M5's residency work). Recorded here rather than papered
 over.
 
 The `write_buffer` alignment rule and the page-limit rules are collected in
-[`wgpu-traps.md`](wgpu-traps.md).
+[`wgpu-traps.md`](../../notes/wgpu-traps.md).
 
 ## Tests
 

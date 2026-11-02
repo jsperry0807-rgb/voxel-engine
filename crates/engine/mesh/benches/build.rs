@@ -11,7 +11,7 @@
 //! single-chunk build the M2 exit names, not a border-seam benchmark.
 //!
 //! Measured 2026-10-31 (reference host, release): recorded in
-//! `docs/task-list.md` under M2-28. Set `BUILD_PROFILE=1` and pass
+//! `docs/specs/task-list.md` under M2-28. Set `BUILD_PROFILE=1` and pass
 //! `--profile-time 10` to write a pprof flamegraph.
 
 use std::hint::black_box;

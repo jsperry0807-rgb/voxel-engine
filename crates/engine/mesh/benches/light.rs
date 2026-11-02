@@ -14,11 +14,11 @@
 //! Measured 2026-10-29 (reference host): incremental p95 is 4.4% of full at 64³
 //! and 5.7% at 128³ (criterion means 5.25% / 7.06%), inside the 20% task limit;
 //! the edit raises light in 21%/41% of the padded cells. The full result and the
-//! decision are in `docs/m2-light-cost.md`.
+//! decision are in `docs/milestones/m2/m2-light-cost.md`.
 //!
 //! Set `LIGHT_PROFILE=1` and pass `--profile-time 10` to write a pprof flamegraph
 //! under `target/criterion/light_edge_<edge>/<bench>/profile/flamegraph.svg`.
-//! `docs/profile/m2-17-20pct.html` is the committed report.
+//! `docs/milestones/m2/profile/m2-17-20pct.html` is the committed report.
 
 use std::time::{Duration, Instant};
 

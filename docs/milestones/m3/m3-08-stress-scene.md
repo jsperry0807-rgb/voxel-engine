@@ -3,7 +3,7 @@
 **Status:** landed 2026-10-31. The viewer's 256-chunk ring is now a seeded scene
 with five terrain variants and two canopy densities, reproducible from one
 number, and the viewer can capture its presented frame to a PNG. The committed
-image is [`images/m3-08-stress-scene.png`](images/m3-08-stress-scene.png).
+image is [`images/m3-08-stress-scene.png`](../../images/m3-08-stress-scene.png).
 
 ## Acceptance
 

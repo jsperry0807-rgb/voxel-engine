@@ -110,7 +110,7 @@ reports the differing-pixel fraction, the largest channel delta and the mean
 absolute delta against a documented threshold (0.01% beyond a 2/255 tolerance,
 max 32/255, mean 0.5/255). It exits 1 outside the threshold and prints JSON with
 `--json`. A capture at the wrong drawable size is a size-mismatch error, not a
-difference. See [`docs/m3-12-visual-regression.md`](../../docs/m3-12-visual-regression.md).
+difference. See [`docs/milestones/m3/m3-12-visual-regression.md`](../../docs/milestones/m3/m3-12-visual-regression.md).
 
 ## Scene memory (M3-11)
 
@@ -121,7 +121,7 @@ volume and the finished uploads on the host, plus live/peak heap and RSS. It
 prints the DAG / mesh / overlay / light / probes rows, the per-chunk figure and
 the 40%-of-8-GiB budget check with the 1.5× margin, and exits 1 if the margin is
 missed. M3 stores no DAG or overlay on the GPU, so those rows are zero by
-construction; see [`docs/m3-11-memory.md`](../../docs/m3-11-memory.md).
+construction; see [`docs/milestones/m3/m3-11-memory.md`](../../docs/milestones/m3/m3-11-memory.md).
 
 ## What is measured
 
@@ -323,7 +323,7 @@ report; `--out FILE` also writes it.
 
 **Gate report** (`gate report`, M1-39) runs the four harnesses above and writes
 one `gate.md` plus one `gate.json` (default `target/gate/`). The report contains
-the twelve frozen rows from `docs/pre-registration.md` §3, in table order:
+the twelve frozen rows from `docs/specs/pre-registration.md` §3, in table order:
 
 | # | Row | Source |
 |---:|---|---|
@@ -344,7 +344,7 @@ Every verdict is computed from a measured value, from an invariant the
 measurement already asserts, or is reported as `not_measured`; the report never
 types `PASS` by hand. Each row carries the measured value, the limit, a signed
 margin and a machine-readable `numbers` block. The header names the reference
-machine from `docs/reference-machine.md` and the actual host CPU/OS/architecture;
+machine from `docs/specs/reference-machine.md` and the actual host CPU/OS/architecture;
 the headless gate does not open a wgpu adapter, so the GPU is named but not
 re-probed. The overall gate is `pass` only when all twelve rows pass, `fail` when
 any row fails, and `incomplete` when no row fails but a required measurement is

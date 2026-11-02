@@ -11,7 +11,7 @@
 //! every probe is not simply open sky and the directional coefficients vary.
 //!
 //! Measured 2026-10-30 (reference host, release): recorded in
-//! `docs/task-list.md` under M2-18. Set `PROBE_PROFILE=1` and pass
+//! `docs/specs/task-list.md` under M2-18. Set `PROBE_PROFILE=1` and pass
 //! `--profile-time 10` to write a pprof flamegraph.
 
 use std::hint::black_box;

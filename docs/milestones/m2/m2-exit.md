@@ -2,12 +2,12 @@
 
 **Date:** 2026-10-31
 **Milestone:** M2 (production content pipeline), task M2-30
-**Run:** [`benchmarks/runs/20261031T152718Z-m2-gate-128`](../benchmarks/runs/20261031T152718Z-m2-gate-128)
-**Fixture:** [`benchmarks/fixtures/m2-128`](../benchmarks/fixtures/m2-128) — 9 chunks, 128³ edge, synthetic and provisional
+**Run:** [`benchmarks/runs/20261031T152718Z-m2-gate-128`](../../../benchmarks/runs/20261031T152718Z-m2-gate-128)
+**Fixture:** [`benchmarks/fixtures/m2-128`](../../../benchmarks/fixtures/m2-128) — 9 chunks, 128³ edge, synthetic and provisional
 **Profile:** `minimum` (gated)
-**Gate report:** [`gate.md`](../benchmarks/runs/20261031T152718Z-m2-gate-128/gate.md) · [`gate.json`](../benchmarks/runs/20261031T152718Z-m2-gate-128/gate.json)
-**Granularity:** [`granularity.md`](../benchmarks/runs/20261031T152718Z-m2-gate-128/granularity.md)
-**Scale-up:** [`scaleup.md`](../benchmarks/runs/20261031T152718Z-m2-gate-128/scaleup.md)
+**Gate report:** [`gate.md`](../../../benchmarks/runs/20261031T152718Z-m2-gate-128/gate.md) · [`gate.json`](../../../benchmarks/runs/20261031T152718Z-m2-gate-128/gate.json)
+**Granularity:** [`granularity.md`](../../../benchmarks/runs/20261031T152718Z-m2-gate-128/granularity.md)
+**Scale-up:** [`scaleup.md`](../../../benchmarks/runs/20261031T152718Z-m2-gate-128/scaleup.md)
 
 ---
 
@@ -102,7 +102,7 @@ a zero-cost culler, and the 128³ conclusion does not rest on it.
 
 The fixture is `m2-128`, the same deterministic stand-in generator as
 `m1-representative`, frozen at the 128³ edge over a 3 × 1 × 3 chunk box (x, y, z). It is
-not a gameplay save and not `docs/worldgen-design.md`; its manifest says so. The
+not a gameplay save and not `docs/specs/worldgen-design.md`; its manifest says so. The
 dataset row therefore stays **NOT MEASURED**.
 
 The M2 exit records this as a carried item, not a pass. When the first real save
@@ -117,7 +117,7 @@ at the same edge, and only then close row 11.
   fewer), 167,808 B mesh + 1,024 B light + 776 B probes; 166–172 fps on llvmpipe
   at 1920×1080.
 - **Scrub** (M2-24): the gate edits report includes the production path; see
-  [`gate.md`](../benchmarks/runs/20261031T152718Z-m2-gate-128/gate.md) for the
+  [`gate.md`](../../../benchmarks/runs/20261031T152718Z-m2-gate-128/gate.md) for the
   measured terms.
 - **Probes** (M2-26): the ray-test remains behind the off-by-default flag; the
   flood fill stays the default occluder.

@@ -5,8 +5,8 @@
 **Supersedes:** the per-voxel light volumes in
 [`../reference/material-spec-v1.md`](../reference/material-spec-v1.md) and
 [`../reference/adr-three-tier-store-v2.md`](../reference/adr-three-tier-store-v2.md)
-**Related:** spec §1.1, §2, §6, §7, §8; [`../pre-registration.md`](../pre-registration.md) §3;
-[`../performance-targets.md`](../performance-targets.md) §5; ADR-001 raster;
+**Related:** spec §1.1, §2, §6, §7, §8; [`../pre-registration.md`](../specs/pre-registration.md) §3;
+[`../performance-targets.md`](../specs/performance-targets.md) §5; ADR-001 raster;
 ADR-005 probes; ADR-010 mesh format; `voxel-core::content_constants`;
 M0-07, M1-29, M2-07…M2-17
 

@@ -219,7 +219,7 @@ impl FrameReport {
         );
         let _ = writeln!(
             out,
-            "Targets from `docs/reference-machine.md`: average >= {:.1} fps, \
+            "Targets from `docs/specs/reference-machine.md`: average >= {:.1} fps, \
              1% low >= {:.1} fps, and no frame above {}.\n",
             self.target_avg_fps,
             self.target_one_percent_low_fps,

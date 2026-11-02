@@ -37,7 +37,7 @@ Two consequences:
    visual-parity grounds, so the only lever that preserves the current look is
    the mesh encoding itself.
 
-**Immediate record:** add a dated erratum to [`m2-exit.md`](m2-exit.md) §3 and
+**Immediate record:** add a dated erratum to [`m2-exit.md`](../m2/m2-exit.md) §3 and
 update the repeated numbers in `task-list.md`, `m1-gate-decision.md` and the
 roadmap. Keep the archived M2 run append-only.
 
@@ -123,7 +123,7 @@ mesh; `n` is the loaded-chunk count.
 | 64³ 8 B vertex | 253.2 | 164.0 | 1.0 | 0.75 | 536.0 | 1,012.1 KiB | 6,440 | **6.22 GiB** |
 
 Sources: DAG/light/probes and the v1 pool from
-[`m1-gate-decision.md`](m1-gate-decision.md) §3 and the 2026-10-29 amendment;
+[`m1-gate-decision.md`](../m1/m1-gate-decision.md) §3 and the 2026-10-29 amendment;
 the mesh numbers are measured with the gate's per-chunk total p95 (not the
 sum of component p95s). The 64³ instanced total is **3.20 GiB**, over the 3.20
 GiB target by ~4.6 MiB before the M6-09a v1-pool removal, and ~3.04 GiB after.

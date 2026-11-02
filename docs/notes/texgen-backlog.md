@@ -95,5 +95,5 @@ without a milestone that consumes them.
 | Data-driven face table: `data/faces.ron` drives slots in the pipeline, editor and MCP; `FaceTable` validation replaces `SLICES`/`SLICE_FACE_COUNT` | this change |
 | Incremental generation: `texgen generate --key FACE` (repeatable) renders only the selected faces and writes PNG/manifest/materials/atlas only when their bytes change; `check --key` verifies the same subset | this change |
 | M2.5-30/31 art data: 29 biome-surface, underground, structure and flora faces (slots 41–69), 22 block rows, regenerated manifest, material table and atlas | this change |
-| M3.5-15 water/current: `water_flow` + `foam_strip` (slots 70–71), 2 block rows, flow axis/scroll/alpha policy in `docs/water-textures.md`; caustics procedural | this change |
+| M3.5-15 water/current: `water_flow` + `foam_strip` (slots 70–71), 2 block rows, flow axis/scroll/alpha policy in `docs/specs/water-textures.md`; caustics procedural | this change |
 | MCP `generate`/`check` accept an optional `keys` array and route to the per-key pipeline | this change |

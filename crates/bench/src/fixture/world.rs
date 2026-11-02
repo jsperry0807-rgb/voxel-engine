@@ -1,7 +1,7 @@
 //! Deterministic generator for the M1-28 fixture world.
 //!
 //! The generator is deliberately not the production worldgen in
-//! `docs/worldgen-design.md`: it is a small, dependency-free stand-in that
+//! `docs/specs/worldgen-design.md`: it is a small, dependency-free stand-in that
 //! exercises the shapes a save must carry before real saves exist. It builds
 //! terrain with sea level, beaches and snowy peaks; chambers, tunnels, shafts
 //! and water-filled caves; a rock canyon with natural roof shelves; a tower, a

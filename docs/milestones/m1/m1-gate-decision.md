@@ -2,11 +2,11 @@
 
 **Status:** Decided — 2026-10-27; revised 2026-10-27 after the per-profile projection
 **Task:** M1-42, following the recorded gate run M1-41
-**Gate:** [pre-registration.md](pre-registration.md) (frozen 2026-10-26)
-**Machine:** [reference-machine.md](reference-machine.md) — AMD Ryzen 5 7600, 6 cores / 12 threads; NVIDIA GeForce RTX 4060, 8,188 MiB; 32 GiB RAM; Linux
-**Run:** [`benchmarks/runs/20261027T204626Z-m1-gate`](../benchmarks/runs/20261027T204626Z-m1-gate) at commit `f904640a`
-**Raw report:** [`gate.md`](../benchmarks/runs/20261027T204626Z-m1-gate/gate.md) · [`gate.json`](../benchmarks/runs/20261027T204626Z-m1-gate/gate.json)
-**128³ projection:** [Default](../benchmarks/runs/20261027T204626Z-m1-gate/scaleup.md) · [Minimum](../benchmarks/runs/20261027T204626Z-m1-gate/scaleup-minimum.md)
+**Gate:** [pre-registration.md](../../specs/pre-registration.md) (frozen 2026-10-26)
+**Machine:** [reference-machine.md](../../specs/reference-machine.md) — AMD Ryzen 5 7600, 6 cores / 12 threads; NVIDIA GeForce RTX 4060, 8,188 MiB; 32 GiB RAM; Linux
+**Run:** [`benchmarks/runs/20261027T204626Z-m1-gate`](../../../benchmarks/runs/20261027T204626Z-m1-gate) at commit `f904640a`
+**Raw report:** [`gate.md`](../../../benchmarks/runs/20261027T204626Z-m1-gate/gate.md) · [`gate.json`](../../../benchmarks/runs/20261027T204626Z-m1-gate/gate.json)
+**128³ projection:** [Default](../../../benchmarks/runs/20261027T204626Z-m1-gate/scaleup.md) · [Minimum](../../../benchmarks/runs/20261027T204626Z-m1-gate/scaleup-minimum.md)
 
 ---
 
@@ -63,7 +63,7 @@ Minimum profile; M1 remains built and measured at 64³.**
 | 128³ Minimum | 805 | 4.93 / 7.88 MiB | 3.88 / 6.19 GiB | PASS optimistic / MISS pessimistic |
 
 The pre-registration already predicts 6.0–17.2 GiB for 64³ Default and calls it
-the memory-risk profile ([`pre-registration.md`](pre-registration.md) §2, §5).
+the memory-risk profile ([`pre-registration.md`](../../specs/pre-registration.md) §2, §5).
 The 24.76 GiB is that prediction plus the measured fixture's high-end p95. It is
 a verdict on 64³ Default, not a requirement the engine must meet.
 
@@ -156,7 +156,7 @@ widened in either direction.
 ## 6. M1 exit record
 
 - **Gate run:** `LABEL=m1-gate scripts/bench.sh`, archived in
-  [`benchmarks/HISTORY.md`](../benchmarks/HISTORY.md); the report is attached to
+  [`benchmarks/HISTORY.md`](../../../benchmarks/HISTORY.md); the report is attached to
   [PR #1](https://github.com/jsperry0807-rgb/voxel-engine/pull/1).
 - **Measured edge:** 64³. The 128³ variant remains compile-only until M2.
 - **M2 target:** 128³ Minimum, conditional on the M2 128³ gate measurement and
@@ -190,7 +190,7 @@ gate, the chosen profile or any threshold.
 - **M2 started:** `M2-01` six-face apron landed. `M2-02` measured the apron at
   8.5% of the dense path's bytes and 9.1% of its time at 64³ (4.5%/5.7% at
   128³, re-measured after the benchmark was changed to resolve chunks once);
-  see [`m2-apron-cost.md`](m2-apron-cost.md). `M2-03` added the
+  see [`m2-apron-cost.md`](../m2/m2-apron-cost.md). `M2-03` added the
   block-granular driver with an 11,664 B reusable scratch; `M2-04` added the
   greedy rectangle core and matched the M1-31 reference on five fixtures;
   `M2-05` added the `(material, orientation, 4×AO)` merge key; `M2-06` culls
@@ -206,8 +206,8 @@ gate, the chosen profile or any threshold.
   full relight. `M2-17` added the border light benchmark and then the
   channel-selective, scratch-reuse and neighbour-mask changes; the 128³ edit now
   measures 5.7% of full at p95, under the 20% target. See
-  [`m2-light-cost.md`](m2-light-cost.md) and
-  [`m2-light-20pct.md`](m2-light-20pct.md).
+  [`m2-light-cost.md`](../m2/m2-light-cost.md) and
+  [`m2-light-20pct.md`](../m2/m2-light-20pct.md).
 - **128³ Minimum is still unmeasured.** The M2 gate run after `M2-29` is the
   measurement that confirms or rejects the upgrade; mesh compression remains
   the first lever.
@@ -215,8 +215,8 @@ gate, the chosen profile or any threshold.
 ## 8. Amendment — 2026-10-31: the M2 128³ measurement
 
 M2 is complete and the 128³ Minimum run is measured. The report is
-[`m2-exit.md`](m2-exit.md); the archived run is
-[`benchmarks/runs/20261031T152718Z-m2-gate-128`](../benchmarks/runs/20261031T152718Z-m2-gate-128).
+[`m2-exit.md`](../m2/m2-exit.md); the archived run is
+[`benchmarks/runs/20261031T152718Z-m2-gate-128`](../../../benchmarks/runs/20261031T152718Z-m2-gate-128).
 The frozen gate, profile and thresholds are unchanged.
 
 - **Fixture:** `m2-128`, the deterministic stand-in generator at the 128³ edge

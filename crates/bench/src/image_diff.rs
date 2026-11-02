@@ -3,7 +3,7 @@
 //! [`compare`] measures a candidate capture against the committed reference and
 //! decides against [`Threshold`]. The reference for the M3 scene is
 //! `docs/images/m3-12-reference.png`, captured with the M3-08 screenshot pose;
-//! [`docs/m3-12-visual-regression.md`](../../../docs/m3-12-visual-regression.md)
+//! [`docs/milestones/m3/m3-12-visual-regression.md`](../../../docs/milestones/m3/m3-12-visual-regression.md)
 //! records the measured run-to-run variance and why the threshold is what it is.
 //!
 //! The comparison is deliberately geometric, not a perceptual hash: the renderer

@@ -4,7 +4,7 @@
 //! questions: an average frame rate hides a 200 ms hitch, and a single maximum
 //! hides a run that spends most of its time at 20 fps. The viewer writes one
 //! interval per presented frame; `voxel-bench frame` reads the same file and
-//! applies the targets frozen in `docs/reference-machine.md`.
+//! applies the targets frozen in `docs/specs/reference-machine.md`.
 //!
 //! # Trace format
 //!

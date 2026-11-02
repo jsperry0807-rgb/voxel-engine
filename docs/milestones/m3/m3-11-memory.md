@@ -104,8 +104,8 @@ statement is:
 
 - the **renderer's** 256-chunk scene is 107.5 MiB of VRAM;
 - the **storage model's** projection is unchanged and still recorded in
-  [`m1-gate-decision.md`](m1-gate-decision.md) and
-  [`m2-exit.md`](m2-exit.md);
+  [`m1-gate-decision.md`](../m1/m1-gate-decision.md) and
+  [`m2-exit.md`](../m2/m2-exit.md);
 - if the 805-chunk profile were rendered with today's per-chunk bytes it would
   need ~338 MiB, under the target — but mesh size follows surface area, not chunk
   count, so that figure is an upper bound rather than a plan.

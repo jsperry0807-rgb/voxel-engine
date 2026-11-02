@@ -3,8 +3,8 @@
 **Status:** Complete
 **Date:** 2026-10-26
 **Tag:** `m0` (annotated)
-**Scope:** [`task-list.md`](task-list.md) §3, tasks M0-01…M0-24
-**Binding artifact:** [`pre-registration.md`](pre-registration.md), frozen 2026-10-26
+**Scope:** [`task-list.md`](../../specs/task-list.md) §3, tasks M0-01…M0-24
+**Binding artifact:** [`pre-registration.md`](../../specs/pre-registration.md), frozen 2026-10-26
 
 This record signs off the four M0 exit checks and fixes the tag the roadmap
 refers to. It does not amend the pre-registration; only the checklist evidence
@@ -14,10 +14,10 @@ lives here.
 
 | Check | Evidence | Result |
 |---|---|---|
-| Pre-registration table frozen | [`pre-registration.md`](pre-registration.md) is dated 2026-10-26, marked FROZEN, names the reference machine, separates memory from latency fallbacks and states the amendment rule. No dated appendix exists yet. | **PASS** |
-| ADRs merged | ADR-001…ADR-013 are present under [`adr/`](adr/), each `Accepted (closed)`, and all thirteen are indexed in [`README.md`](README.md). | **PASS** |
-| Constants used | [`crates/core/src/constants.rs`](../crates/core/src/constants.rs) and [`content_constants.rs`](../crates/core/src/content_constants.rs) exist with compile-time assertions; `voxel-storage` re-exports the geometry constants and uses `CHUNK_BITS`/`CHUNK_DIM` in index packing; content sizes derive from the block grid. | **PASS** |
-| CI green | The required jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) pass: fmt, clippy `-D warnings`, `cargo test --workspace` (168 passed), naga shader tests (4 passed). The `chunk128` job fails on the M0-08 guard exactly as designed. | **PASS** (local equivalent; see §3) |
+| Pre-registration table frozen | [`pre-registration.md`](../../specs/pre-registration.md) is dated 2026-10-26, marked FROZEN, names the reference machine, separates memory from latency fallbacks and states the amendment rule. No dated appendix exists yet. | **PASS** |
+| ADRs merged | ADR-001…ADR-013 are present under [`adr/`](../../adr), each `Accepted (closed)`, and all thirteen are indexed in [`README.md`](../../README.md). | **PASS** |
+| Constants used | [`crates/core/src/constants.rs`](../../../crates/core/src/constants.rs) and [`content_constants.rs`](../../../crates/core/src/content_constants.rs) exist with compile-time assertions; `voxel-storage` re-exports the geometry constants and uses `CHUNK_BITS`/`CHUNK_DIM` in index packing; content sizes derive from the block grid. | **PASS** |
+| CI green | The required jobs in [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) pass: fmt, clippy `-D warnings`, `cargo test --workspace` (168 passed), naga shader tests (4 passed). The `chunk128` job fails on the M0-08 guard exactly as designed. | **PASS** (local equivalent; see §3) |
 | Tag exists | `git tag -n m0` resolves to this record's commit with the M0 exit annotation. | **PASS** |
 
 ## 2. Commands run

@@ -24,15 +24,15 @@ id = "specifications"
 title = "Specifications"
 description = "The normative documents. When they disagree, the spec wins, then the roadmap, then the task list."
 pages = [
-  "docs/voxel-engine-architecture-spec.md",
-  "docs/voxel-engine-roadmap.md",
-  "docs/task-list.md",
-  "docs/worldgen-design.md",
-  "docs/pre-registration.md",
-  "docs/reference-machine.md",
-  "docs/performance-targets.md",
-  "docs/generator.spec.md",
-  "docs/water-textures.md",
+  "docs/specs/voxel-engine-architecture-spec.md",
+  "docs/specs/voxel-engine-roadmap.md",
+  "docs/specs/task-list.md",
+  "docs/specs/worldgen-design.md",
+  "docs/specs/pre-registration.md",
+  "docs/specs/reference-machine.md",
+  "docs/specs/performance-targets.md",
+  "docs/specs/generator.spec.md",
+  "docs/specs/water-textures.md",
 ]
 
 [[section]]
@@ -55,50 +55,50 @@ description = "Measured evidence for every milestone: what was built, what it co
 [[section.child]]
 id = "m0"
 title = "M0 — baseline"
-match = ["docs/m0-*.md"]
+match = ["docs/milestones/m0/*.md"]
 
 [[section.child]]
 id = "m1"
 title = "M1 — gate selection"
-match = ["docs/m1-*.md"]
+match = ["docs/milestones/m1/*.md"]
 
 [[section.child]]
 id = "m2"
 title = "M2 — meshing & light"
 pages = [
-  "docs/m2-apron-cost.md",
-  "docs/m2-light-cost.md",
-  "docs/m2-light-20pct.md",
-  "docs/m2-raytest.md",
-  "docs/m2-viewer.md",
-  "docs/profile/README.md",
-  "docs/m2-exit.md",
+  "docs/milestones/m2/m2-apron-cost.md",
+  "docs/milestones/m2/m2-light-cost.md",
+  "docs/milestones/m2/m2-light-20pct.md",
+  "docs/milestones/m2/m2-raytest.md",
+  "docs/milestones/m2/m2-viewer.md",
+  "docs/milestones/m2/profile/README.md",
+  "docs/milestones/m2/m2-exit.md",
 ]
 
 [[section.child]]
 id = "m2_5"
 title = "M2.5 — worldgen"
-match = ["docs/m2.5-*.md"]
+match = ["docs/milestones/m2.5/*.md"]
 
 [[section.child]]
 id = "m3"
 title = "M3 — streaming slice"
 pages = [
-  "docs/m3-mesh-compression.md",
-  "docs/m3-packed-8b.md",
-  "docs/m3-01-streaming.md",
-  "docs/m3-02-mesh-pool.md",
-  "docs/m3-03-upload-queue.md",
-  "docs/m3-04-cpu-cull.md",
-  "docs/m3-05-draw-loop.md",
-  "docs/m3-06-instrumentation.md",
-  "docs/m3-07-frame-breakdown.md",
-  "docs/m3-08-stress-scene.md",
-  "docs/m3-09-hitch-test.md",
-  "docs/m3-10-60hz.md",
-  "docs/m3-11-memory.md",
-  "docs/m3-12-visual-regression.md",
-  "docs/m3-exit.md",
+  "docs/milestones/m3/m3-mesh-compression.md",
+  "docs/milestones/m3/m3-packed-8b.md",
+  "docs/milestones/m3/m3-01-streaming.md",
+  "docs/milestones/m3/m3-02-mesh-pool.md",
+  "docs/milestones/m3/m3-03-upload-queue.md",
+  "docs/milestones/m3/m3-04-cpu-cull.md",
+  "docs/milestones/m3/m3-05-draw-loop.md",
+  "docs/milestones/m3/m3-06-instrumentation.md",
+  "docs/milestones/m3/m3-07-frame-breakdown.md",
+  "docs/milestones/m3/m3-08-stress-scene.md",
+  "docs/milestones/m3/m3-09-hitch-test.md",
+  "docs/milestones/m3/m3-10-60hz.md",
+  "docs/milestones/m3/m3-11-memory.md",
+  "docs/milestones/m3/m3-12-visual-regression.md",
+  "docs/milestones/m3/m3-exit.md",
 ]
 
 [[section]]
@@ -146,10 +146,10 @@ id = "notes"
 title = "Engineering notes"
 description = "Hard-won operational knowledge, previews and backlog notes."
 pages = [
-  "docs/wgpu-traps.md",
-  "docs/worldgen-preview.md",
-  "docs/texgen-backlog.md",
-  "docs/v1-pool-residency.md",
+  "docs/notes/wgpu-traps.md",
+  "docs/design/worldgen-preview.md",
+  "docs/notes/texgen-backlog.md",
+  "docs/notes/v1-pool-residency.md",
 ]
 
 [[section]]

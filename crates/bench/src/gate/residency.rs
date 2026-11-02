@@ -48,7 +48,7 @@ use voxel_core::constants::{
 /// Schema version of the residency report.
 pub const SCHEMA_VERSION: u32 = 1;
 
-/// The profiles frozen in `docs/reference-machine.md` §3.
+/// The profiles frozen in `docs/specs/reference-machine.md` §3.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Profile {
@@ -74,7 +74,7 @@ impl Profile {
         }
     }
 
-    /// Near voxel radius in metres (`docs/reference-machine.md` §3).
+    /// Near voxel radius in metres (`docs/specs/reference-machine.md` §3).
     pub const fn near_radius_m(self) -> u32 {
         match self {
             Self::Minimum => 64,
@@ -116,7 +116,7 @@ pub struct ResidencyConfig {
 }
 
 impl ResidencyConfig {
-    /// Profile defaults from `docs/reference-machine.md` §3.
+    /// Profile defaults from `docs/specs/reference-machine.md` §3.
     pub const fn from_profile(profile: Profile) -> Self {
         Self {
             profile,

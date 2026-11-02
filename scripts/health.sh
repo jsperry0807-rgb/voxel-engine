@@ -288,8 +288,8 @@ check_tasks() {
   local log="$LOG_DIR/task-list.log"
   begin_check "$name"
 
-  if [[ ! -f docs/task-list.md ]]; then
-    end_check "in-repo" "$name" FAIL "docs/task-list.md not found" "" 0
+  if [[ ! -f docs/specs/task-list.md ]]; then
+    end_check "in-repo" "$name" FAIL "docs/specs/task-list.md not found" "" 0
     return
   fi
 
@@ -326,7 +326,7 @@ check_tasks() {
         printf "MS\t%s\t%d\t%d\t%d\n", milestone, ms_done[milestone] + 0, ms_total[milestone], ms_open[milestone] + 0
       }
     }
-  ' docs/task-list.md >"$log"
+  ' docs/specs/task-list.md >"$log"
 
   TASK_TOTAL=0
   TASK_DONE=0

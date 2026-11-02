@@ -8,10 +8,10 @@ policy below does not change.
 per-chunk LOD-tree position in
 [`../reference/adr-three-tier-store-v2.md`](../reference/adr-three-tier-store-v2.md) §10.3
 **Related:** spec §4.1, §4.2, §7, §13.5, §14.1;
-[`../pre-registration.md`](../pre-registration.md) §1–2;
-[`../performance-targets.md`](../performance-targets.md) §2–4;
-[`../reference-machine.md`](../reference-machine.md) §3;
-[`../worldgen-design.md`](../worldgen-design.md) §3.2; ADR-001, ADR-002, ADR-005,
+[`../pre-registration.md`](../specs/pre-registration.md) §1–2;
+[`../performance-targets.md`](../specs/performance-targets.md) §2–4;
+[`../reference-machine.md`](../specs/reference-machine.md) §3;
+[`../worldgen-design.md`](../specs/worldgen-design.md) §3.2; ADR-001, ADR-002, ADR-005,
 ADR-006, ADR-008, ADR-010, ADR-012, ADR-013
 
 ## Context
@@ -22,7 +22,7 @@ LOD rings, then a macro heightfield to an 8 km or 16 km far clip (High: 256 m,
 1,024 m, 32 km). Drawing the whole 512 m disc at full detail is not a tuning choice:
 it is 16× the Default LOD0 area, and the Default LOD0 shell alone is 3,216 chunks at
 1.2–3.2 MiB = **3.8–9.8 GiB** against a 3,275 MiB target
-([`../pre-registration.md`](../pre-registration.md) §2–3). LOD and streaming are the
+([`../pre-registration.md`](../specs/pre-registration.md) §2–3). LOD and streaming are the
 memory policy, not an optimization added after the fact.
 
 The spec fixes the shape of the answer: LOD is a cutoff of the same SVDAG traversal,
@@ -30,7 +30,7 @@ not a second tree (§4.1); probes are per-block near, half-res mid, none far (§
 far field is a separate raster heightfield with a near/far seam (§14.1). What is not
 fixed in one place is the ring table, the vertical residency rule, and what M6 must
 measure before choosing the LOD representation. The 64 m world height from the old
-task plan is retired by spec v2.3 and [`../worldgen-design.md`](../worldgen-design.md).
+task plan is retired by spec v2.3 and [`../worldgen-design.md`](../specs/worldgen-design.md).
 
 ## Decision
 
@@ -48,8 +48,8 @@ under this ADR.**
    | Default | 128 m | 256 m | 512 m | 16 km |
    | High (not gated) | 256 m | 512 m | 1,024 m | 32 km |
 
-   These are the radii in [`../reference-machine.md`](../reference-machine.md) §3 and
-   [`../pre-registration.md`](../pre-registration.md) §1. Default is the shipping
+   These are the radii in [`../reference-machine.md`](../specs/reference-machine.md) §3 and
+   [`../pre-registration.md`](../specs/pre-registration.md) §1. Default is the shipping
    target; Minimum is the fallback; High is not gated on the reference machine. The
    radii are in metres and therefore survive the chunk-edge gate; only chunk counts
    and per-chunk bytes change with the edge.
