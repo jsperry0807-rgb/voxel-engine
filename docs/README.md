@@ -83,8 +83,11 @@ binding number is made in the spec and the pre-registration, never only in a tas
   [`m2.5-13-transitions.md`](m2.5-13-transitions.md). `M2.5-14` added the 3D
   cave field — spaghetti, cheese, shafts, galleries and water/lava fills — with
   balanced density, a 2,000 m depth budget and a 2 m seal under water; see
-  [`m2.5-14-caves.md`](m2.5-14-caves.md). Cave depth and underground biomes
-  (`M2.5-15`) are next.
+  [`m2.5-14-caves.md`](m2.5-14-caves.md). `M2.5-15` made cave depth relative to
+  the local surface and assigned aquifer/fungal/cavern/geothermal with the
+  softmax, resolving every underground material key; see
+  [`m2.5-15-cave-depth.md`](m2.5-15-cave-depth.md). Overhangs (`M2.5-16`) are
+  next.
 
 ## Tools
 
