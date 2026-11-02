@@ -25,6 +25,7 @@
 //! - [`ores`] — depth-tiered ore veins.
 //! - [`landmarks`] — one terrain-fitted landmark per 32 km cell.
 //! - [`structures`] — 1–4 km structure anchors and terrain-fitted prefab stamps.
+//! - [`flora`] — biome species, seam ecotones and rare giant trees.
 //! - [`climate`] — latitude, altitude and ocean-distance climate fields.
 //! - [`generator`] — the seeded generator that fills a tile.
 //! - [`hydro`] — priority-flood depression fill, D8 flow and accumulation.
@@ -50,6 +51,7 @@ pub mod cave_depth;
 pub mod caves;
 pub mod climate;
 pub mod fixed;
+pub mod flora;
 pub mod generator;
 pub mod hash;
 pub mod hydro;
@@ -73,6 +75,7 @@ pub use cave_depth::{CaveDepth, UndergroundClimate};
 pub use caves::{CaveContext, CaveField, CaveFill, CaveShape, CaveVoxel};
 pub use climate::{Climate, ClimateSample};
 pub use fixed::{Coord, ONE};
+pub use flora::{FloraContext, FloraField, FloraKind, FloraPlacement};
 pub use generator::MacroGenerator;
 pub use hydro::{FlowDir, Hydrology};
 pub use lakes::{Lake, Lakes};

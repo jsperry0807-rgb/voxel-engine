@@ -108,6 +108,10 @@ pub struct FloraEntry {
     pub species: String,
     /// Probability per eligible surface block, `[0, 1]`.
     pub density: f64,
+    /// `density` rounded to Q16.16 once at parse time, so the generation path
+    /// never touches floating point.
+    #[serde(skip)]
+    pub density_q16: i32,
 }
 
 /// One biome definition, as stored in `data/biomes.ron`.
@@ -226,8 +230,13 @@ impl std::error::Error for BiomeError {}
 impl BiomeCatalog {
     /// Parse and structurally validate a biome file.
     pub fn parse(text: &str) -> Result<Self, BiomeError> {
-        let catalog: Self =
+        let mut catalog: Self =
             ron::from_str(text).map_err(|error| BiomeError::Parse(error.to_string()))?;
+        for biome in &mut catalog.biomes {
+            for flora in &mut biome.flora {
+                flora.density_q16 = ((flora.density * ONE as f64).round() as i32).clamp(0, ONE);
+            }
+        }
         catalog.check_structure()?;
         Ok(catalog)
     }
