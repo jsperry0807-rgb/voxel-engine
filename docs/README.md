@@ -89,8 +89,10 @@ binding number is made in the spec and the pre-registration, never only in a tas
   [`m2.5-15-cave-depth.md`](m2.5-15-cave-depth.md). `M2.5-16` added the 3D
   overhang density, occasional cell-hash arches and the support pass that
   removes floating rock; see
-  [`m2.5-16-overhangs.md`](m2.5-16-overhangs.md). Ore placement (`M2.5-17`) is
-  next.
+  [`m2.5-16-overhangs.md`](m2.5-16-overhangs.md). `M2.5-17` added the
+  depth-tiered ore veins — coal, iron, gold and diamond, with no surface gems
+  and connected capsules — at 1.0% ore by volume; see
+  [`m2.5-17-ores.md`](m2.5-17-ores.md). Landmark anchors (`M2.5-18`) are next.
 
 ## Tools
 
