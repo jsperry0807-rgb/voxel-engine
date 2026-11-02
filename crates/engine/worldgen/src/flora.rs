@@ -135,7 +135,9 @@ impl FloraContext {
         let step = 4 << 16;
         let dx = (generator.surface(x + step, z) - generator.surface(x - step, z)).abs();
         let dz = (generator.surface(x, z + step) - generator.surface(x, z - step)).abs();
-        let slope = (dx.max(dz) / 4).clamp(0, ONE);
+        // The samples are ±4 m apart, so the span is 8 m: Q16.16 metres / 8 m
+        // is Q16.16 rise over run. Dividing by 4 would double every slope.
+        let slope = (dx.max(dz) / 8).clamp(0, ONE);
         Self {
             surface,
             continentalness,
@@ -462,6 +464,19 @@ mod tests {
         assert!((x >> 16) >= 104_000 && (x >> 16) < 120_000);
         assert!((z >> 16) >= 168_000 && (z >> 16) < 184_000);
         assert_eq!(field.giant_anchor(3, 5), field.giant_anchor(3, 5));
+    }
+
+    #[test]
+    fn flora_context_slope_uses_the_full_sample_span() {
+        let generator = MacroGenerator::new(1);
+        let x = 12_000 << 16;
+        let z = 20_000 << 16;
+        let step = 4 << 16;
+        let dx = (generator.surface(x + step, z) - generator.surface(x - step, z)).abs();
+        let dz = (generator.surface(x, z + step) - generator.surface(x, z - step)).abs();
+        let expected = (dx.max(dz) / 8).clamp(0, ONE);
+        let context = FloraContext::from_generator(&generator, x, z);
+        assert_eq!(context.slope, expected);
     }
 
     #[test]

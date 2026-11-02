@@ -245,18 +245,38 @@ fn load_startup_atlas() -> Result<Atlas, ViewerError> {
         if !path.is_file() {
             continue;
         }
-        return match Atlas::load_verified(&path) {
-            Ok(atlas) => {
-                log::info!(
-                    "loaded atlas from {} ({} mips)",
-                    path.display(),
-                    atlas.mip_count()
-                );
-                Ok(atlas)
+        // A custom standalone PNG or directory has no committed hash file;
+        // load it as a local, unverified atlas instead of failing startup.
+        let verified = path.with_file_name("atlas.hash.ron").is_file();
+        return if verified {
+            match Atlas::load_verified(&path) {
+                Ok(atlas) => {
+                    log::info!(
+                        "loaded verified atlas from {} ({} mips)",
+                        path.display(),
+                        atlas.mip_count()
+                    );
+                    Ok(atlas)
+                }
+                Err(error) => {
+                    log::error!("atlas verification failed at {}: {error}", path.display());
+                    Err(ViewerError::Atlas(error.to_string()))
+                }
             }
-            Err(error) => {
-                log::error!("atlas verification failed at {}: {error}", path.display());
-                Err(ViewerError::Atlas(error.to_string()))
+        } else {
+            match Atlas::load(&path) {
+                Ok(atlas) => {
+                    log::warn!(
+                        "using local unverified atlas from {} ({} mips)",
+                        path.display(),
+                        atlas.mip_count()
+                    );
+                    Ok(atlas)
+                }
+                Err(error) => {
+                    log::error!("atlas load failed at {}: {error}", path.display());
+                    Err(ViewerError::Atlas(error.to_string()))
+                }
             }
         };
     }
