@@ -21,6 +21,7 @@
 //! - [`transitions`] — 1 m material dither and two-material + debris templates.
 //! - [`caves`] — the 3D cave field: tunnels, chambers, shafts, galleries, fluids.
 //! - [`cave_depth`] — local-surface depth and underground biome assignment.
+//! - [`overhangs`] — occasional 3D shelves and arches, with floating-rock pruning.
 //! - [`climate`] — latitude, altitude and ocean-distance climate fields.
 //! - [`generator`] — the seeded generator that fills a tile.
 //! - [`hydro`] — priority-flood depression fill, D8 flow and accumulation.
@@ -52,6 +53,7 @@ pub mod hydro;
 pub mod lakes;
 pub mod macro_grid;
 pub mod noise;
+pub mod overhangs;
 pub mod rivers;
 pub mod splines;
 pub mod surface;
@@ -70,6 +72,7 @@ pub use hydro::{FlowDir, Hydrology};
 pub use lakes::{Lake, Lakes};
 pub use macro_grid::{Cell, TileFlags, TilePos};
 pub use noise::Noise;
+pub use overhangs::OverhangField;
 pub use rivers::{Mouth, River, RiverNetwork, RiverPoint};
 pub use splines::{PEAK, SEA_LEVEL, surface_height};
 pub use surface::{SurfaceColumn, SurfaceKind, SurfaceSample};
