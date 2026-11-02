@@ -77,8 +77,11 @@ binding number is made in the spec and the pre-registration, never only in a tas
   surface rules — 3–6 block default soil, cliff stone, underwater beds,
   universal rock and snow, and beaches that require a shore — with every
   emitted key checked against the manifest; see
-  [`m2.5-12-surface.md`](m2.5-12-surface.md). The material dither
-  (`M2.5-13`) is next.
+  [`m2.5-12-surface.md`](m2.5-12-surface.md). `M2.5-13` added the 1 m weighted
+  material dither and four canonical two-material + debris 16³ templates per
+  pair, all reusing committed materials so they add zero atlas slots; see
+  [`m2.5-13-transitions.md`](m2.5-13-transitions.md). Caves (`M2.5-14`) are
+  next.
 
 ## Tools
 
