@@ -87,7 +87,7 @@ pub struct ClimateRange {
 }
 
 /// The four surface materials of a biome.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 pub struct SurfacePalette {
     pub top: String,
     pub filler: String,
