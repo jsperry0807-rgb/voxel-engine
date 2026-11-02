@@ -95,8 +95,11 @@ binding number is made in the spec and the pre-registration, never only in a tas
   [`m2.5-17-ores.md`](m2.5-17-ores.md). `M2.5-18` added one terrain-fitted
   landmark per 32 km cell (massif, canyon, volcano, grove, monolith/arch) and
   the `map --landmarks` distribution dump; see
-  [`m2.5-18-landmarks.md`](m2.5-18-landmarks.md). Structure anchors
-  (`M2.5-19`) are next.
+  [`m2.5-18-landmarks.md`](m2.5-18-landmarks.md). `M2.5-19` added 2 km
+  structure anchors (90.3% of cells empty) and terrain-fitted ruin, tower,
+  dungeon and bridge prefabs with no floating foundations; see
+  [`m2.5-19-structures.md`](m2.5-19-structures.md). Cross-chunk feature
+  determinism (`M2.5-20`) is next.
 
 ## Tools
 
