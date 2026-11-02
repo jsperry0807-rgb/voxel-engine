@@ -37,21 +37,26 @@ The raw files are optional, depending on which tools existed on the machine.
 A milestone gate run uses the same archive and adds the pre-registered report:
 
 ```sh
-LABEL=m1-gate scripts/bench.sh
-cargo run --release -p voxel-bench -- gate report --out target/gate
-cargo run --release -p voxel-bench -- gate scaleup --out target/gate/scaleup.json \
-  > target/gate/scaleup.md
-cargo run --release -p voxel-bench -- gate scaleup --profile minimum \
-  --out target/gate/scaleup-minimum.json > target/gate/scaleup-minimum.md
+# default 64³ build
+LABEL=m1-gate GATE=1 scripts/bench.sh
+
+# 128³ build: the fixture must be frozen at the same edge
+LABEL=m3-gate-128 GATE=1 FEATURES=chunk128 GATE_PROFILE=minimum \
+  GATE_MANIFEST=benchmarks/fixtures/m2-128/manifest.json scripts/bench.sh
 ```
 
-Copy `gate.md`, `gate.json`, `scaleup.md`, `scaleup.json`, `scaleup-minimum.md` and
-`scaleup-minimum.json` into the recorded run directory so the report stays with the
-numbers it judges. The gate measures Minimum and Default; the scale-up must be read
-per profile, because the per-chunk term is shared but the loaded count is not. The twelve rows and the
-fallback order are frozen in [`../docs/pre-registration.md`](../docs/pre-registration.md);
-the gate report computes every verdict from a measured value and does not type `PASS`.
-The M1 outcome is recorded in [`../docs/m1-gate-decision.md`](../docs/m1-gate-decision.md).
+`GATE=1` writes `gate.md`/`gate.json` plus a scale-up for **every** profile
+(`scaleup-minimum.*`, `scaleup-default.*`, `scaleup-high.*`) and attaches all of
+them to the recorded run, so the report and the projection cannot disagree about
+the view. `GATE_PROFILE` selects the twelve-row verdict only. A `chunk128` build
+without `GATE_MANIFEST` is refused: the default `m1-representative` fixture is
+frozen at 64³ and the gate will not measure across an edge.
+
+The scale-up must be read per profile, because the per-chunk term is shared but
+the loaded count is not. The twelve rows and the fallback order are frozen in
+[`../docs/pre-registration.md`](../docs/pre-registration.md); the gate report
+computes every verdict from a measured value and does not type `PASS`. The M1
+outcome is recorded in [`../docs/m1-gate-decision.md`](../docs/m1-gate-decision.md).
 
 
 ## Recording a run

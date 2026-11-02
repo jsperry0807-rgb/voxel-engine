@@ -1,0 +1,19 @@
+(
+    schema: 1,
+    key: "voxel:block/red_sand",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 32, octaves: 2), inputs: []),
+        (id: 1, op: ValueNoise(period: 64, octaves: 1), inputs: []),
+        (id: 2, op: Threshold(at: 62000), inputs: [1]),
+        (id: 3, op: ValueNoise(period: 16, octaves: 2), inputs: []),
+        (id: 4, op: Remap(from_lo: 0, from_hi: 30000, to_lo: 65535, to_hi: 0), inputs: [3]),
+        (id: 5, op: Ramp(stops: [(0, "#a85838"), (65535, "#c87850")]), inputs: [0]),
+        (id: 6, op: Ramp(stops: [(0, "#7a3a24"), (65535, "#8a4a30")]), inputs: [4]),
+        (id: 7, op: MixColor, inputs: [5, 6, 2]),
+    ],
+    output: (color: 7, alpha: Const(65535)),
+)

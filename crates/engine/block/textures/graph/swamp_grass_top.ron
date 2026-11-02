@@ -1,0 +1,21 @@
+(
+    schema: 1,
+    key: "voxel:block/swamp_grass_top",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 16, octaves: 3), inputs: []),
+        (id: 1, op: ValueNoise(period: 16, octaves: 2), inputs: []),
+        (id: 2, op: Smoothstep(edge0: 30000, edge1: 52000), inputs: [1]),
+        (id: 3, op: Ramp(stops: [(0, "#3a4a24"), (65535, "#5a6a34")]), inputs: [0]),
+        (id: 4, op: Ramp(stops: [(0, "#2f3a1c"), (65535, "#3a4a2a")]), inputs: [1]),
+        (id: 5, op: MixColor, inputs: [3, 4, 2]),
+        (id: 6, op: ValueNoise(period: 32, octaves: 1), inputs: []),
+        (id: 7, op: Threshold(at: 60500), inputs: [6]),
+        (id: 8, op: Ramp(stops: [(0, "#6a7a3a"), (65535, "#8a9a52")]), inputs: [6]),
+        (id: 9, op: MixColor, inputs: [5, 8, 7]),
+    ],
+    output: (color: 9, alpha: Const(65535)),
+)

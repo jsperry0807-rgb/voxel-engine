@@ -3439,13 +3439,16 @@ dependencies = [
  "criterion",
  "iai-callgrind",
  "libc",
+ "png 0.17.16",
  "pollster",
  "serde",
  "serde_json",
  "voxel-block",
  "voxel-core",
+ "voxel-mesh",
  "voxel-render",
  "voxel-storage",
+ "voxel-viewer",
  "wgpu 30.0.1",
 ]
 
@@ -3546,11 +3549,25 @@ dependencies = [
  "pollster",
  "ron",
  "serde",
+ "serde_json",
  "voxel-app-support",
  "voxel-core",
+ "voxel-mesh",
+ "voxel-storage",
  "voxel-texgraph",
  "wgpu 30.0.1",
  "winit",
+]
+
+[[package]]
+name = "voxel-worldgen"
+version = "0.1.0"
+dependencies = [
+ "png 0.17.16",
+ "ron",
+ "serde",
+ "voxel-block",
+ "voxel-core",
 ]
 
 [[package]]

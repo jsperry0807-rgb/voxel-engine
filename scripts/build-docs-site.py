@@ -32,7 +32,7 @@ OUTPUT = ROOT / "site"
 EXCLUDE_DIRS = {
     ".git",
     ".docs-build",
-    ".temp",
+    "assets",
     "__archive__",
     "__sandbox__",
     "__ai-session-history__",

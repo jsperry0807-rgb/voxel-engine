@@ -229,7 +229,7 @@ pub struct MeasuredMemory {
     pub light_bytes: u64,
     /// Fixed near-LOD probe bytes per chunk.
     pub probe_bytes: u64,
-    /// Count-only greedy mesh estimate per chunk.
+    /// Production mesh estimate per chunk.
     pub mesh_bytes: u64,
     /// Measured p95 of the six-component total.
     pub total_bytes: u64,

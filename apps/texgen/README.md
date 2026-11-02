@@ -83,9 +83,13 @@ can call as tools. It exposes the same core as the GUI and CLI:
 | `render_atlas` | 256² atlas plus hashes |
 | `list_materials` | material rows and block six-face rows |
 | `read_manifest` | committed `textures.ron` |
-| `check` | verify every committed byte |
-| `generate` | write PNGs, manifest, materials and atlas |
+| `check` | verify every committed byte (optional `keys` list) |
+| `generate` | write PNGs, manifest, materials and atlas (optional `keys` list) |
 | `bake_atlas` | write only the atlas and its hash |
+
+`generate` and `check` take an optional `keys` array, e.g.
+`{"keys": ["stone", "dirt"]}`. Omit it for the whole set; with it, only those
+faces are rendered and unchanged files are left alone.
 
 The server is read/preview/generate only. It never writes graph RON: edit
 `textures/graph/*.ron` with normal file tools, call `validate_graph`, then
@@ -128,11 +132,17 @@ resources.
 ```sh
 cargo run -p voxel-texgen -- list
 cargo run -p voxel-texgen -- generate          # PNGs + textures.ron + materials.gen.ron
+cargo run -p voxel-texgen -- generate --key stone   # one face only, atlas kept in sync
 cargo run -p voxel-texgen -- materials         # material table only
 cargo run -p voxel-texgen -- bake-atlas        # atlas.png + atlas.hash.ron
 cargo run -p voxel-texgen -- update-all        # generate + bake-atlas
 cargo run -p voxel-texgen -- check             # fail on any byte difference
 ```
+
+`--key FACE` (repeatable) limits `generate`/`update-all` to the named faces and
+writes a file only when its bytes change; `--key stone` and
+`--key voxel:block/stone` are equivalent. The atlas is rebaked only when the
+manifest changes. With `--check` the same selection is verified instead.
 
 `--root PATH` selects the repository explicitly; otherwise the command walks up
 from the current directory until it finds `crates/engine/block/data/blocks.ron`.

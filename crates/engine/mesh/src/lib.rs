@@ -17,6 +17,12 @@ use voxel_storage::{
 mod greedy;
 pub use greedy::{GreedyQuad, MergeKey, corner_ao, greedy_block, greedy_block_with_ao};
 
+pub mod dirty;
+pub use dirty::{BLOCKS_PER_CHUNK_EDGE, DirtyBlocks};
+
+pub mod scheduler;
+pub use scheduler::RemeshScheduler;
+
 pub mod light;
 pub use light::{
     APRON_CELLS, BlockLight, CellEdit, Channel, LEVELS, LightCell, LightFill, LightSource,
@@ -27,8 +33,23 @@ pub use light::{
 mod mesh;
 pub use mesh::{Mesh, face_from_code, mesh_block, mesh_face};
 
+mod record;
+pub use record::QuadRecord;
+
+#[cfg(feature = "raytest")]
+pub mod raytest;
+#[cfg(feature = "raytest")]
+pub use raytest::{RayTestConfig, RayTestFill, SvdagScene, VoxelScene, ray_test, ray_test_scene};
+
+pub mod probe;
+pub use probe::{
+    BakeStep, ProbeBake, ProbeGrid, ProbeLod, ProbeLodState, ProbeReach, ProbeSample, ProbeVolume,
+    RebakeStats, SampleSource, Sh4Probe, bake, bake_svdag, chunk_distance_m, chunk_probe_lod,
+    first_solid_on_ray, probes_reaching,
+};
+
 mod vertex;
-pub use vertex::Vertex;
+pub use vertex::{PackedVertex, Vertex};
 
 /// Voxels along one block edge.
 pub const BLOCK_EDGE: usize = BLOCK_DIM;
@@ -122,6 +143,40 @@ impl BlockScratch {
     fn set(&mut self, x: usize, y: usize, z: usize, material: u16) {
         self.voxels[x + y * SCRATCH_EDGE + z * SCRATCH_EDGE * SCRATCH_EDGE] = material;
     }
+
+    /// Fills this scratch for one block from the chunk and its apron.
+    ///
+    /// `chunk` is the resident chunk in `local_index` order. This is the
+    /// per-block entry point behind [`for_each_block`]: the remesh scheduler
+    /// (M2-24) uses it to mesh a dirty block without visiting the whole chunk.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `chunk` is not exactly [`CHUNK_VOLUME`] voxels, or if `block`
+    /// is outside the chunk.
+    pub fn fill(&mut self, chunk: &[u16], apron: &Apron, block: BlockPos) {
+        assert_eq!(
+            chunk.len(),
+            CHUNK_VOLUME,
+            "chunk must contain exactly CHUNK_VOLUME voxels"
+        );
+        let edge = CHUNK_DIM / BLOCK_EDGE;
+        assert!(
+            (block.x as usize) < edge && (block.y as usize) < edge && (block.z as usize) < edge,
+            "block ({}, {}, {}) is outside the {edge}³ chunk",
+            block.x,
+            block.y,
+            block.z
+        );
+        fill_scratch(
+            chunk,
+            apron,
+            block.x as i32,
+            block.y as i32,
+            block.z as i32,
+            self,
+        );
+    }
 }
 
 /// Scratch index for scratch-local `(x, y, z)`.
@@ -154,8 +209,9 @@ where
     for bz in 0..blocks {
         for by in 0..blocks {
             for bx in 0..blocks {
-                fill_scratch(chunk, apron, bx, by, bz, &mut scratch);
-                visit(BlockPos::new(bx as u32, by as u32, bz as u32), &scratch);
+                let block = BlockPos::new(bx as u32, by as u32, bz as u32);
+                scratch.fill(chunk, apron, block);
+                visit(block, &scratch);
             }
         }
     }
@@ -228,6 +284,24 @@ mod tests {
     use std::mem::size_of_val;
 
     use super::*;
+
+    #[test]
+    #[should_panic(expected = "outside")]
+    fn scratch_fill_rejects_a_block_outside_the_chunk() {
+        let chunk = noise_chunk();
+        let apron = Apron::new();
+        let mut scratch = BlockScratch::new();
+        let edge = (CHUNK_DIM / BLOCK_EDGE) as u32;
+        scratch.fill(&chunk, &apron, BlockPos::new(edge, 0, 0));
+    }
+
+    #[test]
+    #[should_panic(expected = "CHUNK_VOLUME")]
+    fn scratch_fill_rejects_a_short_chunk() {
+        let apron = Apron::new();
+        let mut scratch = BlockScratch::new();
+        scratch.fill(&[AIR; 10], &apron, BlockPos::new(0, 0, 0));
+    }
 
     #[test]
     fn scratch_budget() {

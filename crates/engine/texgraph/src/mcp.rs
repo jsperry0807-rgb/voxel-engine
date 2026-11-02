@@ -185,7 +185,7 @@ impl Server {
             "ping" => Some(Ok(json!({}))),
             "tools/list" => Some(Ok(json!({ "tools": tools() }))),
             "tools/call" => Some(self.call_tool(&params)),
-            "resources/list" => Some(Ok(json!({ "resources": resources() }))),
+            "resources/list" => Some(Ok(json!({ "resources": resources(&self.workspace) }))),
             "resources/templates/list" => Some(Ok(json!({ "resourceTemplates": [] }))),
             "resources/read" => Some(self.read_resource(&params)),
             "prompts/list" => Some(Ok(json!({ "prompts": [] }))),
@@ -260,8 +260,8 @@ impl Server {
             "render_atlas" => self.render_atlas(),
             "list_materials" => self.list_materials(),
             "read_manifest" => self.read_manifest(),
-            "check" => self.check(),
-            "generate" => self.generate(),
+            "check" => self.check(arguments),
+            "generate" => self.generate(arguments),
             "bake_atlas" => self.bake_atlas(),
             other => ToolResult::error(format!("unknown tool `{other}`")),
         }
@@ -270,7 +270,7 @@ impl Server {
     fn list_faces(&self) -> ToolResult {
         let manifest = TextureManifest::load(&self.workspace.manifest_path()).ok();
         let mut faces = Vec::new();
-        for (key, slot) in pipeline::SLICES {
+        for (key, slot) in self.workspace.faces().iter() {
             let graph_path = self.workspace.graph_path(key);
             let png_path = self.workspace.texture_path(key);
             let graph_hash = fs::read(&graph_path)
@@ -320,7 +320,7 @@ impl Server {
         let Some(key) = arguments.get("key").and_then(Value::as_str) else {
             return ToolResult::error("read_graph requires `key`");
         };
-        let key = match normalize_key(key) {
+        let key = match normalize_key(&self.workspace, key) {
             Ok(key) => key,
             Err(error) => return ToolResult::error(error),
         };
@@ -351,7 +351,7 @@ impl Server {
 
     fn validate_graph(&self, arguments: &Value) -> ToolResult {
         let (source, text) = if let Some(key) = arguments.get("key").and_then(Value::as_str) {
-            let key = match normalize_key(key) {
+            let key = match normalize_key(&self.workspace, key) {
                 Ok(key) => key,
                 Err(error) => return ToolResult::error(error),
             };
@@ -413,7 +413,7 @@ impl Server {
         let Some(key) = arguments.get("key").and_then(Value::as_str) else {
             return ToolResult::error("render_preview requires `key`");
         };
-        let key = match normalize_key(key) {
+        let key = match normalize_key(&self.workspace, key) {
             Ok(key) => key,
             Err(error) => return ToolResult::error(error),
         };
@@ -452,7 +452,7 @@ impl Server {
         let text = format!(
             "{} slot {} · {:?} · {:?} · preview {}²\nsource: {}x{} RGBA8\n{tile_note}",
             key,
-            pipeline::slot_of(&key).unwrap_or(0),
+            self.workspace.slot_of(&key).unwrap_or(0),
             graph.alpha,
             graph.tiling,
             size,
@@ -468,7 +468,7 @@ impl Server {
         let Some(key) = arguments.get("key").and_then(Value::as_str) else {
             return ToolResult::error("render_tile requires `key`");
         };
-        let key = match normalize_key(key) {
+        let key = match normalize_key(&self.workspace, key) {
             Ok(key) => key,
             Err(error) => return ToolResult::error(error),
         };
@@ -550,15 +550,33 @@ impl Server {
         }
     }
 
-    fn check(&self) -> ToolResult {
-        match pipeline::check_all(&self.workspace) {
+    fn check(&self, arguments: &Value) -> ToolResult {
+        let keys = match keys_from(arguments) {
+            Ok(keys) => keys,
+            Err(error) => return ToolResult::error(error),
+        };
+        let result = if keys.is_empty() {
+            pipeline::check_all(&self.workspace)
+        } else {
+            pipeline::check_keys(&self.workspace, &keys)
+        };
+        match result {
             Ok(message) => ToolResult::text(message),
             Err(error) => ToolResult::error(error.to_string()),
         }
     }
 
-    fn generate(&self) -> ToolResult {
-        match pipeline::update_all(&self.workspace) {
+    fn generate(&self, arguments: &Value) -> ToolResult {
+        let keys = match keys_from(arguments) {
+            Ok(keys) => keys,
+            Err(error) => return ToolResult::error(error),
+        };
+        let result = if keys.is_empty() {
+            pipeline::update_all(&self.workspace)
+        } else {
+            pipeline::generate_keys(&self.workspace, &keys)
+        };
+        match result {
             Ok(message) => ToolResult::text(message),
             Err(error) => ToolResult::error(error.to_string()),
         }
@@ -594,7 +612,7 @@ impl Server {
                 format!("{}: {error}", self.workspace.atlas_hash_path().display())
             })?
         } else if let Some(name) = uri.strip_prefix("texgen://graph/") {
-            let key = normalize_key(name)?;
+            let key = normalize_key(&self.workspace, name)?;
             fs::read_to_string(self.workspace.graph_path(&key)).map_err(|error| {
                 format!("{}: {error}", self.workspace.graph_path(&key).display())
             })?
@@ -617,6 +635,7 @@ fn instructions() -> &'static str {
      read_graph and validate_graph inspect a fixed-point node graph; render_preview and render_tile show the result; \
      render_atlas shows the packed material atlas. check verifies every committed byte without writing. \
      generate writes all source PNGs, textures.ron, materials.gen.ron and the atlas; bake_atlas writes only the atlas. \
+     generate and check accept an optional `keys` array to limit work to named faces. \
      Graph RON is not writable through MCP: edit textures/graph/*.ron with normal file tools, validate it, then generate. \
      The evaluator is integer-only; previews and committed PNGs come from the same code."
 }
@@ -688,14 +707,14 @@ fn tools() -> Vec<Value> {
         ),
         tool(
             "check",
-            "Regenerate everything in memory and fail if any committed PNG, manifest byte, material row or atlas byte differs.",
-            empty_schema(),
+            "Regenerate everything in memory and fail if any committed PNG, manifest byte, material row or atlas byte differs. Pass `keys` to verify only those faces, plus the shared materials and atlas.",
+            keys_schema(),
             true,
         ),
         tool(
             "generate",
-            "Write all committed source PNGs, textures.ron, materials.gen.ron and the atlas. Use check first.",
-            empty_schema(),
+            "Write all committed source PNGs, textures.ron, materials.gen.ron and the atlas. Pass `keys` to write only those faces and skip unchanged files. Use check first.",
+            keys_schema(),
             false,
         ),
         tool(
@@ -735,7 +754,22 @@ fn empty_schema() -> Value {
     json!({ "type": "object", "properties": {}, "additionalProperties": false })
 }
 
-fn resources() -> Vec<Value> {
+/// An optional `keys` array; omitting it means "the whole committed set".
+fn keys_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "keys": {
+                "type": "array",
+                "items": { "type": "string", "description": "Face key, e.g. voxel:block/stone or stone" },
+                "description": "Optional face list; omit or pass [] for the whole set."
+            }
+        },
+        "additionalProperties": false
+    })
+}
+
+fn resources(workspace: &Workspace) -> Vec<Value> {
     let mut resources = vec![
         json!({
             "uri": "texgen://faces",
@@ -762,7 +796,7 @@ fn resources() -> Vec<Value> {
             "mimeType": "application/ron",
         }),
     ];
-    for (key, _) in pipeline::SLICES {
+    for (key, _) in workspace.faces().iter() {
         let name = pipeline::name_of(key);
         resources.push(json!({
             "uri": format!("texgen://graph/{name}"),
@@ -774,26 +808,24 @@ fn resources() -> Vec<Value> {
     resources
 }
 
-fn normalize_key(input: &str) -> Result<String, String> {
-    let key = if input.starts_with("voxel:block/") {
-        input.to_owned()
-    } else {
-        format!(
-            "voxel:block/{}",
-            input.trim_start_matches("voxel:").trim_start_matches('/')
-        )
-    };
-    if pipeline::slot_of(&key).is_none() {
-        return Err(format!(
-            "unknown face `{input}`; expected one of: {}",
-            pipeline::SLICES
-                .iter()
-                .map(|(key, _)| pipeline::name_of(key))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ));
+/// Reads the optional `keys` array from tool arguments.
+fn keys_from(arguments: &Value) -> Result<Vec<String>, String> {
+    match arguments.get("keys") {
+        None | Some(Value::Null) => Ok(Vec::new()),
+        Some(Value::Array(items)) => items
+            .iter()
+            .map(|item| {
+                item.as_str()
+                    .map(str::to_owned)
+                    .ok_or_else(|| "`keys` must be an array of face names".to_owned())
+            })
+            .collect(),
+        Some(_) => Err("`keys` must be an array of face names".to_owned()),
     }
-    Ok(key)
+}
+
+fn normalize_key(workspace: &Workspace, input: &str) -> Result<String, String> {
+    workspace.key_from(input).map_err(|error| error.to_string())
 }
 
 fn relative(workspace: &Workspace, path: &std::path::Path) -> String {
@@ -837,15 +869,16 @@ mod tests {
 
     #[test]
     fn key_normalization_accepts_short_and_full_keys() {
+        let workspace = server();
         assert_eq!(
-            normalize_key("stone").unwrap(),
+            normalize_key(&workspace.workspace, "stone").unwrap(),
             "voxel:block/stone".to_owned()
         );
         assert_eq!(
-            normalize_key("voxel:block/stone").unwrap(),
+            normalize_key(&workspace.workspace, "voxel:block/stone").unwrap(),
             "voxel:block/stone".to_owned()
         );
-        assert!(normalize_key("not_a_face").is_err());
+        assert!(normalize_key(&workspace.workspace, "not_a_face").is_err());
     }
 
     #[test]
@@ -904,6 +937,61 @@ mod tests {
         assert!(names.contains(&"render_preview"));
         assert!(names.contains(&"generate"));
         assert!(!names.contains(&"write_graph"));
+    }
+
+    fn call(server: &Server, id: u64, name: &str, arguments: Value) -> Value {
+        server
+            .handle(&json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "method": "tools/call",
+                "params": { "name": name, "arguments": arguments }
+            }))
+            .expect("tools/call response")
+    }
+
+    #[test]
+    fn generate_and_check_accept_an_optional_key_list() {
+        let server = server();
+        let list = server
+            .handle(&json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}))
+            .expect("tools response");
+        for name in ["generate", "check"] {
+            let tool = list["result"]["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|tool| tool["name"] == name)
+                .unwrap_or_else(|| panic!("{name} is missing"));
+            assert_eq!(tool["inputSchema"]["properties"]["keys"]["type"], "array");
+        }
+
+        // A keyed check is read-only and names the selected face.
+        let response = call(&server, 2, "check", json!({ "keys": ["stone"] }));
+        assert_eq!(response["result"]["isError"], false, "{response}");
+        let text = response["result"]["content"][0]["text"]
+            .as_str()
+            .expect("text content");
+        assert!(
+            text.contains("1 texture, materials and atlas are current"),
+            "{text}"
+        );
+
+        // An unknown key fails before anything is written.
+        let response = call(&server, 3, "generate", json!({ "keys": ["not_a_face"] }));
+        assert_eq!(response["result"]["isError"], true);
+        let text = response["result"]["content"][0]["text"]
+            .as_str()
+            .expect("error text");
+        assert!(text.contains("unknown face"), "{text}");
+
+        // A non-array `keys` value is rejected with a shape error.
+        let response = call(&server, 4, "check", json!({ "keys": "stone" }));
+        assert_eq!(response["result"]["isError"], true);
+        let text = response["result"]["content"][0]["text"]
+            .as_str()
+            .expect("error text");
+        assert!(text.contains("must be an array"), "{text}");
     }
 
     #[test]

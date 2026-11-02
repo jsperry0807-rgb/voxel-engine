@@ -1,9 +1,9 @@
 # Roadmap Task List
 
-**Status:** v1.6 — derived from spec v2.3 and roadmap v3.2
-**Date:** 2026-10-29
+**Status:** v1.9 — derived from spec v2.3 and roadmap v3.5
+**Date:** 2026-10-31
 **Owner:** engine
-**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 in progress: `M2-16` done; `M2-17` done (5.7% p95 at 128³, target ≤20%); `M2-18` next.
+**Current position:** M1 complete. M1.5 complete — `M1.5-17` (texel-density pair) landed 2026-10-29. M2 complete — `M2-30` (measured exit) landed 2026-10-31; the 128³ Minimum run is recorded, the mesh row is 1,250 KiB over the cap (production AO 3,650 KiB) and mesh compression is the first M3 item, gate row 9 is measured and row 11 is carried. M3-00 (mesh compression) is complete: the 44 B packed path passes 128³ and 64³ is abandoned. M3-01 (streaming shell) is complete: 256 chunks load with max pump 0.09 ms and 0 hitches on both GPUs. M3-02 (mesh buffer pool) is complete: 256 chunks mesh into 16 × 8 MiB pages (128 MiB for 120.3 MiB of meshes, 0 holes) with no buffer created after warm-up on both GPUs. M3-03 (upload queue) is complete: the 120.3 MiB ring uploads in 160–166 frames at ≤1 MiB per frame with 0 overruns and the pump stays under 0.5 ms. M3-04 (CPU chunk cull) is complete: it equals the M1-32 reference on 100 poses and draws 93 of 256 chunks at the default camera. M3-05 (draw loop) is complete: a culled frame is byte-identical to a draw-everything frame and no chunk is drawn twice. M3-06 (instrumentation) is complete: the per-second line reports CPU submit 1.2 ms, GPU pass 1.7 ms, 93/256 chunks, 13,201 blocks, 1,032,763 quads and 43.3 MiB on the RTX 4060. M3-07 (frame breakdown) is complete: draw is 1.7 ms (4060) / 8.9 ms (iGPU), cull 0.05 ms, upload 0 steady, content 64.8 ms/chunk off-thread and 6.0 s to fill the ring. M3-08 (stress scene) is complete: a seed selects five terrain variants and two canopy densities, 256 chunks fill in 5 s with 0 hitches, and the viewer writes a 1920×1080 PNG of the presented frame. M3-09 (hitch test) is complete: over 1,000 frames of camera motion the upload p99 is 2.5–2.9 ms (4060) / 1.6–3.1 ms (iGPU) and the worst frame 6.2–6.4 ms, after the default upload budget was halved from 1 MiB to 512 KiB (1 MiB measured a 6.8 ms p99). M3-10 (60 Hz) is complete: at 1080p and 128³ the RTX 4060 records 192–202 fps average and a 104–113 fps 1% low; the Radeon iGPU records 70–75 fps average but a 57–61 fps 1% low, so it misses the 60 Hz tail and carries that to M3-13. M3-11 (memory report) is complete: the 256-chunk 128³ scene holds 107.5 MiB of VRAM (mesh 104.0, light 2.0, probes 1.5) and 16.8 MiB of host heap, 3.4% of the 3.20 GiB target with 29.8× headroom. M3-12 (visual regression) is complete: `docs/images/m3-12-reference.png` plus `voxel-bench image-diff` with a documented threshold; two captures are byte-identical and the M3-08-to-now comparison differs in one pixel. M3-13 (exit) is complete: the scene config is frozen in `benchmarks/m3-scene.json` (enforced by tests), the exit record is written and `m3` is tagged. The Radeon iGPU's 128³ 1% low and the default/high view-distance projections are the open conditions carried into M3.5/M5.
 **Units:** `d` = one focused day, `h` = hours. Estimates are ±50%; they exist to size work, not to promise dates.
 
 ---
@@ -206,46 +206,46 @@ The deadline is the art task in the last column; its output must be ready before
 
 `water_still` is authored here even though transparency lands in M3.5; the slice draws it as a normal face.
 
-**Later sets.** Keys marked `*` are proposed; M2.5-30/M2.5-31 freeze the exact name. The deadline is the art task in the last column.
+**Later sets.** The M2.5 and M3.5 water keys below are frozen in the manifest at slots 41–71; the UI keys remain proposed until their task lands. The deadline is the art task in the last column.
 
 | Texture / material | Applies to | Done in task |
 | --- | --- | --- |
-| `dry_grass_top`*, `dry_grass_side`* | plains and savanna dry grass | M2.5-30 |
-| `savanna_grass_top`*, `savanna_grass_side`* | savanna | M2.5-30 |
-| `taiga_grass_top`*, `taiga_grass_side`* | taiga | M2.5-30 |
-| `swamp_grass_top`*, `swamp_grass_side`* | swamp surface | M2.5-30 |
-| `swamp_mud`* | swamp filler | M2.5-30 |
-| `red_sand`* | desert | M2.5-30 |
-| `alpine_rock`* | mountains and alpine | M2.5-30 |
-| `tundra_moss`* | tundra | M2.5-30 |
-| `deep_ocean_floor`* | deep and trench | M2.5-30 |
-| `clay`* | shelf and swamp | M2.5-30 |
-| `deep_stone`* | deep caves and trench walls | M2.5-31 |
-| `fungal_cap_top`*, `fungal_cap_side`* | fungal deep cap | M2.5-31 |
-| `fungal_stem`* | fungal deep stem | M2.5-31 |
-| `lava_still`*, `lava_flow`* | water/lava caves and geothermal | M2.5-31 |
-| `geothermal_rock`* | geothermal | M2.5-31 |
-| `obsidian`* | geothermal and lava contact | M2.5-31 |
-| `oak_planks`* | towers, bridges, ruins | M2.5-31 |
-| `stone_bricks`* | ruins, dungeons | M2.5-31 |
-| `cracked_stone_bricks`* | ruins | M2.5-31 |
-| `mossy_cobblestone`* | ruins, dungeons | M2.5-31 |
-| `birch_log`*, `birch_log_top`*, `birch_leaves`* | birch ecotone | M2.5-31 |
-| `spruce_log`*, `spruce_log_top`*, `spruce_leaves`* | taiga and spruce | M2.5-31 |
-| `fern`* | forest and taiga undergrowth | M2.5-31 |
-| `cactus_top`*, `cactus_side`*, `cactus_bottom`* | desert | M2.5-31 |
-| `dead_bush`* | desert and savanna | M2.5-31 |
-| `water_flow`* | rivers and current | M3.5-15 |
-| `foam_strip`* | river foam | M3.5-15 |
-| `caustics`* | underwater light, only if not procedural | M3.5-15 |
+| `dry_grass_top`, `dry_grass_side` | plains and savanna dry grass | M2.5-30 |
+| `savanna_grass_top`, `savanna_grass_side` | savanna | M2.5-30 |
+| `taiga_grass_top`, `taiga_grass_side` | taiga | M2.5-30 |
+| `swamp_grass_top`, `swamp_grass_side` | swamp surface | M2.5-30 |
+| `swamp_mud` | swamp filler | M2.5-30 |
+| `red_sand` | desert | M2.5-30 |
+| `alpine_rock` | mountains and alpine | M2.5-30 |
+| `tundra_moss` | tundra | M2.5-30 |
+| `deep_ocean_floor` | deep and trench | M2.5-30 |
+| `clay` | shelf and swamp | M2.5-30 |
+| `deep_stone` | deep caves and trench walls | M2.5-31 |
+| `fungal_cap_top`, `fungal_cap_side` | fungal deep cap | M2.5-31 |
+| `fungal_stem` | fungal deep stem | M2.5-31 |
+| `lava_still`, `lava_flow` | water/lava caves and geothermal | M2.5-31 |
+| `geothermal_rock` | geothermal | M2.5-31 |
+| `obsidian` | geothermal and lava contact | M2.5-31 |
+| `oak_planks` | towers, bridges, ruins | M2.5-31 |
+| `stone_bricks` | ruins, dungeons | M2.5-31 |
+| `cracked_stone_bricks` | ruins | M2.5-31 |
+| `mossy_cobblestone` | ruins, dungeons | M2.5-31 |
+| `birch_log`, `birch_log_top`, `birch_leaves` | birch ecotone | M2.5-31 |
+| `spruce_log`, `spruce_log_top`, `spruce_leaves` | taiga and spruce | M2.5-31 |
+| `fern` | forest and taiga undergrowth | M2.5-31 |
+| `cactus_top`, `cactus_side`, `cactus_bottom` | desert | M2.5-31 |
+| `dead_bush` | desert and savanna | M2.5-31 |
+| `water_flow` | rivers and current | M3.5-15 |
+| `foam_strip` | river foam | M3.5-15 |
+| `caustics` (procedural; no atlas tile) | underwater light | M3.5-15 |
 | `map_item_icon`* | map item icon (UI sprite) | M3.5-10 |
 | `player_marker`* | map marker (UI sprite) | M3.5-10 |
 
-**Biome surfaces (≤ 24 new tiles).** Top, filler, stone and beach faces for the 18 biome palettes, plus each biome's `map_color` (data, not a tile). Reuse the slice set first; add only what the palette cannot express. Transition blocks and debris reuse these parents and add zero slots. M2.5-30 freezes the proposed keys in the table.
+**Biome surfaces (≤ 24 new tiles).** Top, filler, stone and beach faces for the 18 biome palettes, plus each biome's `map_color` (data, not a tile). Reuse the slice set first; add only what the palette cannot express. Transition blocks and debris reuse these parents and add zero slots. The 14 M2.5-30 faces are frozen in `data/faces.ron`; the per-biome palette table and `map_color` values remain acceptance work.
 
-**Underground, structures and flora (≤ 32 new tiles).** The per-material rows above are the deadline list. Lava and geothermal tiles carry the emissive material flag; that is a property, not a texture rule. Giant-tree detail reuses the oak/spruce keys; transition and detail templates add zero slots.
+**Underground, structures and flora (≤ 32 new tiles).** The per-material rows above are the deadline list. Lava and geothermal tiles carry the emissive material flag; that is a property, not a texture rule. Giant-tree detail reuses the oak/spruce keys; transition and detail templates add zero slots. The 15 M2.5-31 faces and their block rows are frozen in the manifest; the flora, structure and underground tables and their fixtures remain acceptance work.
 
-**Water and current (≤ 3 new tiles).** `water_still` exists from M1.5-14; add `water_flow` and `foam_strip`. The flow axis and UV-scroll rate are documented with the tiles. Caustics are procedural unless M3.5-15 adds a `caustics` tile; the decision is recorded with M3.5-15, and no caustics texture is invented in the shader task.
+**Water and current (≤ 3 new tiles).** `water_still` exists from M1.5-14; `water_flow` and `foam_strip` are frozen at slots 70–71. Both are Translucent and tile on both axes, flow along +X, and use a nominal 0.25 tile/s UV scroll that M3.5-08 scales by current speed. Caustics are procedural; no `caustics` tile enters the atlas. The flow axis, alpha policy and scroll rate are recorded in `docs/water-textures.md`.
 
 **Map UI (0 slots).** The atlas item icon and player marker are UI sprites, not material tiles. They are authored inside M3.5-10 and never enter the 256-slot table.
 
@@ -382,7 +382,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 ## 5. M1.5 — Vertical slice
 
 **Goal:** one textured chunk in a window. **Exit:** M1.5-17. **Budget:** 10.5 d code + 4 d art (M1.5-14). **Depends:** M1-15 (layout API), M0-06 (atlas math); M1.5-14 before M1.5-07.
-**Status:** Complete — M1.5-01…M1.5-17 done. The before/after texel-density pair, the full M1.5-15 screenshot set and the viewer README have landed. M2 work has started.
+**Status:** Complete — M1.5-01…M1.5-17 done. The before/after texel-density pair, the full M1.5-15 screenshot set and the viewer README have landed. M2 is complete.
 **Art:** M1.5-14 authors the 23 slice faces; M1.5-17 is the exit art checkpoint.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -411,7 +411,7 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
 
 **Goal:** deterministic mesh + AO + block light + probes, at the 128³ Minimum edge.
 **Exit:** M2-30. **Budget:** 27.0 d raw. **Depends:** M1 gate, M1.5 vertex/atlas format, M1.5-14 (texture set).
-**Status:** In progress — M2-16 done; M2-17 done (5.7% p95 at 128³, target ≤20%); M2-18 next. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
+**Status:** Complete — `M2-16`…`M2-30` done. The measured 128³ Minimum exit is in [`m2-exit.md`](m2-exit.md): **9 pass, 1 fail, 2 not measured**. The mesh-buffer row misses by 1,250 KiB (production AO 3,650 KiB), so 128³ Minimum is a measured candidate pending mesh compression; row 9 is measured, row 11 is carried until a real save. Target edge: **128³ Minimum** (ADR-002 / [`m1-gate-decision.md`](m1-gate-decision.md)); 128³ Default is not greenlit.
 **Art:** none beyond M1.5-14; M2 reuses the slice atlas.
 
 **M1 gate carry-over — blocks M2-30:**
@@ -425,6 +425,14 @@ Each ADR is Context / Decision / Consequences / Rejected alternatives, cross-lin
   and replace the provisional fixture with a real populated save.
 - If the 128³ run misses the 4.80 GiB hard-fail line, apply the pre-registered
   fallback: 64³ Minimum, then mesh compression, near radius, vertical shell.
+
+**M2-30 resolution (2026-10-31):** the measured run is recorded in
+[`m2-exit.md`](m2-exit.md). Row 9 is closed by the M1-34 reference over 100
+poses on the save (p95 0.00%); row 11 is **carried**, not closed, because no real
+save exists until M2.5/worldgen or gameplay. The 128³ memory row is 4.16 GiB
+(passes the 4.80 GiB hard fail, over the 3.20 GiB target), and the mesh row
+misses the 2.4 MiB cap by 1,250 KiB (production AO 3,650 KiB), so mesh compression
+remains the first rule-3 lever and 128³ Minimum is a measured candidate.
 
 **M2-02 measured (2026-10-29, development host):** the face planes used 49,152 B
 and 445 µs versus 574,992 B and 4.90 ms for a dense padded copy at 64³
@@ -512,6 +520,200 @@ including the 570-cell border-side edit. The edit changes 46/216 padded cells at
 [`m2-light-cost.md`](m2-light-cost.md) and the measured path in
 [`m2-light-20pct.md`](m2-light-20pct.md).
 
+**M2-18 measured (2026-10-30):** the production `voxel-mesh::probe` bake is
+byte-identical to the M1-30 oracle on floor, cave and terrain fixtures at the
+pre-registered 512-probe (8-block) edge, and on the SVDAG path at the compiled
+chunk edge. `ProbeBake::advance` is a strict ray budget: no call casts more than
+it is given, and budgets from 1 to 1,000 rays produce the same payload and
+validity mask; an invalid probe costs no rays. Criterion means are 439 µs for a
+64³ full bake and 11.57 ms for 128³; the bench terrain leaves 33/64 and 382/512
+probes valid, so those bakes cast 2,112 and 24,448 rays (a fully open 128³ near
+grid is capped at 32,768). One 256-ray frame costs 120 µs (~475 ns/ray), so a
+full 128³ bake spreads over 96–128 frames. See
+`cargo bench -p voxel-mesh --bench probe`.
+
+**M2-19 measured (2026-10-30):** `ProbeVolume::sample` anchors its interpolation
+cell on the probe centres (a sample at a probe centre reproduces that probe, not
+the neighbouring blend), blends the eight corners when all are valid and, when
+any corner is invalid, selects the nearest valid probe in the 3×3×3 window
+around the sample's nearest lattice probe, clamped to this chunk's grid, with
+equal distances breaking to the lowest linear probe index; an empty window
+returns zero contribution. Ten `probe_fallback` tests pin each branch: the
+probe-centre identity, a blend against a hand-summed cell, a sample inside the
+floor fixture selecting probe 4 over the equidistant probe 5, the all-solid and
+far cases returning zero, a mid-grid window that must reach the nearer probe,
+the negative window case (a valid probe outside is not used), edge/outside
+clamping, the SH4 radiance against the basis, and a sweep over NaN/infinite
+positions and degenerate normals that stays finite. See
+`cargo test -p voxel-mesh probe_fallback`.
+
+**M2-20 measured (2026-10-30):** ring membership is the horizontal distance from
+the camera to the chunk AABB: ≤ 128 m near, ≤ 256 m mid, far beyond, with height
+ignored and a non-finite camera pinned to far. Density is 512/64/0 probes per
+chunk at the 128³ edge (64/8/0 at 64³), pinned against `TARGET_CHUNK_DIM`.
+`ProbeLodState` makes a crossing a content event: `request` only sets a target,
+`begin` returns the ring to bake and `commit` flips; the previous volume stays
+bound and samplable until the flip, targets that change before a build starts
+coalesce into one rebuild, and a change during a build is queued for after the
+commit, and `abort` drops a cancelled build so the target can be retried. Ten
+`probe_lod` tests cover the inclusive ring boundaries, diagonal distance, the
+negative/low faces, coalescing (including crossing back to the bound ring), one
+rebuild per crossing, the mid-build request, the abort path, the commit guards
+(no build, wrong edge) and the old-grid-stays-bound property. Mid centres remain the M1-30 lattice (block centres of every
+second block), now documented on `ProbeGrid::mid`; ADR-005's "2 m cell centres"
+wording is unchanged and still needs a decision. See
+`cargo test -p voxel-mesh probe_lod`.
+
+**M2-21 measured (2026-10-30):** `voxel-bench gate probes` now drives the
+production `voxel-mesh::probe` path — selection, incremental rebake and the
+first-solid ray helper ported from `voxel_storage::reference::probe` — and the
+report lists compaction as its own term. On the frozen `m1-representative`
+fixture (1,000 edits, 35 chunks), release p95 is **143.052 µs** (p50
+50.586 µs) against the 4 ms budget, a 3.86 ms margin, split into select
+106.392 µs, rebake 37.361 µs, upload 50 ns and compaction 20 ns p95. The debug
+verify path is 550.265 µs p95. The recorded max, 710.910 µs (8.88 ms in debug),
+is one periodic DAG compaction (every 64th edit; 655.354 µs of it); probe work
+stays under 104 µs. An edit affects 1 probe (max 3 of 64), tests 1,220 selection
+rays, rebakes 67 rays and stages 13 B. `tests/probe_update.rs` pins selection,
+rebake and first-solid to the M1-30 oracle byte-for-byte across edits,
+direction, centre flips, index order, threads and the compiled chunk edge.
+
+**M2-22 measured (2026-10-30):** `voxel-mesh::dirty::DirtyBlocks` keeps one bit
+per block (1 word at 64³, 8 at 128³) and derives the remesh set from a COW edit
+batch against the pre-edit `Svdag`; the bitset also supports retiring one block
+(`clear_block`) and merging batches (`union`) for M2-23. A block's 18³ scratch
+reads its own voxels plus a one-voxel border, so an interior edit dirties
+exactly its block, a face edit two, an edge four and a corner eight — the 2×2×2
+blocks whose scratch contains the voxel, checked against the scratch coverage
+and against the real `greedy_block` meshes of every block. A solid → solid edit
+marks only its own block, because culling and AO are binary and the vertex
+carries no light; added and removed edits mark the apron. Chunk-border edits
+mark only in-chunk blocks, while `mark_apron_cell` marks the neighbour side of
+one apron cell (1–4 blocks, not a face). `from_edits` applies last-wins per
+voxel, so a batch that reverts before publication is not dirty, and a no-op
+write marks nothing. Eleven `dirty_bitset` tests; see
+`cargo test -p voxel-mesh dirty_bitset`.
+
+**M2-23 measured (2026-10-30):** `voxel-mesh::scheduler::RemeshScheduler` owns
+the M2-22 dirty backlog and drains it in ascending block order, at most a
+caller-supplied block budget per frame; a block is the budget unit because one
+18³ block is one bounded mesh task. `next_batch_into` reuses the caller's `Vec`,
+clears each handed-out bit, coalesces edits to a block already queued (`union`)
+and re-queues a block dirtied after it was meshed; `DirtyBlocks::take_first`
+owns the drain so the bit-to-block mapping has one owner. Twelve `scheduler`
+tests pin the budget (1/5/7/64 blocks and the zero-budget no-op), a full drain
+with no repeats or gaps, an 8-word 512-block backlog even at 64³, deterministic
+batch sequences across enqueue orders and merge boundaries, clear, the
+cross-edge panic, merge/requeue semantics, buffer reuse and an end-to-end drain
+of a real `DirtyBlocks` from a COW batch. The 128³ backlog (512 blocks) drains in
+64 frames at an 8-block budget. See `cargo test -p voxel-mesh scheduler`.
+
+**M2-24 measured (2026-10-31):** `voxel-bench gate edits` now also reports the
+production scrub path on the same 1,000 edits: COW → M2-22 dirty blocks → one
+M2-23 scheduler batch → M2-21 probe selection/rebake → M2-15 incremental light →
+production greedy remesh. Release p95 is **183.007 µs** (p50 113.857 µs, max
+825.958 µs; the max is a periodic DAG compaction) against the 4 ms scrub budget —
+a 3.82 ms margin — split into dirty 140 ns, remesh 104.248 µs, light 942 ns and
+probe 112.463 µs p95. The debug verify path is 1.13 ms p95 (p50 969.250 µs).
+The frozen fixture pairs two non-air materials on every edit, so the swap is
+occupancy-neutral: the batch is always one block (64 quads/edit on average) and
+no probe can change, making the probe term selection-only (0 affected probes);
+M2-21 records the rebake workload on visible targets. Sky is the startup
+heightmap, so light values keep the M1-29 static-sky model and only latency is
+used here. Schema v3 adds the scrub terms and keeps the M1-37 8 ms edit terms
+unchanged. See `cargo run -p voxel-bench -- gate edits`.
+
+**M2-25 measured (2026-10-31):** the SVDAG ray-test occluder lives in
+`voxel-mesh::raytest` behind the `raytest` cargo feature; `RayTestConfig` mirrors
+the `occlusion.raytest` key (ADR-006) and defaults off. One ray per block over the
+same 128 m block cube and bit layout as the M1-33 fill; a voxel-resolution DDA
+reads resident `Svdag`s (`SvdagScene`), the target block's own voxels are skipped
+so opaque boundary blocks stay visible, and a camera inside solid skips its own
+block. On a 9³ pillar fixture the fill marks 729 blocks visible and the ray-test
+566 — a delta of 163 (22.4%) around the obstacle — with 729 rays and 54,032 voxel
+steps; open sky and a closed room agree exactly, and a floor patch shows an 11.5%
+delta. The scene-comparison tests assert the ray set is a subset of the fill
+(line of sight implies connectivity). A material-aware `SvdagScene` keeps water
+transparent, and the suite also covers negative chunks, multiple chunks, a
+camera inside solid and a camera on a block boundary. The 100-pose accuracy/cost
+table and the decision recommendation are M2-26. See [`m2-raytest.md`](m2-raytest.md) and
+`cargo test -p voxel-mesh --features raytest`.
+
+**M2-26 measured (2026-10-31):** the 100-pose comparison runs on a 16³-block
+SVDAG world (terrain, slit wall, pillar, sealed cave) with horizon 4 and is
+recorded in [`m2-raytest.md`](m2-raytest.md). Release p50/p95 per pose is
+24.8/28.3 µs for the flood fill and 799.1/892.9 µs for the ray-test — a 32.3× /
+31.5× cost ratio at 64³ (33.4× / 37.2× at 128³) — with the ray set a subset of
+the fill on every pose and an in-world delta of 20,227 blocks (35.3% of in-world
+fill-visible) over the sweep. The ray-test is O(h⁴) against the fill's O(h³), so
+the gap grows with the horizon and the 128 m production horizon is not
+affordable per frame; with the non-air default it also culls behind transparent
+and partially filled blocks. **Recommendation: keep the flood fill as the
+default**; `occlusion.raytest` stays off for the far-field/shadow-ray path.
+Reproduce with `cargo test --release -p voxel-mesh --features raytest --test
+raytest_compare -- --nocapture`.
+
+**M2-27 measured (2026-10-31):** the viewer now draws the production M2 content:
+`chunk_content` meshes every 16³ block with `greedy_block` (AO) + `mesh_block`
+into the ADR-010 16 B stream, runs `voxel_mesh::light::full_pass` for the block
+cells and `voxel_mesh::probe::bake` for the near probes; `chunk_lighting`
+uploads both as storage buffers and the chunk shader consumes the AO corner
+(`vertex_index % 4`) and the `max(sky, block)` level. The demo chunk drops from
+8,226 naive faces to **2,208 quads covering the same 8,226 faces (73.2% fewer
+quads)**, 167,808 B mesh + 1,024 B light + 776 B probes; the atlas, material
+slots and UV mapping are unchanged, and probes are uploaded/bound but not
+sampled yet. `cargo run -p voxel-viewer` on the development host
+(llvmpipe/software Vulkan, 1920×1080) logs the M2 upload and runs at 166–172 fps
+(5.8–6.0 ms/frame); the reference-GPU 60 Hz run is the manual acceptance step.
+The one-chunk `u16` index stream caps a mesh at 16,384 quads, so a fully
+populated 128³ chunk needs meshlets in M3. See [`m2-viewer.md`](m2-viewer.md).
+
+**M2-28 measured (2026-10-31):** `cargo bench -p voxel-mesh build` runs the
+production single-threaded chunk build (18³ scratch fill + `greedy_block` with
+AO + `mesh_block`) over 100 deterministic terrain chunks (hills, two ellipsoid
+caves and a floating shelf). Release throughput is **210.4 chunks/s at 64³**
+(5,535 quads/chunk) and **34.3 chunks/s at 128³** (18,180 quads/chunk) — both
+above the 20/s budget, which the bench asserts. Volumes are generated before
+timing, so the measurement is meshing rather than generation; the apron is
+empty (single-chunk build, not a border-seam run). The bench prints the summary
+before its criterion group, so the filtered verify command reports the number
+without running the long criterion sampling.
+
+**M2-29 measured (2026-10-31):** `crates/engine/mesh/tests/scratch_budget.rs`
+installs a counting `GlobalAlloc` armed only on the measuring thread. Walking
+all 64 blocks at 64³ (512 at 128³) with an inert callback allocates **0 heap
+bytes**; filling every block into one reused `BlockScratch` also allocates 0,
+and so does the greedy core with a caller-owned quad buffer. The budgeted
+working set is therefore the stack `18³ × 2 B = 11,664 B` scratch plus the
+stack merge mask — 5.6× under the 64 KiB budget (compile-time asserted) — and
+no chunk-wide dense copy is allocated during the walk. The full build is pinned
+to **exactly two allocations per non-empty block** (`mesh_block`'s vertex and
+index buffers), with bytes and peak equal to the per-block mesh, so any extra
+or chunk-wide buffer changes the counts regardless of size. Quad and mesh
+buffers are per-block outputs bounded by `3 × 16³` quads, not scratch. Both
+edges pass `cargo test -p voxel-mesh scratch_budget`.
+
+**M2-30 measured (2026-10-31):** the M2 exit is recorded in
+[`m2-exit.md`](m2-exit.md) and archived as
+`benchmarks/runs/20261031T152718Z-m2-gate-128`. The `m2-128` fixture (9 chunks,
+128³ edge) was frozen and verified. The M2 run reported edit p95 **8.136 µs**,
+probe-update p95 **765.844 µs**, nodes max **138,636**, granularity p95
+**0.00%** over 100 poses (row 9 measured), and dataset row 11 **carried** (no
+real save exists before M2.5); the 128³ chunk build is **34.3 chunks/s**
+(M2-28). Its 3.29 GiB and 2,519 KiB mesh figures were the **no-AO reference**.
+
+**Phase 0 erratum (2026-10-31, M3-00):** `gate memory` now measures the
+production AO mesh through `mesh_block` (runs
+`benchmarks/runs/20261031T163853Z-m2-production-mesh-128` and `...-64`).
+Production 128³: **4.16 GiB** projected VRAM (p95 5.29 MiB × 805; PASS against
+4.80 GiB, 987 MiB over the 3.20 GiB target) and **mesh p95 3,650 KiB vs the
+2,400 KiB cap (FAIL by 1,250 KiB, 52.1%)**. Production 64³: mesh p95 **925
+KiB vs 600 (FAIL by 325.5 KiB)** and 34.51 GiB. The M2 verdict (FAIL) is
+unchanged; the severity is worse. The mesh row is the open rule-3 lever: mesh
+compression is the first M3 item, and 128³ Minimum stays a measured candidate
+rather than a confirmed profile. CI runs the M2-11 mesh goldens at both edges
+and uploads them as a 90-day artifact.
+
 ### 6.1 Apron and mesher
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
@@ -543,24 +745,24 @@ including the 570-cell border-side edit. The edit changes 46/216 padded cells at
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| M2-18 | Production SH4 bake at block centres, deterministic, budgeted across frames | M1-30 | Byte-equal to the reference on 3 fixtures | `cargo test -p voxel-mesh probe_bake` | 1.5 d | [ ] |
-| M2-19 | Invalid-in-solid flag and 3×3×3 nearest-valid fallback | M2-18 | Sampling inside a wall returns the nearest valid probe; no NaNs | `cargo test -p voxel-mesh probe_fallback` | 0.5 d | [ ] |
-| M2-20 | Probe LOD: near per block, mid half-res, far none; transition is a content event | M2-19 | Ring transition rebuilds once; counts match 512/64/0 per chunk | `cargo test -p voxel-mesh probe_lod` | 1.5 d | [ ] |
-| M2-21 | Probe determinism and update budget: p95 ≤ 4 ms per edited chunk | M2-18 | Measured on the fixture; recorded | `cargo run -p voxel-bench -- gate probes` | 0.5 d | [ ] |
+| M2-18 | Production SH4 bake at block centres, deterministic, budgeted across frames | M1-30 | Byte-equal to the reference on 3 fixtures | `cargo test -p voxel-mesh probe_bake` | 1.5 d | [x] |
+| M2-19 | Invalid-in-solid flag and 3×3×3 nearest-valid fallback | M2-18 | Sampling inside a wall returns the nearest valid probe; no NaNs | `cargo test -p voxel-mesh probe_fallback` | 0.5 d | [x] |
+| M2-20 | Probe LOD: near per block, mid half-res, far none; transition is a content event | M2-19 | Ring transition rebuilds once; counts match 512/64/0 per chunk | `cargo test -p voxel-mesh probe_lod` | 1.5 d | [x] |
+| M2-21 | Probe determinism and update budget: p95 ≤ 4 ms per edited chunk | M2-18 | Measured on the fixture; recorded | `cargo run -p voxel-bench -- gate probes` | 0.5 d | [x] |
 
 ### 6.4 Integration, ray-test, and exit
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| M2-22 | Dirty bitset: per-block dirty flags derived from the COW diff (added/removed/changed) | M1-10 | Editing one voxel dirties exactly the block plus the AO/light apron | `cargo test -p voxel-mesh dirty_bitset` | 0.5 d | [ ] |
-| M2-23 | Budgeted remesh scheduler: dirty blocks → mesh batches under a per-frame budget | M2-22 | Backlog drains; no frame exceeds the budget in the test | `cargo test -p voxel-mesh scheduler` | 1 d | [ ] |
-| M2-24 | Scrub latency: single-block edit → remesh + light + probe ≤ 4 ms p95 | M2-23 | Measured; recorded | `cargo run -p voxel-bench -- gate edits` | 0.5 d | [ ] |
-| M2-25 | Ray-test occlusion behind `occlusion.raytest` flag, using the SVDAG; default off | M1-33 | Flag on/off produce comparable visible sets; documented delta | `cargo test -p voxel-mesh --features raytest` | 2 d | [ ] |
-| M2-26 | Ray-test vs flood-fill comparison report: accuracy and cost on 100 poses | M2-25 | Table in `docs/` with the decision recommendation (still default flood-fill) | review | 0.5 d | [ ] |
-| M2-27 | Wire M2 into the viewer: replace the naive mesher; light + probes uploaded | M2-12, M2-21 | Visual parity with M1.5 except better merge ratio; 60 Hz; no new material keys, the M1.5-14 atlas is unchanged | run | 1 d | [ ] |
-| M2-28 | Throughput: ≥ 20 terrain chunks/s single-threaded | M2-27 | Measured over 100 chunks; recorded | `cargo bench -p voxel-mesh build` | 0.5 d | [ ] |
-| M2-29 | Scratch-memory budget test: ≤ 64 KiB per worker, no chunk-wide densify anywhere | M2-03 | Counting allocator test fails if exceeded | `cargo test -p voxel-mesh scratch_budget` | 0.5 d | [ ] |
-| M2-30 | M2 exit: tag `m2`, update roadmap, freeze goldens as CI artifacts; record the 128³ Minimum run and close gate rows 9/11 | M2-29; M1 gate carry-over | Tag; CI runs the goldens; 128³ memory/edit/probe numbers and gate rows 9/11 recorded | `git tag -n m2`; gate report | 0.5 d | [ ] |
+| M2-22 | Dirty bitset: per-block dirty flags derived from the COW diff (added/removed/changed) | M1-10 | Editing one voxel dirties exactly the block plus the AO/light apron | `cargo test -p voxel-mesh dirty_bitset` | 0.5 d | [x] |
+| M2-23 | Budgeted remesh scheduler: dirty blocks → mesh batches under a per-frame budget | M2-22 | Backlog drains; no frame exceeds the budget in the test | `cargo test -p voxel-mesh scheduler` | 1 d | [x] |
+| M2-24 | Scrub latency: single-block edit → remesh + light + probe ≤ 4 ms p95 | M2-23 | Measured; recorded | `cargo run -p voxel-bench -- gate edits` | 0.5 d | [x] |
+| M2-25 | Ray-test occlusion behind `occlusion.raytest` flag, using the SVDAG; default off | M1-33 | Flag on/off produce comparable visible sets; documented delta | `cargo test -p voxel-mesh --features raytest` | 2 d | [x] |
+| M2-26 | Ray-test vs flood-fill comparison report: accuracy and cost on 100 poses | M2-25 | Table in `docs/` with the decision recommendation (still default flood-fill) | review | 0.5 d | [x] |
+| M2-27 | Wire M2 into the viewer: replace the naive mesher; light + probes uploaded | M2-12, M2-21 | Visual parity with M1.5 except better merge ratio; 60 Hz; no new material keys, the M1.5-14 atlas is unchanged | run | 1 d | [x] |
+| M2-28 | Throughput: ≥ 20 terrain chunks/s single-threaded | M2-27 | Measured over 100 chunks; recorded | `cargo bench -p voxel-mesh build` | 0.5 d | [x] |
+| M2-29 | Scratch-memory budget test: ≤ 64 KiB per worker, no chunk-wide densify anywhere | M2-03 | Counting allocator test fails if exceeded | `cargo test -p voxel-mesh scratch_budget` | 0.5 d | [x] |
+| M2-30 | M2 exit: tag `m2`, update roadmap, freeze goldens as CI artifacts; record the 128³ Minimum run and close row 9, carrying row 11 | M2-29; M1 gate carry-over | Tag; CI runs the goldens; 128³ numbers recorded and row 9 measured, row 11 carried | `git tag -n m2`; gate report | 0.5 d | [x] |
 
 ---
 
@@ -576,24 +778,24 @@ including the 570-cell border-side edit. The edit changes 46/216 padded cells at
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| M2.5-01 | Create `crates/engine/worldgen` (`voxel-worldgen`); deterministic integer-hash 2D/3D gradient noise with 16.16 fixed-point interpolation | M1-24 | Same bytes for 1/2/8 threads and on two machines; golden vectors committed | `cargo test -p voxel-worldgen noise` | 2 d | [ ] |
-| M2.5-02 | Macro grid data model and 16 km tile format: height u16, temp/humidity/erosion/flags u8, header with seed + versions + CRC | M0-04 | Tile round-trips; 125² × 6 B = 93.75 KB; corrupt tile rejected | `cargo test -p voxel-worldgen tile` | 1 d | [ ] |
-| M2.5-03 | Continentalness/erosion/height spline tables for 0–12,000 m; sea level 6,600 | M2.5-01 | Splines monotonic where required; height clamped; unit table tests | `cargo test -p voxel-worldgen splines` | 1.5 d | [ ] |
-| M2.5-04 | Climate fields: compressed latitude (cold edges, warm equator), humidity from ocean distance, altitude lapse rate | M2.5-03 | Poles cold, coasts humid, peaks cold; 2D map test | `cargo test -p voxel-worldgen climate` | 1 d | [ ] |
-| M2.5-05 | Macro tile generator at 128 m, seeded and content-hashed | M2.5-02…04 | 4,096 tiles generate in minutes; hash stable across runs | `cargo run -p voxel-worldgen -- macro --seed 1` | 2 d | [ ] |
-| M2.5-06 | Hydrology: priority-flood depression fill, D8 flow, accumulation | M2.5-05 | Lakes at spill level; flow graph acyclic; hand-checked fixture | `cargo test -p voxel-worldgen hydro` | 2 d | [ ] |
-| M2.5-07 | River extraction: vector polylines with width/depth/order from catchment; deltas | M2.5-06 | Every river reaches sea or a lake; width 10–200 m; no uphill segments | `cargo test -p voxel-worldgen rivers` | 2 d | [ ] |
-| M2.5-08 | Lake extraction, spill levels, shoreline and underwater terrain | M2.5-06 | No leaking basins; shoreline continuous; tests | `cargo test -p voxel-worldgen lakes` | 1 d | [ ] |
-| M2.5-09 | Macro tile store: tiled streaming, LRU, 3×3 border for interpolation | M2.5-02 | 32 km view holds ≤ 9 tiles; no seams at tile borders | `cargo test -p voxel-worldgen tile_store` | 1.5 d | [ ] |
+| M2.5-01 | Create `crates/engine/worldgen` (`voxel-worldgen`); deterministic integer-hash 2D/3D gradient noise with 16.16 fixed-point interpolation | M1-24 | Same bytes for 1/2/8 threads and on two machines; golden vectors committed | `cargo test -p voxel-worldgen noise` | 2 d | [x] |
+| M2.5-02 | Macro grid data model and 16 km tile format: height u16, temp/humidity/erosion/flags u8, header with seed + versions + CRC | M0-04 | Tile round-trips; 125² × 6 B = 93.75 KB; corrupt tile rejected | `cargo test -p voxel-worldgen tile` | 1 d | [x] |
+| M2.5-03 | Continentalness/erosion/height spline tables for 0–12,000 m; sea level 6,600 | M2.5-01 | Splines monotonic where required; height clamped; unit table tests | `cargo test -p voxel-worldgen splines` | 1.5 d | [x] |
+| M2.5-04 | Climate fields: compressed latitude (cold edges, warm equator), humidity from ocean distance, altitude lapse rate | M2.5-03 | Poles cold, coasts humid, peaks cold; 2D map test | `cargo test -p voxel-worldgen climate` | 1 d | [x] |
+| M2.5-05 | Macro tile generator at 128 m, seeded and content-hashed | M2.5-02…04 | 4,096 tiles generate in minutes; hash stable across runs | `cargo run -p voxel-worldgen -- macro --seed 1` | 2 d | [x] |
+| M2.5-06 | Hydrology: priority-flood depression fill, D8 flow, accumulation | M2.5-05 | Lakes at spill level; flow graph acyclic; hand-checked fixture | `cargo test -p voxel-worldgen hydro` | 2 d | [x] |
+| M2.5-07 | River extraction: vector polylines with width/depth/order from catchment; deltas | M2.5-06 | Every river reaches sea or a lake; width 10–200 m; no uphill segments | `cargo test -p voxel-worldgen rivers` | 2 d | [x] |
+| M2.5-08 | Lake extraction, spill levels, shoreline and underwater terrain | M2.5-06 | No leaking basins; shoreline continuous; tests | `cargo test -p voxel-worldgen lakes` | 1 d | [x] |
+| M2.5-09 | Macro tile store: tiled streaming, LRU, 3×3 border for interpolation | M2.5-02 | 32 km view holds ≤ 9 tiles; no seams at tile borders | `cargo test -p voxel-worldgen tile_store` | 1.5 d | [x] |
 
 ### 7.2 Biomes, surface and transitions
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| M2.5-10 | Biome weight function: softmax over 18 centres in climate/erosion/continentalness; shape parameters blended before evaluation | M2.5-04, M2.5-05 | Weights sum to 1; transition width 300–500 m; no argmax curve in a map dump | `cargo test -p voxel-worldgen weights` | 2 d | [ ] |
-| M2.5-11 | RON biome schema and the 18 definitions (11 land, 3 ocean, 3 underground, geothermal) | M2.5-30, M2.5-10 | All definitions validate; every climate cell resolves; every material key resolves in the manifest; content is data-only | `cargo test -p voxel-worldgen biome_ron` | 2 d | [ ] |
-| M2.5-12 | Surface rules: 3–6 block soil default, biome/altitude override, slope and underwater rules | M2.5-30 | Cliffs expose stone; beaches ring water; every top/filler/stone/beach key comes from M2.5-30; tests | `cargo test -p voxel-worldgen surface` | 2 d | [ ] |
-| M2.5-13 | 1 m material dither and canonical two-material + debris transition blocks | M2.5-12 | Seam is mixed, not a line; ≤ 4 variants per pair; zero new atlas slots, parents come from M2.5-30 | `cargo test -p voxel-worldgen transitions` | 2 d | [ ] |
+| M2.5-10 | Biome weight function: softmax over 18 centres in climate/erosion/continentalness; shape parameters blended before evaluation | M2.5-04, M2.5-05 | Weights sum to 1; transition width 300–500 m; no argmax curve in a map dump | `cargo test -p voxel-worldgen weights` | 2 d | [x] |
+| M2.5-11 | RON biome schema and the 18 definitions (11 land, 3 ocean, 3 underground, geothermal) | M2.5-30, M2.5-10 | All definitions validate; every climate cell resolves; every material key resolves in the manifest; content is data-only | `cargo test -p voxel-worldgen biome_ron` | 2 d | [x] |
+| M2.5-12 | Surface rules: 3–6 block soil default, biome/altitude override, slope and underwater rules | M2.5-30 | Cliffs expose stone; beaches ring water; every top/filler/stone/beach key comes from M2.5-30; tests | `cargo test -p voxel-worldgen surface` | 2 d | [x] |
+| M2.5-13 | 1 m material dither and canonical two-material + debris transition blocks | M2.5-12 | Seam is mixed, not a line; ≤ 4 variants per pair; zero new atlas slots, parents come from M2.5-30 | `cargo test -p voxel-worldgen transitions` | 2 d | [x] |
 | M2.5-30 | Author biome surface textures: the top/filler/stone/beach faces the 18 palettes need beyond M1.5-14; freeze each biome's `map_color`; record the slot table | M2.5-10 | A palette table names the top/filler/stone/beach key for each biome; every key is in the manifest; ≤ 24 new tiles; transitions add zero | `cargo test -p voxel-block texture_manifest`; `cargo run -p voxel-viewer -- bake-atlas`; review | 4 d | [ ] |
 
 ### 7.3 Caves, ores, landmarks and structures
@@ -601,14 +803,14 @@ including the 570-cell border-side edit. The edit changes 46/216 padded cells at
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
 | M2.5-31 | Author underground, structure and flora textures: deep stone, fungal, lava, geothermal; planks, bricks, mossy cobble; birch, spruce, fern, cactus, giant variants | M2.5-30 | Every new key is in the manifest and referenced by the flora/structure/underground tables; at least one fixture uses each key; ≤ 32 new tiles; lava/geothermal carry the emissive flag | `cargo test -p voxel-block texture_manifest`; `cargo run -p voxel-viewer -- bake-atlas` | 4 d | [ ] |
-| M2.5-14 | 3D cave carve: spaghetti, cheese, vertical shafts, galleries, water/lava caves | M2.5-12 | All five types present; balanced density; no caves in the first 2 m under water | `cargo test -p voxel-worldgen caves` | 3 d | [ ] |
-| M2.5-15 | Cave depth relative to the local surface (down to −2,000 m) and underground biome assignment | M2.5-31, M2.5-14 | Caves follow terrain; aquifer/fungal/cavern assigned by depth and water; every underground material key resolves | `cargo test -p voxel-worldgen cave_depth` | 1 d | [ ] |
-| M2.5-16 | Occasional overhangs and arches from 3D density; no disconnected floating rock | M2.5-14 | Arch fixture passes; no unsupported islands at the surface | `cargo test -p voxel-worldgen overhangs` | 1 d | [ ] |
-| M2.5-17 | Ore placement by depth tier and vein | M2.5-14 | Metals + gems; no surface gems; vein continuity test | `cargo test -p voxel-worldgen ores` | 1 d | [ ] |
-| M2.5-18 | Landmark anchors every 20–50 km: massif, canyon/falls, volcano, giant grove, monolith/arch | M2.5-05 | One landmark per cell; type fits terrain; map dump shows distribution | `cargo run -p voxel-worldgen -- map --landmarks` | 2 d | [ ] |
-| M2.5-19 | Structure anchors on a 1–4 km jittered grid; prefab stamps for ruins, towers, dungeons, bridges/roads | M2.5-31, M2.5-18 | Stamps fit terrain; no floating foundations; most cells empty; every prefab uses M2.5-31 keys | `cargo test -p voxel-worldgen structures` | 2.5 d | [ ] |
-| M2.5-20 | Cross-chunk feature determinism: a tree, structure or river crossing a border is identical from both sides | M2.5-19 | Byte-equal overlap from two adjacent chunks; 1,000 sampled features | `cargo test -p voxel-worldgen cross_chunk` | 1.5 d | [ ] |
-| M2.5-21 | Flora placement: species, moderate density, biome-dependent, ecotones, rare giants | M2.5-31, M2.5-20 | Birch/scrub only at seams; giants 1 per 20–50 km; every species key comes from M2.5-31; density tests | `cargo test -p voxel-worldgen flora` | 1.5 d | [ ] |
+| M2.5-14 | 3D cave carve: spaghetti, cheese, vertical shafts, galleries, water/lava caves | M2.5-12 | All five types present; balanced density; no caves in the first 2 m under water | `cargo test -p voxel-worldgen caves` | 3 d | [x] |
+| M2.5-15 | Cave depth relative to the local surface (down to −2,000 m) and underground biome assignment | M2.5-31, M2.5-14 | Caves follow terrain; aquifer/fungal/cavern assigned by depth and water; every underground material key resolves | `cargo test -p voxel-worldgen cave_depth` | 1 d | [x] |
+| M2.5-16 | Occasional overhangs and arches from 3D density; no disconnected floating rock | M2.5-14 | Arch fixture passes; no unsupported islands at the surface | `cargo test -p voxel-worldgen overhangs` | 1 d | [x] |
+| M2.5-17 | Ore placement by depth tier and vein | M2.5-14 | Metals + gems; no surface gems; vein continuity test | `cargo test -p voxel-worldgen ores` | 1 d | [x] |
+| M2.5-18 | Landmark anchors every 20–50 km: massif, canyon/falls, volcano, giant grove, monolith/arch | M2.5-05 | One landmark per cell; type fits terrain; map dump shows distribution | `cargo run -p voxel-worldgen -- map --landmarks` | 2 d | [x] |
+| M2.5-19 | Structure anchors on a 1–4 km jittered grid; prefab stamps for ruins, towers, dungeons, bridges/roads | M2.5-31, M2.5-18 | Stamps fit terrain; no floating foundations; most cells empty; every prefab uses M2.5-31 keys | `cargo test -p voxel-worldgen structures` | 2.5 d | [x] |
+| M2.5-20 | Cross-chunk feature determinism: a tree, structure or river crossing a border is identical from both sides | M2.5-19 | Byte-equal overlap from two adjacent chunks; 1,000 sampled features | `cargo test -p voxel-worldgen cross_chunk` | 1.5 d | [x] |
+| M2.5-21 | Flora placement: species, moderate density, biome-dependent, ecotones, rare giants | M2.5-31, M2.5-20 | Birch/scrub only at seams; giants 1 per 20–50 km; every species key comes from M2.5-31; density tests | `cargo test -p voxel-worldgen flora` | 1.5 d | [x] |
 | M2.5-22 | Surface detail pass: grass tufts, pebbles, leaves, ripples, moss, snow drift; canonical templates | M2.5-13 | Six types; templates dedup; detail only in LOD0; no new atlas keys, parents come from M2.5-30/31 | `cargo test -p voxel-worldgen detail` | 2 d | [ ] |
 
 ### 7.4 Pipeline, determinism and exit
@@ -627,24 +829,168 @@ including the 570-cell border-side edit. The edit changes 46/216 padded cells at
 
 ## 8. M3 — Raster scale-up
 
-**Goal:** a real world at real distance without GPU culling. **Exit:** M3-13. **Budget:** 9 d raw. **Depends:** M2.
+**Goal:** a real world at real distance without GPU culling. **Exit:** M3-13. **Budget:** 17 d raw (9 d original + M3-00 ~6.75–8 d + M3-02 pool 1.5 d). **Depends:** M2.
+
+**M3-00 mesh compression (closed 2026-10-31):** Gate A/B1/B2/D pass on the
+RTX 4060 and Radeon iGPU; **Gate C fails** for instanced quads (1.311×/1.381×
+indexed). The **44 B packed 8 B vertex fallback is landed**: 128³ row 6
+**2,115 KiB PASS**, row 1 **2.98 GiB PASS**; 64³ row 6 **536 KiB PASS**, 64³
+Minimum row 1 **6.22 GiB FAIL** (5.11/5.21 GiB after M6-09a). **64³ is
+abandoned**; the 32 B 4-vertex strip is deferred to a separate spike.
 **Art:** none; M3 reuses M1.5-14 and, if M2.5 ran, M2.5-31.
+
+**M3-01 streaming shell (closed 2026-10-31):** the viewer keeps a 16×16 ring
+(256 chunks) at `y = 0`. Generation/meshing runs on a worker pool; a separate
+uploader thread owns buffer creation and writes; the frame thread only installs
+finished resources within the 4 ms pump budget. Both the RTX 4060 and Radeon
+iGPU load **256/256** with **max pump 0.09 ms and 0 hitches over 4 ms**. The
+hitch number is the frame-thread pump (recenter + install), not whole-frame;
+M3-09/M3-10 own the latter. The 256-chunk trace measures an upload at 6.2 ms
+mean / 20.9 ms max, which is why upload is a separate stage; M3-02's arena is
+the follow-up. `stream_apron` culls chunk borders against the analytic
+neighbour; runtime camera motion/eviction is M3-09. See
+[`m3-01-streaming.md`](m3-01-streaming.md).
+
+**M3-02 mesh pool (closed 2026-10-31):** one 8 MiB paged arena with byte-range
+suballocation; a mesh is one contiguous range and the arena takes its strides
+from `MeshFormat`. 256 chunks use 16 pages — **128 MiB committed for 120.3 MiB
+of meshes, 0 holes, 7.7 MiB of page slack** — and 4 pages/32 MiB at 64³, with
+page creation **0.04–0.05 s** once. Max pump stays **0.09 ms with 0 hitches** on
+both GPUs and no buffer is created after warm-up. Per-mesh arena allocation is
+~0.2 ms; the remaining `write_buffer` cost is wgpu's staging path and moves to
+M3-03. A 64-column flight adds at most one page, reported by `tests/pool.rs`.
+See [`m3-02-mesh-pool.md`](m3-02-mesh-pool.md).
+
+**M3-03 upload queue (closed 2026-10-31):** finished meshes queue on the CPU
+behind a **32 MiB backlog cap**; a frame copies at most **1 MiB** through one
+staging belt into the pool, in the same encoder as the pass that first draws
+them. The 128³ ring uploads **120.3 MiB in 160–166 frames** with a max frame of
+**1,023–1,024 KiB of 1,024 KiB and 0 overruns** on both GPUs; 64³ takes 35
+frames. Max pump stays **0.42/0.24 ms** with 0 hitches. Copy mean is 2.9 ms
+(the 4 ms target), max 15.6 ms from the same driver tail that shows 261 ms page
+creations. See [`m3-03-upload-queue.md`](m3-03-upload-queue.md).
+
+**M3-04 CPU chunk cull (closed 2026-10-31):** the frame thread extracts six
+planes from the camera's view-projection matrix and skips any resident chunk
+whose world AABB is outside all of them. On **100 poses** the chunk set equals
+the M1-32 reference exactly (52–138 of 256 kept, mean **95.7**); the live viewer
+draws **93 of 256** at the default camera. Frame rate rose from 119 to
+**182–184 fps** on the RTX 4060 and from 39 to **72–75 fps** on the Radeon iGPU,
+which is the stopgap's 256-draw raster cost. See
+[`m3-04-cpu-cull.md`](m3-04-cpu-cull.md).
+
+**M3-05 draw loop (closed 2026-10-31):** `streaming::draw_visible` makes one
+pass over the resident map, filters with the M3-04 frustum, and issues one
+indexed draw per accepted chunk with a mesh. `DrawStats` separates visible from
+drawn. A 5×5 patch rendered with the cull and with every chunk accepted is
+**byte-identical**, and both visit lists are duplicate-free; the viewer logs
+**93 visible, 93 drawn, 256 resident** on both GPUs. See
+[`m3-05-draw-loop.md`](m3-05-draw-loop.md).
+
+**M3-06 instrumentation (closed 2026-10-31):** `stats.rs` reports a
+`FrameStats` per frame (CPU submit, GPU pass from in-pass timestamp queries,
+visible/drawn, blocks/quads/mesh bytes, upload bytes) and a once-per-second
+summary line. Steady state on the RTX 4060: **180 fps, CPU 1.23 ms, GPU pass
+1.66 ms, 93/256 chunks, 13,201 blocks, 1,032,763 quads, 43.3 MiB** (exactly
+44 B/quad); Radeon iGPU: 73 fps, GPU pass 8.9 ms. Upload bytes read 0 KiB in
+steady state and ~0.75 MiB per frame during the load. See
+[`m3-06-instrumentation.md`](m3-06-instrumentation.md).
+
+**M3-07 frame breakdown (closed 2026-10-31):** at 1080p and the default pose
+the frame is **5.5 ms on the RTX 4060** (GPU pass 1.7, CPU 1.2 of which cull
+0.05, upload 0, residual 3.9) and **13.7 ms on the Radeon iGPU** (GPU pass 8.9,
+residual 4.8). The iGPU is draw-bound at 54% of its frame; the 4060 is
+present-bound with ~11 ms of 16.6 ms headroom. Load phase: generation
+**64.8 ms/chunk**, ring fill **6.0 s**, upload **3.15 ms/frame**, submit
+22–29 ms under worker contention. See
+[`m3-07-frame-breakdown.md`](m3-07-frame-breakdown.md).
+
+**M3-08 stress scene (closed 2026-10-31):** `scene.rs` makes the ring a pure
+function of `VOXEL_SCENE_SEED`. Five terrain variants (meadow 110, forest 67,
+sand bar 29, highland 34, rocky 16 chunks at the default seed) and two canopy
+densities (0 on sand/highland/rock, sparse oaks on meadows, dense forest) use
+only the M1.5-14 keys; chunks now store block ids and resolve per-face atlas
+slots. Forest floors blend flat so the ring peaks at 13.5k quads against the
+16,384 u16 index budget. The ring fills in 5 s / 100.5 MiB in 13 pages with 0
+hitches; RTX 4060 runs 180 fps (GPU pass 1.6 ms) and the Radeon iGPU 80 fps
+(7.8 ms). `VOXEL_SCREENSHOT` writes a PNG of the presented frame;
+[`images/m3-08-stress-scene.png`](images/m3-08-stress-scene.png) is the
+committed capture. See [`m3-08-stress-scene.md`](m3-08-stress-scene.md).
+
+**M3-09 hitch test (closed 2026-10-31):** `cargo run -p voxel-bench -- hitch`
+drives the viewer's real frame-thread path headlessly — pump, the M3-03
+take/staging-copy/install step (now `Streaming::install_frame`, shared with the
+render loop) and finish+submit — for 1,000 frames at 16 u/s. Upload p99 is
+**2.51–2.87 ms on the RTX 4060** and **1.62–3.11 ms on the Radeon iGPU**; the
+worst frame is **6.16–6.42 ms** and **5.72–6.13 ms**. At the M3-03 default of
+1 MiB the same run measured a **6.79 ms** upload p99, so the default is now
+**512 KiB**: p99 drops ~2.5× and the 256-chunk ring uploads in 260 frames
+instead of 141. The remaining tail is generator contention: with
+`VOXEL_STREAM_WORKERS=1` the worst warm-up copy falls from 15.8 ms to 7.1 ms.
+See [`m3-09-hitch-test.md`](m3-09-hitch-test.md).
+
+**M3-10 60 Hz (closed 2026-11-01):** `VOXEL_FRAMETIME` records the interval
+between presents for 1200 frames at a pinned pose and writes a JSON report with
+the average, the 1% / 0.1% lows and the frame percentiles. At 1080p and 128³ the
+**RTX 4060 records 192.0–202.5 fps average and a 104.3–113.0 fps 1% low**; the
+**Radeon iGPU records 70.2–75.1 fps average but a 56.6–61.2 fps 1% low**
+(p99 frame 15.9–17.3 ms against the 16.6 ms budget), i.e. it clears 60 Hz on
+average and straddles it in the tail. The 4060 is present-bound (0.4–1.8 ms
+pass), the iGPU draw-bound (8.2–8.5 ms pass). At 64³ the iGPU records 119 fps
+average / 87 fps 1% low, so the miss is specific to the 128³ gate. Front-to-back
+draw ordering was measured and reverted (no pass change). The iGPU tail is
+carried to M3-13. See [`m3-10-60hz.md`](m3-10-60hz.md).
+
+**M3-11 memory report (closed 2026-11-01):** `cargo run --release -p voxel-bench
+--features chunk128 -- scene-memory` fills the real 256-chunk ring headlessly and
+reads the scene's own allocations. At 128³: **VRAM 107.5 MiB** (mesh 104.0 in 13
+× 8 MiB pages, light 2.0, probes 1.5, origins 4 KiB) and **host 16.8 MiB** (the
+worker dense volumes); rows split DAG (0 GPU / 16.0 MiB host), mesh, overlay (0),
+light, probes. Against the 3.20 GiB target (40% of 8 GiB) that is **3.4% used,
+29.8× headroom, ×1.5 = 161.3 MiB PASS**. The viewer adds ~10.3 MiB (atlas, depth,
+belt). This is a render-scene number: M3 uploads no DAG or overlay, so it is not
+comparable to the M1 gate's 5.29 MiB/chunk projection. The gate's 128³ storage
+projection, now recorded for all three residency profiles on every run, is
+**2.98 GiB at minimum (805 chunks, PASS)**, 11.93 GiB at default (3,217) and
+95.4 GiB at high (25,736) — green only at the minimum view, which is a
+view-distance decision for M5/M7. See [`m3-11-memory.md`](m3-11-memory.md).
+
+**M3-12 visual regression (closed 2026-11-01):**
+[`images/m3-12-reference.png`](images/m3-12-reference.png) is the M3-08 scene at
+the pinned pose (1920×1080, default seed, 128³), regenerable with the
+`VOXEL_SCREENSHOT` command in the doc. `cargo run -p voxel-bench -- image-diff
+--reference … --candidate …` compares a capture against it and exits 1 outside
+the threshold: ≤0.01% of pixels beyond a 2/255 channel tolerance, no channel
+delta above 32/255, mean absolute delta ≤ 0.5/255. Two captures from the current
+build are **byte-identical**; the M3-08 capture differs by **one pixel** (18/255).
+See [`m3-12-visual-regression.md`](m3-12-visual-regression.md).
+
+**M3-13 exit (closed 2026-11-01):** the scene config is frozen in
+[`benchmarks/m3-scene.json`](../benchmarks/m3-scene.json) — seed `0x5EED1234`,
+128³ gate / 64³ default, 256-chunk ring, 4 ms pump budget, 512 KiB upload budget,
+1920×1080 at the `(14, 6, 20) → (2, 1, 2)` gate pose, 1200-frame window,
+reference image and image threshold — and both crates' `scene_config` tests fail
+if the code and the file disagree. The exit record is
+[`m3-exit.md`](m3-exit.md) and `m3` is tagged. **Two open conditions: the Radeon
+iGPU's 128³ 1% low (56.6–61.2 fps against 60) and 128³ being green only at the
+minimum residency profile (default 11.93 GiB, high 95.4 GiB).**
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| M3-01 | Streaming shell in the viewer: load ring, evict ring, budgeted per frame | M2-27 | 256 chunks load without a hitch > 4 ms | run + log | 1.5 d | [ ] |
-| M3-02 | Mesh buffer pool: one arena with suballocation, or per-chunk buffers; document the choice | M3-01 | No per-frame allocation after warm-up; fragmentation reported | `cargo test -p voxel-viewer pool` | 1.5 d | [ ] |
-| M3-03 | Upload queue with a per-frame byte budget | M3-02 | A 10 MB backlog drains without exceeding the budget | `cargo test -p voxel-viewer upload_budget` | 0.5 d | [ ] |
-| M3-04 | CPU frustum cull of chunk AABBs — the stopgap and the M5 reference | M3-01 | Equals the M1-32 reference set on 100 poses | `cargo test -p voxel-viewer cpu_cull` | 1 d | [ ] |
-| M3-05 | Draw loop over visible chunks with per-chunk draws | M3-04 | Correct image; no double-draw | run | 0.5 d | [ ] |
-| M3-06 | Instrumentation: CPU submit, GPU pass, visible chunks/blocks/quads/bytes, upload bytes | M3-05 | Overlay or log line per frame; values match the scene | run | 0.5 d | [ ] |
-| M3-07 | Frame breakdown report: where the 16.6 ms goes | M3-06 | Table in the PR; draw vs cull vs upload vs content | review | 0.5 d | [ ] |
-| M3-08 | 256-chunk stress scene with terrain and canopy variants | M3-01 | Scene reproducible from a seed; screenshot; uses only M1.5-14 and, if M2.5 ran, M2.5-31 keys | run | 0.5 d | [ ] |
-| M3-09 | Hitch test: upload p99 ≤ 4 ms over 1 000 frames of camera motion | M3-03 | Measured; no single frame > 8 ms | `cargo run -p voxel-bench -- hitch` | 1 d | [ ] |
-| M3-10 | 60 Hz at 1080p at the gated edge on the reference machine | M3-09 | Recorded average and 1% low | run | 0.5 d | [ ] |
-| M3-11 | Memory report: VRAM and host for the 256-chunk scene, rows split by DAG/mesh/overlay/light/probes | M3-10 | Fits the 40% VRAM budget with the 1.5× margin | run | 0.5 d | [ ] |
-| M3-12 | Visual regression screenshot committed | M3-10 | Image in `docs/images/`; diff threshold documented | review | 0.25 d | [ ] |
-| M3-13 | M3 exit: tag `m3`, freeze the scene config | M3-12 | Tag; config checked in | `git tag -n m3` | 0.25 d | [ ] |
+| M3-00 | Mesh compression: 44 B packed 8 B vertex, Gate C comparison, 64³ decision | M2-29 | 128³ row 6 ≤2,400 KiB and row 1 ≤3.20 GiB PASS; 64³ abandoned; 32 B deferred | `cargo test -p voxel-viewer --test validation`; gate report | 7 d | [x] |
+| M3-01 | Streaming shell in the viewer: load ring, evict ring, budgeted per frame | M2-27 | 256 chunks load without a hitch > 4 ms | run + log | 1.5 d | [x] |
+| M3-02 | Mesh buffer pool: one arena with suballocation, or per-chunk buffers; document the choice | M3-01 | No per-frame allocation after warm-up; fragmentation reported | `cargo test -p voxel-viewer pool` | 1.5 d | [x] |
+| M3-03 | Upload queue with a per-frame byte budget | M3-02 | A 10 MB backlog drains without exceeding the budget | `cargo test -p voxel-viewer upload_budget` | 0.5 d | [x] |
+| M3-04 | CPU frustum cull of chunk AABBs — the stopgap and the M5 reference | M3-01 | Equals the M1-32 reference set on 100 poses | `cargo test -p voxel-viewer cpu_cull` | 1 d | [x] |
+| M3-05 | Draw loop over visible chunks with per-chunk draws | M3-04 | Correct image; no double-draw | run | 0.5 d | [x] |
+| M3-06 | Instrumentation: CPU submit, GPU pass, visible chunks/blocks/quads/bytes, upload bytes | M3-05 | Overlay or log line per frame; values match the scene | run | 0.5 d | [x] |
+| M3-07 | Frame breakdown report: where the 16.6 ms goes | M3-06 | Table in the PR; draw vs cull vs upload vs content | review | 0.5 d | [x] |
+| M3-08 | 256-chunk stress scene with terrain and canopy variants | M3-01 | Scene reproducible from a seed; screenshot; uses only M1.5-14 and, if M2.5 ran, M2.5-31 keys | run | 0.5 d | [x] |
+| M3-09 | Hitch test: upload p99 ≤ 4 ms over 1 000 frames of camera motion | M3-03 | Measured; no single frame > 8 ms | `cargo run -p voxel-bench -- hitch` | 1 d | [x] |
+| M3-10 | 60 Hz at 1080p at the gated edge on the reference machine | M3-09 | Recorded average and 1% low | run | 0.5 d | [x] |
+| M3-11 | Memory report: VRAM and host for the 256-chunk scene, rows split by DAG/mesh/overlay/light/probes | M3-10 | Fits the 40% VRAM budget with the 1.5× margin | run | 0.5 d | [x] |
+| M3-12 | Visual regression screenshot committed | M3-10 | Image in `docs/images/`; diff threshold documented | review | 0.25 d | [x] |
+| M3-13 | M3 exit: tag `m3`, freeze the scene config | M3-12 | Tag; config checked in | `git tag -n m3` | 0.25 d | [x] |
 
 ---
 
@@ -669,7 +1015,7 @@ including the 570-cell border-side edit. The edit changes 46/216 padded cells at
 | M3.5-11 | Menu orbit view of the square slab and ocean rim | M2.5-27 | Pre-rendered/2.5D view in the menu; no gameplay renderer | run | 1 d | [ ] |
 | M3.5-12 | Visual regression set: seam, water, far field, night | M3.5-15, M3.5-08 | Four screenshots with a documented diff threshold; final M3.5-15 water art | review | 1 d | [ ] |
 | M3.5-13 | Streaming hitch test over a 2 km flight with water and far field | M3.5-03 | p99 ≤ 4 ms; no frame > 16.6 ms | `cargo run -p voxel-bench -- hitch` | 1 d | [ ] |
-| M3.5-15 | Author water and current textures: `water_flow`, `foam_strip`, optional `caustics`; alpha/tint policy; flow axis and UV-scroll rate | M1.5-14 | Keys are in the manifest and atlas; alpha is smooth; flow axis and UV-scroll rate documented; caustics are procedural or a named tile | `cargo test -p voxel-block texture_manifest`; `cargo run -p voxel-viewer -- bake-atlas`; visual | 1.5 d | [ ] |
+| M3.5-15 | Author water and current textures: `water_flow`, `foam_strip`, optional `caustics`; alpha/tint policy; flow axis and UV-scroll rate | M1.5-14 | Keys are in the manifest and atlas; alpha is smooth; flow axis and UV-scroll rate documented; caustics are procedural or a named tile | `cargo test -p voxel-block texture_manifest`; `cargo run -p voxel-viewer -- bake-atlas`; visual | 1.5 d | [x] |
 | M3.5-16 | M3.5 exit: tag `m3.5`, budgets recorded, material manifest frozen | M3.5-13, M3.5-15 | Tag; docs updated; manifest accounts for ids 0..N−1 with no gap and the unused tail; CI rejects a block key without a texture | `git tag -n m3.5` | 0.25 d | [ ] |
 
 ---

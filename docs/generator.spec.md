@@ -26,7 +26,7 @@ Architecture in one line: **RON node graphs -> (CPU deterministic evaluator) -> 
 
 ## 1. Scope
 
-In: the committed face set (23 M1.5 faces plus 17 stone and tree faces added later), manifest, material variants, atlas bake, determinism, node-graph generator (CPU).
+In: the committed face set (23 M1.5 faces, 17 stone and tree faces added later, and the 29-face M2.5 set), manifest, material variants, atlas bake, determinism, node-graph generator (CPU).
 Out (unchanged from brief): damage/AO/light textures, transition variants, UI sprites, water animation, 320² atlas, BC7, mips beyond level 4, new block keys, runtime reading of resource-pack layouts.
 Also out for M1.5: the GUI node editor itself and GPU preview (hook defined in section 9).
 
@@ -44,7 +44,7 @@ The bake tool and the generator must use these; a grep test (`no_atlas_constant_
 
 ## 3. Face set
 
-Slots 1..=40 exactly as in the committed slice table. Slot 0 = air, never sampled. Slots 41..=255 transparent black. New keys are appended by extending `pipeline::SLICES` and bumping `texture_manifest::SLICE_FACE_COUNT`.
+Slots follow `crates/engine/block/data/faces.ron`: the entry at index `i` occupies slot `i + 1`. Slot 0 = air, never sampled. Slots above the table are transparent black. New keys are appended to `faces.ron`; no code changes are needed.
 
 Tiling requirement (clarification of brief section 3, see 12.1):
 
@@ -99,8 +99,8 @@ Rules:
 ### 4.3 `cargo test -p voxel-block texture_manifest` checks
 
 1. Parses; `schema == 1`.
-2. Key set == distinct `voxel:block/*` keys in `blocks.ron` (no missing, no extra); exactly `SLICE_FACE_COUNT` (currently 40).
-3. Slots unique, exactly `1..=40`, all <= 255.
+2. Key set == distinct `voxel:block/*` keys in `blocks.ron` (no missing, no extra); exactly the keys in `data/faces.ron`, with each entry's slot equal to its position in that table.
+3. Slots unique, exactly `1..=N` (N = `data/faces.ron` length), all <= 255.
 4. File exists, resolves inside crate, decodes as 256x256 RGBA8 colour type 6.
 5. BLAKE3(file bytes) == `hash`.
 6. `alpha` equals the strictest alpha class required by every block using the face (all users of a key must agree on RenderType; disagreement = error `RenderTypeConflict`).
@@ -130,7 +130,7 @@ Seam metric: mean absolute RGBA difference between column 0 and column 255 (and 
 - `crates/engine/texgraph` (lib `voxel-texgraph`): graph model, RON (de)serialization, validation, CPU evaluator, PNG encoder, bake pipeline. No GPU or UI dependencies.
 - `apps/texgen` (app `voxel-texgen`): the standalone Material Maker-style egui editor and the `texgen` binary:
   - `texgen` with no command opens the editor.
-  - `texgen generate` writes the committed PNGs, `textures.ron` and `materials.gen.ron`.
+  - `texgen generate` writes the committed PNGs, `textures.ron` and `materials.gen.ron`. `texgen generate --key FACE` (repeatable) renders and writes only those faces and rewrites the manifest, material table and atlas only when their bytes change.
   - `texgen update-manifest` is an alias for `generate`; `texgen update-all` also bakes the atlas.
   - `texgen check` regenerates in memory and fails if any committed PNG, hash, material row or atlas byte differs.
   - `texgen bake-atlas [--check]` writes or verifies `atlas.png` and `atlas.hash.ron`.
@@ -201,7 +201,7 @@ Command: `cargo run -p voxel-viewer -- bake-atlas [--check]`
 
 ### 6.4 Runtime guard
 
-The viewer, at startup, verifies `atlas.hash.ron` against `atlas.png` and the manifest hash. Mismatch or a missing slot in 1..=40 is a hard error (`AtlasError::...`). There is no magenta/placeholder fallback.
+The viewer, at startup, verifies `atlas.hash.ron` against `atlas.png` and the manifest hash. Mismatch or a missing slot in `1..=N` (N = the `data/faces.ron` length) is a hard error (`AtlasError::...`). There is no magenta/placeholder fallback.
 
 ## 7. Material model
 
@@ -209,7 +209,7 @@ The viewer, at startup, verifies `atlas.hash.ron` against `atlas.png` and the ma
 
 ```rust
 pub struct BlockId(u16);           // identity, dense, from blocks.ron
-pub struct MaterialId(u8);         // 0 = air, 1..=40 drawable; equals atlas slot
+pub struct MaterialId(u8);         // 0 = air, 1..=N drawable; equals atlas slot
 pub struct FaceMaterials { pub top: MaterialId, pub bottom: MaterialId,
                            pub north: MaterialId, pub south: MaterialId,
                            pub east: MaterialId, pub west: MaterialId }
@@ -242,11 +242,11 @@ pub struct FaceMaterials { pub top: MaterialId, pub bottom: MaterialId,
     blocks_blake3: "<hex of blocks.ron>",
     materials: [
         (id: 1, key: "voxel:block/stone", alpha: Opaque),
-        // ... through id 40
+        // ... through id 71
     ],
     faces: [
         (block: "voxel:stone", top: 1, bottom: 1, north: 1, south: 1, east: 1, west: 1),
-        // ... one per block in blocks.ron order (33 blocks)
+        // ... one per block in blocks.ron order (57 blocks)
     ],
 )
 ```
@@ -284,7 +284,7 @@ pub struct FaceMaterials { pub top: MaterialId, pub bottom: MaterialId,
 
 Every spatial op takes a period in lattice cells and wraps lattice coordinates modulo that period, so a texture built only from periodic ops tiles on both axes. Ops that break periodicity (e.g. `HBand`, `Rect`) are tagged `breaks_v` / `breaks_h`; the validator checks that a graph's declared `tiling` is consistent with the ops it uses.
 
-### 8.4 Initial op set (enough for all 40 faces)
+### 8.4 Initial op set (enough for all 71 faces)
 
 - Sources: `Const`, `Uv`, `ValueNoise`, `Worley` (F1/F2/edge), `Fbm`, `Rings` (integer sqrt), `Stripes` (axis, count, wobble), `Rect`, `HBand`.
 - Patterns and shapes: `Checker`, `Bricks`, `Wave`, `Spiral`, `RadialGradient`, `Circle`, `Star`, `Polygon`.
@@ -386,7 +386,7 @@ M1.5-15 screenshots. The committed set lives under `docs/images/m1.5-15-*.png`.
 Future art-set acceptance screenshots include the first 8 hex of
 `atlas_png_blake3` in the filename.
 
-1. `face-sheet`: all 40 faces on an 8x5 grid, nearest filtering, 1:1 (the M1.5 review sheet is the 23 M1.5 faces on a 6x4 grid).
+1. `face-sheet`: all 71 faces on a 12x6 grid, nearest filtering, 1:1 (the M1.5 review sheet is the 23 M1.5 faces on a 6x4 grid).
 2. `grass-block`: top, side and bottom visible, side fringe matches top.
 3. `sandstone-block`: three faces agree at edges.
 4. `log-and-leaves`: oak log + leaves cutout gaps.
@@ -427,7 +427,7 @@ The generator is implemented and runnable:
 
 - `cargo run -p voxel-texgen` opens the editor; `cargo run -p voxel-texgen -- check` verifies the committed set.
 - The deterministic core is `voxel-texgraph`; the app is `voxel-texgen` and contains no byte-producing logic of its own.
-- All 40 graphs, PNGs, `textures.ron`, `materials.gen.ron`, `atlas.png` and `atlas.hash.ron` are committed.
+- All 71 graphs, PNGs, `textures.ron`, `materials.gen.ron`, `atlas.png` and `atlas.hash.ron` are committed.
 - The evaluator adds `MixColor`, the pattern/shape nodes, domain transforms and the colour/effect nodes listed in section 8.4.
 - Neighbourhood effects (`Blur`, `Emboss`, `NormalMap`, `Bevel`) re-sample their input at fixed 256-grid texel offsets. They preserve periodicity because the offsets wrap, but cost more than pointwise ops; preview at 128² while authoring.
 - `Circle`, `Star`, `Polygon`, `Rotate` and `Mirror` are tagged as breaking both axes; `Polar` and `Cartesian` break the vertical axis. The validator rejects them under incompatible tiling.

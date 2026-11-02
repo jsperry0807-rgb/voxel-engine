@@ -82,6 +82,31 @@ impl Camera {
         self.pitch = (self.pitch + delta_pitch).clamp(-MAX_PITCH, MAX_PITCH);
     }
 
+    /// World-space position in metres.
+    pub fn position(&self) -> Vec3 {
+        self.position
+    }
+
+    /// Vertical field of view in radians.
+    pub fn fov_y(&self) -> f32 {
+        self.fov_y
+    }
+
+    /// Viewport width divided by height.
+    pub fn aspect(&self) -> f32 {
+        self.aspect
+    }
+
+    /// Near clip distance in metres.
+    pub fn near(&self) -> f32 {
+        self.near
+    }
+
+    /// Far clip distance in metres.
+    pub fn far(&self) -> f32 {
+        self.far
+    }
+
     /// Unit forward vector, including pitch.
     pub fn forward(&self) -> Vec3 {
         let (sin_yaw, cos_yaw) = self.yaw.sin_cos();

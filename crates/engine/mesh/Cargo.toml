@@ -20,7 +20,25 @@ pprof = { version = "0.15.0", features = ["flamegraph", "criterion"] }
 [features]
 # Forward the pre-registered 128³ chunk edge to the storage crate.
 chunk128 = ["voxel-storage/chunk128"]
+# Optional SVDAG ray-test occluder (M2-25), off by default (ADR-006).
+raytest = []
 
 [[bench]]
 name = "light"
 harness = false
+
+[[bench]]
+name = "probe"
+harness = false
+
+[[bench]]
+name = "build"
+harness = false
+
+[[test]]
+name = "raytest"
+required-features = ["raytest"]
+
+[[test]]
+name = "raytest_compare"
+required-features = ["raytest"]

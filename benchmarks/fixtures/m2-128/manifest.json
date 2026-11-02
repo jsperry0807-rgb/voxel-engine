@@ -1,0 +1,323 @@
+{
+  "schema_version": 1,
+  "id": "m2-128",
+  "status": "provisional",
+  "provisional_until_first_real_save": true,
+  "limitation": "Provisional until the first real save. This world is synthetic: it exercises the shape of a save (terrain, caves, overhangs, structures and mixed materials) but was not produced by gameplay, by docs/worldgen-design.md, or by the save path on the reference machine. Its byte sizes, material histograms and distributions are illustrative only and must not be quoted as gate results (M1-35, M1-37) until a real save is captured and this fixture is re-frozen.",
+  "save_root": "save",
+  "provenance": {
+    "kind": "synthetic-engine-generated",
+    "generator": "voxel-bench fixture world (m1-representative v1)",
+    "generator_source": "crates/bench/src/fixture/world.rs",
+    "captured_from_gameplay": false,
+    "external_data": false,
+    "generated_by": "cargo run -p voxel-bench -- fixture build",
+    "generated_at": "20261031T145950Z",
+    "source_commit": "36db8620c8c1",
+    "source_worktree_dirty": true,
+    "worldgen": "Deterministic stand-in, not docs/worldgen-design.md; frozen for gate measurement."
+  },
+  "format": {
+    "chunk_format": "VXV2",
+    "chunk_version": 2,
+    "chunk_bits": 7,
+    "chunk_dim": 128,
+    "region_format": "vxr-1"
+  },
+  "recipe": {
+    "generator": "m1-representative",
+    "generator_version": 1,
+    "seed": 5562278864163835942,
+    "chunk_min": [
+      -1,
+      0,
+      -1
+    ],
+    "chunk_max": [
+      1,
+      0,
+      1
+    ],
+    "sea_level": 44,
+    "features": [
+      "terrain",
+      "caves",
+      "overhangs",
+      "structures",
+      "mixed_materials"
+    ]
+  },
+  "palette": [
+    {
+      "id": 0,
+      "key": "voxel:air",
+      "name": "air",
+      "role": "empty space"
+    },
+    {
+      "id": 1,
+      "key": "voxel:stone",
+      "name": "stone",
+      "role": "terrain and underground"
+    },
+    {
+      "id": 2,
+      "key": "voxel:dirt",
+      "name": "dirt",
+      "role": "soil"
+    },
+    {
+      "id": 3,
+      "key": "voxel:grass_block",
+      "name": "grass_block",
+      "role": "surface"
+    },
+    {
+      "id": 4,
+      "key": "voxel:cobblestone",
+      "name": "cobblestone",
+      "role": "structures"
+    },
+    {
+      "id": 5,
+      "key": "voxel:sand",
+      "name": "sand",
+      "role": "beaches and canyon floor"
+    },
+    {
+      "id": 6,
+      "key": "voxel:gravel",
+      "name": "gravel",
+      "role": "underground pockets and canyon floor"
+    },
+    {
+      "id": 7,
+      "key": "voxel:water",
+      "name": "water",
+      "role": "oceans and water-filled caves"
+    },
+    {
+      "id": 8,
+      "key": "voxel:oak_log",
+      "name": "oak_log",
+      "role": "trees and bridge deck"
+    },
+    {
+      "id": 9,
+      "key": "voxel:oak_leaves",
+      "name": "oak_leaves",
+      "role": "tree canopy"
+    },
+    {
+      "id": 10,
+      "key": "voxel:bedrock",
+      "name": "bedrock",
+      "role": "world floor"
+    },
+    {
+      "id": 11,
+      "key": "voxel:coal_ore",
+      "name": "coal_ore",
+      "role": "shallow ore"
+    },
+    {
+      "id": 12,
+      "key": "voxel:iron_ore",
+      "name": "iron_ore",
+      "role": "mid-depth ore"
+    },
+    {
+      "id": 13,
+      "key": "voxel:gold_ore",
+      "name": "gold_ore",
+      "role": "deep ore"
+    },
+    {
+      "id": 14,
+      "key": "voxel:diamond_ore",
+      "name": "diamond_ore",
+      "role": "deepest ore"
+    },
+    {
+      "id": 15,
+      "key": "voxel:tall_grass",
+      "name": "tall_grass",
+      "role": "cutout ground cover"
+    },
+    {
+      "id": 16,
+      "key": "voxel:red_flower",
+      "name": "red_flower",
+      "role": "cutout ground cover"
+    },
+    {
+      "id": 17,
+      "key": "voxel:snow",
+      "name": "snow",
+      "role": "peaks and cold surfaces"
+    },
+    {
+      "id": 18,
+      "key": "voxel:ice",
+      "name": "ice",
+      "role": "frozen water surface"
+    },
+    {
+      "id": 19,
+      "key": "voxel:sandstone",
+      "name": "sandstone",
+      "role": "beach subsoil"
+    }
+  ],
+  "integrity": {
+    "algorithm": "blake3-256",
+    "world_hash": "03c687a5d0967d1e24ec1b7d4e8ef3edd4da8e326cecf2bb45fcb57d042b14be",
+    "total_bytes": 5336168,
+    "files": [
+      {
+        "path": "r.-1.0.-1.vxr",
+        "bytes": 551492,
+        "blake3": "4180c01e6fbe24aebf44f17aac96387eda1509d7fe3473df8f83b51b067a1c73"
+      },
+      {
+        "path": "r.-1.0.0.vxr",
+        "bytes": 1317748,
+        "blake3": "bad02d0439d79e8fd5403008c20defdf25d36697d91468c73bfc7401f62240f5"
+      },
+      {
+        "path": "r.0.0.-1.vxr",
+        "bytes": 1135032,
+        "blake3": "f5d9996aff323efce023fb079ff191dc67585754a9aa62d0745b62e21336d9d4"
+      },
+      {
+        "path": "r.0.0.0.vxr",
+        "bytes": 2331896,
+        "blake3": "a2385860f58487f7ec55dd3eac75b057927561c8133a48bb9fe40ff07cc5003b"
+      }
+    ]
+  },
+  "observed": {
+    "region_files": 4,
+    "file_bytes": 5336168,
+    "record_bytes": 5336168,
+    "live_bytes": 5336168,
+    "superseded_bytes": 0,
+    "live_chunks": 9,
+    "total_voxels": 7296044,
+    "total_overrides": 0,
+    "materials": [
+      {
+        "id": 1,
+        "name": "stone",
+        "count": 5168051
+      },
+      {
+        "id": 2,
+        "name": "dirt",
+        "count": 277685
+      },
+      {
+        "id": 3,
+        "name": "grass_block",
+        "count": 92567
+      },
+      {
+        "id": 4,
+        "name": "cobblestone",
+        "count": 1341
+      },
+      {
+        "id": 5,
+        "name": "sand",
+        "count": 52631
+      },
+      {
+        "id": 6,
+        "name": "gravel",
+        "count": 705222
+      },
+      {
+        "id": 7,
+        "name": "water",
+        "count": 109492
+      },
+      {
+        "id": 8,
+        "name": "oak_log",
+        "count": 693
+      },
+      {
+        "id": 9,
+        "name": "oak_leaves",
+        "count": 9652
+      },
+      {
+        "id": 10,
+        "name": "bedrock",
+        "count": 147456
+      },
+      {
+        "id": 11,
+        "name": "coal_ore",
+        "count": 243091
+      },
+      {
+        "id": 12,
+        "name": "iron_ore",
+        "count": 207411
+      },
+      {
+        "id": 13,
+        "name": "gold_ore",
+        "count": 92412
+      },
+      {
+        "id": 14,
+        "name": "diamond_ore",
+        "count": 30436
+      },
+      {
+        "id": 15,
+        "name": "tall_grass",
+        "count": 1397
+      },
+      {
+        "id": 16,
+        "name": "red_flower",
+        "count": 478
+      },
+      {
+        "id": 17,
+        "name": "snow",
+        "count": 2846
+      },
+      {
+        "id": 18,
+        "name": "ice",
+        "count": 13122
+      },
+      {
+        "id": 19,
+        "name": "sandstone",
+        "count": 140061
+      }
+    ],
+    "node_bytes": {
+      "p50": 592044,
+      "p95": 673460,
+      "max": 673460
+    },
+    "voxels": {
+      "p50": 810378,
+      "p95": 930579,
+      "max": 930579
+    },
+    "warnings": []
+  },
+  "checks": {
+    "cave_air_voxels": 191798,
+    "overhang_roof_blocks": 1073,
+    "structure_blocks": 1341,
+    "tree_blocks": 10345
+  }
+}

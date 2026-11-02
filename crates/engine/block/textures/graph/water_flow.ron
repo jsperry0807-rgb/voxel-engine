@@ -1,0 +1,22 @@
+(
+    schema: 1,
+    key: "voxel:block/water_flow",
+    size: 256,
+    tiling: Both,
+    alpha: Translucent,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 16, octaves: 3), inputs: []),
+        (id: 1, op: Stripes(axis: Y, count: 8, wobble: 6000), inputs: []),
+        (id: 2, op: Const(value: 32000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: Ramp(stops: [(0, "#2f7fa8"), (65535, "#45a8c8")]), inputs: [3]),
+        (id: 5, op: Fbm(period: 32, octaves: 2), inputs: []),
+        (id: 6, op: AlphaBand(min: 42000, max: 56000), inputs: [5]),
+        (id: 7, op: ValueNoise(period: 64, octaves: 1), inputs: []),
+        (id: 8, op: Threshold(at: 63000), inputs: [7]),
+        (id: 9, op: Ramp(stops: [(0, "#8fd0e8"), (65535, "#d8f4ff")]), inputs: [7]),
+        (id: 10, op: MixColor, inputs: [4, 9, 8]),
+    ],
+    output: (color: 10, alpha: Node(6)),
+)

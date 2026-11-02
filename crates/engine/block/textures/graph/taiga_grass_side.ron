@@ -1,0 +1,22 @@
+(
+    schema: 1,
+    key: "voxel:block/taiga_grass_side",
+    size: 256,
+    tiling: Horizontal,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 16, octaves: 3), inputs: []),
+        (id: 1, op: ValueNoise(period: 16, octaves: 2), inputs: []),
+        (id: 2, op: HBand(y0: 0, y1: 14000), inputs: []),
+        (id: 3, op: Warp(amount: 9000), inputs: [2, 1]),
+        (id: 4, op: Ramp(stops: [(0, "#3f3326"), (65535, "#6a5540")]), inputs: [0]),
+        (id: 5, op: Ramp(stops: [(0, "#2f5a34"), (65535, "#4a7a4a")]), inputs: [1]),
+        (id: 6, op: MixColor, inputs: [4, 5, 3]),
+        (id: 7, op: ValueNoise(period: 32, octaves: 1), inputs: []),
+        (id: 8, op: Threshold(at: 61000), inputs: [7]),
+        (id: 9, op: Ramp(stops: [(0, "#3a6640"), (65535, "#5c8a58")]), inputs: [7]),
+        (id: 10, op: MixColor, inputs: [6, 9, 8]),
+    ],
+    output: (color: 10, alpha: Const(65535)),
+)

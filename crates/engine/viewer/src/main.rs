@@ -207,23 +207,22 @@ fn report(error: &dyn Error) {
 
 /// Loads and verifies the committed atlas.
 ///
-/// `VOXEL_VIEWER_ATLAS` may name either `atlas.png` or a directory. The
-/// committed atlas is hash-verified; a temporary `.temp/atlas` directory with
-/// `atlas-0.png`…`atlas-4.png` is accepted as an explicit local-development
-/// fallback and is logged as unverified.
+/// `VOXEL_VIEWER_ATLAS` may name either `atlas.png` or a directory. A
+/// directory that holds `atlas-0.png`…`atlas-4.png` is a local bake (for
+/// example `assets/atlas/resourcepack`) and is logged as unverified. The
+/// committed atlas is hash-verified.
 fn load_startup_atlas() -> Result<Atlas, ViewerError> {
     let mut candidates = Vec::new();
     if let Some(value) = std::env::var_os("VOXEL_VIEWER_ATLAS") {
         candidates.push(PathBuf::from(value));
     }
     candidates.push(PathBuf::from("crates/engine/viewer/assets/atlas/atlas.png"));
-    candidates.push(PathBuf::from(".temp/atlas"));
     for candidate in candidates {
         if candidate.is_dir() && candidate.join("atlas-0.png").is_file() {
             return match Atlas::load_dir(&candidate) {
                 Ok(atlas) => {
                     log::warn!(
-                        "using temporary unverified atlas from {} ({} mips)",
+                        "using local unverified atlas from {} ({} mips)",
                         candidate.display(),
                         atlas.mip_count()
                     );
@@ -246,18 +245,38 @@ fn load_startup_atlas() -> Result<Atlas, ViewerError> {
         if !path.is_file() {
             continue;
         }
-        return match Atlas::load_verified(&path) {
-            Ok(atlas) => {
-                log::info!(
-                    "loaded atlas from {} ({} mips)",
-                    path.display(),
-                    atlas.mip_count()
-                );
-                Ok(atlas)
+        // A custom standalone PNG or directory has no committed hash file;
+        // load it as a local, unverified atlas instead of failing startup.
+        let verified = path.with_file_name("atlas.hash.ron").is_file();
+        return if verified {
+            match Atlas::load_verified(&path) {
+                Ok(atlas) => {
+                    log::info!(
+                        "loaded verified atlas from {} ({} mips)",
+                        path.display(),
+                        atlas.mip_count()
+                    );
+                    Ok(atlas)
+                }
+                Err(error) => {
+                    log::error!("atlas verification failed at {}: {error}", path.display());
+                    Err(ViewerError::Atlas(error.to_string()))
+                }
             }
-            Err(error) => {
-                log::error!("atlas verification failed at {}: {error}", path.display());
-                Err(ViewerError::Atlas(error.to_string()))
+        } else {
+            match Atlas::load(&path) {
+                Ok(atlas) => {
+                    log::warn!(
+                        "using local unverified atlas from {} ({} mips)",
+                        path.display(),
+                        atlas.mip_count()
+                    );
+                    Ok(atlas)
+                }
+                Err(error) => {
+                    log::error!("atlas load failed at {}: {error}", path.display());
+                    Err(ViewerError::Atlas(error.to_string()))
+                }
             }
         };
     }

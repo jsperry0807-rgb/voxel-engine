@@ -1,0 +1,729 @@
+{
+  "schema_version": 1,
+  "fixture": {
+    "id": "m2-128",
+    "status": "provisional",
+    "provisional_until_first_real_save": true,
+    "limitation": "Provisional until the first real save. This world is synthetic: it exercises the shape of a save (terrain, caves, overhangs, structures and mixed materials) but was not produced by gameplay, by docs/worldgen-design.md, or by the save path on the reference machine. Its byte sizes, material histograms and distributions are illustrative only and must not be quoted as gate results (M1-35, M1-37) until a real save is captured and this fixture is re-frozen.",
+    "manifest": "benchmarks/fixtures/m2-128/manifest.json",
+    "save_dir": "benchmarks/fixtures/m2-128/save",
+    "world_hash": "03c687a5d0967d1e24ec1b7d4e8ef3edd4da8e326cecf2bb45fcb57d042b14be",
+    "chunk_bits": 7,
+    "chunk_dim": 128,
+    "chunks": 9,
+    "total_voxels": 7296044,
+    "overlay_entries": 0,
+    "region_files": 4
+  },
+  "poses": 100,
+  "limit": 0.15,
+  "p50": 0.0,
+  "p95": 0.0,
+  "max": 0.0,
+  "mean": 0.0,
+  "traversed_blocks": 223332,
+  "visible_blocks": 223332,
+  "missed_blocks": 0,
+  "per_pose": [
+    {
+      "pose": 0,
+      "traversed_blocks": 2243,
+      "visible_blocks": 2243,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 1,
+      "traversed_blocks": 2244,
+      "visible_blocks": 2244,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 2,
+      "traversed_blocks": 2247,
+      "visible_blocks": 2247,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 3,
+      "traversed_blocks": 2245,
+      "visible_blocks": 2245,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 4,
+      "traversed_blocks": 2243,
+      "visible_blocks": 2243,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 5,
+      "traversed_blocks": 2239,
+      "visible_blocks": 2239,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 6,
+      "traversed_blocks": 2233,
+      "visible_blocks": 2233,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 7,
+      "traversed_blocks": 2229,
+      "visible_blocks": 2229,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 8,
+      "traversed_blocks": 2224,
+      "visible_blocks": 2224,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 9,
+      "traversed_blocks": 2221,
+      "visible_blocks": 2221,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 10,
+      "traversed_blocks": 2219,
+      "visible_blocks": 2219,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 11,
+      "traversed_blocks": 2216,
+      "visible_blocks": 2216,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 12,
+      "traversed_blocks": 2216,
+      "visible_blocks": 2216,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 13,
+      "traversed_blocks": 2216,
+      "visible_blocks": 2216,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 14,
+      "traversed_blocks": 2216,
+      "visible_blocks": 2216,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 15,
+      "traversed_blocks": 2219,
+      "visible_blocks": 2219,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 16,
+      "traversed_blocks": 2221,
+      "visible_blocks": 2221,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 17,
+      "traversed_blocks": 2224,
+      "visible_blocks": 2224,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 18,
+      "traversed_blocks": 2229,
+      "visible_blocks": 2229,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 19,
+      "traversed_blocks": 2233,
+      "visible_blocks": 2233,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 20,
+      "traversed_blocks": 2238,
+      "visible_blocks": 2238,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 21,
+      "traversed_blocks": 2242,
+      "visible_blocks": 2242,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 22,
+      "traversed_blocks": 2244,
+      "visible_blocks": 2244,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 23,
+      "traversed_blocks": 2246,
+      "visible_blocks": 2246,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 24,
+      "traversed_blocks": 2243,
+      "visible_blocks": 2243,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 25,
+      "traversed_blocks": 2242,
+      "visible_blocks": 2242,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 26,
+      "traversed_blocks": 2243,
+      "visible_blocks": 2243,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 27,
+      "traversed_blocks": 2243,
+      "visible_blocks": 2243,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 28,
+      "traversed_blocks": 2243,
+      "visible_blocks": 2243,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 29,
+      "traversed_blocks": 2242,
+      "visible_blocks": 2242,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 30,
+      "traversed_blocks": 2239,
+      "visible_blocks": 2239,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 31,
+      "traversed_blocks": 2237,
+      "visible_blocks": 2237,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 32,
+      "traversed_blocks": 2234,
+      "visible_blocks": 2234,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 33,
+      "traversed_blocks": 2230,
+      "visible_blocks": 2230,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 34,
+      "traversed_blocks": 2226,
+      "visible_blocks": 2226,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 35,
+      "traversed_blocks": 2224,
+      "visible_blocks": 2224,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 36,
+      "traversed_blocks": 2224,
+      "visible_blocks": 2224,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 37,
+      "traversed_blocks": 2219,
+      "visible_blocks": 2219,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 38,
+      "traversed_blocks": 2219,
+      "visible_blocks": 2219,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 39,
+      "traversed_blocks": 2224,
+      "visible_blocks": 2224,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 40,
+      "traversed_blocks": 2224,
+      "visible_blocks": 2224,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 41,
+      "traversed_blocks": 2226,
+      "visible_blocks": 2226,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 42,
+      "traversed_blocks": 2230,
+      "visible_blocks": 2230,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 43,
+      "traversed_blocks": 2234,
+      "visible_blocks": 2234,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 44,
+      "traversed_blocks": 2237,
+      "visible_blocks": 2237,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 45,
+      "traversed_blocks": 2239,
+      "visible_blocks": 2239,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 46,
+      "traversed_blocks": 2243,
+      "visible_blocks": 2243,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 47,
+      "traversed_blocks": 2244,
+      "visible_blocks": 2244,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 48,
+      "traversed_blocks": 2244,
+      "visible_blocks": 2244,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 49,
+      "traversed_blocks": 2244,
+      "visible_blocks": 2244,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 50,
+      "traversed_blocks": 2243,
+      "visible_blocks": 2243,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 51,
+      "traversed_blocks": 2244,
+      "visible_blocks": 2244,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 52,
+      "traversed_blocks": 2247,
+      "visible_blocks": 2247,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 53,
+      "traversed_blocks": 2244,
+      "visible_blocks": 2244,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 54,
+      "traversed_blocks": 2242,
+      "visible_blocks": 2242,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 55,
+      "traversed_blocks": 2238,
+      "visible_blocks": 2238,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 56,
+      "traversed_blocks": 2233,
+      "visible_blocks": 2233,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 57,
+      "traversed_blocks": 2230,
+      "visible_blocks": 2230,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 58,
+      "traversed_blocks": 2226,
+      "visible_blocks": 2226,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 59,
+      "traversed_blocks": 2223,
+      "visible_blocks": 2223,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 60,
+      "traversed_blocks": 2222,
+      "visible_blocks": 2222,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 61,
+      "traversed_blocks": 2219,
+      "visible_blocks": 2219,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 62,
+      "traversed_blocks": 2219,
+      "visible_blocks": 2219,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 63,
+      "traversed_blocks": 2219,
+      "visible_blocks": 2219,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 64,
+      "traversed_blocks": 2219,
+      "visible_blocks": 2219,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 65,
+      "traversed_blocks": 2222,
+      "visible_blocks": 2222,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 66,
+      "traversed_blocks": 2223,
+      "visible_blocks": 2223,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 67,
+      "traversed_blocks": 2226,
+      "visible_blocks": 2226,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 68,
+      "traversed_blocks": 2230,
+      "visible_blocks": 2230,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 69,
+      "traversed_blocks": 2233,
+      "visible_blocks": 2233,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 70,
+      "traversed_blocks": 2239,
+      "visible_blocks": 2239,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 71,
+      "traversed_blocks": 2243,
+      "visible_blocks": 2243,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 72,
+      "traversed_blocks": 2245,
+      "visible_blocks": 2245,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 73,
+      "traversed_blocks": 2248,
+      "visible_blocks": 2248,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 74,
+      "traversed_blocks": 2245,
+      "visible_blocks": 2245,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 75,
+      "traversed_blocks": 2244,
+      "visible_blocks": 2244,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 76,
+      "traversed_blocks": 2245,
+      "visible_blocks": 2245,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 77,
+      "traversed_blocks": 2245,
+      "visible_blocks": 2245,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 78,
+      "traversed_blocks": 2245,
+      "visible_blocks": 2245,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 79,
+      "traversed_blocks": 2244,
+      "visible_blocks": 2244,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 80,
+      "traversed_blocks": 2240,
+      "visible_blocks": 2240,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 81,
+      "traversed_blocks": 2237,
+      "visible_blocks": 2237,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 82,
+      "traversed_blocks": 2234,
+      "visible_blocks": 2234,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 83,
+      "traversed_blocks": 2230,
+      "visible_blocks": 2230,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 84,
+      "traversed_blocks": 2226,
+      "visible_blocks": 2226,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 85,
+      "traversed_blocks": 2224,
+      "visible_blocks": 2224,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 86,
+      "traversed_blocks": 2224,
+      "visible_blocks": 2224,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 87,
+      "traversed_blocks": 2219,
+      "visible_blocks": 2219,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 88,
+      "traversed_blocks": 2219,
+      "visible_blocks": 2219,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 89,
+      "traversed_blocks": 2224,
+      "visible_blocks": 2224,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 90,
+      "traversed_blocks": 2224,
+      "visible_blocks": 2224,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 91,
+      "traversed_blocks": 2226,
+      "visible_blocks": 2226,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 92,
+      "traversed_blocks": 2230,
+      "visible_blocks": 2230,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 93,
+      "traversed_blocks": 2234,
+      "visible_blocks": 2234,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 94,
+      "traversed_blocks": 2237,
+      "visible_blocks": 2237,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 95,
+      "traversed_blocks": 2240,
+      "visible_blocks": 2240,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 96,
+      "traversed_blocks": 2243,
+      "visible_blocks": 2243,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 97,
+      "traversed_blocks": 2244,
+      "visible_blocks": 2244,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 98,
+      "traversed_blocks": 2244,
+      "visible_blocks": 2244,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    },
+    {
+      "pose": 99,
+      "traversed_blocks": 2244,
+      "visible_blocks": 2244,
+      "missed_blocks": 0,
+      "ratio": 0.0
+    }
+  ]
+}

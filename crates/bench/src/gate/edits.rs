@@ -14,6 +14,12 @@
 //! the aggregate terms are the per-edit sums, so the sub-timers' overhead is
 //! charged to the aggregate rather than hidden.
 //!
+//! M2-24 adds a second, production **scrub** path over the same edits: the
+//! per-block dirty bitset (M2-22), one scheduler batch (M2-23), the production
+//! greedy remesh, incremental light (M2-15) and the production probe update
+//! (M2-21), compared with the 4 ms scrub budget. The M1-37 edit terms are kept
+//! unchanged, so the historical 8 ms measurement stays comparable.
+//!
 //! # What is real and what is a model
 //!
 //! The gate runs headless: there is no wgpu adapter and no GPU fence. Upload
@@ -44,6 +50,7 @@
 //! **provisional until the first real save**; the report carries that limitation
 //! verbatim.
 
+use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::hint::black_box;
 use std::path::Path;
@@ -55,13 +62,17 @@ use serde::{Deserialize, Serialize};
 use voxel_block::{BlockFlags, BlockKind, BlockRegistryBuilder, MaterialId};
 use voxel_core::constants::ROOT_LEVEL;
 use voxel_core::content_constants::{LIGHT_CELLS_PER_CHUNK, LIGHT_CELLS_PER_EDGE};
+use voxel_mesh::dirty::DirtyBlocks;
+use voxel_mesh::light::{BlockLight as MeshBlockLight, CellEdit, LightState};
+use voxel_mesh::probe::{ProbeGrid, ProbeLod, ProbeVolume, probes_reaching};
+use voxel_mesh::{BlockScratch, RemeshScheduler, greedy_block};
 use voxel_storage::bands::BAND_COUNT;
 use voxel_storage::reference::light::{BlockLight, LightFill, full_pass};
 use voxel_storage::scan::scan_save;
 use voxel_storage::serialize;
 use voxel_storage::{
-    AIR, BLOCK_DIM, CHUNK_BITS, CHUNK_DIM, CHUNK_VOLUME, ChunkDag, ChunkPos, Node, local_index,
-    local_xyz,
+    AIR, Apron, BLOCK_DIM, CHUNK_BITS, CHUNK_DIM, CHUNK_VOLUME, ChunkDag, ChunkPos, Face, Node,
+    local_index, local_xyz,
 };
 
 use crate::fixture::{self, FixtureStatus, Manifest};
@@ -71,7 +82,9 @@ pub use super::stat::{BudgetCheck, Term};
 use super::stat::{format_duration, format_signed_duration, grouped, mean, term};
 
 /// Schema version of the edits report itself.
-pub const SCHEMA_VERSION: u32 = 2;
+///
+/// Version 3 adds the M2-24 production scrub terms.
+pub const SCHEMA_VERSION: u32 = 3;
 
 /// Measured edits. The task fixes this count; the report is not a microbenchmark
 /// that silently changes its sample size.
@@ -83,6 +96,10 @@ pub const WARMUP_EDITS: usize = 100;
 
 /// Pre-registered edit-latency budget: p95 ≤ 8 ms (`pre-registration.md` §3).
 pub const BUDGET_NS: u64 = 8_000_000;
+
+/// M2-24 scrub budget: single edit → remesh + light + probe p95 ≤ 4 ms
+/// (`voxel-engine-roadmap.md` M2 exit).
+pub const SCRUB_BUDGET_NS: u64 = 4_000_000;
 
 /// Candidate voxels sampled per fixture chunk.
 const CANDIDATES_PER_CHUNK: usize = 16;
@@ -161,6 +178,49 @@ pub struct EditSample {
     pub dirty_ns: u64,
     /// `fixed_ns + dirty_ns + compact_ns`.
     pub total_ns: u64,
+    /// Blocks in the scrub batch (M2-22 dirty set drained by M2-23).
+    pub dirty_blocks: u32,
+    /// Quads the production greedy mesher produced for the batch.
+    pub meshed_quads: u32,
+    /// Probes rebaked for this edit (M2-21 selection).
+    pub affected_probes: u32,
+    /// Dirty bitset + scheduler batch.
+    pub scrub_dirty_ns: u64,
+    /// Production greedy remesh of the batch.
+    pub remesh_ns: u64,
+    /// Production incremental light (M2-15).
+    pub scrub_light_ns: u64,
+    /// Production probe selection + rebake (M2-21).
+    pub probe_ns: u64,
+    /// `compact_ns + cow_ns + scrub_dirty_ns + remesh_ns + scrub_light_ns +
+    /// probe_ns`.
+    pub scrub_total_ns: u64,
+}
+
+/// The M2-24 scrub terms: what a single edit costs after the COW write.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScrubTerms {
+    /// Dirty bits (M2-22) plus the scheduler batch (M2-23).
+    pub dirty: Term,
+    /// Production greedy remesh of the dirty blocks.
+    pub remesh: Term,
+    /// Production incremental light (M2-15).
+    pub light: Term,
+    /// Production probe selection and rebake (M2-21).
+    pub probe: Term,
+    /// `compaction + cow + dirty + remesh + light + probe`.
+    pub total: Term,
+}
+
+/// Mean scrub work per edited chunk.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScrubCounts {
+    /// Blocks in the scrub batch.
+    pub dirty_blocks_per_edit: u64,
+    /// Quads produced by the production mesher.
+    pub quads_per_edit: u64,
+    /// Probes rebaked per edit.
+    pub affected_probes_per_edit: u64,
 }
 
 /// Byte and light-cell totals behind the timing rows.
@@ -203,8 +263,14 @@ pub struct EditsReport {
     pub terms: EditTerms,
     /// Byte and light-cell totals.
     pub bytes: EditBytes,
-    /// Budget comparison.
+    /// Budget comparison for the pre-registered 8 ms edit budget.
     pub budget: BudgetCheck,
+    /// M2-24 scrub component and aggregate terms.
+    pub scrub_terms: ScrubTerms,
+    /// Mean scrub work per edit.
+    pub scrub_counts: ScrubCounts,
+    /// Budget comparison for the 4 ms scrub budget.
+    pub scrub_budget: BudgetCheck,
     /// Every measured edit, in run order.
     pub edits: Vec<EditSample>,
     /// Definitions and caveats a reader needs to interpret the table.
@@ -299,6 +365,50 @@ impl EditsReport {
 
         writeln!(
             out,
+            "\n**Scrub budget (M2-24):** p95 ≤ {}; measured p95 {} → {} ({} margin)\n",
+            format_duration(self.scrub_budget.budget_ns),
+            format_duration(self.scrub_budget.measured_p95_ns),
+            if self.scrub_budget.within_budget {
+                "**PASS**"
+            } else {
+                "**MISS**"
+            },
+            format_signed_duration(self.scrub_budget.margin_ns),
+        )
+        .unwrap();
+        writeln!(out, "| Scrub | Component | p50 | p95 | max | total |").unwrap();
+        writeln!(out, "|---|---|---:|---:|---:|---:|").unwrap();
+        for (component, value) in [
+            ("Dirty blocks", &self.scrub_terms.dirty),
+            ("Remesh", &self.scrub_terms.remesh),
+            ("Light", &self.scrub_terms.light),
+            ("Probe", &self.scrub_terms.probe),
+            (
+                "**Compaction + edit + dirty + remesh + light + probe**",
+                &self.scrub_terms.total,
+            ),
+        ] {
+            writeln!(
+                out,
+                "| Scrub | {component} | {} | {} | {} | {} |",
+                format_duration(value.p50_ns),
+                format_duration(value.p95_ns),
+                format_duration(value.max_ns),
+                format_duration(value.total_ns),
+            )
+            .unwrap();
+        }
+        writeln!(
+            out,
+            "\n**Scrub work per edit:** dirty blocks {}, quads {}, probes {}\n",
+            self.scrub_counts.dirty_blocks_per_edit,
+            self.scrub_counts.quads_per_edit,
+            self.scrub_counts.affected_probes_per_edit,
+        )
+        .unwrap();
+
+        writeln!(
+            out,
             "\n**Upload:** {} B/edit ({} nodes, {} leaves, {} `levelStart`); {} total\n",
             self.bytes.upload_bytes_per_edit,
             self.bytes.upload_node_bytes / self.edit_count.max(1) as u64,
@@ -381,9 +491,17 @@ struct Candidate {
 struct ChunkState {
     pos: ChunkPos,
     dag: ChunkDag,
+    /// The same content as `dag`, kept dense for the scrub path.
+    dense: Vec<u16>,
+    /// One-voxel border from the six neighbours when they are resident.
+    apron: Apron,
     candidates: Vec<Candidate>,
     /// Chunk-local sky exposure per light cell.
     sky: Vec<bool>,
+    /// Production incremental light state (M2-15).
+    light_state: LightState,
+    /// Near-grid probe volume, updated per edit (M2-21).
+    probe: ProbeVolume,
 }
 
 /// Band lengths before one edit, used to isolate the appended ranges.
@@ -532,7 +650,10 @@ fn measure(
 ) -> Result<EditsReport, String> {
     let light_table = builtin_light_table();
     let mut dense = vec![0u16; CHUNK_VOLUME];
-    let mut states = Vec::with_capacity(manifest.observed.live_chunks.min(4096));
+    // The scrub path needs dense neighbours to build each chunk's apron, so the
+    // scan keeps every populated chunk until the states are assembled.
+    let mut scanned: Vec<(ChunkPos, Vec<u16>)> =
+        Vec::with_capacity(manifest.observed.live_chunks.min(4096));
     let mut total_voxels = 0u64;
     let mut overlay_entries = 0u64;
 
@@ -544,18 +665,7 @@ fn measure(
 
         total_voxels += dense.iter().filter(|&&material| material != AIR).count() as u64;
         overlay_entries += chunk.overlay.len() as u64;
-
-        let dag = ChunkDag::from_dense(&dense);
-        let candidates = candidates(&dense);
-        if candidates.is_empty() {
-            return;
-        }
-        states.push(ChunkState {
-            pos: chunk.pos,
-            dag,
-            candidates,
-            sky: sky_cells(&dense, &light_table),
-        });
+        scanned.push((chunk.pos, dense.clone()));
     })
     .map_err(|error| format!("failed to scan fixture {}: {error}", save_dir.display()))?;
 
@@ -583,6 +693,50 @@ fn measure(
             manifest.observed.region_files,
         ));
     }
+    let index: HashMap<ChunkPos, usize> = scanned
+        .iter()
+        .enumerate()
+        .map(|(slot, (pos, _))| (*pos, slot))
+        .collect();
+
+    // Build every apron before taking any dense buffer: a later chunk's apron
+    // reads its neighbours, including chunks already turned into states.
+    let mut aprons: Vec<Option<Apron>> = Vec::with_capacity(scanned.len());
+    for (pos, dense) in &scanned {
+        if candidates(dense).is_empty() {
+            aprons.push(None);
+        } else {
+            aprons.push(Some(build_apron(*pos, &scanned, &index)));
+        }
+    }
+
+    let mut states = Vec::with_capacity(scanned.len());
+    for slot in 0..scanned.len() {
+        let Some(apron) = aprons[slot].take() else {
+            continue;
+        };
+        let pos = scanned[slot].0;
+        let dense = std::mem::take(&mut scanned[slot].1);
+        let candidates = candidates(&dense);
+        let sky = sky_cells(&dense, &light_table);
+        let light_state = build_light_state(&dense, &sky, &light_table);
+        let probe =
+            voxel_mesh::probe::bake(pos, ProbeGrid::for_chunk(ProbeLod::Near), |x, y, z| {
+                dense[local_index(x, y, z) as usize] != AIR
+            });
+        states.push(ChunkState {
+            pos,
+            dag: ChunkDag::from_dense(&dense),
+            dense,
+            apron,
+            candidates,
+            sky,
+            light_state,
+            probe,
+        });
+    }
+    drop(scanned);
+
     if states.is_empty() {
         return Err(
             "fixture has no live chunk with a non-air voxel to edit; the gate needs real targets"
@@ -594,6 +748,14 @@ fn measure(
     let mut edited_chunks = vec![false; chunks_available];
     let mut device = UploadDevice::new(chunks_available);
     let mut edits = Vec::with_capacity(EDITS);
+    // Reused scrub scratch: one scheduler, one output batch, one bitmask, one
+    // block scratch and one probe-selection list for the whole run.
+    let probe_grid = ProbeGrid::for_chunk(ProbeLod::Near);
+    let mut scheduler = RemeshScheduler::new();
+    let mut scrub_blocks = Vec::new();
+    let mut affected = Vec::new();
+    let mut scrub_quads = Vec::new();
+    let mut scratch = BlockScratch::new();
 
     for step in 0..(WARMUP_EDITS + EDITS) {
         let record = step >= WARMUP_EDITS;
@@ -649,6 +811,76 @@ fn measure(
         let light_ns = elapsed_ns(light_start);
         black_box(&fill);
 
+        // M2-24 scrub path: the edit triggers dirty blocks (M2-22), one
+        // scheduler batch (M2-23), the production greedy remesh, incremental
+        // light (M2-15) and the production probe update (M2-21).
+        let cell_block = BLOCK_DIM as u32;
+        let cx = (vx / cell_block) as i32;
+        let cy = (vy / cell_block) as i32;
+        let cz = (vz / cell_block) as i32;
+        let sky_edge = LIGHT_CELLS_PER_EDGE as i32;
+        let sky_index = (cx + cy * sky_edge + cz * sky_edge * sky_edge) as usize;
+
+        let scrub_dirty_start = Instant::now();
+        let mut dirty = DirtyBlocks::new();
+        assert!(
+            dirty.mark_edit(vx, vy, vz, previous_material, material),
+            "a measured edit must change the voxel"
+        );
+        let queued = scheduler.enqueue(&dirty);
+        let dirty_blocks = scheduler.next_batch_into(usize::MAX, &mut scrub_blocks);
+        black_box(queued);
+        let scrub_dirty_ns = elapsed_ns(scrub_dirty_start);
+
+        // Selection sees the pre-edit voxel; `dense` is not updated until the
+        // selection has run, so this is the same pre-edit view the probe gate
+        // uses.
+        let probe_start = Instant::now();
+        let reach = probes_reaching(
+            state.pos,
+            probe_grid,
+            [vx, vy, vz],
+            |x, y, z| state.dense[local_index(x, y, z) as usize] != AIR,
+            &mut affected,
+        );
+        state.dense[candidate.index as usize] = material;
+        debug_assert_eq!(
+            state.dag.get(vx, vy, vz),
+            material,
+            "the dense scrub buffer must track the COW chunk"
+        );
+        let rebaked = {
+            let dense = &state.dense;
+            state.probe.rebake(state.pos, &affected, |x, y, z| {
+                dense[local_index(x, y, z) as usize] != AIR
+            })
+        };
+        black_box((reach, rebaked));
+        let probe_ns = elapsed_ns(probe_start);
+
+        let scrub_light_start = Instant::now();
+        let cell_light = light_for(&light_table, material);
+        state.light_state.apply_edit(CellEdit::new(
+            cx,
+            cy,
+            cz,
+            MeshBlockLight::new(cell_light.emission, cell_light.opacity),
+            state.sky[sky_index],
+        ));
+        let scrub_light_ns = elapsed_ns(scrub_light_start);
+
+        let remesh_start = Instant::now();
+        let mut meshed_quads = 0usize;
+        for &block in &scrub_blocks[..dirty_blocks] {
+            scratch.fill(&state.dense, &state.apron, block);
+            greedy_block(&scratch, &mut scrub_quads);
+            meshed_quads += scrub_quads.len();
+        }
+        let remesh_ns = elapsed_ns(remesh_start);
+        black_box(meshed_quads);
+        let scrub_total_ns =
+            compact_ns + cow_ns + scrub_dirty_ns + remesh_ns + scrub_light_ns + probe_ns;
+
         if record {
             edited_chunks[state_index] = true;
             let fixed_ns = upload_ns + fence_ns + flip_ns;
@@ -678,6 +910,14 @@ fn measure(
                 compact_ns,
                 dirty_ns,
                 total_ns: fixed_ns + dirty_ns + compact_ns,
+                dirty_blocks: dirty_blocks as u32,
+                meshed_quads: meshed_quads as u32,
+                affected_probes: affected.len() as u32,
+                scrub_dirty_ns,
+                remesh_ns,
+                scrub_light_ns,
+                probe_ns,
+                scrub_total_ns,
             });
         }
     }
@@ -706,6 +946,19 @@ fn measure(
         light_cells_per_edit: mean(edits.iter().map(|sample| sample.light_cells)),
     };
     let budget = BudgetCheck::new(BUDGET_NS, terms.total.p95_ns);
+    let scrub_terms = ScrubTerms {
+        dirty: term(&edits, |sample| sample.scrub_dirty_ns),
+        remesh: term(&edits, |sample| sample.remesh_ns),
+        light: term(&edits, |sample| sample.scrub_light_ns),
+        probe: term(&edits, |sample| sample.probe_ns),
+        total: term(&edits, |sample| sample.scrub_total_ns),
+    };
+    let scrub_counts = ScrubCounts {
+        dirty_blocks_per_edit: mean(edits.iter().map(|sample| sample.dirty_blocks as u64)),
+        quads_per_edit: mean(edits.iter().map(|sample| sample.meshed_quads as u64)),
+        affected_probes_per_edit: mean(edits.iter().map(|sample| sample.affected_probes as u64)),
+    };
+    let scrub_budget = BudgetCheck::new(SCRUB_BUDGET_NS, scrub_terms.total.p95_ns);
 
     let status = match manifest.status {
         FixtureStatus::Provisional => "provisional".to_owned(),
@@ -755,7 +1008,28 @@ fn measure(
          uses the material just written and the apron samples the current DAG. A single-voxel \
          edit is charged one dirty cell. Sky exposure is the chunk-local heightmap: a chunk \
          directly above is not consulted and the apron is treated as open sky. M2 replaces this \
-         reference with the incremental pass."
+         reference with the incremental pass. The M2-24 scrub row below uses the production \
+         incremental pass."
+            .to_owned(),
+        "Scrub (M2-24) = compaction + cow + dirty + remesh + light + probe. Dirty is the M2-22 per-block \
+         bitset plus one M2-23 scheduler batch; probe is M2-21 selection plus the production \
+         rebake; light is the M2-15 incremental LightState edit; remesh is the production greedy \
+         mesher over the batch's 18³ scratches (filled from the dense chunk and the six-neighbour \
+         apron). It runs on every measured edit and is compared with the 4 ms scrub budget, \
+         separately from the pre-registered 8 ms edit budget. Startup (states, aprons, light seed \
+         and the initial probe bake) is outside every timer."
+            .to_owned(),
+        "The frozen fixture pairs two non-air materials on every edit. That swap is \
+         occupancy-neutral, so the M2-22 batch is always the voxel's own block (mark_edit's \
+         solid→solid fast path) and no probe's baked visibility can change: the probe term is \
+         M2-21 selection only (0 affected probes) and the rebake half is measured by the probe \
+         gate. The apron is built once from resident neighbours; cross-chunk dirtiness \
+         (mark_apron_cell) belongs to the streaming layer and is out of scope here."
+            .to_owned(),
+        "Sky exposure is the startup chunk-local heightmap and is not recomputed after an \
+         opacity-changing edit. Light values therefore follow the same static-sky model as the \
+         M1-29 reference and are not validated against a fresh bake; only the light latency is \
+         used by this gate."
             .to_owned(),
         format!(
             "The fixture has {} live chunks; {} contain at least one non-air voxel and are the \
@@ -783,6 +1057,9 @@ fn measure(
         terms,
         bytes,
         budget,
+        scrub_terms,
+        scrub_counts,
+        scrub_budget,
         edits,
         notes,
     })
@@ -892,6 +1169,83 @@ fn sky_cells(dense: &[u16], light: &[BlockLight]) -> Vec<bool> {
     sky
 }
 
+/// The chunk sharing `face` with `pos`.
+fn neighbour_pos(pos: ChunkPos, face: Face) -> ChunkPos {
+    match face {
+        Face::NegX => ChunkPos::new(pos.x - 1, pos.y, pos.z),
+        Face::PosX => ChunkPos::new(pos.x + 1, pos.y, pos.z),
+        Face::NegY => ChunkPos::new(pos.x, pos.y - 1, pos.z),
+        Face::PosY => ChunkPos::new(pos.x, pos.y + 1, pos.z),
+        Face::NegZ => ChunkPos::new(pos.x, pos.y, pos.z - 1),
+        Face::PosZ => ChunkPos::new(pos.x, pos.y, pos.z + 1),
+    }
+}
+
+/// Chunk-local coordinate of the neighbour voxel on `face`'s plane at `(u, v)`.
+///
+/// This is the inverse of [`Face::offset`]: the plane lies outside this chunk,
+/// so the coordinate is the touching border voxel of the neighbour.
+fn face_local(face: Face, u: u32, v: u32) -> (u32, u32, u32) {
+    let last = CHUNK_DIM as u32 - 1;
+    match face {
+        Face::NegX => (last, v, u),
+        Face::PosX => (0, v, u),
+        Face::NegY => (v, last, u),
+        Face::PosY => (v, 0, u),
+        Face::NegZ => (u, v, last),
+        Face::PosZ => (u, v, 0),
+    }
+}
+
+/// Builds the six face planes from the scanned neighbours, or air where absent.
+fn build_apron(
+    pos: ChunkPos,
+    scanned: &[(ChunkPos, Vec<u16>)],
+    index: &HashMap<ChunkPos, usize>,
+) -> Apron {
+    let mut apron = Apron::new();
+    for face in Face::ALL {
+        let Some(&slot) = index.get(&neighbour_pos(pos, face)) else {
+            continue;
+        };
+        let dense = &scanned[slot].1;
+        for v in 0..CHUNK_DIM as u32 {
+            for u in 0..CHUNK_DIM as u32 {
+                let (x, y, z) = face_local(face, u, v);
+                apron.set(face, u, v, dense[local_index(x, y, z) as usize]);
+            }
+        }
+    }
+    apron
+}
+
+/// Production incremental light state (M2-15) over the chunk's cell grid.
+///
+/// Outside the chunk is air and open sky, matching the reference fill's
+/// documented limitation: a chunk directly above is not consulted.
+fn build_light_state(dense: &[u16], sky: &[bool], light: &[BlockLight]) -> LightState {
+    let edge = LIGHT_CELLS_PER_EDGE as i32;
+    let block = BLOCK_DIM as u32;
+    LightState::new(
+        LIGHT_CELLS_PER_EDGE,
+        |x, y, z| {
+            if x < 0 || y < 0 || z < 0 || x >= edge || y >= edge || z >= edge {
+                return MeshBlockLight::AIR;
+            }
+            let material =
+                dense[local_index(x as u32 * block, y as u32 * block, z as u32 * block) as usize];
+            let entry = light_for(light, material);
+            MeshBlockLight::new(entry.emission, entry.opacity)
+        },
+        |x, y, z| {
+            if x < 0 || y < 0 || z < 0 || x >= edge || y >= edge || z >= edge {
+                return true;
+            }
+            sky[(x + y * edge + z * edge * edge) as usize]
+        },
+    )
+}
+
 /// Runs the M1-29 reference fill over the dirty cell and its apron.
 fn relight(
     state: &ChunkState,
@@ -998,20 +1352,61 @@ mod tests {
         assert_eq!(device.leaves.len() as u64 * 2, uploaded.leaf_bytes);
     }
 
+    fn chunk_state(dense: Vec<u16>) -> ChunkState {
+        let light = builtin_light_table();
+        let sky = sky_cells(&dense, &light);
+        let pos = ChunkPos::new(0, 0, 0);
+        let light_state = build_light_state(&dense, &sky, &light);
+        let probe =
+            voxel_mesh::probe::bake(pos, ProbeGrid::for_chunk(ProbeLod::Near), |x, y, z| {
+                dense[local_index(x, y, z) as usize] != AIR
+            });
+        ChunkState {
+            pos,
+            dag: ChunkDag::from_dense(&dense),
+            dense,
+            apron: Apron::new(),
+            candidates: Vec::new(),
+            sky,
+            light_state,
+            probe,
+        }
+    }
+
     #[test]
     fn one_edit_relights_one_cell_and_its_apron() {
         let dense = crate::patterns::terrain(0, 0);
         let light = builtin_light_table();
-        let state = ChunkState {
-            pos: ChunkPos::new(0, 0, 0),
-            dag: ChunkDag::from_dense(&dense),
-            candidates: Vec::new(),
-            sky: sky_cells(&dense, &light),
-        };
+        let state = chunk_state(dense);
         let (cells, fill) = relight(&state, local_index(1, 2, 3), 1, &light);
         assert_eq!(cells, 27);
         assert_eq!(fill.padded_cells().len(), 27);
         assert_eq!(fill.edge_cells(), 1);
+    }
+
+    #[test]
+    fn apron_reads_the_facing_neighbour_border() {
+        let last = CHUNK_DIM as u32 - 1;
+        let mut west = vec![AIR; CHUNK_VOLUME];
+        let mut east = vec![AIR; CHUNK_VOLUME];
+        west[local_index(last, 5, 9) as usize] = 3;
+        east[local_index(0, 5, 9) as usize] = 4;
+        let scanned = vec![
+            (ChunkPos::new(0, 0, 0), west),
+            (ChunkPos::new(1, 0, 0), east),
+        ];
+        let index = scanned
+            .iter()
+            .enumerate()
+            .map(|(slot, (pos, _))| (*pos, slot))
+            .collect();
+
+        // East's -X plane (u = z, v = y) reads west's last x column.
+        let apron = build_apron(ChunkPos::new(1, 0, 0), &scanned, &index);
+        assert_eq!(apron.get(Face::NegX, 9, 5), 3);
+        // West's +X plane reads east's first x column.
+        let apron = build_apron(ChunkPos::new(0, 0, 0), &scanned, &index);
+        assert_eq!(apron.get(Face::PosX, 9, 5), 4);
     }
 
     #[test]

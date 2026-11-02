@@ -1,0 +1,20 @@
+(
+    schema: 1,
+    key: "voxel:block/lava_still",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 16, octaves: 3), inputs: []),
+        (id: 1, op: Fbm(period: 32, octaves: 2), inputs: []),
+        (id: 2, op: Smoothstep(edge0: 30000, edge1: 50000), inputs: [1]),
+        (id: 3, op: Ramp(stops: [(0, "#3a1208"), (65535, "#7a2a0a")]), inputs: [0]),
+        (id: 4, op: Ramp(stops: [(0, "#ff8a1a"), (65535, "#ffd84a")]), inputs: [2]),
+        (id: 5, op: MixColor, inputs: [3, 4, 2]),
+        (id: 6, op: Fbm(period: 16, octaves: 2), inputs: []),
+        (id: 7, op: Ramp(stops: [(0, "#ffffff"), (65535, "#c05020")]), inputs: [6]),
+        (id: 8, op: Multiply, inputs: [5, 7]),
+    ],
+    output: (color: 8, alpha: Const(65535)),
+)

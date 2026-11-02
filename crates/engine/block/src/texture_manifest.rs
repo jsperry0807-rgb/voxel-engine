@@ -24,13 +24,144 @@ use crate::ron::RonBlockList;
 pub const MANIFEST_PATH: &str = "data/textures.ron";
 /// Block definitions path, relative to the block crate root.
 pub const BLOCKS_PATH: &str = "data/blocks.ron";
+/// Ordered face table, relative to the block crate root.
+pub const FACES_PATH: &str = "data/faces.ron";
 /// Source face edge in texels. The atlas tile is 16x16, so the box filter is
 /// exactly 16x16.
 pub const SOURCE_EDGE: u32 = 256;
 /// Bytes in one decoded source face.
 pub const SOURCE_BYTES: usize = (SOURCE_EDGE * SOURCE_EDGE * 4) as usize;
-/// Number of faces in the committed set.
-pub const SLICE_FACE_COUNT: usize = 40;
+/// Largest face index the atlas can address: slots are 1..=255.
+pub const MAX_FACES: usize = u8::MAX as usize;
+
+/// The committed face table (`data/faces.ron`).
+///
+/// The table is the single source of truth for the atlas slot of each face:
+/// the entry at index `i` occupies slot `i + 1`. Slots are stable because they
+/// are baked into the material table and the atlas, so the list is
+/// append-only. Adding a face is a data change, not a code change.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FaceTable {
+    pub schema: u32,
+    pub faces: Vec<String>,
+}
+
+impl FaceTable {
+    /// Reads and checks `data/faces.ron` under the block crate root.
+    pub fn load(crate_root: &Path) -> Result<Self, ManifestError> {
+        let path = crate_root.join(FACES_PATH);
+        let text = fs::read_to_string(&path).map_err(|source| ManifestError::Io {
+            path: path.clone(),
+            source,
+        })?;
+        Self::parse(&text)
+    }
+
+    /// Parses and checks the table text.
+    pub fn parse(text: &str) -> Result<Self, ManifestError> {
+        let table: Self = ron::from_str(text).map_err(ManifestError::FaceParse)?;
+        table.check()?;
+        Ok(table)
+    }
+
+    /// Checks the table itself, independent of any manifest.
+    pub fn check(&self) -> Result<(), ManifestError> {
+        if self.schema != 1 {
+            return Err(ManifestError::Invalid(format!(
+                "{FACES_PATH}: schema {} is not supported (expected 1)",
+                self.schema
+            )));
+        }
+        if self.faces.is_empty() {
+            return Err(ManifestError::Invalid(format!(
+                "{FACES_PATH}: the face table must not be empty"
+            )));
+        }
+        if self.faces.len() > MAX_FACES {
+            return Err(ManifestError::Invalid(format!(
+                "{FACES_PATH}: {} faces exceeds the {MAX_FACES} slots the atlas can address",
+                self.faces.len()
+            )));
+        }
+        let mut seen = BTreeSet::new();
+        for (index, key) in self.faces.iter().enumerate() {
+            if !key.starts_with("voxel:block/") {
+                return Err(ManifestError::Invalid(format!(
+                    "{FACES_PATH}: entry {} is `{key}`, which is not a voxel:block/ key",
+                    index + 1
+                )));
+            }
+            if !seen.insert(key.as_str()) {
+                return Err(ManifestError::Invalid(format!(
+                    "{FACES_PATH}: duplicate face {key}"
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Slot of a face key, or `None` when the table does not list it.
+    pub fn slot_of(&self, key: &str) -> Option<u16> {
+        self.faces
+            .iter()
+            .position(|candidate| candidate == key)
+            .map(|index| index as u16 + 1)
+    }
+
+    /// Number of listed faces.
+    pub fn len(&self) -> usize {
+        self.faces.len()
+    }
+
+    /// Whether the table lists no faces.
+    pub fn is_empty(&self) -> bool {
+        self.faces.is_empty()
+    }
+
+    /// `(key, slot)` pairs in slot order.
+    pub fn iter(&self) -> impl Iterator<Item = (&str, u16)> {
+        self.faces
+            .iter()
+            .enumerate()
+            .map(|(index, key)| (key.as_str(), index as u16 + 1))
+    }
+
+    /// Checks that `manifest` covers exactly these faces in exactly this order.
+    pub fn check_manifest(&self, manifest: &TextureManifest) -> Result<(), ManifestError> {
+        if manifest.textures.len() != self.len() {
+            return Err(ManifestError::Invalid(format!(
+                "manifest has {} textures but {FACES_PATH} lists {} faces",
+                manifest.textures.len(),
+                self.len()
+            )));
+        }
+        for (key, slot) in self.iter() {
+            match manifest.entry(key) {
+                None => {
+                    return Err(ManifestError::Invalid(format!(
+                        "MissingManifestEntry: {key} is listed in {FACES_PATH}"
+                    )));
+                }
+                Some(entry) if entry.slot != slot => {
+                    return Err(ManifestError::Invalid(format!(
+                        "{}: slot {} but {FACES_PATH} puts it at {slot}",
+                        entry.key, entry.slot
+                    )));
+                }
+                Some(_) => {}
+            }
+        }
+        for entry in &manifest.textures {
+            if self.slot_of(&entry.key).is_none() {
+                return Err(ManifestError::Invalid(format!(
+                    "UnusedManifestEntry: {} is not listed in {FACES_PATH}",
+                    entry.key
+                )));
+            }
+        }
+        Ok(())
+    }
+}
 
 /// Alpha class of a source face, as locked by decision D1.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -91,6 +222,7 @@ pub enum ManifestError {
         source: std::io::Error,
     },
     Parse(ron::error::SpannedError),
+    FaceParse(ron::error::SpannedError),
     BlockParse(ron::error::SpannedError),
     Decode {
         path: PathBuf,
@@ -104,6 +236,7 @@ impl fmt::Display for ManifestError {
         match self {
             Self::Io { path, source } => write!(f, "{}: {source}", path.display()),
             Self::Parse(error) => write!(f, "textures.ron: {error}"),
+            Self::FaceParse(error) => write!(f, "{FACES_PATH}: {error}"),
             Self::BlockParse(error) => write!(f, "blocks.ron: {error}"),
             Self::Decode { path, source } => {
                 write!(f, "could not decode {}: {source}", path.display())
@@ -117,7 +250,7 @@ impl Error for ManifestError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Io { source, .. } => Some(source),
-            Self::Parse(error) | Self::BlockParse(error) => Some(error),
+            Self::Parse(error) | Self::FaceParse(error) | Self::BlockParse(error) => Some(error),
             Self::Decode { source, .. } => Some(source),
             Self::Invalid(_) => None,
         }
@@ -313,6 +446,9 @@ pub fn validate(manifest: &TextureManifest, crate_root: &Path) -> Result<(), Man
         source,
     })?;
     let face_classes = block_face_classes(&blocks)?;
+    // The slot table is an input, not an output: it must agree with the
+    // committed manifest exactly, in order.
+    let faces = FaceTable::load(crate_root)?;
 
     let mut keys = BTreeSet::new();
     let mut slots = BTreeSet::new();
@@ -344,12 +480,7 @@ pub fn validate(manifest: &TextureManifest, crate_root: &Path) -> Result<(), Man
             face_classes.len()
         )));
     }
-    if manifest.textures.len() != SLICE_FACE_COUNT {
-        return Err(ManifestError::Invalid(format!(
-            "manifest has {} textures; the committed set is exactly {SLICE_FACE_COUNT}",
-            manifest.textures.len()
-        )));
-    }
+    faces.check_manifest(manifest)?;
     for (expected, slot) in (1u16..).zip(slots.iter()) {
         if *slot != expected {
             return Err(ManifestError::Invalid(format!(
@@ -652,5 +783,118 @@ mod tests {
         assert!(resolve_inside(root, Path::new("../outside.png")).is_err());
         assert!(resolve_inside(root, Path::new("/etc/passwd")).is_err());
         assert!(resolve_inside(root, Path::new("textures/block/stone.png")).is_ok());
+    }
+
+    fn table(faces: &[&str]) -> FaceTable {
+        FaceTable {
+            schema: 1,
+            faces: faces.iter().map(|key| (*key).to_owned()).collect(),
+        }
+    }
+
+    fn entry(key: &str, slot: u16) -> TextureEntry {
+        TextureEntry {
+            key: key.to_owned(),
+            slot,
+            source: PathBuf::from(format!("textures/block/{key}.png")),
+            alpha: AlphaClass::Opaque,
+            tiling: Tiling::Both,
+            hash: String::new(),
+            graph: None,
+            graph_hash: None,
+            placeholder: false,
+        }
+    }
+
+    fn manifest(entries: &[(&str, u16)]) -> TextureManifest {
+        TextureManifest {
+            schema: 1,
+            license: "CC0-1.0".to_owned(),
+            provenance: "test".to_owned(),
+            textures: entries
+                .iter()
+                .map(|(key, slot)| entry(key, *slot))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn face_table_positions_are_one_based() {
+        let table = table(&["voxel:block/stone", "voxel:block/dirt"]);
+        assert_eq!(table.slot_of("voxel:block/stone"), Some(1));
+        assert_eq!(table.slot_of("voxel:block/dirt"), Some(2));
+        assert_eq!(table.slot_of("voxel:block/gravel"), None);
+        assert_eq!(table.len(), 2);
+        assert_eq!(
+            table.iter().collect::<Vec<_>>(),
+            vec![("voxel:block/stone", 1), ("voxel:block/dirt", 2)]
+        );
+    }
+
+    #[test]
+    fn face_table_rejects_bad_entries() {
+        let duplicate = FaceTable {
+            schema: 1,
+            faces: vec![
+                "voxel:block/stone".to_owned(),
+                "voxel:block/stone".to_owned(),
+            ],
+        };
+        assert!(duplicate.check().is_err());
+
+        assert!(table(&[]).check().is_err());
+        assert!(table(&["stone"]).check().is_err());
+        assert!(
+            FaceTable {
+                schema: 2,
+                faces: vec!["voxel:block/stone".to_owned()],
+            }
+            .check()
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn face_table_checks_slot_order() {
+        let table = table(&["voxel:block/stone", "voxel:block/dirt"]);
+        table
+            .check_manifest(&manifest(&[
+                ("voxel:block/stone", 1),
+                ("voxel:block/dirt", 2),
+            ]))
+            .expect("ordered manifest should pass");
+
+        // Swapped slots are a renumbering, not a reorder-of-list: reject.
+        assert!(
+            table
+                .check_manifest(&manifest(&[
+                    ("voxel:block/stone", 2),
+                    ("voxel:block/dirt", 1),
+                ]))
+                .is_err()
+        );
+
+        assert!(
+            table
+                .check_manifest(&manifest(&[("voxel:block/stone", 1)]))
+                .is_err()
+        );
+        assert!(
+            table
+                .check_manifest(&manifest(&[
+                    ("voxel:block/stone", 1),
+                    ("voxel:block/dirt", 2),
+                    ("voxel:block/gravel", 3),
+                ]))
+                .is_err()
+        );
+        assert!(
+            table
+                .check_manifest(&manifest(&[
+                    ("voxel:block/stone", 1),
+                    ("voxel:block/gravel", 2),
+                ]))
+                .is_err()
+        );
     }
 }

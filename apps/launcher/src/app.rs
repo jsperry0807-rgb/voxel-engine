@@ -17,6 +17,11 @@ const WINDOWS_TARGET: &str = voxel_core::win_toolchain::TARGET;
 /// True when the Windows build is a cross-build (Unix host). On Windows the
 /// "Windows build" is just the host build, with no mingw-w64 toolchain.
 const CROSS_BUILD: bool = cfg!(unix);
+/// Baked atlases for local, uncommitted texture sets (resource packs).
+const LOCAL_ATLASES: &str = "assets/atlas";
+/// The local set the launcher toggles to when it is not using the generated
+/// atlas.
+const RESOURCE_PACK_SET: &str = "resourcepack";
 const WINDOWS_SETUP: &str = "Windows toolchain";
 const LINUX_BUILD: &str = "Linux build";
 const WINDOWS_BUILD: &str = "Windows build";
@@ -62,14 +67,41 @@ pub struct LauncherApp {
 
 /// Options passed to the viewer as environment variables.
 struct ViewerOptions {
+    /// Which atlas the viewer renders with.
+    texture: TextureSource,
+    /// Free-form path used when [`TextureSource::Custom`] is selected.
     atlas: String,
     log: String,
     wayland: bool,
 }
 
+/// Where the viewer's atlas comes from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TextureSource {
+    /// The committed atlas built from the texgen graphs (CC0).
+    Voxgen,
+    /// A locally baked atlas from a resource pack under `assets/`.
+    ResourcePack,
+    /// Whatever path the user typed (a directory or `atlas.png`).
+    Custom,
+}
+
+impl TextureSource {
+    const ALL: [Self; 3] = [Self::Voxgen, Self::ResourcePack, Self::Custom];
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Voxgen => "Voxgen",
+            Self::ResourcePack => "Resource pack",
+            Self::Custom => "Custom path",
+        }
+    }
+}
+
 impl Default for ViewerOptions {
     fn default() -> Self {
         Self {
+            texture: TextureSource::Voxgen,
             atlas: String::new(),
             log: "warn,voxel_viewer=info".to_owned(),
             wayland: false,
@@ -78,21 +110,30 @@ impl Default for ViewerOptions {
 }
 
 impl ViewerOptions {
+    /// The atlas override for the current source, or `None` when the viewer
+    /// should use its committed default.
+    fn atlas_path(&self, root: &Path) -> Option<PathBuf> {
+        match self.texture {
+            TextureSource::Voxgen => None,
+            TextureSource::ResourcePack => Some(root.join(LOCAL_ATLASES).join(RESOURCE_PACK_SET)),
+            TextureSource::Custom => {
+                let atlas = self.atlas.trim();
+                (!atlas.is_empty()).then(|| PathBuf::from(atlas))
+            }
+        }
+    }
+
     /// The environment for a viewer launch. The atlas path is translated for
     /// the Windows exe when WSL can do it.
-    fn environment(&self, windows: bool) -> Vec<(String, String)> {
+    fn environment(&self, windows: bool, root: &Path) -> Vec<(String, String)> {
         let mut env = vec![("RUST_BACKTRACE".to_owned(), "1".to_owned())];
         let log = self.log.trim();
         if !log.is_empty() {
             env.push(("RUST_LOG".to_owned(), log.to_owned()));
         }
-        let atlas = self.atlas.trim();
-        if !atlas.is_empty() {
-            let atlas = if windows {
-                windows_path(atlas)
-            } else {
-                atlas.to_owned()
-            };
+        if let Some(atlas) = self.atlas_path(root) {
+            let atlas = atlas.display().to_string();
+            let atlas = if windows { windows_path(&atlas) } else { atlas };
             env.push(("VOXEL_VIEWER_ATLAS".to_owned(), atlas));
         }
         if self.wayland {
@@ -289,7 +330,7 @@ impl LauncherApp {
             CommandSpec::new("Viewer (Linux)", "cargo", &["run", "-p", "voxel-viewer"])
                 .note("pointer capture prefers X11/XWayland; enable Force Wayland to override")
         };
-        let spec = spec.envs(self.viewer.environment(windows));
+        let spec = spec.envs(self.viewer.environment(windows, &self.root));
         self.start(spec);
     }
 
@@ -304,12 +345,10 @@ impl LauncherApp {
         );
     }
 
-    fn start_texgen_tool(&mut self, label: &str, command: &str) {
-        self.start(CommandSpec::new(
-            label,
-            "cargo",
-            &["run", "--quiet", "-p", "voxel-texgen", "--", command],
-        ));
+    fn start_texgen_tool(&mut self, label: &str, args: &[&str]) {
+        let mut run: Vec<&str> = vec!["run", "--quiet", "-p", "voxel-texgen", "--"];
+        run.extend_from_slice(args);
+        self.start(CommandSpec::new(label, "cargo", &run));
     }
 
     fn start_cargo(&mut self, label: &str, args: &[&str]) {
@@ -515,15 +554,60 @@ impl LauncherApp {
         if action_button(ui, "Open texture editor", "cargo run -p voxel-texgen", true) {
             self.start_texgen();
         }
+
+        ui.add_space(4.0);
+        ui.label(RichText::new("Texture source").small().weak());
+        ui.horizontal_wrapped(|ui| {
+            for source in TextureSource::ALL {
+                ui.selectable_value(&mut self.viewer.texture, source, source.label());
+            }
+        });
+        let atlas = self.viewer.atlas_path(&self.root);
+        match self.viewer.texture {
+            TextureSource::Voxgen => {
+                ui.label(
+                    RichText::new(
+                        "Committed atlas from the texgen graphs (crates/engine/viewer/assets/atlas).",
+                    )
+                    .weak()
+                    .small(),
+                );
+            }
+            TextureSource::ResourcePack => {
+                let ready = atlas
+                    .as_ref()
+                    .is_some_and(|dir| dir.join("atlas-0.png").is_file());
+                if ready {
+                    ui.label(
+                        RichText::new(
+                            atlas
+                                .as_ref()
+                                .map(|path| path.display().to_string())
+                                .unwrap_or_default(),
+                        )
+                        .weak()
+                        .small()
+                        .monospace(),
+                    );
+                } else {
+                    ui.colored_label(
+                        WARN,
+                        RichText::new("No baked resource-pack atlas yet: bake it in Textures.")
+                            .small(),
+                    );
+                }
+            }
+            TextureSource::Custom => {
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.viewer.atlas)
+                        .hint_text("atlas.png or atlas directory")
+                        .desired_width(f32::INFINITY),
+                );
+            }
+        }
         egui::CollapsingHeader::new("Viewer options")
             .default_open(false)
             .show(ui, |ui| {
-                ui.label(RichText::new("Atlas override").small().weak());
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.viewer.atlas)
-                        .hint_text("committed atlas")
-                        .desired_width(f32::INFINITY),
-                );
                 ui.label(RichText::new("RUST_LOG").small().weak());
                 ui.add(
                     egui::TextEdit::singleline(&mut self.viewer.log)
@@ -554,7 +638,7 @@ impl LauncherApp {
             "Fails on a one-byte difference",
             true,
         ) {
-            self.start_texgen_tool("Texture check", "check");
+            self.start_texgen_tool("Texture check", &["check"]);
         }
         if action_button(
             ui,
@@ -562,10 +646,10 @@ impl LauncherApp {
             "Renders every graph, then writes textures.ron and materials.gen.ron",
             true,
         ) {
-            self.start_texgen_tool("Texture generate", "generate");
+            self.start_texgen_tool("Texture generate", &["generate"]);
         }
         if action_button(ui, "Bake atlas", "Writes the 256² atlas and its hash", true) {
-            self.start_texgen_tool("Atlas bake", "bake-atlas");
+            self.start_texgen_tool("Atlas bake", &["bake-atlas"]);
         }
         if action_button(
             ui,
@@ -573,8 +657,37 @@ impl LauncherApp {
             "Generate then bake the atlas",
             true,
         ) {
-            self.start_texgen_tool("Texture update", "update-all");
+            self.start_texgen_tool("Texture update", &["update-all"]);
         }
+        ui.add_space(4.0);
+        ui.label(RichText::new("Resource pack set").small().weak());
+        if action_button(
+            ui,
+            "Bake resource pack atlas",
+            "assets/textures/resourcepack -> assets/atlas/resourcepack (local, uncommitted)",
+            true,
+        ) {
+            self.start_texgen_tool("Resource pack atlas", &["bake-set", RESOURCE_PACK_SET]);
+        }
+        if action_button(
+            ui,
+            "Check resource pack atlas",
+            "Fails when assets/atlas/resourcepack is stale",
+            true,
+        ) {
+            self.start_texgen_tool(
+                "Resource pack check",
+                &["bake-set", RESOURCE_PACK_SET, "--check"],
+            );
+        }
+        ui.label(
+            RichText::new(
+                "Put 256² face PNGs in assets/textures/resourcepack; then switch \
+                 Texture source above to Resource pack.",
+            )
+            .weak()
+            .small(),
+        );
         ui.separator();
     }
 
@@ -1056,7 +1169,11 @@ fn dark_visuals() -> egui::Visuals {
 
 #[cfg(test)]
 mod tests {
-    use super::{LOG_TEXT_BASE, LOG_TEXT_MAX_SCALE, log_text_size_for};
+    use std::path::{Path, PathBuf};
+
+    use super::{
+        LOG_TEXT_BASE, LOG_TEXT_MAX_SCALE, TextureSource, ViewerOptions, log_text_size_for,
+    };
 
     #[test]
     fn log_text_keeps_a_readable_floor() {
@@ -1073,5 +1190,35 @@ mod tests {
             log_text_size_for(8_000.0, 8_000.0),
             LOG_TEXT_BASE * LOG_TEXT_MAX_SCALE
         );
+    }
+
+    #[test]
+    fn texture_source_picks_the_viewer_atlas() {
+        let root = Path::new("/workspace");
+        let mut options = ViewerOptions::default();
+        assert_eq!(options.texture, TextureSource::Voxgen);
+        assert_eq!(options.atlas_path(root), None);
+
+        options.texture = TextureSource::ResourcePack;
+        assert_eq!(
+            options.atlas_path(root),
+            Some(PathBuf::from("/workspace/assets/atlas/resourcepack"))
+        );
+
+        options.texture = TextureSource::Custom;
+        options.atlas = "  /tmp/atlas.png  ".to_owned();
+        assert_eq!(
+            options.atlas_path(root),
+            Some(PathBuf::from("/tmp/atlas.png"))
+        );
+        options.atlas.clear();
+        assert_eq!(options.atlas_path(root), None);
+    }
+
+    #[test]
+    fn voxgen_does_not_set_an_atlas_override() {
+        let options = ViewerOptions::default();
+        let env = options.environment(false, Path::new("/workspace"));
+        assert!(env.iter().all(|(name, _)| name != "VOXEL_VIEWER_ATLAS"));
     }
 }

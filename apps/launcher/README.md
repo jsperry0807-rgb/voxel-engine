@@ -17,8 +17,8 @@ The launcher finds the workspace root by walking up from the working directory
 
 | Area | Actions |
 | --- | --- |
-| Run | Viewer on Linux (`cargo run -p voxel-viewer`), viewer from the Windows exe, the texture editor |
-| Textures | `check`, `generate`, `bake-atlas`, `update-all` from the texgen pipeline |
+| Run | Viewer on Linux (`cargo run -p voxel-viewer`), viewer from the Windows exe, the texture editor, and the Voxgen/resource-pack texture-source toggle |
+| Textures | `check`, `generate`, `bake-atlas`, `update-all` from the texgen pipeline, plus `bake-set` for local resource packs |
 | Verify | fmt, clippy, workspace tests, texture manifest test, shader tests, chunk constants |
 | Bench | `gate report`, the full `scripts/bench.sh` suite |
 | Build | the Linux workspace build, the Windows cross-build, or both at once |
@@ -30,9 +30,51 @@ output text scales with the window (15–20 pt) so a maximised launcher stays
 readable without crushing long lines.
 
 The viewer options in the Run section set the same environment variables the
-viewer reads: `VOXEL_VIEWER_ATLAS`, `RUST_LOG` and `VOXEL_VIEWER_WAYLAND`. The
-committed atlas is used when the atlas field is empty; X11/XWayland stays the
-default pointer backend.
+viewer reads: `VOXEL_VIEWER_ATLAS`, `RUST_LOG` and `VOXEL_VIEWER_WAYLAND`.
+Texture source picks the atlas: *Voxgen* leaves the override empty so the
+committed procedural atlas is used, *Resource pack* points at
+`assets/atlas/resourcepack`, and *Custom path* uses the field below. X11/XWayland
+stays the default pointer backend.
+
+## Voxgen vs resource-pack textures
+
+Both sides are 256² face sources that the same box filter bakes into the
+viewer's 16×16 atlas tiles, so switching sources compares like with like.
+
+```text
+assets/textures/voxgen/        generated faces (copy of the committed set)
+assets/textures/resourcepack/  resource-pack faces; local only, never committed
+assets/atlas/voxgen/           standby bake of the generated set
+assets/atlas/resourcepack/     atlas-0.png … atlas-4.png written by bake-set
+```
+
+Both sets bake through the same command, so either can be on standby:
+
+```sh
+cargo run -p voxel-texgen -- bake-set voxgen
+cargo run -p voxel-texgen -- bake-set resourcepack
+```
+
+The Voxgen base level is byte-identical to the committed `atlas.png`; the
+launcher still uses the committed, hash-verified atlas for *Voxgen*.
+
+`assets/` is gitignored on purpose: resource packs are almost always
+all-rights-reserved, so they cannot ship with the repository. Create the set by
+copying the pack's `assets/minecraft/textures/block/*.png` into
+`assets/textures/resourcepack/` (flat, one PNG per face). Faces the pack does
+not include have to be supplied from another source; `texgen bake-set` names
+every missing file instead of baking a partial atlas.
+
+Then either press *Bake resource pack atlas* in the launcher or run:
+
+```sh
+cargo run -p voxel-texgen -- bake-set resourcepack
+cargo run -p voxel-texgen -- bake-set resourcepack --check
+```
+
+Finally set *Texture source* to *Resource pack* and open a viewer. The viewer
+logs the local atlas as unverified because, unlike the committed atlas, it has
+no manifest hash.
 
 ## Linux and Windows stay warm
 

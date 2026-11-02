@@ -211,3 +211,64 @@ gate, the chosen profile or any threshold.
 - **128³ Minimum is still unmeasured.** The M2 gate run after `M2-29` is the
   measurement that confirms or rejects the upgrade; mesh compression remains
   the first lever.
+
+## 8. Amendment — 2026-10-31: the M2 128³ measurement
+
+M2 is complete and the 128³ Minimum run is measured. The report is
+[`m2-exit.md`](m2-exit.md); the archived run is
+[`benchmarks/runs/20261031T152718Z-m2-gate-128`](../benchmarks/runs/20261031T152718Z-m2-gate-128).
+The frozen gate, profile and thresholds are unchanged.
+
+- **Fixture:** `m2-128`, the deterministic stand-in generator at the 128³ edge
+  over a 3 × 1 × 3 chunk box (x, y, z) (9 chunks, 5,336,168 B). It is still synthetic;
+  the dataset row remains **not measured**.
+- **Memory:** the production-mesh p95 is **5.29 MiB/chunk** → **4.16 GiB** over
+  805 chunks. This **passes** the 4.80 GiB hard-fail line by 650 MiB and misses
+  the 3.20 GiB target by 987 MiB. (The archived M2 run reported 3.29 GiB from
+  the no-AO reference; see the Phase 0 erratum below.) The v1 pool is 658 KiB
+  of the total and remains scheduled for removal by M6-09a.
+- **Edit latency:** p95 **8.136 µs** (limit 8 ms). **Probe update:** p95
+  **765.844 µs** (limit 4 ms). Node budget: max **138,636** (limit 1.5 M).
+  Light and probe-grid rows are fixed at 8,192 B and 6,144 B.
+- **Mesh buffer:** production AO p95 **3,650 KiB** (3,645 KiB payload + records
+  and table) against the 2,400 KiB cap — a **1,250 KiB (52.1%)** miss. The
+  archived M2 run's 2,519 KiB is the no-AO reference. **Mesh compression is
+  therefore still the first rule-3 lever, and 128³ Minimum is a measured
+  candidate, not a confirmed profile.**
+- **Culling granularity (row 9):** measured by the M1-34 reference over 100 poses
+  on the save; p95 **0.00%** traversed-but-invisible, zero missed blocks. The
+  reference fill is conservative (partial blocks are passable), so this is a
+  lower bound and the synthetic two-chunk case remains the sensitivity check.
+- **Measurement dataset (row 11):** **carried**. No real populated save exists
+  before M2.5/worldgen or gameplay. Re-freeze the fixture and rerun the gate
+  when one does.
+- **Throughput:** 34.3 chunks/s at 128³ and 210.4 chunks/s at 64³,
+  single-threaded (M2-28).
+
+The M2 exit tag records this measured state. It does not widen a budget, does
+not confirm 128³ Default, and does not close row 11.
+
+**Phase 0 erratum (2026-10-31, M3-00):** the production AO mesh is now measured
+by `gate memory` through `mesh_block`; the runs are
+`benchmarks/runs/20261031T163853Z-m2-production-mesh-128` and
+`...-64`. The corrected 128³ row 6 is **3,650 KiB** (1,250 KiB / 52.1% over)
+and row 1 is **4.16 GiB**. The 64³ production row 6 is **925 KiB** (325.5 KiB
+over the 600 KiB cap) and row 1 is **34.51 GiB**. The M2 verdict (FAIL) is
+unchanged; the severity is not.
+
+## 9. M3-00 mesh compression — 2026-10-31
+
+The M2 exit measured the production AO mesh at 3,650 KiB p95 (1,250 KiB over
+the 2.4 MiB cap). M3-00 evaluated two formats:
+
+- **Instanced 8 B quad records** passed Gates A/B1/B2/D but failed Gate C:
+  1.311× (RTX 4060) and 1.381× (Radeon iGPU) the indexed full-frame time,
+  above the 10% threshold. Rejected on performance.
+- **44 B packed 8 B vertex** (4 vertices + six `u16` indices) landed. 128³
+  Minimum: row 6 **2,115 KiB PASS**, row 1 **2.98 GiB PASS**. 64³ Default:
+  row 6 536 KiB PASS, row 1 24.84 GiB FAIL. 64³ Minimum: row 6 PASS, row 1
+  **6.22 GiB FAIL** (5.11/5.21 after M6-09a).
+
+**64³ is abandoned.** The 32 B/quad 4-vertex strip is deferred; it is the only
+variant that clears the 4.80 hard fail after the M6-09a pool removal (~4.22 GiB)
+but its draw mechanism is unmeasured. No threshold or frozen row changed.

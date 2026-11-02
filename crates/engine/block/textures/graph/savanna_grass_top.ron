@@ -1,0 +1,21 @@
+(
+    schema: 1,
+    key: "voxel:block/savanna_grass_top",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 16, octaves: 3), inputs: []),
+        (id: 1, op: ValueNoise(period: 32, octaves: 2), inputs: []),
+        (id: 2, op: Threshold(at: 50000), inputs: [1]),
+        (id: 3, op: Const(value: 22000), inputs: []),
+        (id: 4, op: Mix, inputs: [0, 2, 3]),
+        (id: 5, op: ValueNoise(period: 32, octaves: 1), inputs: []),
+        (id: 6, op: Threshold(at: 61000), inputs: [5]),
+        (id: 7, op: Ramp(stops: [(0, "#7f7a32"), (65535, "#b8a44a")]), inputs: [4]),
+        (id: 8, op: Ramp(stops: [(0, "#9a8a3a"), (65535, "#d0bc62")]), inputs: [5]),
+        (id: 9, op: MixColor, inputs: [7, 8, 6]),
+    ],
+    output: (color: 9, alpha: Const(65535)),
+)

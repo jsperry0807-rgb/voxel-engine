@@ -74,8 +74,21 @@ fn report_covers_every_fixture_chunk_and_components_sum_to_total() {
         );
         assert_eq!(chunk.dag_bytes, chunk.dag_node_bytes + chunk.dag_leaf_bytes);
         assert_eq!(
+            chunk.mesh_payload_bytes,
+            chunk.mesh_quads * voxel_bench::gate::memory::MESH_BYTES_PER_QUAD,
+        );
+        assert_eq!(
             chunk.mesh_bytes,
-            chunk.mesh_quads * voxel_storage::reference::mesh::QUAD_BYTES as u64
+            chunk.mesh_payload_bytes + chunk.mesh_record_bytes + chunk.mesh_table_bytes,
+        );
+        assert_eq!(
+            chunk.mesh_reference_bytes,
+            chunk.mesh_reference_quads * voxel_storage::reference::mesh::QUAD_BYTES as u64,
+        );
+        assert_eq!(chunk.mesh_record_bytes % 16, 0);
+        assert!(
+            chunk.mesh_table_bytes == 0
+                || chunk.mesh_table_bytes == 2 * voxel_storage::gpu::BLOCKS_PER_CHUNK as u64
         );
         assert_eq!(chunk.light_bytes, 1_024);
         assert_eq!(chunk.probe_bytes, 768);
@@ -91,6 +104,7 @@ fn report_covers_every_fixture_chunk_and_components_sum_to_total() {
         ("light", &report.components.light),
         ("probes", &report.components.probes),
         ("mesh", &report.components.mesh),
+        ("mesh_reference", &report.components.mesh_reference),
         ("total", &report.components.total),
     ] {
         let p50 = distribution.p50.unwrap_or_else(|| panic!("{name} p50"));
@@ -107,6 +121,19 @@ fn report_covers_every_fixture_chunk_and_components_sum_to_total() {
     assert_eq!(report.components.light.p50, Some(1_024));
     assert_eq!(report.components.probes.p50, Some(768));
     assert!(report.components.mesh.p95.unwrap() > 0);
+    assert!(report.components.mesh_reference.p95.unwrap() > 0);
+    let production_quads: u64 = report.chunks.iter().map(|chunk| chunk.mesh_quads).sum();
+    let reference_quads: u64 = report
+        .chunks
+        .iter()
+        .map(|chunk| chunk.mesh_reference_quads)
+        .sum();
+    assert!(
+        production_quads > reference_quads,
+        "the production AO merge must emit more quads than the no-AO reference"
+    );
+    assert_eq!(report.mesh_bytes_per_quad, 44);
+    assert!(report.mesh_format.contains("packed 8 B"));
 
     let component_sum = report.components.dag.total
         + report.components.legacy_v1.total
@@ -122,6 +149,36 @@ fn report_covers_every_fixture_chunk_and_components_sum_to_total() {
     assert_eq!(report.dag_v1_view.p50, manifest.observed.node_bytes.p50);
     assert_eq!(report.dag_v1_view.p95, manifest.observed.node_bytes.p95);
     assert_eq!(report.dag_v1_view.max, manifest.observed.node_bytes.max);
+
+    // Schema v3 is a semantic change; a pre-v3 document must fail loudly
+    // rather than reinterpret reference bytes as production bytes.
+    let mut value = serde_json::to_value(&report).expect("memory report serializes");
+    value["schema_version"] = 2.into();
+    value["chunks"][0]
+        .as_object_mut()
+        .expect("chunk object")
+        .remove("mesh_payload_bytes");
+    assert!(
+        serde_json::from_value::<voxel_bench::gate::memory::MemoryReport>(value).is_err(),
+        "pre-v3 memory JSON must be rejected"
+    );
+}
+
+#[test]
+fn explicit_format_changes_payload_bytes_not_the_reference() {
+    let format = voxel_bench::gate::memory::MeshFormat {
+        name: "test-44",
+        payload_bytes_per_quad: 44,
+        meshlet_record_bytes: 16,
+        table_bytes: voxel_bench::gate::memory::ADR_010.table_bytes,
+    };
+    let report = voxel_bench::gate::memory::report_with_format(&manifest_path(), format)
+        .expect("the explicit format measures");
+    assert_eq!(report.mesh_format, "test-44");
+    assert_eq!(report.mesh_bytes_per_quad, 44);
+    for chunk in &report.chunks {
+        assert_eq!(chunk.mesh_payload_bytes, chunk.mesh_quads * 44);
+    }
 }
 
 #[test]
@@ -148,7 +205,8 @@ fn cli_prints_every_component_and_percentile() {
         "Overlay",
         "Light",
         "Probes",
-        "Mesh estimate",
+        "Mesh (production AO)",
+        "Mesh reference (no AO, informational)",
         "Total",
         "p50",
         "p95",

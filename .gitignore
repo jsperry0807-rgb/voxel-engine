@@ -2,8 +2,8 @@
 visual
 /site
 /.docs-build
+# Local, uncommitted art: resources packs and their baked atlases.
 /assets
-.temp/
 __archive__/
 __sandbox__/
 __ai-session-history__/
@@ -11,3 +11,7 @@ perf.data
 perf.data.old
 /mutants.out
 /mutants.out.old
+
+# MemPalace per-project files (issue #185)
+mempalace.yaml
+entities.json

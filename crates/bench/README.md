@@ -66,11 +66,57 @@ cargo run -p voxel-bench -- gate scaleup
 cargo run -p voxel-bench -- gate scaleup --profile minimum
 cargo run -p voxel-bench -- gate scaleup --json
 
+# Streaming and upload hitch over 1,000 frames of camera motion (M3-09)
+cargo run --release -p voxel-bench -- hitch
+cargo run --release -p voxel-bench -- hitch --frames 300 --speed 24 --json
+
+# VRAM and host for the 256-chunk scene, split by DAG/mesh/overlay/light/probes (M3-11)
+cargo run --release -p voxel-bench --features chunk128 -- scene-memory
+cargo run --release -p voxel-bench --features chunk128 -- scene-memory --json
+
+# Compare a capture against the committed visual-regression reference (M3-12)
+cargo run --release -p voxel-bench -- image-diff \
+  --reference docs/images/m3-12-reference.png --candidate target/capture.png
+
 # The twelve pre-registered rows as one gate.md + gate.json (M1-39)
 cargo run -p voxel-bench -- gate report
 cargo run -p voxel-bench -- gate report --profile minimum
 cargo run -p voxel-bench -- gate report --json
 ```
+
+## Hitch test (M3-09)
+
+`hitch` drives the viewer's real frame-thread streaming path — ring pump, the
+M3-03 take/staging-copy/install step and the encoder finish plus submit — for
+1,000 frames while the camera flies at 16 world units per second (two chunks a
+second at 128³). It is headless: no surface, no render pass, so it measures the
+CPU-side streaming path, not GPU draw time.
+
+It reports p50/p95/p99/max for `pump`, `upload`, `finish` and their `total`,
+the slowest five frames, upload frames, overruns and resident/pending chunks,
+and it exits 1 when the upload p99 exceeds 4 ms or any frame exceeds 8 ms
+(`--no-check` reports without failing). `--upload-kib`, `--speed`, `--seed` and
+`--frames` override the defaults.
+
+## Image diff (M3-12)
+
+`image-diff` compares an RGBA8 PNG against the committed M3 scene reference and
+reports the differing-pixel fraction, the largest channel delta and the mean
+absolute delta against a documented threshold (0.01% beyond a 2/255 tolerance,
+max 32/255, mean 0.5/255). It exits 1 outside the threshold and prints JSON with
+`--json`. A capture at the wrong drawable size is a size-mismatch error, not a
+difference. See [`docs/m3-12-visual-regression.md`](../../docs/m3-12-visual-regression.md).
+
+## Scene memory (M3-11)
+
+`scene-memory` builds the viewer's real streaming scene headlessly, fills the
+256-chunk ring and reports the bytes it holds: the mesh pool's committed pages
+and the per-chunk light, probe and origin buffers on the GPU, each worker's dense
+volume and the finished uploads on the host, plus live/peak heap and RSS. It
+prints the DAG / mesh / overlay / light / probes rows, the per-chunk figure and
+the 40%-of-8-GiB budget check with the 1.5× margin, and exits 1 if the margin is
+missed. M3 stores no DAG or overlay on the GPU, so those rows are zero by
+construction; see [`docs/m3-11-memory.md`](../../docs/m3-11-memory.md).
 
 ## What is measured
 
@@ -147,13 +193,13 @@ row per component with p50/p95/max over chunks plus the fixture-wide total:
 | **Overlay** | Allocated GPU overlay storage: a block table per edited chunk plus 8 704 B per edited 16³ block |
 | **Light** | `LIGHT_BYTES_PER_CHUNK` (1 KiB at 64³, 8 KiB at 128³) |
 | **Probes** | `PROBE_BYTES_PER_CHUNK` near-LOD volume (768 B at 64³, 6 KiB at 128³) |
-| **Mesh estimate** | M1-31 greedy quads × 76 B; count-only, no vertex/index buffer overhead |
+| **Mesh** | Production AO `mesh_block` bytes (76 B/quad) + 16 B/block records + u16 table; the M1-31 no-AO reference is reported separately and excluded from the total |
 | **Total** | The six components above, per chunk |
 
 The transitional v1 `Svdag` pool is counted in the total: it is still resident
 for GPU and disk compatibility, and memory that is occupied must not disappear
 from the gate. It predates the banded layout but is not free. The fixture has no pending overlay entries, so its overlay component
-is zero by measurement, not by assumption. Mesh is an upper bound at chunk
+is zero by measurement, not by assumption. The M1-31 reference is an upper bound at chunk
 boundaries because the M1-31 reference has no neighbour apron; A/B root overhead
 is not part of this measurement. The report carries the fixture's provisional
 limitation verbatim and refuses to measure a save whose live chunk, voxel,

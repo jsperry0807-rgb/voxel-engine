@@ -1,0 +1,21 @@
+(
+    schema: 1,
+    key: "voxel:block/fungal_cap_top",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 16, octaves: 3), inputs: []),
+        (id: 1, op: ValueNoise(period: 16, octaves: 2), inputs: []),
+        (id: 2, op: Smoothstep(edge0: 30000, edge1: 55000), inputs: [1]),
+        (id: 3, op: Ramp(stops: [(0, "#4a1e5a"), (65535, "#7a3a8a")]), inputs: [0]),
+        (id: 4, op: Ramp(stops: [(0, "#c88ae0"), (65535, "#e8c8f4")]), inputs: [1]),
+        (id: 5, op: MixColor, inputs: [3, 4, 2]),
+        (id: 6, op: ValueNoise(period: 32, octaves: 1), inputs: []),
+        (id: 7, op: Threshold(at: 62000), inputs: [6]),
+        (id: 8, op: Ramp(stops: [(0, "#8a4a9a"), (65535, "#b06ac8")]), inputs: [6]),
+        (id: 9, op: MixColor, inputs: [5, 8, 7]),
+    ],
+    output: (color: 9, alpha: Const(65535)),
+)

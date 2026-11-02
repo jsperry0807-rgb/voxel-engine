@@ -13,6 +13,7 @@
 //! - [`scaleup`] — analytic 128³ projection from the measured 64³ terms (M1-40).
 
 pub mod edits;
+pub mod granularity;
 pub mod memory;
 pub mod probes;
 pub mod report;

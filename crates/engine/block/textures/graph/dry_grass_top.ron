@@ -1,0 +1,20 @@
+(
+    schema: 1,
+    key: "voxel:block/dry_grass_top",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 16, octaves: 3), inputs: []),
+        (id: 1, op: Stripes(axis: Y, count: 36, wobble: 14000), inputs: []),
+        (id: 2, op: Const(value: 28000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: ValueNoise(period: 64, octaves: 1), inputs: []),
+        (id: 5, op: Threshold(at: 60000), inputs: [4]),
+        (id: 6, op: Ramp(stops: [(0, "#6f7a37"), (65535, "#a4a45a")]), inputs: [3]),
+        (id: 7, op: Ramp(stops: [(0, "#8a8a48"), (65535, "#c2b86a")]), inputs: [4]),
+        (id: 8, op: MixColor, inputs: [6, 7, 5]),
+    ],
+    output: (color: 8, alpha: Const(65535)),
+)

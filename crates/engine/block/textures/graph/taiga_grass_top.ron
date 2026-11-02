@@ -1,0 +1,20 @@
+(
+    schema: 1,
+    key: "voxel:block/taiga_grass_top",
+    size: 256,
+    tiling: Both,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 16, octaves: 3), inputs: []),
+        (id: 1, op: Stripes(axis: Y, count: 28, wobble: 16000), inputs: []),
+        (id: 2, op: Const(value: 24000), inputs: []),
+        (id: 3, op: Mix, inputs: [0, 1, 2]),
+        (id: 4, op: ValueNoise(period: 64, octaves: 1), inputs: []),
+        (id: 5, op: Threshold(at: 61000), inputs: [4]),
+        (id: 6, op: Ramp(stops: [(0, "#2f5a34"), (65535, "#4a7a4a")]), inputs: [3]),
+        (id: 7, op: Ramp(stops: [(0, "#3a6640"), (65535, "#5c8a58")]), inputs: [4]),
+        (id: 8, op: MixColor, inputs: [6, 7, 5]),
+    ],
+    output: (color: 8, alpha: Const(65535)),
+)

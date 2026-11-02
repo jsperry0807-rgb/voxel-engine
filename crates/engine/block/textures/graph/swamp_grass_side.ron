@@ -1,0 +1,23 @@
+(
+    schema: 1,
+    key: "voxel:block/swamp_grass_side",
+    size: 256,
+    tiling: Horizontal,
+    alpha: Opaque,
+    seed: 0,
+    nodes: [
+        (id: 0, op: Fbm(period: 16, octaves: 3), inputs: []),
+        (id: 1, op: ValueNoise(period: 16, octaves: 2), inputs: []),
+        (id: 2, op: HBand(y0: 0, y1: 10000), inputs: []),
+        (id: 3, op: Warp(amount: 15000), inputs: [2, 1]),
+        (id: 4, op: Ramp(stops: [(0, "#3a3022"), (65535, "#5a4a30")]), inputs: [0]),
+        (id: 5, op: Ramp(stops: [(0, "#3a4a24"), (65535, "#5a6a34")]), inputs: [1]),
+        (id: 6, op: MixColor, inputs: [4, 5, 3]),
+        (id: 7, op: Worley(period: 8, mode: F1), inputs: []),
+        (id: 8, op: Remap(from_lo: 0, from_hi: 34000, to_lo: 65535, to_hi: 0), inputs: [7]),
+        (id: 9, op: Smoothstep(edge0: 30000, edge1: 56000), inputs: [8]),
+        (id: 10, op: Ramp(stops: [(0, "#2a2e1c"), (65535, "#3e4a2a")]), inputs: [7]),
+        (id: 11, op: MixColor, inputs: [6, 10, 9]),
+    ],
+    output: (color: 11, alpha: Const(65535)),
+)

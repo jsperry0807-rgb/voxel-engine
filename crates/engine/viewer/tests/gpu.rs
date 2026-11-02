@@ -22,7 +22,8 @@ struct TestGpu {
 fn gpu() -> Option<&'static TestGpu> {
     static GPU: OnceLock<Option<TestGpu>> = OnceLock::new();
     GPU.get_or_init(|| {
-        let instance = wgpu::Instance::default();
+        let instance =
+            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
         let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
         let adapter = adapters
             .into_iter()
@@ -240,7 +241,7 @@ fn chunk_mesh_buffers_match_quad_count() {
         }
     }
     let mesh = naive_mesh(&volume);
-    let buffers = ChunkMesh::new(&gpu.device, &gpu.queue, &mesh).expect("non-empty mesh");
+    let buffers = ChunkMesh::new(&gpu.device, &mesh).expect("non-empty mesh");
 
     assert_eq!(buffers.quad_count(), mesh.quad_count());
     assert_eq!(buffers.vertex_count as usize, mesh.vertices.len());

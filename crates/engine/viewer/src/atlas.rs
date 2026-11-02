@@ -233,8 +233,9 @@ pub struct Atlas {
 impl Atlas {
     /// Loads `atlas-0.png` through `atlas-4.png` from `dir`.
     ///
-    /// This is the temporary local-development path for the baked `.temp`
-    /// atlas. The files are RGBA8 and each level must be the expected size.
+    /// This is the local texture-set path (for example
+    /// `assets/atlas/resourcepack`, written by `texgen bake-set`). The files
+    /// are RGBA8 and each level must be the expected size.
     pub fn load_dir(dir: &Path) -> Result<Self, AtlasLoadError> {
         let mut levels = Vec::with_capacity(MIP_LEVELS as usize);
         for level in 0..MIP_LEVELS {

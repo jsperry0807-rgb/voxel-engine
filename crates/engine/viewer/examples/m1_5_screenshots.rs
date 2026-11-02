@@ -32,7 +32,7 @@ use voxel_viewer::atlas::Atlas;
 use voxel_viewer::atlas_texture::AtlasTexture;
 use voxel_viewer::camera::{Camera, CameraUniform};
 use voxel_viewer::chunk_mesh::ChunkMesh;
-use voxel_viewer::chunk_render::VERTEX_LAYOUT;
+use voxel_viewer::chunk_render::NAIVE_VERTEX_LAYOUT;
 use voxel_viewer::depth::{DEPTH_FORMAT, DepthTarget};
 use voxel_viewer::naive_mesh::{Mesh, Quad, Vertex, mesh_face, naive_mesh};
 
@@ -416,7 +416,8 @@ fn block_corners(face: Face, [x, y, z]: [u16; 3], size: u16) -> [[u16; 3]; 4] {
 
 impl Gpu {
     fn new(root: &Path) -> Result<Self, Box<dyn Error>> {
-        let instance = wgpu::Instance::default();
+        let instance =
+            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
@@ -595,7 +596,7 @@ impl Gpu {
         variant: AtlasVariant,
         atlas: &wgpu::BindGroup,
     ) -> Result<Vec<u8>, Box<dyn Error>> {
-        let chunk = ChunkMesh::new(&self.device, &self.queue, mesh).ok_or("empty mesh")?;
+        let chunk = ChunkMesh::new(&self.device, mesh).ok_or("empty mesh")?;
         let camera_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("screenshot camera"),
             size: std::mem::size_of::<CameraUniform>() as u64,
@@ -742,7 +743,7 @@ impl Gpu {
                     module: &shader,
                     entry_point: Some("vs_main"),
                     compilation_options: Default::default(),
-                    buffers: &[Some(VERTEX_LAYOUT)],
+                    buffers: &[Some(NAIVE_VERTEX_LAYOUT)],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,

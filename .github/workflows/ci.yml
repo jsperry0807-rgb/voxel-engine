@@ -49,6 +49,8 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      # The optional ray-test occluder is feature-gated, so it needs its own pass.
+      - run: cargo clippy -p voxel-mesh --features raytest --all-targets -- -D warnings
 
   test:
     name: test
@@ -61,6 +63,39 @@ jobs:
       # GPU round-trips skip themselves when no adapter is available; the
       # layout and shader tests still run everywhere.
       - run: cargo test --workspace
+      - run: cargo test -p voxel-mesh --features raytest
+
+  goldens:
+    name: golden mesh fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      # The golden files are the frozen M2-11 mesh contract at both edges.
+      - run: cargo test -p voxel-mesh --test golden
+      - run: cargo test -p voxel-mesh --features chunk128 --test golden
+      # The worldgen goldens are the frozen M2.5-01 noise contract.
+      - run: cargo test -p voxel-worldgen noise
+      - run: cargo test -p voxel-worldgen macro_generator
+      # M2.5-05: the whole macro world hashes to a pinned value. Update the
+      # constant here and in the task docs when a field change is intentional.
+      - name: Full macro world hash
+        run: |
+          cargo run -p voxel-worldgen -- macro --seed 1 | tee target/macro-world.txt
+          grep -q 'world_hash=4a7fd7354f810b8f' target/macro-world.txt
+      - name: Checksum the frozen goldens
+        run: sha256sum crates/engine/mesh/tests/golden/*.txt > target/golden-sha256.txt
+      - name: Upload the frozen goldens
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4
+        with:
+          name: mesh-goldens
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            crates/engine/mesh/tests/golden/
+            target/golden-sha256.txt
 
   textures:
     name: texture pipeline

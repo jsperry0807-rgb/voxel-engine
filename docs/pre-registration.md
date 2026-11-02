@@ -86,3 +86,23 @@ expected value. M1 measures the real distribution before anything is cut.
 - Append a dated section: what changed, why, the old value, the new value.
 - Never edit or delete a frozen row.
 - An amendment made after a gate run invalidates that run; re-run and re-record.
+
+---
+
+## 7. Amendment 2026-10-31 — mesh row basis (M3-00)
+
+Row 6's basis changes from **76 B/quad** (16 B vertex + six `u16` indices) to
+**44 B/quad** (8 B packed vertex + six `u16` indices). The cap is unchanged:
+600 KiB at 64³, 2.4 MiB at 128³. The frozen rows are not edited.
+
+- 128³ Minimum measured: mesh p95 **2,115 KiB** (PASS), row 1 **2.98 GiB**
+  (PASS against 3.20 target and 4.80 hard fail).
+- 64³ Minimum measured: mesh p95 **536 KiB** (row 6 PASS) but row 1 **6.22 GiB**
+  (FAIL 4.80); after the M6-09a v1-pool removal it is 5.11 GiB (p95 of
+  total−pool) / 5.21 GiB (difference of p95s). **64³ is abandoned.**
+- The instanced-quad path failed Gate C (1.311×/1.381× indexed) and is not the
+  basis. The 32 B/quad 4-vertex strip is deferred to a separate spike.
+
+This amendment invalidates the 76 B M2/M3 row-6 comparison; the 44 B runs
+`20261031T181211Z-m3-packed-8b-128` and `20261031T181227Z-m3-packed-8b-64` are
+the basis.

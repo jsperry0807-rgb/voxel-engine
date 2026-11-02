@@ -1,0 +1,56 @@
+# M1 gate report (M1-39)
+
+**Gate:** **FAIL** — 9 pass, 1 fail, 2 not measured
+
+**Machine:** RTX 4060 reference — AMD Ryzen 5 7600, 6 cores / 12 threads, NVIDIA GeForce RTX 4060, 8188 MiB VRAM, 32 GiB RAM, 1920 × 1080, Linux (primary)
+
+**Host:** AMD Ryzen 5 7600 6-Core Processor / linux / x86_64 — reference host: yes; GPU probed: no
+
+**Profile:** `minimum` (gated)
+
+**Fixture:** `m2-128` (provisional) — provisional: yes
+
+**Generated:** unix 1793460430
+
+| # | Pre-registered row | Requirement | Measured | Margin | Result |
+|---|---|---|---|---|---|
+| 1 | VRAM budget for voxel data | ≤ 4.80 GiB hard fail (3.20 GiB target) | 3.29 GiB (p95 4.19 MiB × 805 chunks) | +1.50 GiB to hard fail | **PASS** |
+| 2 | Target loaded chunk count | N64 = 6,440 = 8 × N128; table predicted N64 = 6,432, N128 = 804 | N64 = 6,440 at 64³; N128 = 805 at 128³ equal volume | 0 chunks (equal-volume identity) | **PASS** |
+| 3 | SVDAG node budget/chunk | ≤ 1,500,000 nodes/chunk at 128³ | max 138,636 nodes/chunk (p95 138,636); 128³ build (128 voxels/edge) | +1,361,364 nodes | **PASS** |
+| 4 | Light volume/chunk | = 8,192 B/chunk at 128³ (512 cells) | 8,192 B/chunk (512 cells × 16 B); p50 8,192 B | 0 B | **PASS** |
+| 5 | Probe grid/chunk | = 512 probes = 6,144 B/chunk at 128³ | 512 probes/chunk, 6,144 B; 32,768 rays/full rebake | 0 B | **PASS** |
+| 6 | Mesh buffer/chunk | ≤ 2400 KiB/chunk at 128³ | p95 2519 KiB (max 2519 KiB); greedy estimate × 76 B | -119.4 KiB | **FAIL** |
+| 7 | Edit latency | p95 ≤ 8.00 ms | p95 8.136 µs (p50 4.889 µs, max 2.90 ms); 1,000 edits | 7.99 ms | **PASS** |
+| 8 | Probe-update budget | p95 ≤ 4.00 ms per edited chunk | p95 765.844 µs (p50 618.955 µs, max 3.93 ms); 1,000 edited chunks | 3.23 ms | **PASS** |
+| 9 | Culling granularity | ≤ 15% traversed-but-invisible | p95 0.00% (p50 0.00%, max 0.00%) over 100 poses | +15.00 pp | **PASS** |
+| 10 | Safety factor | hard fail = 4,913 MiB | 4,913 MiB = ceil(1.5 × 3,275 MiB) | 0 MiB | **PASS** |
+| 11 | Measurement dataset | real populated save | m2-128 (provisional; synthetic) | n/a | **NOT MEASURED** |
+| 12 | Fallback trigger | pre-registration §4 fallback order | rule 3 triggered by the measured rows | n/a | **NOT MEASURED** |
+
+## Row detail
+
+1. **VRAM budget for voxel data** — pre-registered: 40% of 8,188 MiB = 3,275 MiB; hard fail at 60% = 4,913 MiB. Source: gate memory (M1-35) + gate residency (M1-36). Projected from the measured p95 total per chunk; the max chunk (4.19 MiB) would project to 3.29 GiB. The target row is 3.20 GiB (-98.29 MiB), the hard-fail row is 4.80 GiB (+1.50 GiB). The gate uses p95 by pre-registration, not the mean, and does not apply the 1.5× factor a second time.
+2. **Target loaded chunk count** — pre-registered: Per profile and edge, table §2: N64 = 6,432, N128 = 804. Source: gate residency (M1-36). The gate asserts the frozen model's equal-volume identity, N64 = 8 × N128. The table's own N64/N128 are a prediction: measured 6,440 / 805 against 6,432 / 804 (deltas +8 / +1). Those deltas are the table's nearest-integer rounding and are reported, not folded back into the model. N64 feeds the memory projection.
+3. **SVDAG node budget/chunk** — pre-registered: 64³ ≤ 200,000; 128³ ≤ 1,500,000 unique nodes. Source: gate memory (M1-35). The node count is the banded internal-node arena (`dag_node_bytes / 8`), so it is a hard per-chunk cap, not a p95. The other edge's budget is pre-registered but not measured by this build; M1-40 supplies the 128³ projection before M1-42.
+4. **Light volume/chunk** — pre-registered: 64³: 64 cells = 1 KiB; 128³: 512 cells = 8 KiB. Source: gate memory (M1-35); ADR-004. One 16 B cell per block, fixed by the compiled chunk edge. The 128³ value is the frozen pre-registration target and is not built in M1. This is an invariant of the memory model, which charges exactly this volume; a resident `LightState` also allocates propagation scratch, which this gate does not measure.
+5. **Probe grid/chunk** — pre-registered: 64³: 64 probes = 768 B; 128³: 512 probes = 6 KiB. Source: gate probes (M1-38) + gate memory (M1-35); ADR-005. One 12 B SH4 RGB probe per block at the near LOD. The update row measures the latency; this row checks the fixed grid and the byte volume the model charges, which is an invariant rather than a resident allocation. The 128³ value is pre-registered, not built in M1.
+6. **Mesh buffer/chunk** — pre-registered: 64³: 150–600 KB; 128³: 600 KB–2.4 MB. Source: gate memory (M1-35); M1-31 reference mesher. The estimate is greedy quads × 76 B and excludes vertex/index buffer overhead. The predicted lower bound is 150 KiB; a lower estimate is not a failure, but it is not a measured GPU buffer either. The gate uses p95 and reports max separately.
+7. **Edit latency** — pre-registered: p95 ≤ 8 ms (consolidate + upload + fence + flip + dirty light). Source: gate edits (M1-37). Fixed = upload + fence + flip; dirty = COW + light. The fence and upload are the CPU side of the M4 protocol; the headless gate has no GPU device time, so this is a lower bound on a real device path, not a claim about GPU completion.
+8. **Probe-update budget** — pre-registered: p95 ≤ 4 ms per edited chunk. Source: gate probes (M1-38). Update = select + rebake + upload. Only probes whose rays reach the dirty voxel are rebaked; the upload is the CPU staging copy and excludes the device transfer and the M4 fence/flip.
+9. **Culling granularity** — pre-registered: ≤ 15% traversed-but-invisible at chunk boundaries @ max view. Source: gate granularity (M1-34 reference). Reference frustum traversal at block resolution against the M1-33 occlusion oracle, on the frozen save. The reference fill is conservative: a partly filled block is passable, so on this terrain save almost everything is reachable and a 0.00% result is non-discriminating. It is the baseline the M5 production culler must beat; a missed reference-visible block would be a correctness failure, not granularity.
+10. **Safety factor** — pre-registered: 1.5× on the memory budget. Source: pre-registration §3; performance-targets §1.1. This is an invariant on the frozen budget, not a second measurement. The factor survives hardware changes because the fraction (40%/60%) does; applying it twice would make the gate stricter than the pre-registration.
+11. **Measurement dataset** — pre-registered: Real populated save; median, p95, max per chunk. Source: gate memory fixture (M1-28/M1-35). Provisional until the first real save. This world is synthetic: it exercises the shape of a save (terrain, caves, overhangs, structures and mixed materials) but was not produced by gameplay, by docs/worldgen-design.md, or by the save path on the reference machine. Its byte sizes, material histograms and distributions are illustrative only and must not be quoted as gate results (M1-35, M1-37) until a real save is captured and this fixture is re-frozen. The distributions are measured (p50/p95/max per chunk), but the dataset is not admissible as the M1 gate result until a real populated save replaces it.
+12. **Fallback trigger** — pre-registered: See §4; pre-registered; no renegotiation inside M1. Source: pre-registration §4. Rule 3: a voxel-memory row failed at 128³. Apply the pre-registered sacrifice order: mesh compression, then near radius, then vertical shell. Never shrink the far clip below 8 km.
+
+## Fallback
+
+Rule 3: a voxel-memory row failed at 128³. Apply the pre-registered sacrifice order: mesh compression, then near radius, then vertical shell. Never shrink the far clip below 8 km.
+
+## Notes
+
+- The twelve rows are the frozen table in docs/pre-registration.md §3. Every verdict is computed from a measured value, a checked invariant, or is not_measured; no row is typed PASS. A row the M1-35…M1-38 harnesses do not measure is NOT MEASURED, not green.
+- The memory projection is the measured p95 per-chunk total multiplied by the loaded chunk count at the edge this build uses. It applies the frozen 60% hard-fail line (4,913 MiB); the 1.5× safety factor is already inside that line, so it is not applied twice.
+- The headless gate does not open a wgpu adapter. GPU identity is quoted from docs/reference-machine.md and is not re-probed; the host CPU, OS and architecture are read from the running process.
+- The fixture is provisional until the first real save. Its distributions are a rehearsal for the gate and must not be quoted as the M1 result; the dataset row stays not measured until a real save replaces it.
+- Culling granularity is measured by the M1-34 reference over 100 poses on the frozen save. The reference traversal is frustum-only, so its ratio is the baseline the M5 production occlusion culler must beat.
+- The fallback is computed from the measured rows with the pre-registration §4 order. It is a preview, not a renegotiation of any threshold.
