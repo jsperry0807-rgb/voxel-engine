@@ -92,7 +92,11 @@ binding number is made in the spec and the pre-registration, never only in a tas
   [`m2.5-16-overhangs.md`](m2.5-16-overhangs.md). `M2.5-17` added the
   depth-tiered ore veins — coal, iron, gold and diamond, with no surface gems
   and connected capsules — at 1.0% ore by volume; see
-  [`m2.5-17-ores.md`](m2.5-17-ores.md). Landmark anchors (`M2.5-18`) are next.
+  [`m2.5-17-ores.md`](m2.5-17-ores.md). `M2.5-18` added one terrain-fitted
+  landmark per 32 km cell (massif, canyon, volcano, grove, monolith/arch) and
+  the `map --landmarks` distribution dump; see
+  [`m2.5-18-landmarks.md`](m2.5-18-landmarks.md). Structure anchors
+  (`M2.5-19`) are next.
 
 ## Tools
 
