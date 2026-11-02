@@ -19,12 +19,30 @@
           "catalog": 30000,
           "execution": 600000
         }
+      },
+      "mempalace": {
+        "type": "local",
+        "command": [
+          "/home/jace/.local/bin/mempalace-mcp",
+          "--palace",
+          "/home/jace/.mempalace/palace"
+        ],
+        "timeout": {
+          "startup": 180000,
+          "catalog": 60000,
+          "execution": 120000
+        }
       }
     }
   },
   "permissions": [
     {
       "action": "texgen_*",
+      "resource": "*",
+      "effect": "allow"
+    },
+    {
+      "action": "mempalace_*",
       "resource": "*",
       "effect": "allow"
     }
