@@ -98,8 +98,11 @@ binding number is made in the spec and the pre-registration, never only in a tas
   [`m2.5-18-landmarks.md`](m2.5-18-landmarks.md). `M2.5-19` added 2 km
   structure anchors (90.3% of cells empty) and terrain-fitted ruin, tower,
   dungeon and bridge prefabs with no floating foundations; see
-  [`m2.5-19-structures.md`](m2.5-19-structures.md). Cross-chunk feature
-  determinism (`M2.5-20`) is next.
+  [`m2.5-19-structures.md`](m2.5-19-structures.md). `M2.5-20` added the
+  cross-chunk harness: 1,000 structure stamps and 1,000 tree fixtures are cut
+  at a border, rebuilt from both sides with an apron, and compared byte for
+  byte; see [`m2.5-20-cross-chunk.md`](m2.5-20-cross-chunk.md). Flora
+  (`M2.5-21`) is next.
 
 ## Tools
 
