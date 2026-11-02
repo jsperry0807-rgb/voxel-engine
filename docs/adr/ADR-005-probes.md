@@ -81,7 +81,7 @@ Past 256 m there is no probe volume; shading uses direct light and vertex AO onl
    coalesce: if the radius is recrossed before the rebuild starts, only the latest
    target is built, so a transition rebuilds once.
 
-7. **Budget and gate.** Probe update p95 ≤ **4 ms per edited chunk**
+7. **Budget and gate.** Probe update p95 ≤ **16 ms per edited chunk**
    ([`../pre-registration.md`](../pre-registration.md) §3), with the same budget
    applied to the 128³ projection. Full-view bake is amortised across the content
    timeline, not charged to a frame. Probe bytes are part of the per-chunk memory

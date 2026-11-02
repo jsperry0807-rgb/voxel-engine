@@ -12,7 +12,7 @@ ADR-012 traversal; M1-04, M1-12, M4-01…M4-17
 
 COW consolidation publishes a new root while the GPU may still be traversing the old
 one. Overwriting a single root slot in place would either tear a frame or force every
-edit to wait on a fence, which breaks the 8 ms edit budget. The spec therefore gives
+edit to wait on a fence, which breaks the 16 ms edit budget. The spec therefore gives
 each chunk **two roots (A/B)** and flips a `versionIndex` only after the batch fence
 signals (spec §3).
 

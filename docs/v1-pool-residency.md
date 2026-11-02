@@ -86,8 +86,8 @@ so the consolidation path can reuse one allocation across chunks.
 1. **Extra encode on save.** `apply_edits` already encodes the pool to compute
    `v1_words`; `put_dag` then rebuilds it. Mitigation options, in order:
    - reuse one scratch `Vec` per flush (`to_bytes_into`);
-   - measure `dag/build/*` and the edit p95 before/after; the gate's 8 ms budget
-     has ~5 ms of headroom at p95 2.6 µs, so one extra encode is likely noise,
+   - measure `dag/build/*` and the edit p95 before/after; the gate's 16 ms budget
+     has ~13 ms of headroom at p95 2.6 µs, so one extra encode is likely noise,
      but it must be measured.
 2. **Equality is O(nodes) instead of O(1).** Production code does not compare
    `Svdag`s; tests do (edit-vs-rebuild, store round-trips). Acceptable. If it

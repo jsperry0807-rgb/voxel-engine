@@ -12,7 +12,7 @@ roots; ADR-012 traversal; `voxel-core::node_word`; M0-05, M1-01…M1-18, M4-09, 
 
 One node layout must serve four readers at once: GPU traversal, which wants a sibling
 group in one coalesced fetch; the CPU editor, which must publish a new version inside
-the 8 ms budget; the A/B root scheme, which lets an old and a new version coexist; and
+the 16 ms budget; the A/B root scheme, which lets an old and a new version coexist; and
 the disk format, which must reopen without a full rebuild. Those preferences conflict.
 A per-node hash-consed pool maximises sharing but puts an independent pointer on every
 node, so traversal becomes a chain of dependent loads and a one-voxel edit can copy

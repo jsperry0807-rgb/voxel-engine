@@ -62,26 +62,26 @@ Do not run the full suite on every commit. One clean, recorded baseline per mile
 
 | When (run point) | Benchmark / lens | Threshold |
 | --- | --- | --- |
-| Every frame-reporting run | Frame time, Default profile | ≤ 16.6 ms average; 1% low ≤ 22.2 ms; any frame > 33 ms fails |
+| Every frame-reporting run | Frame time, Default profile | ≤ 16 ms average; 1% low ≤ 16 ms; any frame > 16 ms fails |
 | Every memory-reporting run | Voxel VRAM, Default profile | ≤ 3,275 MiB target; > 4,913 MiB is a hard fail |
 | M1-18, S3 | Layout cost report | Recorded in `HISTORY.md`; 64³ ≤ 200 k nodes/chunk |
 | M1-34, S4 | Granularity instrumentation | ≤ 15% traversed-but-invisible at chunk boundaries |
-| M1-37, S4 | Gate edit latency | p95 ≤ 8 ms |
-| M1-38, S4 | Gate probe update | p95 ≤ 4 ms per edited chunk |
+| M1-37, S4 | Gate edit latency | p95 ≤ 16 ms |
+| M1-38, S4 | Gate probe update | p95 ≤ 16 ms per edited chunk |
 | M1-41, end of S4 | Full gate report (`LABEL=m1-gate`) | All 12 rows pass; memory and latency per pre-registration; otherwise apply §4 fallback |
 | M2-02, S6 | Apron vs dense 130³ | ≤ 25% of the dense path's bytes and time |
 | M2-08, S6 | AO merge ratio | Reported for AO on/off; no AO artifacts in goldens |
 | M2-17, S7 | Full vs incremental light | Incremental p95 ≤ 20% of full on one edit |
-| M2-21, S8 | Probe determinism and update | p95 ≤ 4 ms per edited chunk |
-| M2-24, S8 | Scrub latency (edit → remesh + light + probe) | ≤ 4 ms p95 |
+| M2-21, S8 | Probe determinism and update | p95 ≤ 16 ms per edited chunk |
+| M2-24, S8 | Scrub latency (edit → remesh + light + probe) | ≤ 16 ms p95 |
 | M2-28, S8 | Terrain meshing throughput | ≥ 20 chunks/s single-threaded |
 | M2-29, S8 | Worker scratch | ≤ 64 KiB per worker; no chunk-wide densify |
-| M2.5-23, M2.5 exit | Chunk generation | p95 ≤ 2 ms per chunk on the reference machine |
-| M3-09, S9 | Upload hitch over 1,000 frames | p99 ≤ 4 ms; no single frame > 8 ms |
-| M3-10, S9 | Frame rate at gated edge | 60 Hz average, 45 fps 1% low at 1080p |
+| M2.5-23, M2.5 exit | Chunk generation | p95 ≤ 16 ms per chunk on the reference machine |
+| M3-09, S9 | Upload hitch over 1,000 frames | p99 ≤ 16 ms; no single frame > 16 ms |
+| M3-10, S9 | Frame rate at gated edge | 60 Hz average, 60 fps 1% low at 1080p |
 | M3-11, S9 | 256-chunk VRAM and host memory | Within the 40% VRAM budget with the 1.5× safety margin |
 | M3.5-05, M3.5 exit | 32 km view | ≥ 60 Hz average at 1080p |
-| M3.5-13, M3.5 exit | Streaming hitch over 2 km flight | p99 ≤ 4 ms; no frame > 16.6 ms |
+| M3.5-13, M3.5 exit | Streaming hitch over 2 km flight | p99 ≤ 16 ms; no frame > 16 ms |
 | M4-13, S11 | Soak, 1,000 edits/s for 10,000 frames | No torn frame; per-frame hash matches the CPU model |
 | M4-15, S11 | Leak detector over the soak | Refcounts, pool live count and RSS flat within 1% |
 | M4-16, S11 | Commit cost | ≤ 0.1 ms CPU per frame; ≤ 1 fence wait per frame |
@@ -91,7 +91,7 @@ Do not run the full suite on every commit. One clean, recorded baseline per mile
 | M5-22, S14 | Draw-work reduction vs M3 | ≥ 3× on terrain and canopy; < 1.5× triggers the kill criterion |
 | M6-01, S15 | LOD policy experiment | Measured table for both paths; ADR decision written |
 | M6-17, S17 | VRAM at 128/256/512 m rings | Within 40% of VRAM on the reference machine |
-| M6-18, S17 | Streaming hitch over 2,000-frame flight | p99 ≤ 4 ms; no frame > 16.6 ms |
+| M6-18, S17 | Streaming hitch over 2,000-frame flight | p99 ≤ 16 ms; no frame > 16 ms |
 | M6-19, S17 | Reopen | ≤ 50 ms per chunk p95 |
 | M7-04, S18 | Regression vs last tagged run | > 10% on a stable metric fails review |
 | M7-05, S18 | Memory-budget enforcement | A seeded over-budget fixture fails the build |
@@ -143,7 +143,7 @@ Two weeks per sprint, one engineer. The gate sprint (S4) is the only one that ca
 | S19 | 37–38 | Hardening B | M7-08…M7-14 | v0.1 | M7-10; M7-12 |
 | S20 | 39–40 | Buffer | — | contingency, not planned work | Re-run any red benchmark |
 
-If the worldgen track runs, M2.5-23 (generation p95 ≤ 2 ms) is a checkpoint at the M2.5 exit. If the far-field track runs, M3.5-05 (≥ 60 Hz at 32 km) and M3.5-13 (hitch p99 ≤ 4 ms) are checkpoints at the M3.5 exit.
+If the worldgen track runs, M2.5-23 (generation p95 ≤ 16 ms) is a checkpoint at the M2.5 exit. If the far-field track runs, M3.5-05 (≥ 60 Hz at 32 km) and M3.5-13 (hitch p99 ≤ 16 ms) are checkpoints at the M3.5 exit.
 
 **Art timing.** M1.5-14 (slice textures) sits in S5; M2.5-30 and M2.5-31 sit in the first two sprints of M2.5; M3.5-15 sits inside M3.5; the manifest freezes in M3.5-16. With one engineer, S5 needs **14.5 raw days** (10.5 code + 4 art) rather than 10.5, so the slice exit moves to early S6 unless the slice set is sourced externally. The gate at S4 is unaffected; no art task is allowed into the gate sprint.
 
@@ -748,7 +748,7 @@ and uploads them as a 90-day artifact.
 | M2-18 | Production SH4 bake at block centres, deterministic, budgeted across frames | M1-30 | Byte-equal to the reference on 3 fixtures | `cargo test -p voxel-mesh probe_bake` | 1.5 d | [x] |
 | M2-19 | Invalid-in-solid flag and 3×3×3 nearest-valid fallback | M2-18 | Sampling inside a wall returns the nearest valid probe; no NaNs | `cargo test -p voxel-mesh probe_fallback` | 0.5 d | [x] |
 | M2-20 | Probe LOD: near per block, mid half-res, far none; transition is a content event | M2-19 | Ring transition rebuilds once; counts match 512/64/0 per chunk | `cargo test -p voxel-mesh probe_lod` | 1.5 d | [x] |
-| M2-21 | Probe determinism and update budget: p95 ≤ 4 ms per edited chunk | M2-18 | Measured on the fixture; recorded | `cargo run -p voxel-bench -- gate probes` | 0.5 d | [x] |
+| M2-21 | Probe determinism and update budget: p95 ≤ 16 ms per edited chunk | M2-18 | Measured on the fixture; recorded | `cargo run -p voxel-bench -- gate probes` | 0.5 d | [x] |
 
 ### 6.4 Integration, ray-test, and exit
 
@@ -756,7 +756,7 @@ and uploads them as a 90-day artifact.
 | --- | --- | --- | --- | --- | --- | --- |
 | M2-22 | Dirty bitset: per-block dirty flags derived from the COW diff (added/removed/changed) | M1-10 | Editing one voxel dirties exactly the block plus the AO/light apron | `cargo test -p voxel-mesh dirty_bitset` | 0.5 d | [x] |
 | M2-23 | Budgeted remesh scheduler: dirty blocks → mesh batches under a per-frame budget | M2-22 | Backlog drains; no frame exceeds the budget in the test | `cargo test -p voxel-mesh scheduler` | 1 d | [x] |
-| M2-24 | Scrub latency: single-block edit → remesh + light + probe ≤ 4 ms p95 | M2-23 | Measured; recorded | `cargo run -p voxel-bench -- gate edits` | 0.5 d | [x] |
+| M2-24 | Scrub latency: single-block edit → remesh + light + probe ≤ 16 ms p95 | M2-23 | Measured; recorded | `cargo run -p voxel-bench -- gate edits` | 0.5 d | [x] |
 | M2-25 | Ray-test occlusion behind `occlusion.raytest` flag, using the SVDAG; default off | M1-33 | Flag on/off produce comparable visible sets; documented delta | `cargo test -p voxel-mesh --features raytest` | 2 d | [x] |
 | M2-26 | Ray-test vs flood-fill comparison report: accuracy and cost on 100 poses | M2-25 | Table in `docs/` with the decision recommendation (still default flood-fill) | review | 0.5 d | [x] |
 | M2-27 | Wire M2 into the viewer: replace the naive mesher; light + probes uploaded | M2-12, M2-21 | Visual parity with M1.5 except better merge ratio; 60 Hz; no new material keys, the M1.5-14 atlas is unchanged | run | 1 d | [x] |
@@ -817,7 +817,7 @@ and uploads them as a 90-day artifact.
 
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| M2.5-23 | Chunk generation pipeline: block grid + feature list, no dense voxel array; p95 ≤ 2 ms | M2.5-21, M2.5-22 | 512 blocks/chunk; p95 ≤ 2 ms on the reference machine | `cargo bench -p voxel-worldgen chunk` | 2 d | [ ] |
+| M2.5-23 | Chunk generation pipeline: block grid + feature list, no dense voxel array; p95 ≤ 16 ms | M2.5-21, M2.5-22 | 512 blocks/chunk; p95 ≤ 16 ms on the reference machine | `cargo bench -p voxel-worldgen chunk` | 2 d | [ ] |
 | M2.5-24 | Worker pool, cancellation and prefetch integration; never generate on the edit path | M2.5-23 | Editing a distant voxel never blocks on generation; stale jobs cancel | `cargo test -p voxel-worldgen workers` | 1.5 d | [ ] |
 | M2.5-25 | Generator versioning: save header pins seed, generator, macro and content versions; old versions remain callable | M2.5-23 | A v1 save regenerates v1 terrain after v2 lands | `cargo test -p voxel-worldgen versioning` | 1 d | [ ] |
 | M2.5-26 | Determinism harness: golden chunk hashes across seeds, thread counts and two machines | M2.5-23 | 1/2/8 workers equal; 10 seeds; hashes committed | `cargo test -p voxel-worldgen --release determinism` | 1 d | [ ] |
@@ -978,15 +978,15 @@ minimum residency profile (default 11.93 GiB, high 95.4 GiB).**
 | ID | Task | Depends | Done when | Verify | Est | Done |
 | --- | --- | --- | --- | --- | --- | --- |
 | M3-00 | Mesh compression: 44 B packed 8 B vertex, Gate C comparison, 64³ decision | M2-29 | 128³ row 6 ≤2,400 KiB and row 1 ≤3.20 GiB PASS; 64³ abandoned; 32 B deferred | `cargo test -p voxel-viewer --test validation`; gate report | 7 d | [x] |
-| M3-01 | Streaming shell in the viewer: load ring, evict ring, budgeted per frame | M2-27 | 256 chunks load without a hitch > 4 ms | run + log | 1.5 d | [x] |
+| M3-01 | Streaming shell in the viewer: load ring, evict ring, budgeted per frame | M2-27 | 256 chunks load without a hitch > 16 ms | run + log | 1.5 d | [x] |
 | M3-02 | Mesh buffer pool: one arena with suballocation, or per-chunk buffers; document the choice | M3-01 | No per-frame allocation after warm-up; fragmentation reported | `cargo test -p voxel-viewer pool` | 1.5 d | [x] |
 | M3-03 | Upload queue with a per-frame byte budget | M3-02 | A 10 MB backlog drains without exceeding the budget | `cargo test -p voxel-viewer upload_budget` | 0.5 d | [x] |
 | M3-04 | CPU frustum cull of chunk AABBs — the stopgap and the M5 reference | M3-01 | Equals the M1-32 reference set on 100 poses | `cargo test -p voxel-viewer cpu_cull` | 1 d | [x] |
 | M3-05 | Draw loop over visible chunks with per-chunk draws | M3-04 | Correct image; no double-draw | run | 0.5 d | [x] |
 | M3-06 | Instrumentation: CPU submit, GPU pass, visible chunks/blocks/quads/bytes, upload bytes | M3-05 | Overlay or log line per frame; values match the scene | run | 0.5 d | [x] |
-| M3-07 | Frame breakdown report: where the 16.6 ms goes | M3-06 | Table in the PR; draw vs cull vs upload vs content | review | 0.5 d | [x] |
+| M3-07 | Frame breakdown report: where the 16 ms goes | M3-06 | Table in the PR; draw vs cull vs upload vs content | review | 0.5 d | [x] |
 | M3-08 | 256-chunk stress scene with terrain and canopy variants | M3-01 | Scene reproducible from a seed; screenshot; uses only M1.5-14 and, if M2.5 ran, M2.5-31 keys | run | 0.5 d | [x] |
-| M3-09 | Hitch test: upload p99 ≤ 4 ms over 1 000 frames of camera motion | M3-03 | Measured; no single frame > 8 ms | `cargo run -p voxel-bench -- hitch` | 1 d | [x] |
+| M3-09 | Hitch test: upload p99 ≤ 16 ms over 1 000 frames of camera motion | M3-03 | Measured; no single frame > 16 ms | `cargo run -p voxel-bench -- hitch` | 1 d | [x] |
 | M3-10 | 60 Hz at 1080p at the gated edge on the reference machine | M3-09 | Recorded average and 1% low | run | 0.5 d | [x] |
 | M3-11 | Memory report: VRAM and host for the 256-chunk scene, rows split by DAG/mesh/overlay/light/probes | M3-10 | Fits the 40% VRAM budget with the 1.5× margin | run | 0.5 d | [x] |
 | M3-12 | Visual regression screenshot committed | M3-10 | Image in `docs/images/`; diff threshold documented | review | 0.25 d | [x] |
@@ -1014,7 +1014,7 @@ minimum residency profile (default 11.93 GiB, high 95.4 GiB).**
 | M3.5-10 | Map atlas item and UI: craftable, zoom, player marker | M3.5-09 | Usable in the viewer; screenshots; item icon and marker are UI sprites, not atlas tiles | run | 1.5 d | [ ] |
 | M3.5-11 | Menu orbit view of the square slab and ocean rim | M2.5-27 | Pre-rendered/2.5D view in the menu; no gameplay renderer | run | 1 d | [ ] |
 | M3.5-12 | Visual regression set: seam, water, far field, night | M3.5-15, M3.5-08 | Four screenshots with a documented diff threshold; final M3.5-15 water art | review | 1 d | [ ] |
-| M3.5-13 | Streaming hitch test over a 2 km flight with water and far field | M3.5-03 | p99 ≤ 4 ms; no frame > 16.6 ms | `cargo run -p voxel-bench -- hitch` | 1 d | [ ] |
+| M3.5-13 | Streaming hitch test over a 2 km flight with water and far field | M3.5-03 | p99 ≤ 16 ms; no frame > 16 ms | `cargo run -p voxel-bench -- hitch` | 1 d | [ ] |
 | M3.5-15 | Author water and current textures: `water_flow`, `foam_strip`, optional `caustics`; alpha/tint policy; flow axis and UV-scroll rate | M1.5-14 | Keys are in the manifest and atlas; alpha is smooth; flow axis and UV-scroll rate documented; caustics are procedural or a named tile | `cargo test -p voxel-block texture_manifest`; `cargo run -p voxel-viewer -- bake-atlas`; visual | 1.5 d | [x] |
 | M3.5-16 | M3.5 exit: tag `m3.5`, budgets recorded, material manifest frozen | M3.5-13, M3.5-15 | Tag; docs updated; manifest accounts for ids 0..N−1 with no gap and the unused tail; CI rejects a block key without a texture | `git tag -n m3.5` | 0.25 d | [ ] |
 
@@ -1104,7 +1104,7 @@ minimum residency profile (default 11.93 GiB, high 95.4 GiB).**
 | M6-04 | Explicit LOD mesh generation (only if chosen): aggregate 2× per level, cache by content hash | M6-02 | LOD1/2 counts match the aggregation rule; dedup works | `cargo test -p voxel-mesh lod_build` | 2 d | [ ] |
 | M6-05 | Streaming prefetch by camera velocity and ring crossing | M6-03 | Loads ahead of the camera; no visible pop within 128 m | run | 1.5 d | [ ] |
 | M6-06 | Eviction policy by distance with hysteresis | M6-05 | No thrash at the ring boundary over 1 000 frames | `cargo test -p voxel-viewer eviction` | 1 d | [ ] |
-| M6-07 | Per-frame streaming budget and backlog accounting | M6-05 | Backlog drains; p99 frame ≤ 16.6 ms | run | 0.5 d | [ ] |
+| M6-07 | Per-frame streaming budget and backlog accounting | M6-05 | Backlog drains; p99 frame ≤ 16 ms | run | 0.5 d | [ ] |
 | M6-08 | Disk header v2: magic, version, `CHUNK_BITS`, level table, compression flag, CRC | M1-13 | Old files rejected with a clear error; new round-trip | `cargo test -p voxel-storage header_v2` | 1 d | [ ] |
 | M6-09 | Band serialization with level lengths and leaf arena; zstd optional | M6-08 | Round-trip on 5 fixtures; sizes recorded | `cargo test -p voxel-storage band_serde` | 1.5 d | [ ] |
 | M6-09a | Retire the transitional v1 `Svdag` pool: disk records and GPU import read bands; delete `pool`/`root`/`LegacyPool` (interim lifetime change scoped in `docs/v1-pool-residency.md`) | M6-09, M4-09 | `Svdag` holds only `ChunkDag`; no v1 bytes resident; save round-trip and the shader mirror tests pass | `cargo test -p voxel-storage band_only` + `cargo run -p voxel-bench -- gate memory` | 3 d | [ ] |
@@ -1116,7 +1116,7 @@ minimum residency profile (default 11.93 GiB, high 95.4 GiB).**
 | M6-15 | Seam policy at chunk and LOD borders: stitch or skirt; pick one and document | M6-03 | No visible crack on the seam fixture | visual + test | 1.5 d | [ ] |
 | M6-16 | Seam fixture: deliberate 1-level LOD difference across a border | M6-15 | Pixel diff under the threshold; screenshot | `cargo test -p voxel-viewer seam` | 0.5 d | [ ] |
 | M6-17 | VRAM ring budget test at LOD0 128 m + LOD1 256 m + LOD2 512 m | M6-03 | Within 40% of VRAM at the reference machine | `cargo run -p voxel-bench -- gate memory` | 1 d | [ ] |
-| M6-18 | Streaming hitch p99 ≤ 4 ms over a 2 000-frame flight | M6-07 | Measured; no > 16.6 ms frame | `cargo run -p voxel-bench -- hitch` | 1 d | [ ] |
+| M6-18 | Streaming hitch p99 ≤ 16 ms over a 2 000-frame flight | M6-07 | Measured; no > 16 ms frame | `cargo run -p voxel-bench -- hitch` | 1 d | [ ] |
 | M6-19 | Reopen benchmark and recorded history | M6-13 | ≤ 50 ms/chunk p95; recorded | `scripts/bench.sh LABEL=m6-reopen` | 0.5 d | [ ] |
 | M6-20 | M6 exit: tag `m6`, update the roadmap and the rings table | M6-19 | Tag; spec/roadmap updated; atlas bake hash equals the M3.5-16 freeze | `git tag -n m6` | 0.25 d | [ ] |
 

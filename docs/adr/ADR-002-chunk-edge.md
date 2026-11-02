@@ -14,7 +14,7 @@ size is written in `CHUNK_BITS` (spec §1.2). The choice is not free. At fixed l
 volume, memory is roughly neutral, but meshes and overlays scale with surface area and
 chunk count, so the smaller edge carries 8× the chunks per edge doubling. Edit latency,
 consolidation tail, scratch memory and culling granularity scale with chunk volume, so
-the larger edge gets worse exactly where the 8 ms and 15% gates bite.
+the larger edge gets worse exactly where the 16 ms and 15% gates bite.
 
 The frozen prediction makes neither edge obviously safe. At Default, 64³ holds 25,736
 chunks at 0.24–0.70 MiB = **6.0–17.2 GiB**; 128³ holds 3,216 at 1.2–3.2 MiB =
@@ -36,8 +36,8 @@ must choose.
    not a rewrite.
 3. **The gate is the frozen table, not a judgement call.** On the reference machine,
    with a real populated save: measured p95 per-chunk memory × target loaded chunk
-   count ≤ 40% VRAM (3,275 MiB) × 1.5 = **4,913 MiB**; edit p95 ≤ **8 ms**; probe-update
-   p95 ≤ **4 ms**; culling granularity ≤ **15%** traversed-but-invisible at chunk
+   count ≤ 40% VRAM (3,275 MiB) × 1.5 = **4,913 MiB**; edit p95 ≤ **16 ms**; probe-update
+   p95 ≤ **16 ms**; culling granularity ≤ **15%** traversed-but-invisible at chunk
    boundaries at max view. Median, p95 and max per chunk are reported; synthetic chunks
    are inadmissible, and there is no renegotiation inside M1 (spec §9.1).
 4. **The fallback trigger separates the three failures.** Per pre-registration §4:

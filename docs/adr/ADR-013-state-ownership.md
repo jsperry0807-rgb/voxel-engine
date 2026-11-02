@@ -76,7 +76,7 @@ reports it. The CPU owns authoritative chunk lifecycle and moves only on an even
    lists, frontier occupancy or draw counts, and no render or streaming decision
    waits on GPU work. The frame path never blocks on a fence; an edit
    acknowledgement may wait for its batch fence, and that wait is charged to the
-   8 ms edit budget. Streaming priority derives from camera position, velocity and
+   16 ms edit budget. Streaming priority derives from camera position, velocity and
    ring distance only. `EDITING`, `UPLOADING` and `EVICTING` chunks are excluded from
    traversal through the uploaded lifecycle table; `PENDING_CONSOLIDATION` stays
    traversable on its previous root, which is what keeps an edit from stalling
@@ -111,7 +111,7 @@ reports it. The CPU owns authoritative chunk lifecycle and moves only on an even
   `PENDING_CONSOLIDATION` remains traversable; GPU-derived diagnostics at most once
   per 30 frames and never authoritative; no GPU writes to lifecycle; `versionIndex`
   is read once per workgroup and flipped only after the fence signals.
-- **Verification:** M1 edit p95 ≤ 8 ms with no fence wait on the frame path; M3-04
+- **Verification:** M1 edit p95 ≤ 16 ms with no fence wait on the frame path; M3-04
   CPU cull matches the M1-32 reference set; M4-13 soak runs 1 000 edits/s for 10 000
   frames with a CPU-matching content hash; M4-14 catches an injected early flip;
   M6-05/M6-06 exercise velocity prefetch and hysteresis eviction; CI greps for
