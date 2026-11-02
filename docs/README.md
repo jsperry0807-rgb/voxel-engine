@@ -86,7 +86,10 @@ binding number is made in the spec and the pre-registration, never only in a tas
   [`m2.5-14-caves.md`](m2.5-14-caves.md). `M2.5-15` made cave depth relative to
   the local surface and assigned aquifer/fungal/cavern/geothermal with the
   softmax, resolving every underground material key; see
-  [`m2.5-15-cave-depth.md`](m2.5-15-cave-depth.md). Overhangs (`M2.5-16`) are
+  [`m2.5-15-cave-depth.md`](m2.5-15-cave-depth.md). `M2.5-16` added the 3D
+  overhang density, occasional cell-hash arches and the support pass that
+  removes floating rock; see
+  [`m2.5-16-overhangs.md`](m2.5-16-overhangs.md). Ore placement (`M2.5-17`) is
   next.
 
 ## Tools
