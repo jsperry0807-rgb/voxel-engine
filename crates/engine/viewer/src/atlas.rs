@@ -1,10 +1,14 @@
-//! Material atlas construction: one 256×256 RGBA8 image in a 16×16 grid of
-//! 16×16 tiles.
+//! Material atlas construction: 16×16 tiles, one texel-pure mip chain.
 //!
 //! The layout is owned by [`voxel_core::atlas`] and re-exported here. The
-//! builder turns 256 tiles into the base image plus four mip levels. Mips are
-//! filtered **per tile**, never across tile boundaries, so every tile stays
-//! whole at every level and level 4 is exactly one texel per tile.
+//! committed atlas is 256×256 with 16×16 tiles; [`AtlasLayout`] can carry the
+//! same 16×16-slot model at 32², 64², 128² or 256² texels per tile for the
+//! runtime density option (`VOXEL_VIEWER_TILE`).
+//!
+//! The builder turns 256 tiles into the base image plus one mip level per
+//! halving. Mips are filtered **per tile**, never across tile boundaries, so
+//! every tile stays whole at every level and the deepest level is exactly one
+//! texel per tile. For the committed 16² layout that is:
 //!
 //! ```text
 //! level 0: 256×256  (16×16 texels per tile)
@@ -25,12 +29,13 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 pub use voxel_core::atlas::{
-    ATLAS_SIZE, MAX_MATERIALS, MAX_MIP, MIP_LEVELS, TILE_SIZE, TILES_PER_EDGE, tile_origin, uv,
+    ATLAS_SIZE, AtlasLayout, MAX_MATERIALS, MAX_MIP, MIP_LEVELS, TILE_SIZE, TILE_SIZES,
+    TILES_PER_EDGE, is_tile_size, tile_origin, uv,
 };
 
-/// RGBA8 bytes in one 16×16 tile.
+/// RGBA8 bytes in one 16×16 tile (the committed density).
 pub const TILE_BYTES: usize = (TILE_SIZE * TILE_SIZE * 4) as usize;
-/// RGBA8 bytes in the base atlas image.
+/// RGBA8 bytes in the base 256×256 atlas image (the committed density).
 pub const ATLAS_BYTES: usize = (ATLAS_SIZE * ATLAS_SIZE * 4) as usize;
 
 /// A failure while assembling an atlas.
@@ -38,6 +43,8 @@ pub const ATLAS_BYTES: usize = (ATLAS_SIZE * ATLAS_SIZE * 4) as usize;
 pub enum AtlasError {
     /// The tile id is outside the 16×16 address space.
     TileOutOfRange(u16),
+    /// The tile pixels are not one tile of the requested density.
+    TileSize { expected: usize, actual: usize },
 }
 
 impl fmt::Display for AtlasError {
@@ -46,6 +53,10 @@ impl fmt::Display for AtlasError {
             Self::TileOutOfRange(tile) => {
                 write!(f, "tile {tile} is outside 0..{MAX_MATERIALS}")
             }
+            Self::TileSize { expected, actual } => write!(
+                f,
+                "tile is {actual} RGBA8 bytes, expected {expected} for this density"
+            ),
         }
     }
 }
@@ -125,24 +136,44 @@ struct AtlasHashFile {
 /// Every tile starts transparent, so a builder can fill only the materials it
 /// has art for. Tile ids are material ids.
 pub struct AtlasBuilder {
-    tiles: Vec<[u8; TILE_BYTES]>,
+    layout: AtlasLayout,
+    tiles: Vec<Vec<u8>>,
 }
 
 impl AtlasBuilder {
-    /// Creates a builder with 256 empty tiles.
+    /// Creates a builder with 256 empty tiles at the committed 16² density.
     pub fn new() -> Self {
+        Self::with_layout(AtlasLayout::DEFAULT)
+    }
+
+    /// Creates a builder with 256 empty tiles at `layout`'s density.
+    pub fn with_layout(layout: AtlasLayout) -> Self {
         Self {
-            tiles: vec![[0; TILE_BYTES]; MAX_MATERIALS as usize],
+            layout,
+            tiles: vec![vec![0; layout.tile_bytes()]; MAX_MATERIALS as usize],
         }
     }
 
-    /// Copies one 16×16 RGBA8 tile into `tile`.
+    /// The density this builder is filling.
+    pub fn layout(&self) -> AtlasLayout {
+        self.layout
+    }
+
+    /// Copies one `tile_size × tile_size` RGBA8 tile into `tile`.
     ///
     /// # Errors
     ///
     /// Returns [`AtlasError::TileOutOfRange`] when `tile` is not a slot in the
-    /// 16×16 grid.
-    pub fn set_tile(&mut self, tile: u16, pixels: &[u8; TILE_BYTES]) -> Result<(), AtlasError> {
+    /// 16×16 grid, or [`AtlasError::TileSize`] when `pixels` is not one tile of
+    /// this builder's density.
+    pub fn set_tile(&mut self, tile: u16, pixels: &[u8]) -> Result<(), AtlasError> {
+        let expected = self.layout.tile_bytes();
+        if pixels.len() != expected {
+            return Err(AtlasError::TileSize {
+                expected,
+                actual: pixels.len(),
+            });
+        }
         let slot = self
             .tiles
             .get_mut(tile as usize)
@@ -151,11 +182,13 @@ impl AtlasBuilder {
         Ok(())
     }
 
-    /// Builds the base image and its four mip levels.
+    /// Builds the base image and its per-tile mip levels.
     pub fn build(self) -> Atlas {
-        let mut levels: Vec<MipLevel> = (0..MIP_LEVELS)
+        let layout = self.layout;
+        let atlas_edge = layout.atlas_size();
+        let mut levels: Vec<MipLevel> = (0..layout.mip_count())
             .map(|level| {
-                let edge = ATLAS_SIZE >> level;
+                let edge = atlas_edge >> level;
                 MipLevel {
                     width: edge,
                     height: edge,
@@ -165,9 +198,9 @@ impl AtlasBuilder {
             .collect();
 
         for (tile, pixels) in self.tiles.iter().enumerate() {
-            let (origin_x, origin_y) = tile_origin(tile as u16);
-            let mut mip = pixels.to_vec();
-            let mut tile_edge = TILE_SIZE;
+            let (origin_x, origin_y) = layout.tile_origin(tile as u16);
+            let mut mip = pixels.clone();
+            let mut tile_edge = layout.tile_size();
             for (level, atlas) in levels.iter_mut().enumerate() {
                 blit(
                     atlas,
@@ -175,14 +208,14 @@ impl AtlasBuilder {
                     &mip,
                     tile_edge,
                 );
-                if level + 1 < MIP_LEVELS as usize {
+                if level + 1 < layout.mip_count() as usize {
                     mip = downsample(&mip, tile_edge);
                     tile_edge /= 2;
                 }
             }
         }
 
-        Atlas { levels }
+        Atlas { layout, levels }
     }
 }
 
@@ -201,6 +234,31 @@ pub struct MipLevel {
 }
 
 impl MipLevel {
+    /// Builds one level from a row-major RGBA8 buffer.
+    ///
+    /// Used by the viewer to adopt the texgraph bake without copying through a
+    /// PNG.
+    pub fn new(width: u32, height: u32, pixels: Vec<u8>) -> Result<Self, AtlasLoadError> {
+        let expected = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|texels| texels.checked_mul(4))
+            .unwrap_or(usize::MAX);
+        if pixels.len() != expected {
+            return Err(AtlasLoadError::Format {
+                path: PathBuf::from("atlas level"),
+                message: format!(
+                    "{width}x{height} needs {expected} RGBA8 bytes, got {}",
+                    pixels.len()
+                ),
+            });
+        }
+        Ok(Self {
+            width,
+            height,
+            pixels,
+        })
+    }
+
     pub fn width(&self) -> u32 {
         self.width
     }
@@ -224,30 +282,76 @@ impl MipLevel {
     }
 }
 
-/// The finished atlas: base image plus [`MIP_LEVELS`] - 1 mip levels.
+/// The finished atlas: base image plus the per-tile mip chain.
 #[derive(Clone, Debug)]
 pub struct Atlas {
+    layout: AtlasLayout,
     levels: Vec<MipLevel>,
 }
 
 impl Atlas {
-    /// Loads `atlas-0.png` through `atlas-4.png` from `dir`.
+    /// Wraps already-built levels for `layout`.
+    ///
+    /// The levels must start at `layout.atlas_size()` and halve each time, with
+    /// `layout.mip_count()` entries. This is the path the viewer uses for a
+    /// density built from the committed 256² sources.
+    pub fn from_levels(layout: AtlasLayout, levels: Vec<MipLevel>) -> Result<Self, AtlasLoadError> {
+        if levels.len() != layout.mip_count() as usize {
+            return Err(AtlasLoadError::Format {
+                path: PathBuf::from("atlas levels"),
+                message: format!(
+                    "{} levels for {}-texel tiles, expected {}",
+                    levels.len(),
+                    layout.tile_size(),
+                    layout.mip_count()
+                ),
+            });
+        }
+        let mut expected = layout.atlas_size();
+        for level in &levels {
+            if level.width != expected || level.height != expected {
+                return Err(AtlasLoadError::Format {
+                    path: PathBuf::from("atlas levels"),
+                    message: format!(
+                        "level is {}x{}, expected {expected}x{expected}",
+                        level.width, level.height
+                    ),
+                });
+            }
+            expected = (expected / 2).max(1);
+        }
+        Ok(Self { layout, levels })
+    }
+
+    /// Loads `atlas-0.png` through the last mip level from `dir`.
     ///
     /// This is the local texture-set path (for example
     /// `assets/atlas/resourcepack`, written by `texgen bake-set`). The files
-    /// are RGBA8 and each level must be the expected size.
+    /// are RGBA8 and each level must be the expected size. The density is read
+    /// from the base image, so a set baked at a larger tile still loads.
     pub fn load_dir(dir: &Path) -> Result<Self, AtlasLoadError> {
-        let mut levels = Vec::with_capacity(MIP_LEVELS as usize);
-        for level in 0..MIP_LEVELS {
+        let base = dir.join("atlas-0.png");
+        let (width, height, _) = decode_png(&base)?;
+        if width != height || width % TILES_PER_EDGE != 0 || !is_tile_size(width / TILES_PER_EDGE) {
+            return Err(AtlasLoadError::Format {
+                path: base,
+                message: format!(
+                    "{width}x{height} is not a square atlas of {TILES_PER_EDGE} tiles at one of {TILE_SIZES:?}"
+                ),
+            });
+        }
+        let layout = AtlasLayout::new(width / TILES_PER_EDGE);
+        let mut levels = Vec::with_capacity(layout.mip_count() as usize);
+        for level in 0..layout.mip_count() {
             let path = dir.join(format!("atlas-{level}.png"));
-            let expected = ATLAS_SIZE >> level;
+            let edge = level_edge(layout.atlas_size(), level);
             let (width, height, pixels) = decode_png(&path)?;
-            if width != expected || height != expected {
+            if width != edge || height != edge {
                 return Err(AtlasLoadError::Dimensions {
                     path,
                     width,
                     height,
-                    expected,
+                    expected: edge,
                 });
             }
             levels.push(MipLevel {
@@ -256,30 +360,34 @@ impl Atlas {
                 pixels,
             });
         }
-        Ok(Self { levels })
+        Self::from_levels(layout, levels)
     }
 
-    /// Loads the base `atlas.png` and regenerates the four per-tile mip
-    /// levels. The committed format stores only the base image.
+    /// Loads the base `atlas.png` and regenerates the per-tile mip levels.
+    ///
+    /// The committed format stores only the base image. The density follows the
+    /// image edge, so a 4096² atlas is accepted when it is a supported tile
+    /// size.
     pub fn load(path: &Path) -> Result<Self, AtlasLoadError> {
         let (width, height, pixels) = decode_png(path)?;
-        if width != ATLAS_SIZE || height != ATLAS_SIZE {
-            return Err(AtlasLoadError::Dimensions {
+        if width != height || width % TILES_PER_EDGE != 0 || !is_tile_size(width / TILES_PER_EDGE) {
+            return Err(AtlasLoadError::Format {
                 path: path.to_owned(),
-                width,
-                height,
-                expected: ATLAS_SIZE,
+                message: format!(
+                    "{width}x{height} is not a square atlas of {TILES_PER_EDGE} tiles at one of {TILE_SIZES:?}"
+                ),
             });
         }
-        let mut builder = AtlasBuilder::new();
+        let layout = AtlasLayout::new(width / TILES_PER_EDGE);
+        let tile_size = layout.tile_size() as usize;
+        let mut builder = AtlasBuilder::with_layout(layout);
+        let mut tile_pixels = vec![0u8; layout.tile_bytes()];
         for tile in 0..MAX_MATERIALS {
-            let (origin_x, origin_y) = tile_origin(tile as u16);
-            let mut tile_pixels = [0u8; TILE_BYTES];
-            for row in 0..TILE_SIZE as usize {
-                let source =
-                    ((origin_y as usize + row) * ATLAS_SIZE as usize + origin_x as usize) * 4;
-                tile_pixels[row * TILE_SIZE as usize * 4..(row + 1) * TILE_SIZE as usize * 4]
-                    .copy_from_slice(&pixels[source..source + TILE_SIZE as usize * 4]);
+            let (origin_x, origin_y) = layout.tile_origin(tile as u16);
+            for row in 0..tile_size {
+                let source = ((origin_y as usize + row) * width as usize + origin_x as usize) * 4;
+                tile_pixels[row * tile_size * 4..(row + 1) * tile_size * 4]
+                    .copy_from_slice(&pixels[source..source + tile_size * 4]);
             }
             builder
                 .set_tile(tile as u16, &tile_pixels)
@@ -301,6 +409,12 @@ impl Atlas {
             source,
         })?;
         let atlas = Self::load(path)?;
+        if atlas.tile_size() != TILE_SIZE {
+            return Err(AtlasLoadError::Hash(format!(
+                "{}: only the committed {TILE_SIZE}-texel atlas has a committed hash",
+                path.display()
+            )));
+        }
         let hash_path = path.with_file_name("atlas.hash.ron");
         let hash_text = fs::read_to_string(&hash_path).map_err(|source| AtlasLoadError::Io {
             path: hash_path.clone(),
@@ -370,7 +484,22 @@ impl Atlas {
         Ok(atlas)
     }
 
-    /// Number of levels including the base image; always [`MIP_LEVELS`].
+    /// The density this atlas was built at.
+    pub fn layout(&self) -> AtlasLayout {
+        self.layout
+    }
+
+    /// Texels per tile edge.
+    pub fn tile_size(&self) -> u32 {
+        self.layout.tile_size()
+    }
+
+    /// Texels per atlas edge (`16 × tile_size`).
+    pub fn atlas_size(&self) -> u32 {
+        self.layout.atlas_size()
+    }
+
+    /// Number of levels including the base image.
     pub fn mip_count(&self) -> u32 {
         self.levels.len() as u32
     }
@@ -380,7 +509,7 @@ impl Atlas {
         &self.levels
     }
 
-    /// One level, or `None` past [`MAX_MIP`].
+    /// One level, or `None` past [`AtlasLayout::max_mip`].
     pub fn level(&self, level: u32) -> Option<&MipLevel> {
         self.levels.get(level as usize)
     }
@@ -389,6 +518,11 @@ impl Atlas {
     pub fn byte_len(&self) -> usize {
         self.levels.iter().map(|level| level.pixels.len()).sum()
     }
+}
+
+/// Edge of mip level `level`, never below one texel.
+fn level_edge(atlas_edge: u32, level: u32) -> u32 {
+    (atlas_edge >> level).max(1)
 }
 
 fn decode_png(path: &Path) -> Result<(u32, u32, Vec<u8>), AtlasLoadError> {
@@ -579,6 +713,59 @@ mod tests {
         let atlas = Atlas::load_verified(&path).expect("committed atlas should verify");
         assert_eq!(atlas.mip_count(), MIP_LEVELS);
         assert_eq!(atlas.byte_len(), 349_184);
+    }
+
+    #[test]
+    fn density_layout_sets_the_atlas_edge_and_mip_count() {
+        let layout = AtlasLayout::new(64);
+        let atlas = AtlasBuilder::with_layout(layout).build();
+
+        assert_eq!(atlas.tile_size(), 64);
+        assert_eq!(atlas.atlas_size(), 1024);
+        assert_eq!(atlas.mip_count(), 7);
+        assert_eq!(atlas.layout(), layout);
+
+        let edges: Vec<u32> = atlas.levels().iter().map(MipLevel::width).collect();
+        assert_eq!(edges, [1024, 512, 256, 128, 64, 32, 16]);
+        assert_eq!(
+            atlas.byte_len(),
+            (1024 * 1024 + 512 * 512 + 256 * 256 + 128 * 128 + 64 * 64 + 32 * 32 + 16 * 16) * 4
+        );
+
+        let deepest = atlas.level(layout.max_mip()).unwrap();
+        for id in [0u16, 1, MAX_MATERIALS as u16 - 1] {
+            let (x, y) = layout.tile_origin(id);
+            assert_eq!(
+                deepest.texel(x >> layout.max_mip(), y >> layout.max_mip()),
+                Some([0, 0, 0, 0]),
+                "tile {id} deepest mip"
+            );
+        }
+    }
+
+    #[test]
+    fn set_tile_rejects_pixels_from_another_density() {
+        let mut builder = AtlasBuilder::with_layout(AtlasLayout::new(64));
+        assert_eq!(
+            builder.set_tile(0, &solid([1; 4])),
+            Err(AtlasError::TileSize {
+                expected: 64 * 64 * 4,
+                actual: TILE_BYTES,
+            })
+        );
+        let tile = vec![9u8; 64 * 64 * 4];
+        assert!(builder.set_tile(0, &tile).is_ok());
+    }
+
+    #[test]
+    fn from_levels_rejects_a_mismatched_chain() {
+        let layout = AtlasLayout::new(32);
+        let atlas = AtlasBuilder::with_layout(layout).build();
+        let levels = atlas.levels().to_vec();
+
+        assert!(Atlas::from_levels(layout, levels.clone()).is_ok());
+        assert!(Atlas::from_levels(AtlasLayout::new(16), levels.clone()).is_err());
+        assert!(Atlas::from_levels(layout, levels[..3].to_vec()).is_err());
     }
 
     #[test]

@@ -27,7 +27,9 @@
 //!
 //! `RUST_LOG` follows `env_logger` syntax. The default shows warnings from
 //! dependencies and informational messages from the viewer; for a quiet wgpu
-//! run use `RUST_LOG=wgpu_core=warn`.
+//! run use `RUST_LOG=wgpu_core=warn`. `VOXEL_VIEWER_TILE=16|32|64|128|256`
+//! picks the texels per 1 m face: 16 is the committed atlas, and larger values
+//! rebuild the same 16×16-slot atlas from the committed 256² sources.
 //!
 //! The viewer logs an average / 1%-low / max-hitch summary at `info` when it
 //! exits. Set `VOXEL_FRAME_PROFILE=1` to also log the per-second FPS line at
@@ -43,7 +45,7 @@ use std::time::{Duration, Instant};
 
 use glam::Vec3;
 use voxel_profiling::HITCH_NS;
-use voxel_viewer::atlas::Atlas;
+use voxel_viewer::atlas::{Atlas, AtlasLayout, MipLevel, TILE_SIZE, TILE_SIZES};
 use voxel_viewer::bake;
 use voxel_viewer::camera::Camera;
 use voxel_viewer::error::ViewerError;
@@ -213,85 +215,165 @@ fn report(error: &dyn Error) {
     }
 }
 
-/// Loads and verifies the committed atlas.
+/// The runtime tile density named by `VOXEL_VIEWER_TILE`.
+///
+/// Accepted values are 16, 32, 64, 128 and 256 texels per tile. The value is a
+/// tile edge, not an atlas edge: 256 means 256² texels per 1 m face, built from
+/// the committed 256² sources without any source loss. Unset or invalid means
+/// the committed 16-texel atlas, with a warning for invalid input.
+fn tile_layout_from_env() -> AtlasLayout {
+    let Some(value) = std::env::var_os("VOXEL_VIEWER_TILE") else {
+        return AtlasLayout::DEFAULT;
+    };
+    let value = value.to_string_lossy();
+    match AtlasLayout::parse(&value) {
+        Some(layout) => layout,
+        None => {
+            log::warn!(
+                "VOXEL_VIEWER_TILE={value:?} is not one of {TILE_SIZES:?}; using {}",
+                AtlasLayout::DEFAULT.tile_size()
+            );
+            AtlasLayout::DEFAULT
+        }
+    }
+}
+
+/// Builds a denser atlas from the committed 256² sources.
+///
+/// The sources and the manifest live in the repository, so this needs to run
+/// from a checkout (the same assumption the default relative atlas path
+/// already makes). Every source is hash-verified against `textures.ron` by the
+/// shared texgraph loader.
+fn build_dense_atlas(layout: AtlasLayout) -> Result<Atlas, ViewerError> {
+    let workspace = voxel_texgraph::pipeline::Workspace::locate().map_err(|error| {
+        ViewerError::Atlas(format!(
+            "VOXEL_VIEWER_TILE={} needs the committed texture sources: {error}; \
+             run the viewer from the repository, unset VOXEL_VIEWER_TILE, \
+             or pass 16 to use the committed atlas",
+            layout.tile_size()
+        ))
+    })?;
+    let levels = voxel_texgraph::bake::build_levels_at(&workspace, layout)
+        .map_err(|error| ViewerError::Atlas(format!("dense atlas bake failed: {error}")))?;
+    let levels = levels
+        .into_iter()
+        .map(|level| {
+            MipLevel::new(level.width, level.height, level.pixels)
+                .map_err(|error| ViewerError::Atlas(error.to_string()))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Atlas::from_levels(layout, levels)
+        .map_err(|error| ViewerError::Atlas(format!("dense atlas layout: {error}")))
+}
+
+/// The committed atlas path, relative to the repository root.
+const COMMITTED_ATLAS: &str = "crates/engine/viewer/assets/atlas/atlas.png";
+
+/// Loads and verifies the committed atlas, or builds the requested density.
 ///
 /// `VOXEL_VIEWER_ATLAS` may name either `atlas.png` or a directory. A
-/// directory that holds `atlas-0.png`…`atlas-4.png` is a local bake (for
-/// example `assets/atlas/resourcepack`) and is logged as unverified. The
-/// committed atlas is hash-verified.
-fn load_startup_atlas() -> Result<Atlas, ViewerError> {
-    let mut candidates = Vec::new();
+/// directory that holds `atlas-0.png`… is a local bake (for example
+/// `assets/atlas/resourcepack`) and is logged as unverified. The committed
+/// atlas is hash-verified. An explicit atlas path keeps its own density; the
+/// `VOXEL_VIEWER_TILE` override only rebuilds the committed Voxgen atlas.
+fn load_startup_atlas(layout: AtlasLayout) -> Result<Atlas, ViewerError> {
     if let Some(value) = std::env::var_os("VOXEL_VIEWER_ATLAS") {
-        candidates.push(PathBuf::from(value));
-    }
-    candidates.push(PathBuf::from("crates/engine/viewer/assets/atlas/atlas.png"));
-    for candidate in candidates {
-        if candidate.is_dir() && candidate.join("atlas-0.png").is_file() {
-            return match Atlas::load_dir(&candidate) {
-                Ok(atlas) => {
-                    log::warn!(
-                        "using local unverified atlas from {} ({} mips)",
-                        candidate.display(),
-                        atlas.mip_count()
-                    );
-                    Ok(atlas)
-                }
-                Err(error) => {
-                    log::error!(
-                        "temporary atlas load failed at {}: {error}",
-                        candidate.display()
-                    );
-                    Err(ViewerError::Atlas(error.to_string()))
-                }
-            };
+        let candidate = PathBuf::from(value);
+        if let Some(atlas) = load_atlas_path(&candidate, layout)? {
+            return Ok(atlas);
         }
-        let path = if candidate.is_dir() {
-            candidate.join("atlas.png")
-        } else {
-            candidate
-        };
-        if !path.is_file() {
-            continue;
-        }
-        // A custom standalone PNG or directory has no committed hash file;
-        // load it as a local, unverified atlas instead of failing startup.
-        let verified = path.with_file_name("atlas.hash.ron").is_file();
-        return if verified {
-            match Atlas::load_verified(&path) {
-                Ok(atlas) => {
-                    log::info!(
-                        "loaded verified atlas from {} ({} mips)",
-                        path.display(),
-                        atlas.mip_count()
-                    );
-                    Ok(atlas)
-                }
-                Err(error) => {
-                    log::error!("atlas verification failed at {}: {error}", path.display());
-                    Err(ViewerError::Atlas(error.to_string()))
-                }
-            }
-        } else {
-            match Atlas::load(&path) {
-                Ok(atlas) => {
-                    log::warn!(
-                        "using local unverified atlas from {} ({} mips)",
-                        path.display(),
-                        atlas.mip_count()
-                    );
-                    Ok(atlas)
-                }
-                Err(error) => {
-                    log::error!("atlas load failed at {}: {error}", path.display());
-                    Err(ViewerError::Atlas(error.to_string()))
-                }
-            }
-        };
+        log::warn!(
+            "VOXEL_VIEWER_ATLAS={} has no atlas; falling back",
+            candidate.display()
+        );
     }
-    log::error!("no committed atlas found at crates/engine/viewer/assets/atlas/atlas.png");
-    Err(ViewerError::Atlas(
-        "missing crates/engine/viewer/assets/atlas/atlas.png".to_owned(),
-    ))
+    if layout.tile_size() != TILE_SIZE {
+        log::info!(
+            "building {}-texel tiles from the committed 256² sources",
+            layout.tile_size()
+        );
+        let atlas = build_dense_atlas(layout)?;
+        log::info!(
+            "dense atlas: {}² ({:.1} MiB, {} mips)",
+            atlas.atlas_size(),
+            atlas.byte_len() as f64 / (1024.0 * 1024.0),
+            atlas.mip_count()
+        );
+        return Ok(atlas);
+    }
+    if let Some(atlas) = load_atlas_path(Path::new(COMMITTED_ATLAS), layout)? {
+        return Ok(atlas);
+    }
+    log::error!("no committed atlas found at {COMMITTED_ATLAS}");
+    Err(ViewerError::Atlas(format!("missing {COMMITTED_ATLAS}")))
+}
+
+/// Loads one atlas path, or `None` when the path holds no atlas.
+///
+/// A directory holding `atlas-0.png`… is a local bake; anything else is tried
+/// as a single `atlas.png` (or as a directory containing one).
+fn load_atlas_path(candidate: &Path, layout: AtlasLayout) -> Result<Option<Atlas>, ViewerError> {
+    if candidate.is_dir() && candidate.join("atlas-0.png").is_file() {
+        let atlas = Atlas::load_dir(candidate).map_err(|error| {
+            log::error!("atlas load failed at {}: {error}", candidate.display());
+            ViewerError::Atlas(error.to_string())
+        })?;
+        log::warn!(
+            "using local unverified atlas from {} ({} mips, {}-texel tiles)",
+            candidate.display(),
+            atlas.mip_count(),
+            atlas.tile_size()
+        );
+        warn_density_ignored(layout, atlas.tile_size());
+        return Ok(Some(atlas));
+    }
+    let path = if candidate.is_dir() {
+        candidate.join("atlas.png")
+    } else {
+        candidate.to_owned()
+    };
+    if !path.is_file() {
+        return Ok(None);
+    }
+    // A custom standalone PNG or directory has no committed hash file; load it
+    // as a local, unverified atlas instead of failing startup.
+    let atlas = if path.with_file_name("atlas.hash.ron").is_file() {
+        let atlas = Atlas::load_verified(&path).map_err(|error| {
+            log::error!("atlas verification failed at {}: {error}", path.display());
+            ViewerError::Atlas(error.to_string())
+        })?;
+        log::info!(
+            "loaded verified atlas from {} ({} mips, {}-texel tiles)",
+            path.display(),
+            atlas.mip_count(),
+            atlas.tile_size()
+        );
+        atlas
+    } else {
+        let atlas = Atlas::load(&path).map_err(|error| {
+            log::error!("atlas load failed at {}: {error}", path.display());
+            ViewerError::Atlas(error.to_string())
+        })?;
+        log::warn!(
+            "using local unverified atlas from {} ({} mips, {}-texel tiles)",
+            path.display(),
+            atlas.mip_count(),
+            atlas.tile_size()
+        );
+        warn_density_ignored(layout, atlas.tile_size());
+        atlas
+    };
+    Ok(Some(atlas))
+}
+
+/// Logs when an explicit atlas keeps a density other than the requested one.
+fn warn_density_ignored(requested: AtlasLayout, actual: u32) {
+    if requested.tile_size() != actual {
+        log::warn!(
+            "VOXEL_VIEWER_TILE={} is ignored: the selected atlas has {actual}-texel tiles",
+            requested.tile_size()
+        );
+    }
 }
 
 /// Creates the event loop and runs the viewer until the window closes.
@@ -904,7 +986,7 @@ impl ApplicationHandler for Viewer {
             self.camera
                 .set_aspect(size.width as f32 / size.height as f32);
         }
-        let atlas = match load_startup_atlas() {
+        let atlas = match load_startup_atlas(tile_layout_from_env()) {
             Ok(atlas) => atlas,
             Err(error) => {
                 self.error = Some(error);
@@ -912,6 +994,11 @@ impl ApplicationHandler for Viewer {
                 return;
             }
         };
+        // Put the density in the title so a launch can be checked at a glance,
+        // without reading the log: the value is the atlas that actually loaded,
+        // not the one that was requested.
+        window.set_title(&format!("{TITLE} · {}-texel tiles", atlas.tile_size()));
+        log::info!("texture density: {}-texel tiles", atlas.tile_size());
         match Gpu::new(window.clone(), event_loop.owned_display_handle(), atlas) {
             Ok(gpu) => {
                 self.window = Some(window.clone());

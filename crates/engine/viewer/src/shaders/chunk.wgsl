@@ -6,7 +6,8 @@
 //
 // Tile texels are fetched per fragment from the face-local position inside a
 // 16-voxel block face, not from a vertex attribute. A 1 m face is therefore
-// exactly one 16x16 atlas tile, with one tile texel per voxel face.
+// exactly one atlas tile; the tile edge comes from the bound atlas, so the
+// 16-texel default and the 32/64/128/256 runtime densities share this code.
 //
 // The AO array carries the quad's four corner values (a greedy quad's merge key
 // requires identical values across the rectangle); the vertex shader selects its
@@ -129,12 +130,18 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     // Fetch the exact tile texel. Sampling the atlas with a sampler at a tile
     // edge bleeds the neighbouring material into the last texel (white snow
     // below grass, dark stone elsewhere), which reads as a grid line.
+    //
+    // The atlas is a 16x16 grid of square tiles, so the tile edge is the atlas
+    // edge divided by 16. At 16 texels the face reads one texel per voxel; each
+    // density step doubles both the tile edge and the texels per voxel.
+    let tile = textureDimensions(atlas, 0).x / 16u;
+    let texels_per_voxel = f32(tile) / 16.0;
     let texel = vec2<u32>(
-        u32(clamp(face_uv.x, 0.0, 15.999)),
-        u32(clamp(face_uv.y, 0.0, 15.999)),
+        u32(clamp(floor(face_uv.x * texels_per_voxel), 0.0, f32(tile - 1u))),
+        u32(clamp(floor(face_uv.y * texels_per_voxel), 0.0, f32(tile - 1u))),
     );
     let tile_origin =
-        vec2<u32>(input.material % 16u, input.material / 16u) * 16u;
+        vec2<u32>(input.material % 16u, input.material / 16u) * tile;
     let texel_color = textureLoad(atlas, vec2<i32>(tile_origin + texel), 0);
 
     // Block light is stored one cell per 1 m block. A nearest-cell lookup
