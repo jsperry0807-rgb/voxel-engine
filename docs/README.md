@@ -101,8 +101,10 @@ binding number is made in the spec and the pre-registration, never only in a tas
   [`m2.5-19-structures.md`](m2.5-19-structures.md). `M2.5-20` added the
   cross-chunk harness: 1,000 structure stamps and 1,000 tree fixtures are cut
   at a border, rebuilt from both sides with an apron, and compared byte for
-  byte; see [`m2.5-20-cross-chunk.md`](m2.5-20-cross-chunk.md). Flora
-  (`M2.5-21`) is next.
+  byte; see [`m2.5-20-cross-chunk.md`](m2.5-20-cross-chunk.md). `M2.5-21` added
+  flora: biome-density plants, 8 m tree cells, seam-only birch/ecotone scrub
+  and 30–60 m giants on a 32 km grid; see
+  [`m2.5-21-flora.md`](m2.5-21-flora.md). Surface detail (`M2.5-22`) is next.
 
 ## Tools
 

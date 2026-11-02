@@ -810,7 +810,7 @@ and uploads them as a 90-day artifact.
 | M2.5-18 | Landmark anchors every 20–50 km: massif, canyon/falls, volcano, giant grove, monolith/arch | M2.5-05 | One landmark per cell; type fits terrain; map dump shows distribution | `cargo run -p voxel-worldgen -- map --landmarks` | 2 d | [x] |
 | M2.5-19 | Structure anchors on a 1–4 km jittered grid; prefab stamps for ruins, towers, dungeons, bridges/roads | M2.5-31, M2.5-18 | Stamps fit terrain; no floating foundations; most cells empty; every prefab uses M2.5-31 keys | `cargo test -p voxel-worldgen structures` | 2.5 d | [x] |
 | M2.5-20 | Cross-chunk feature determinism: a tree, structure or river crossing a border is identical from both sides | M2.5-19 | Byte-equal overlap from two adjacent chunks; 1,000 sampled features | `cargo test -p voxel-worldgen cross_chunk` | 1.5 d | [x] |
-| M2.5-21 | Flora placement: species, moderate density, biome-dependent, ecotones, rare giants | M2.5-31, M2.5-20 | Birch/scrub only at seams; giants 1 per 20–50 km; every species key comes from M2.5-31; density tests | `cargo test -p voxel-worldgen flora` | 1.5 d | [ ] |
+| M2.5-21 | Flora placement: species, moderate density, biome-dependent, ecotones, rare giants | M2.5-31, M2.5-20 | Birch/scrub only at seams; giants 1 per 20–50 km; every species key comes from M2.5-31; density tests | `cargo test -p voxel-worldgen flora` | 1.5 d | [x] |
 | M2.5-22 | Surface detail pass: grass tufts, pebbles, leaves, ripples, moss, snow drift; canonical templates | M2.5-13 | Six types; templates dedup; detail only in LOD0; no new atlas keys, parents come from M2.5-30/31 | `cargo test -p voxel-worldgen detail` | 2 d | [ ] |
 
 ### 7.4 Pipeline, determinism and exit
