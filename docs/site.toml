@@ -1,0 +1,159 @@
+# Documentation site taxonomy.
+#
+# Every Markdown file in the repository is published. This file decides where
+# it appears in the navigation and on the landing page. It is deliberately
+# curated: the order below is the reading order, and only files listed here (or
+# matched by a glob) move out of the fallback "Other" section.
+#
+#   pages      explicit, ordered repository-relative paths
+#   match      shell-style globs, appended after `pages` in numeric order
+#   group_by   "directory" nests the matched pages under their parent directory
+#              (used for benchmark runs, which are created automatically)
+#
+# `[[section.child]]` adds a nested group. A new section or document that is
+# not listed here still appears under "Other", so nothing silently disappears.
+
+[[section]]
+id = "overview"
+title = "Overview"
+description = "Where the project is, what to read first, and how the documents fit together."
+pages = ["docs/README.md", "docs/status.md"]
+
+[[section]]
+id = "specifications"
+title = "Specifications"
+description = "The normative documents. When they disagree, the spec wins, then the roadmap, then the task list."
+pages = [
+  "docs/voxel-engine-architecture-spec.md",
+  "docs/voxel-engine-roadmap.md",
+  "docs/task-list.md",
+  "docs/worldgen-design.md",
+  "docs/pre-registration.md",
+  "docs/reference-machine.md",
+  "docs/performance-targets.md",
+  "docs/generator.spec.md",
+  "docs/water-textures.md",
+]
+
+[[section]]
+id = "design"
+title = "Game design"
+description = "Game-level field specifications for the technology tree. No engine rules."
+match = ["docs/design/*.md"]
+
+[[section]]
+id = "adr"
+title = "Architecture Decision Records"
+description = "The decisions behind the spec, one page each."
+match = ["docs/adr/*.md"]
+
+[[section]]
+id = "milestones"
+title = "Milestones & gate reports"
+description = "Measured evidence for every milestone: what was built, what it cost, and whether it passed."
+
+[[section.child]]
+id = "m0"
+title = "M0 — baseline"
+match = ["docs/m0-*.md"]
+
+[[section.child]]
+id = "m1"
+title = "M1 — gate selection"
+match = ["docs/m1-*.md"]
+
+[[section.child]]
+id = "m2"
+title = "M2 — meshing & light"
+pages = [
+  "docs/m2-apron-cost.md",
+  "docs/m2-light-cost.md",
+  "docs/m2-light-20pct.md",
+  "docs/m2-raytest.md",
+  "docs/m2-viewer.md",
+  "docs/profile/README.md",
+  "docs/m2-exit.md",
+]
+
+[[section.child]]
+id = "m2_5"
+title = "M2.5 — worldgen"
+match = ["docs/m2.5-*.md"]
+
+[[section.child]]
+id = "m3"
+title = "M3 — streaming slice"
+pages = [
+  "docs/m3-mesh-compression.md",
+  "docs/m3-packed-8b.md",
+  "docs/m3-01-streaming.md",
+  "docs/m3-02-mesh-pool.md",
+  "docs/m3-03-upload-queue.md",
+  "docs/m3-04-cpu-cull.md",
+  "docs/m3-05-draw-loop.md",
+  "docs/m3-06-instrumentation.md",
+  "docs/m3-07-frame-breakdown.md",
+  "docs/m3-08-stress-scene.md",
+  "docs/m3-09-hitch-test.md",
+  "docs/m3-10-60hz.md",
+  "docs/m3-11-memory.md",
+  "docs/m3-12-visual-regression.md",
+  "docs/m3-exit.md",
+]
+
+[[section]]
+id = "benchmarks"
+title = "Benchmarks"
+description = "How runs are recorded, the lens definitions, and the caveats that apply to every number."
+pages = [
+  "benchmarks/README.md",
+  "benchmarks/HISTORY.md",
+  "benchmarks/fixtures/README.md",
+]
+
+[[section]]
+id = "benchmark-runs"
+title = "Benchmark runs"
+description = "One group per archived run, newest last."
+match = ["benchmarks/runs/**/*.md"]
+group_by = "directory"
+
+[[section]]
+id = "applications"
+title = "Applications"
+description = "The desktop launcher and the standalone texture editor."
+match = ["apps/**/*.md"]
+
+[[section]]
+id = "crates"
+title = "Crates"
+description = "Crate-level READMEs and design notes."
+[[section.child]]
+id = "engine_viewer"
+title = "engine / viewer"
+match = ["crates/engine/viewer/**"]
+[[section.child]]
+id = "bench"
+title = "bench"
+match = ["crates/bench/**"]
+[[section.child]]
+id = "ecs"
+title = "ECS"
+match = ["crates/ECS/**"]
+
+[[section]]
+id = "notes"
+title = "Engineering notes"
+description = "Hard-won operational knowledge, previews and backlog notes."
+pages = [
+  "docs/wgpu-traps.md",
+  "docs/worldgen-preview.md",
+  "docs/texgen-backlog.md",
+  "docs/v1-pool-residency.md",
+]
+
+[[section]]
+id = "reference"
+title = "Reference (historical)"
+description = "Superseded designs kept for their reasoning. Do not implement from them where they conflict with the spec."
+match = ["docs/reference/*.md"]
