@@ -80,8 +80,11 @@ binding number is made in the spec and the pre-registration, never only in a tas
   [`m2.5-12-surface.md`](m2.5-12-surface.md). `M2.5-13` added the 1 m weighted
   material dither and four canonical two-material + debris 16³ templates per
   pair, all reusing committed materials so they add zero atlas slots; see
-  [`m2.5-13-transitions.md`](m2.5-13-transitions.md). Caves (`M2.5-14`) are
-  next.
+  [`m2.5-13-transitions.md`](m2.5-13-transitions.md). `M2.5-14` added the 3D
+  cave field — spaghetti, cheese, shafts, galleries and water/lava fills — with
+  balanced density, a 2,000 m depth budget and a 2 m seal under water; see
+  [`m2.5-14-caves.md`](m2.5-14-caves.md). Cave depth and underground biomes
+  (`M2.5-15`) are next.
 
 ## Tools
 
