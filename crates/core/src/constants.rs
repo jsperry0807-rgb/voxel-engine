@@ -167,6 +167,9 @@ const _: () = {
         assert!(LEVEL_SIZE[level] * 2 == LEVEL_SIZE[level - 1]);
         level += 1;
     }
+    // The loop must visit every level; without this the mutated comparisons
+    // could skip the chain check and still compile.
+    assert!(level == LEVEL_COUNT);
 
     assert!(VOXEL_SIZE * BLOCK_DIM as f32 == 1.0);
     assert!(aabb_extent(0) == CHUNK_DIM as f32 * VOXEL_SIZE);

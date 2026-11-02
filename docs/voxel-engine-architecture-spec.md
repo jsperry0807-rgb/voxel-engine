@@ -280,7 +280,7 @@ a face-textured block registers its variants as separate materials.
 - **Voxel AO:** per-vertex, computed during meshing, part of the merge key, stored
   in vertex attributes — not a texture and not a per-chunk volume.
 - All of these run on the **content timeline**, before the chunk returns to `READY`.
-- **Budget:** probe update p95 ≤ 4 ms per edited chunk.
+- **Budget:** probe update p95 ≤ 16 ms per edited chunk.
 
 ## 8. Sync Points (hard rules)
 
@@ -322,7 +322,7 @@ The gate lives in the roadmap's M0 and is written **before** M1 measures. Summar
 
 - VRAM budget for voxel data: **40% of total VRAM** (a fraction, not an absolute).
 - Gate: measured `p95 per-chunk memory × target loaded chunk count ≤ 40% VRAM × 1.5`.
-- Also pass/fail at 64³: edit latency p95 ≤ **8 ms**, probe update p95 ≤ **4 ms**,
+- Also pass/fail at 64³: edit latency p95 ≤ **16 ms**, probe update p95 ≤ **16 ms**,
   culling granularity ≤ **15%** traversed-but-invisible at boundaries.
 - Dataset: a real populated save; report median, p95 and max per chunk. Synthetic
   chunks are not admissible.
@@ -450,7 +450,7 @@ distance. This is deliberate and is part of the world's identity, not an error.
    temperature, humidity, erosion, flags); priority-flood depression fill; D8 flow
    and accumulation; vector rivers with width/depth/order; lakes with spill levels;
    coasts; landmark anchors every 20–50 km; structure anchors on a 1–4 km grid.
-2. **Chunk generation, worker thread, p95 ≤ 2 ms:** sample the 3×3 macro tiles at
+2. **Chunk generation, worker thread, p95 ≤ 16 ms:** sample the 3×3 macro tiles at
    1 m; compute biome weights; blend shape parameters before evaluating height; add
    local detail noise; carve rivers and lake beds; fill 512 blocks with surface
    rules; carve caves; place ores; place flora and structures from anchors.

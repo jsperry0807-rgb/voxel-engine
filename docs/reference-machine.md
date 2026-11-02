@@ -46,9 +46,21 @@ the cave cache covers descents.
 
 ## 4. What "60 fps" means
 
-- **Average 60 fps**, **1% low 45 fps**, at 1080p native.
-- Frame time budget is 16.6 ms; a 45 fps 1% low allows 22.2 ms spikes.
+- **Average 60 fps**, **1% low 60 fps** — every frame capped at 16 ms — at 1080p native.
+- Frame time budget is 16 ms; every budgeted stage is capped at 16 ms and no frame
+  may exceed it.
 - Measured over a scripted 2 km flight and a 60 s cave walk, not a static camera.
+
+The frame-time lens reads a viewer trace rather than a synthetic loop:
+
+```sh
+VOXEL_FRAME_PROFILE=target/frames.csv cargo run --release -p voxel-viewer
+cargo run --release -p voxel-bench -- frame --input target/frames.csv --warmup 120
+```
+
+The report prints the average, 1% low, p50/p95/p99, longest frame and hitch
+count. It passes only when the average and 1% low are both on target and no
+frame exceeds 16 ms; a 60 fps average with one 200 ms hitch fails.
 
 ## 5. Non-negotiables
 

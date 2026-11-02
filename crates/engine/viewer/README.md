@@ -67,6 +67,25 @@ Bindings can be overridden by pointing `VOXEL_BINDINGS` at a file; see
 `VOXEL_INVERT_X` and `VOXEL_INVERT_Y` configure mouse look, and
 `VOXEL_TOGGLE_SPRINT=1` makes sprint latch.
 
+## Frame-time profiling
+
+Every run logs an average / 1%-low / max-hitch summary at `info` when the viewer
+exits. To validate the 60 Hz target with the benchmark lens, collect the trace:
+
+```sh
+VOXEL_FRAME_PROFILE=1 cargo run --release -p voxel-viewer
+VOXEL_FRAME_PROFILE=target/frames.csv cargo run --release -p voxel-viewer
+cargo run --release -p voxel-bench -- frame --input target/frames.csv
+```
+
+`VOXEL_FRAME_PROFILE=1` also logs the one-second FPS line at `info`; a path also
+writes one `frame,t_ns,frame_ns` row per presented frame. The default one-second
+line stays at `debug` because it is noise on a display that does not pace
+presents. Use `--warmup` on the bench command to discard startup frames, and run
+the scripted flight from
+[`docs/reference-machine.md`](../../../docs/reference-machine.md) before
+quoting a 60 Hz result. `VOXEL_FRAME_PROFILE=0` disables the collector.
+
 ## Validation
 
 ```sh

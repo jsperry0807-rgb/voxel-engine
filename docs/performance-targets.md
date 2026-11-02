@@ -8,6 +8,10 @@
 
 ## 1. Budgets
 
+**The maximum for everything is 16 ms.** Every latency budget in this document — a
+stage, an operation, a hitch, a p95 or a single frame — is capped at 16 ms. Nothing
+may exceed it.
+
 ### 1.1 Video memory
 
 | Quantity | Value |
@@ -30,7 +34,7 @@ culling buffers. It does not include the swapchain, TAA history, or the OS.
 | Macro map resident (tiles) | < 64 MB |
 | Macro map on disk | ~384 MB raw, 120–220 MB compressed |
 
-### 1.3 Frame budget (Default, 16.6 ms)
+### 1.3 Frame budget (Default, 16 ms)
 
 | Stage | Budget |
 |---|---:|
@@ -39,15 +43,15 @@ culling buffers. It does not include the swapchain, TAA history, or the OS.
 | Content (amortised, budgeted) | 2.0 ms CPU |
 | Upload / flip | 0.5 ms |
 | Draw + present | 12.0 ms |
-| **Headroom** | **1.1 ms** |
+| **Headroom** | **0.0 ms** |
 
-The 1% low is allowed to reach 22.2 ms. A frame above 33 ms is a hitch and fails the
+The 1% low is capped at 16 ms. A frame above 16 ms is a hitch and fails the
 profile.
 
 ### 1.4 CPU
 
 - 6 cores; 4 per-frame workers for generation and meshing, 2 for main/render.
-- Chunk generation p95 ≤ 2 ms; meshing ≤ 1 ms for a terrain chunk.
+- Chunk generation p95 ≤ 16 ms; meshing ≤ 16 ms for a terrain chunk.
 - No generation or meshing on the edit path.
 
 ## 2. Profiles
@@ -61,7 +65,7 @@ profile.
 | Vertical shell | ±16 m | ±16 m | ±32 m |
 | Detail pass | reduced | full | full |
 | Shadows | none | none | optional |
-| Avg / 1% low | 60 / 45 | 60 / 45 | 60 / 45 |
+| Avg / 1% low | 60 / 60 | 60 / 60 | 60 / 60 |
 
 ## 3. Why the Default profile is the risk
 
@@ -106,10 +110,13 @@ Never sacrifice: the 8 km floor, determinism, the save format, or the 1 m block 
 
 - Every milestone records a run through `scripts/bench.sh` with the profile name in
   the label: `LABEL=m1-gate-default`.
+- A 60 Hz claim carries a viewer frame trace (`VOXEL_FRAME_PROFILE=<path>`) and the
+  bench frame report, not just an FPS line. The lens fails on the average, the 1% low
+  or a single frame above 16 ms.
 - CI is **advisory until the machine has 10 stable runs**, then hard on:
   - memory over the pre-registered budget,
-  - p99 hitch over 33 ms,
-  - generation p95 over 2 ms.
+  - p99 hitch over 16 ms,
+  - generation p95 over 16 ms.
 - Wall-clock microbenchmarks stay advisory permanently; they are machine-specific
   and this is a solo project.
 

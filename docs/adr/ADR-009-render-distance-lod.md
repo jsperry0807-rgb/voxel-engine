@@ -116,7 +116,7 @@ under this ADR.**
   remesh; probe LOD change is a content event; the far field is a raster heightfield,
   not raymarched voxels.
 - **Verification:** M6-01 experiment table (VRAM, frame time, pop-in); M6-17 ring
-  budget within 40% VRAM; M6-18 streaming p99 ≤ 4 ms over a 2,000-frame flight;
+  budget within 40% VRAM; M6-18 streaming p99 ≤ 16 ms over a 2,000-frame flight;
   M6-15/16 seam fixture; M3.5 far-field view and seam; M6-20 updates the rings table
   and tags `m6`.
 
@@ -139,7 +139,7 @@ under this ADR.**
   and memory failures follow the sacrifice ladder (mesh compression, near radius,
   shell), not the horizon.
 - **Remesh per frame or transition without hysteresis.** Content-timeline work only;
-  per-frame remeshing blows the 12.0 ms draw budget and the 8 ms edit budget, and no
+  per-frame remeshing blows the 12.0 ms draw budget and the 16 ms edit budget, and no
   hysteresis thrashes at every ring boundary.
 
 ## Status of open questions

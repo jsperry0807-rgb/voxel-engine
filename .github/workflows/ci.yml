@@ -1,7 +1,10 @@
 name: CI
 
 on:
+  # Branches are covered by their pull request; running here as well would
+  # duplicate every job and let a skipped push job mask the pull request result.
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -18,10 +21,43 @@ env:
   RUST_BACKTRACE: "1"
 
 jobs:
+  # One cheap job decides what the rest of the workflow needs to do. Every
+  # other job is gated on the areas this run actually touches; a docs-only
+  # change runs nothing else, and a dependency/workflow change runs everything
+  # (see `scripts/changed-areas.sh` for the classification).
+  changes:
+    name: changed areas
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      all: ${{ steps.classify.outputs.all }}
+      code: ${{ steps.classify.outputs.code }}
+      rust: ${{ steps.classify.outputs.rust }}
+      textures: ${{ steps.classify.outputs.textures }}
+      mesh: ${{ steps.classify.outputs.mesh }}
+      worldgen: ${{ steps.classify.outputs.worldgen }}
+      shaders: ${{ steps.classify.outputs.shaders }}
+      viewer: ${{ steps.classify.outputs.viewer }}
+      bench: ${{ steps.classify.outputs.bench }}
+      docs: ${{ steps.classify.outputs.docs }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The classifier diffs arbitrary commits, so it needs full history.
+          fetch-depth: 0
+      - id: classify
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+          FORCE_ALL: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+        run: ./scripts/changed-areas.sh
+
   fmt:
     name: fmt
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -33,6 +69,8 @@ jobs:
     name: chunk constants
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Fails if chunk geometry is spelled as a literal outside constants.rs.
@@ -42,6 +80,8 @@ jobs:
     name: clippy
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -56,6 +96,8 @@ jobs:
     name: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -69,6 +111,10 @@ jobs:
     name: golden mesh fixtures
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs: changes
+    # The goldens pin the mesh and worldgen outputs, so only those two crates
+    # can break them.
+    if: needs.changes.outputs.mesh == 'true' || needs.changes.outputs.worldgen == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -101,6 +147,8 @@ jobs:
     name: texture pipeline
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs: changes
+    if: needs.changes.outputs.textures == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -114,6 +162,8 @@ jobs:
     name: naga shaders
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs: changes
+    if: needs.changes.outputs.shaders == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -125,6 +175,9 @@ jobs:
     name: viewer validation
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs: changes
+    # The offscreen draw covers the viewer and the render pipeline it drives.
+    if: needs.changes.outputs.viewer == 'true' || needs.changes.outputs.shaders == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -142,6 +195,8 @@ jobs:
     name: chunk128 (128³ edge)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -152,6 +207,8 @@ jobs:
     name: Windows cross-build
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    needs: changes
+    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.viewer == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -166,9 +223,11 @@ jobs:
     name: M1 gate (advisory)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: changes
     # The frozen gate cases stay runnable and reporting, but the gate is a
     # milestone decision, not a per-PR merge blocker. The report owns the verdict.
     continue-on-error: true
+    if: needs.changes.outputs.bench == 'true' || needs.changes.outputs.mesh == 'true' || needs.changes.outputs.worldgen == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -180,7 +239,13 @@ jobs:
     name: SonarCloud Scan
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
+    needs: changes
+    # Docs-only pushes have nothing new to analyse, and a fork's pull request
+    # never receives the token.
+    if: >-
+      (github.ref == 'refs/heads/main' || github.event_name == 'pull_request')
+      && github.event.pull_request.head.repo.fork != true
+      && needs.changes.outputs.code == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

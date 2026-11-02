@@ -22,7 +22,7 @@ The two historical reference documents inherited per-voxel light from the 6.25 c
 era. At 64³ that is 262,144 cells and **4 MiB per chunk**; at 128³ it is 2.09 M cells
 and **32 MiB per chunk** (spec §7). Per-block light is 64 cells and **1 KiB per 64³
 chunk**, 512 cells and 8 KiB at 128³. The decision is therefore not a small quality
-dial: it changes light memory and flood-fill work by **4,096×**, against an 8 ms edit
+dial: it changes light memory and flood-fill work by **4,096×**, against a 16 ms edit
 budget and a 3,275 MiB voxel-memory target.
 
 The spec already fixes one 16 B cell per block and vertex AO as the sub-block
@@ -70,7 +70,7 @@ no per-voxel or per-4³-cluster light volume.**
 - **Positive:** light costs **0.8% of the 3,275 MiB target** for the whole Default near
   set — **25.1 MiB at either edge**, because the counts trade against cells exactly
   (25,736 × 1 KiB = 3,216 × 8 KiB). At 64³ it is 1 KiB per chunk against a 60–90 KiB DAG
-  and a 150–600 KB mesh, so it is effectively free. A 64-cell flood fill fits the 8 ms edit
+  and a 150–600 KB mesh, so it is effectively free. A 64-cell flood fill fits the 16 ms edit
   budget with room for COW and upload; AO gives 6.25 cm contact detail at no added
   residency and matches the atlas's block-face texel density.
 
@@ -91,7 +91,7 @@ no per-voxel or per-4³-cluster light volume.**
 - **Verification:** light reference and three-case fixtures (M1-29); full-pass,
   apron, incremental and escalation equality (M2-13…M2-17); AO brute-force,
   merge-key and chunk-seam tests (M2-07…M2-09); memory row and edit p95 in the gate
-  (M1-35, M1-37); scrub ≤ 4 ms (M2-24); light/AO debug view (M7-09).
+  (M1-35, M1-37); scrub ≤ 16 ms (M2-24); light/AO debug view (M7-09).
 
 ## Rejected alternatives
 
@@ -99,7 +99,7 @@ no per-voxel or per-4³-cluster light volume.**
   per-block volume and flood-fill work. 128³: 2.09 M cells, **32 MiB/chunk**. At
   Default that is **~100.5 GiB** for the near set — **~31× the 3,275 MiB budget** —
   before mesh, DAG or overlay. It does not remove the need for AO (corners still need
-  the 3-neighbour test) and it multiplies the dirty-region work that the 8 ms edit
+  the 3-neighbour test) and it multiplies the dirty-region work that the 16 ms edit
   budget caps. This is the position the reference documents inherited, and the reason
   this ADR supersedes them.
 

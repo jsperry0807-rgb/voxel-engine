@@ -22,7 +22,7 @@ drawn. That unit is not free:
   600 KB–2.4 MB at 128³**, assuming **76 B per indexed quad**
   ([`../pre-registration.md`](../pre-registration.md) §3). A format that adds a UV,
   a normal, per-vertex light or a second AO path moves every memory row in the gate.
-- Edit latency is 8 ms p95. A one-voxel edit must dirty **one block plus its AO/light
+- Edit latency is 16 ms p95. A one-voxel edit must dirty **one block plus its AO/light
   apron**, not a whole chunk, or the tail scales with chunk volume (M2-22, M2-23).
 - Occlusion and the M5 append buffer operate at `BLOCK_LEVEL`: the traversal appends
   **surviving 16³ blocks**, and dispatch 3 draws that append buffer. A mesh that

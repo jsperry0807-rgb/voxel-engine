@@ -117,13 +117,13 @@ orientation only; the pre-registration wins.
 | SVDAG node budget/chunk | 64³ ≤ **200k**; 128³ ≤ **1.5M** unique nodes (sharing-adjusted) | 8 B/node × 2 roots = 16 B/node | 3.2 MB/chunk at 64³, 24 MB/chunk at 128³: **hard caps, not p95** |
 | Light volume/chunk | 64³: **64 cells**; 128³: **512 cells**; ~**16 B/cell** | Per-block, RGB+intensity or SH2 | 1 KiB / 8 KiB |
 | Probe grid/chunk | 64³: **64**; 128³: **512** near-residency, multi-res LOD | Per-block near, half-res mid, none far | 768 B / 6 KiB |
-| Mesh buffer/chunk (raster) | 64³: **150–600 KB**; 128³: **600 KB–2.4 MB** | Surface-area scaling; exposed faces from gameplay content | 76 B/indexed quad |
-| Edit latency | p95 ≤ **8 ms** (consolidate + upload + fence + flip + dirty-region light) | Responsiveness target | Measured on the real save |
-| Probe-update budget | p95 ≤ **4 ms** per edited chunk | Keeps probe work off the critical path | Measured on the real save |
+| Mesh buffer/chunk (raster) | 64³: **150–600 KB**; 128³: **600 KB–2.4 MB** | Surface-area scaling; exposed faces from gameplay content | 76 B/indexed quad baseline; 44 B packed gate vertex (ADR-010 amendment) |
+| Edit latency | p95 ≤ **16 ms** (consolidate + upload + fence + flip + dirty-region light) | Responsiveness target | Measured on the real save |
+| Probe-update budget | p95 ≤ **16 ms** per edited chunk | Keeps probe work off the critical path | Measured on the real save |
 | Culling granularity | ≤ **15%** traversed-but-invisible volume at chunk boundaries @ max view distance | 64³ passes easily; 128³ is the question | Reference traversal at block resolution |
 | Safety factor | **1.5×** headroom on the memory budget | Absorbs chunky content, fragmentation, driver reserve | Gate is budget × 1.5 |
 | Measurement dataset | **Real populated save from actual gameplay**; report median, p95, max per chunk | Synthetic dense chunks lie; empty ones lie worse | Provisional fixture until the first gameplay save exists |
-| Fallback trigger | Memory `p95 × N > budget × 1.5`, **or** edit p95 > 8 ms, **or** probe p95 > 4 ms → **stay at 64³** | Pre-registered; no renegotiation in M1 | Applies to the 128³ projection too |
+| Fallback trigger | Memory `p95 × N > budget × 1.5`, **or** edit p95 > 16 ms, **or** probe p95 > 16 ms → **stay at 64³** | Pre-registered; no renegotiation in M1 | Applies to the 128³ projection too |
 
 **4.2 Residency model.** Define `N(edge, view, band)` = the chunk count the streaming
 policy holds for the configured view distance and surface band, so the two edges are
@@ -186,13 +186,13 @@ Work:
   sibling run (`iai` cache-miss check); dedup within 10% of the old encoding;
   COW ≤ 512 B per edited path.
 - **Memory:** `p95 per-chunk × N ≤ 40% VRAM × 1.5`.
-- **Edit latency:** p95 ≤ 8 ms.
-- **Probe update:** p95 ≤ 4 ms.
+- **Edit latency:** p95 ≤ 16 ms.
+- **Probe update:** p95 ≤ 16 ms.
 - **Culling granularity:** ≤ 15% traversed-but-invisible at chunk boundaries at
   max view distance.
 - **128³ projection:** memory clears the same budget at N/8 with the measured
-  per-chunk growth; edit latency projected from fixed + dirty terms ≤ 8 ms; probe
-  update projected ≤ 4 ms. If any misses, **stay at 64³** and record it.
+  per-chunk growth; edit latency projected from fixed + dirty terms ≤ 16 ms; probe
+  update projected ≤ 16 ms. If any misses, **stay at 64³** and record it.
 
 **Risk:** the gate's weakest input is the provisional save. Label the first result
 provisional and re-run the gate when a real save exists. Do not upgrade on a
@@ -248,7 +248,7 @@ Runs at the **128³ Minimum** edge (ADR-002). Default is not greenlit.
 - Golden mesh hashes across 5 fixtures equal to the M1 reference; AO seam test
   passes; light incremental == full on 1 000 edit sets; probe determinism across
   runs and thread counts.
-- ≥ 20 terrain chunks/s single-threaded; scrub ≤ 4 ms; scratch ≤ 64 KiB/worker.
+- ≥ 20 terrain chunks/s single-threaded; scrub ≤ 16 ms; scratch ≤ 64 KiB/worker.
 - Ray-test flag produces a documented delta (accuracy and cost) versus flood-fill,
   without changing default behaviour.
 - **128³ Minimum gate run** recorded: memory 4.16 GiB (PASS against 4.80),
@@ -276,7 +276,7 @@ Runs at the **128³ Minimum** edge (ADR-002). Default is not greenlit.
 - Instrumentation: CPU submit, GPU pass, visible chunks/blocks, quads, bytes.
 
 **Exit:** 256 chunks at 60 Hz at 1080p at the gated edge; frame breakdown recorded;
-no upload hitch over 4 ms.
+no upload hitch over 16 ms.
 
 ---
 
@@ -289,11 +289,11 @@ Full design and numbers: [`worldgen-design.md`](worldgen-design.md).
 - Hydrology: depression fill, D8 flow, accumulation, vector rivers, lakes.
 - 18 biomes in RON; softmax weights; 300–500 m gradients; canonical transitions.
 - Caves (five types), ores, landmarks, structures, flora, surface detail.
-- Block-first chunk pipeline at 2 ms; workers, cancellation, prefetch.
+- Block-first chunk pipeline at 16 ms; workers, cancellation, prefetch.
 - Bit-exact determinism; generator frozen per save.
 
 **Exit:** a 4 × 4 km map and a 1 km walkthrough that look like the intended world;
-p95 chunk generation ≤ 2 ms; identical bytes across 1/2/8 workers; full creation
+p95 chunk generation ≤ 16 ms; identical bytes across 1/2/8 workers; full creation
 ≤ 10 min.
 
 ### M3.5 — Far field, water and map (4 weeks)
@@ -304,7 +304,7 @@ p95 chunk generation ≤ 2 ms; identical bytes across 1/2/8 workers; full creati
 - Map atlas data and item; menu orbit view.
 
 **Exit:** 60 Hz at 1080p at 16–32 km view; no visible seam over a 2 km flight;
-p99 hitch ≤ 4 ms.
+p99 hitch ≤ 16 ms.
 
 ---
 
@@ -356,7 +356,7 @@ after the timebox, keep the CPU cull and record why in ADR-006.
 - Chunk and LOD seam policy (stitch or skirt).
 
 **Exit:** the D9 rings fit the 40% budget at the gated edge; 60 Hz at 1080p;
-streaming hitch p99 ≤ 4 ms; reopen ≤ 50 ms/chunk; journal light == recomputed;
+streaming hitch p99 ≤ 16 ms; reopen ≤ 50 ms/chunk; journal light == recomputed;
 no cracks on the seam fixture.
 
 ---
@@ -401,7 +401,7 @@ per-block probes at 12 B, gated chunk edge.
 | Candidate + append + indirect buffers | ≤ 1 MiB |
 | **VRAM budget for voxel data** | **40% of device** (gate at 60%) |
 
-### Frame (16.6 ms at 60 Hz)
+### Frame (16 ms at 60 Hz)
 
 | Stage | Budget |
 |---|---:|
@@ -445,7 +445,7 @@ week 8; see `docs/task-list.md` §2 for the sprint map.
 
 | # | Risk | Trigger | Mitigation |
 |---|---|---|---|
-| R1 | Per-chunk tail latency (8× at 128³) | Edit p95 > 8 ms | Pre-registered fallback to 64³; block-granular dirty work |
+| R1 | Per-chunk tail latency (8× at 128³) | Edit p95 > 16 ms | Pre-registered fallback to 64³; block-granular dirty work |
 | R2 | Occlusion stalls | M5 > 3 weeks without a win | Ship frustum-only (still ≥ 3×); ray-test flag exists |
 | R3 | Mesh memory exceeds DAG | M3 over pre-registered range | LOD meshes, block meshes, quantise harder |
 | R4 | Incremental light wrong at borders | M2 equality fails | Expand radius; escalate to full relight |

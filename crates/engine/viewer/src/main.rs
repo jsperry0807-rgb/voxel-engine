@@ -28,6 +28,12 @@
 //! `RUST_LOG` follows `env_logger` syntax. The default shows warnings from
 //! dependencies and informational messages from the viewer; for a quiet wgpu
 //! run use `RUST_LOG=wgpu_core=warn`.
+//!
+//! The viewer logs an average / 1%-low / max-hitch summary at `info` when it
+//! exits. Set `VOXEL_FRAME_PROFILE=1` to also log the per-second FPS line at
+//! `info`, or `VOXEL_FRAME_PROFILE=<path>` to write a frame-trace CSV.
+//! `cargo run -p voxel-bench -- frame --input <path>` turns that trace into a
+//! report against the 60 Hz target.
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -36,10 +42,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use glam::Vec3;
+use voxel_profiling::HITCH_NS;
 use voxel_viewer::atlas::Atlas;
 use voxel_viewer::bake;
 use voxel_viewer::camera::Camera;
 use voxel_viewer::error::ViewerError;
+use voxel_viewer::frame_profile::FrameProfiler;
 use voxel_viewer::gpu::Gpu;
 use voxel_viewer::input::{
     Action, Bindings, CONFINED_SWEEP_DEGREES, Input, KeyAction, LookOptions, sensitivity_for_sweep,
@@ -296,9 +304,22 @@ fn run() -> Result<(), ViewerError> {
         sensitivity_explicit,
         mouse_mode: load_mouse_mode(),
         tracker: Tracker::from_env(),
+        timing: FrameTiming::new(FrameProfiler::from_env()),
         ..Viewer::default()
     };
     event_loop.run_app(&mut viewer)?;
+    if let Some(stats) = viewer.timing.finish() {
+        log::info!(
+            "frame profile: {} frames | {:.1} fps avg | {:.1} fps 1% low | \
+             {:.2} ms max | {} hitches > {:.1} ms",
+            stats.frames,
+            stats.avg_fps,
+            stats.one_percent_low_fps,
+            stats.max_ns as f64 / 1e6,
+            stats.hitches,
+            HITCH_NS as f64 / 1e6,
+        );
+    }
     match viewer.error {
         Some(error) => Err(error),
         None => Ok(()),
@@ -1057,14 +1078,29 @@ fn warp_to_centre(window: &Window) {
 }
 
 /// Averages frame intervals and logs one line per [`FRAME_LOG_INTERVAL`].
-#[derive(Default)]
 struct FrameTiming {
     last: Option<Instant>,
     frames: u32,
     elapsed: Duration,
+    profile: FrameProfiler,
+}
+
+impl Default for FrameTiming {
+    fn default() -> Self {
+        Self::new(FrameProfiler::disabled())
+    }
 }
 
 impl FrameTiming {
+    fn new(profile: FrameProfiler) -> Self {
+        Self {
+            last: None,
+            frames: 0,
+            elapsed: Duration::ZERO,
+            profile,
+        }
+    }
+
     /// Returns the time since the previous frame; zero on the first frame.
     fn tick(&mut self) -> Duration {
         let now = Instant::now();
@@ -1072,21 +1108,32 @@ impl FrameTiming {
             return Duration::ZERO;
         };
         let delta = now.duration_since(last);
+        self.profile.record(delta);
         self.elapsed += delta;
         self.frames += 1;
         if self.elapsed >= FRAME_LOG_INTERVAL {
             let seconds = self.elapsed.as_secs_f64();
             let millis = seconds * 1_000.0 / f64::from(self.frames);
-            // `debug`: once a second is too much for a default run, and on a
-            // display that does not pace presents (WSLg) it is pure noise.
-            log::debug!(
-                "frame timing: {:.1} fps ({millis:.2} ms/frame)",
-                f64::from(self.frames) / seconds
-            );
+            let fps = f64::from(self.frames) / seconds;
+            // The default run keeps the one-second line at `debug`; the exit
+            // summary is the measurement the 60 Hz target is checked with.
+            if self.profile.logs_interval() {
+                log::info!("frame timing: {fps:.1} fps ({millis:.2} ms/frame)");
+                self.profile.flush();
+            } else {
+                // Once a second is too much for a default run, and on a
+                // display that does not pace presents (WSLg) it is pure noise.
+                log::debug!("frame timing: {fps:.1} fps ({millis:.2} ms/frame)");
+            }
             self.frames = 0;
             self.elapsed = Duration::ZERO;
         }
         delta
+    }
+
+    /// Flushes the trace and returns the final summary, if profiling was on.
+    fn finish(&mut self) -> Option<voxel_profiling::FrameStats> {
+        self.profile.finish()
     }
 }
 

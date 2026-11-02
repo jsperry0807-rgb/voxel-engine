@@ -24,6 +24,7 @@ benchmarks/
         ├── criterion.txt   # raw Criterion output
         ├── iai.txt         # raw iai-callgrind instruction/cache/branch counts
         ├── perf.txt        # raw perf-stat counters
+        ├── frames.csv      # viewer frame trace, when FRAMES was supplied
         └── gate.md         # gate runs also carry the twelve-row report
             gate.json       # machine-readable report
             scaleup.md      # 128³ projection when the gate is decided
@@ -68,7 +69,20 @@ scripts/bench.sh                 # auto-labeled auto-<short-commit>
 LABEL=baseline scripts/bench.sh  # name it yourself
 RECORD=0 scripts/bench.sh        # report only, keep it out of the archive
 GATE=1 scripts/bench.sh          # also write gate.md/json and the 128³ projection
+FRAMES=target/frames.csv LABEL=flight scripts/bench.sh  # include a frame trace
 ```
+
+A frame-time run starts in the viewer, not in `bench.sh`:
+
+```sh
+VOXEL_FRAME_PROFILE=target/frames.csv cargo run --release -p voxel-viewer
+FRAMES=target/frames.csv scripts/bench.sh
+```
+
+`FRAMES` adds the average / 1%-low / max-hitch section to `report.md` and
+`report.json` (and the history summary). Use `FRAME_WARMUP=N` to discard the
+first N frames. The trace is a claim about the gated profile and scripted
+flight only when it was captured that way on the reference machine.
 
 or record an already-produced `target/bench` run:
 
@@ -118,6 +132,7 @@ Re-recording the same label is allowed and gets a numeric suffix.
 | DAG build/get, GPU lookup, GPU overlay lookup, 100-edit COW, overlay set/flush | CPU |
 | hot lookup, DAG get, GPU edit, GPU overlay set, `World::set` p99 | latency |
 | world tick idle, world consolidate p99 | latency |
+| frame average, 1% low, maximum frame, hitches | frame time |
 | layout bytes/node, run counts, dedup and COW bytes/path | layout |
 
 The layout table is repeated below the main history table for every run that

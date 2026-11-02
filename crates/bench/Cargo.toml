@@ -8,6 +8,7 @@ publish.workspace = true
 voxel-block = { path = "../engine/block" }
 voxel-viewer = { path = "../engine/viewer" }
 voxel-core = { path = "../core" }
+voxel-profiling = { path = "../profiling" }
 voxel-storage = { path = "../engine/storage" }
 voxel-mesh = { path = "../engine/mesh" }
 blake3 = "1"

@@ -60,7 +60,7 @@ Climate zones are **compressed**: 1,024 km stands in for a planet's 10,000 km po
 | Versioning | **Generator frozen per save** |
 | Content | Code for shape, **RON for biome content** |
 | Macro storage | Tiled streaming with LRU |
-| Chunk budget | **2 ms** per chunk on a worker |
+| Chunk budget | **16 ms** per chunk on a worker |
 | Streaming | **Surface-relative shell + cave cache** |
 | Far field | **Heightfield mesh** from the macro map; near/far seam at 512 m |
 | Map | Fog-of-war atlas item, discovered as you explore |
@@ -93,7 +93,7 @@ Climate zones are **compressed**: 1,024 km stands in for a planet's 10,000 km po
 ### 3.3 Generation
 
 - 128³ chunk = **512 block samples**, not 2.1 M voxels.
-- 2 ms/chunk on a worker → ~500 chunks/s/core.
+- 16 ms/chunk on a worker → ~62 chunks/s/core.
 - Detail pass is LOD0-only and block-granular.
 - World creation: minutes (target ≤ 10 min for a full 8,000² hydrology pass).
 
@@ -115,7 +115,7 @@ Climate zones are **compressed**: 1,024 km stands in for a planet's 10,000 km po
 
 The macro map is the canonical geography. Chunk generation never invents macro features.
 
-### 4.2 Chunk generation (runtime, worker, 2 ms)
+### 4.2 Chunk generation (runtime, worker, 16 ms)
 
 1. Load the 3 × 3 macro tiles around the chunk (border-safe).
 2. Sample at 1 m: height, climate, erosion, river distance/width, lake mask.

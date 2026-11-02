@@ -10,7 +10,7 @@ ADR-010 mesh format; ADR-012 traversal
 ## Context
 
 The sparse store is an SVDAG. The renderer must turn that store into a 1080p image at
-60 fps (45 fps 1% low) on the reference machine, with 12.0 ms budgeted for draw and
+60 fps (60 fps 1% low, every frame ≤ 16 ms) on the reference machine, with 12.0 ms budgeted for draw and
 present and no per-frame GPU→CPU readback (spec §8, [`performance-targets.md`](../performance-targets.md)).
 Two paths were viable: traverse the DAG per pixel (raymarch), or extract exposed
 surfaces on the content timeline and rasterise them.
@@ -57,7 +57,7 @@ new ADR that supersedes this one.
   per-frame cost. Greedy meshing amortises shading over merged quads. The culling
   traversal produces an append buffer that maps directly onto an indirect draw.
 - **Negative:** mesh build, upload and AO sit on the content timeline and therefore
-  contribute to the 8 ms edit-latency budget. Mesh memory dominates the per-chunk
+  contribute to the 16 ms edit-latency budget. Mesh memory dominates the per-chunk
   budget: **150–600 KB at 64³ and 600 KB–2.4 MB at 128³** ([`../pre-registration.md`](../pre-registration.md)).
   Quantisation, index reduction and near-ring LOD are the first memory levers.
 - **Explicit trade:** per-pixel DAG detail is given up. Sub-voxel shape stays blocky;

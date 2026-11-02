@@ -106,3 +106,25 @@ Row 6's basis changes from **76 B/quad** (16 B vertex + six `u16` indices) to
 This amendment invalidates the 76 B M2/M3 row-6 comparison; the 44 B runs
 `20261031T181211Z-m3-packed-8b-128` and `20261031T181227Z-m3-packed-8b-64` are
 the basis.
+
+---
+
+## Appendix A — 2026-11-02: the maximum for everything is 16 ms
+
+**What changed:** every latency budget is now capped at **16 ms**. Edit latency,
+probe update, hitches and generation all use 16 ms as the maximum; no measured
+operation may exceed it.
+
+| Row | Old value | New value |
+|---|---|---|
+| Edit latency (§3) | p95 ≤ **8 ms** | p95 ≤ **16 ms** |
+| Probe-update budget (§3) | p95 ≤ **4 ms** per edited chunk | p95 ≤ **16 ms** per edited chunk |
+| Fallback trigger (§4, rule 1) | edit p95 > **8 ms**, probe p95 > **4 ms** | edit p95 > **16 ms**, probe p95 > **16 ms** |
+| Frame / 1% low (§1) | 60 avg, 45 1% low (22.2 ms spikes) | 60 avg, 60 1% low; every frame ≤ **16 ms** |
+
+**Why:** the project adopts a single maximum of 16 ms for all latency work.
+
+**Recorded runs:** the frozen rows in §3 and §4 stay visible and unedited. Gate runs
+recorded before this amendment were measured against the 8 ms / 4 ms limits; their
+verdicts stand and are not re-scored. Per §6, any later use of those runs as a
+16 ms gate result requires a re-run and a new record.

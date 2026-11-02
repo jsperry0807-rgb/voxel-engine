@@ -1070,6 +1070,163 @@ mod tests {
     }
 
     #[test]
+    fn recipe_validate_accepts_every_boundary() {
+        let mut recipe = Recipe {
+            chunk_min: [-4_096, 0, -4_096],
+            chunk_max: [-4_096, 0, -4_096],
+            sea_level: 0,
+            ..Recipe::default()
+        };
+        recipe.validate().unwrap();
+
+        recipe.chunk_min = [4_096, 8, 4_096];
+        recipe.chunk_max = [4_096, 8, 4_096];
+        recipe.sea_level = 120;
+        recipe.validate().unwrap();
+
+        // The maximum supported volume is inclusive.
+        recipe.chunk_min = [0, 0, 0];
+        recipe.chunk_max = [1_023, 0, 0];
+        assert_eq!(recipe.chunk_volume(), 1_024);
+        recipe.validate().unwrap();
+    }
+
+    #[test]
+    fn recipe_validate_rejects_an_unknown_generator() {
+        let recipe = Recipe {
+            generator: "other".to_owned(),
+            ..Recipe::default()
+        };
+        let error = recipe.validate().unwrap_err();
+        assert!(
+            error.contains("unknown fixture generator `other`"),
+            "{error}"
+        );
+        assert!(error.contains(GENERATOR), "{error}");
+    }
+
+    #[test]
+    fn recipe_validate_rejects_an_unsupported_generator_version() {
+        let recipe = Recipe {
+            generator_version: GENERATOR_VERSION + 1,
+            ..Recipe::default()
+        };
+        let error = recipe.validate().unwrap_err();
+        assert!(error.contains("generator version"), "{error}");
+        assert!(
+            error.contains(&(GENERATOR_VERSION + 1).to_string()),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn recipe_validate_rejects_inverted_bounds_on_every_axis() {
+        for axis in 0..3 {
+            let mut recipe = Recipe::default();
+            recipe.chunk_min[axis] = 4;
+            recipe.chunk_max[axis] = 3;
+            let error = recipe.validate().unwrap_err();
+            assert!(
+                error.contains("is greater than chunk_max"),
+                "axis {axis}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn recipe_validate_rejects_out_of_range_chunks_on_every_axis() {
+        for axis in 0..3 {
+            let mut recipe = Recipe::default();
+            recipe.chunk_min[axis] = -4_097;
+            let error = recipe.validate().unwrap_err();
+            assert!(error.contains("±4096 chunks"), "min axis {axis}: {error}");
+
+            let mut recipe = Recipe::default();
+            recipe.chunk_max[axis] = 4_097;
+            let error = recipe.validate().unwrap_err();
+            assert!(error.contains("±4096 chunks"), "max axis {axis}: {error}");
+        }
+    }
+
+    #[test]
+    fn recipe_validate_rejects_chunk_y_outside_the_fixture_band() {
+        let mut recipe = Recipe::default();
+        recipe.chunk_min[1] = -1;
+        let error = recipe.validate().unwrap_err();
+        assert!(error.contains("chunk y must stay in 0..=8"), "{error}");
+
+        let mut recipe = Recipe::default();
+        recipe.chunk_max[1] = 9;
+        let error = recipe.validate().unwrap_err();
+        assert!(error.contains("chunk y must stay in 0..=8"), "{error}");
+    }
+
+    #[test]
+    fn recipe_validate_rejects_sea_level_outside_the_world() {
+        let mut recipe = Recipe {
+            sea_level: -1,
+            ..Recipe::default()
+        };
+        let error = recipe.validate().unwrap_err();
+        assert!(error.contains("sea level must stay in 0..=120"), "{error}");
+
+        recipe.sea_level = 121;
+        let error = recipe.validate().unwrap_err();
+        assert!(error.contains("sea level must stay in 0..=120"), "{error}");
+    }
+
+    #[test]
+    fn recipe_validate_rejects_more_than_1024_chunks() {
+        let recipe = Recipe {
+            chunk_min: [0, 0, 0],
+            chunk_max: [1_024, 0, 0],
+            ..Recipe::default()
+        };
+        assert_eq!(recipe.chunk_volume(), 1_025);
+        let error = recipe.validate().unwrap_err();
+        assert!(error.contains("covers 1025 chunks"), "{error}");
+        assert!(error.contains("1..=1024"), "{error}");
+    }
+
+    #[test]
+    fn recipe_validate_requires_every_feature() {
+        for feature in recipe_features() {
+            let mut recipe = Recipe::default();
+            recipe.features.retain(|present| *present != feature);
+            let error = recipe.validate().unwrap_err();
+            assert!(
+                error.contains(&format!("missing feature {feature:?}")),
+                "{error}"
+            );
+        }
+    }
+
+    #[test]
+    fn recipe_world_bounds_scale_and_close_each_axis() {
+        let edge = CHUNK_DIM as i32;
+        let recipe = Recipe {
+            chunk_min: [-2, 1, -4],
+            chunk_max: [3, 2, 5],
+            ..Recipe::default()
+        };
+        assert_eq!(recipe.world_bounds().0, [-2 * edge, edge, -4 * edge]);
+        assert_eq!(
+            recipe.world_bounds().1,
+            [4 * edge - 1, 3 * edge - 1, 6 * edge - 1]
+        );
+    }
+
+    #[test]
+    fn recipe_chunk_volume_multiplies_each_axis() {
+        let recipe = Recipe {
+            chunk_min: [-1, 2, -3],
+            chunk_max: [1, 3, 0],
+            ..Recipe::default()
+        };
+        assert_eq!(recipe.chunk_volume(), 3 * 2 * 4);
+    }
+
+    #[test]
     fn manifest_limitation_names_the_first_real_save() {
         assert!(LIMITATION.contains("Provisional until the first real save"));
         assert!(LIMITATION.contains("M1-35"));

@@ -6,6 +6,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
+use crate::frame::FrameReport;
+
 /// One memory measurement.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MemoryRecord {
@@ -149,6 +151,10 @@ pub struct Report {
     /// the section existed still deserialize.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub layout: Vec<LayoutRecord>,
+    /// Optional frame-time lens (M3-09/M3-10). Defaulted so archived reports
+    /// written before the section existed still deserialize.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frames: Option<FrameReport>,
 }
 
 impl Report {
@@ -326,6 +332,11 @@ impl Report {
             out.push('\n');
         }
 
+        if let Some(frames) = &self.frames {
+            out.push_str(&frames.section());
+            out.push('\n');
+        }
+
         out.push_str("## Other lenses\n\n");
         out.push_str(
             "These software readings are one half of the picture. Run the rest with:\n\n\
@@ -335,6 +346,10 @@ impl Report {
              cargo bench -p voxel-bench --features iai --bench iai   # instructions/cache/branches\n\
              perf stat -e cycles,instructions,cache-misses,branch-misses \\\n\
              \x20 target/release/voxel-bench cpu                  # hardware counters\n\
+             \n\
+             # Frame time: capture a viewer trace, then attach it to a report\n\
+             VOXEL_FRAME_PROFILE=target/frames.csv cargo run --release -p voxel-viewer\n\
+             cargo run --release -p voxel-bench -- frame --input target/frames.csv\n\
              ```\n",
         );
         out

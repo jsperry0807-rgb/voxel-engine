@@ -4,14 +4,13 @@ docs_dir: .docs-build
 site_dir: site
 use_directory_urls: true
 
-# Navigation is generated from the staged tree; the landing page groups every
-# document by kind. Sources are never moved, see scripts/build-docs-site.py.
+# Navigation is curated in docs/site.toml and generated into a sibling config
+# by scripts/build-docs-site.py; the landing page groups every document by kind.
+# Sources are never moved, see scripts/build-docs-site.py.
 
 theme:
   name: material
   features:
-    - navigation.indexes
-    - navigation.sections
     - navigation.top
     - search.highlight
     - search.suggest

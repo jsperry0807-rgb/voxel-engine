@@ -2,6 +2,11 @@
 visual
 /site
 /.docs-build
+/.docs-build-mkdocs.yml
+__pycache__/
+
+# Windows "downloaded from the internet" metadata companions.
+*:Zone.Identifier
 # Local, uncommitted art: resources packs and their baked atlases.
 /assets
 __archive__/

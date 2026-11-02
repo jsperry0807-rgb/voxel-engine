@@ -4,11 +4,13 @@
 //! cargo run --release -p voxel-bench -- all
 //! cargo run --release -p voxel-bench -- memory --out target/bench
 //! cargo run --release -p voxel-bench -- cpu --print
+//! cargo run --release -p voxel-bench -- frame --input target/frames.csv
 //! ```
 
 use std::path::PathBuf;
 use std::time::Instant;
 
+use voxel_bench::frame::{FrameReport, FrameTarget};
 use voxel_bench::report::{ProcessReport, Report};
 use voxel_bench::{CountingAllocator, history, proc, report, suite};
 
@@ -28,6 +30,8 @@ fn main() {
     let mut mode = Mode::All;
     let mut out_dir = PathBuf::from("target/bench");
     let mut print = false;
+    let mut frames: Option<PathBuf> = None;
+    let mut frame_warmup = 0usize;
 
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().is_some_and(|arg| arg == "record") {
@@ -44,6 +48,10 @@ fn main() {
     }
     if args.first().is_some_and(|arg| arg == "fixture") {
         fixture_mode(&args[1..]);
+        return;
+    }
+    if args.first().is_some_and(|arg| arg == "frame") {
+        frame_mode(&args[1..]);
         return;
     }
     if args.first().is_some_and(|arg| arg == "gate") {
@@ -77,10 +85,27 @@ fn main() {
                     .map(PathBuf::from)
                     .unwrap_or_else(|| usage("--out needs a directory"));
             }
+            "--frames" => {
+                frames = Some(PathBuf::from(
+                    args.next()
+                        .unwrap_or_else(|| usage("--frames needs a file")),
+                ));
+            }
+            "--frame-warmup" => {
+                let value = args
+                    .next()
+                    .unwrap_or_else(|| usage("--frame-warmup needs a frame count"));
+                frame_warmup = value.parse().unwrap_or_else(|_| {
+                    usage(&format!(
+                        "--frame-warmup needs a whole number, got `{value}`"
+                    ))
+                });
+            }
             "--print" => print = true,
             "-h" | "--help" => {
                 println!(
                     "usage: voxel-bench [all|memory|cpu|latency|layout] [--out DIR] [--print]\n\
+                     \x20                  [--frames FILE] [--frame-warmup N]\n\
                      \n\
                      all      run the memory, layout, CPU and latency lenses (default)\n\
                      memory   heap bytes, allocation churn and peak heap\n\
@@ -89,6 +114,22 @@ fn main() {
                      latency  p50/p95/p99/max for the interactive paths\n\
                      --out    report directory (default: target/bench)\n\
                      --print  also print the Markdown report\n\
+                     --frames  attach a viewer frame trace to the report\n\
+                     --frame-warmup  discard this many trace samples (default: 0)\n\
+                     \n\
+                     voxel-bench frame --input FILE [--warmup N] [--out DIR]\n\
+                     \x20                 [--target-fps F] [--one-percent-fps F]\n\
+                     \x20                 [--hitch-ms MS] [--json]\n\
+                     \n\
+                     frame    average, 1% low and maximum-hitch report over a\n\
+                     \x20        frame trace written by VOXEL_FRAME_PROFILE\n\
+                     --input  frame trace CSV (required)\n\
+                     --warmup  discard this many samples from the front\n\
+                     --target-fps     average frame-rate target (default: 60)\n\
+                     --one-percent-fps  1% low target (default: 45)\n\
+                     --hitch-ms       frame time that counts as a hitch (default: 33.3)\n\
+                     --out            output directory (default: target/frame)\n\
+                     --json           print JSON instead of Markdown\n\
                      \n\
                      voxel-bench record [--from DIR] [--history DIR] [--label NAME]\n\
                      \x20                  [--note TEXT] [--attach FILE]...\n\
@@ -217,6 +258,17 @@ fn main() {
         }
     }
 
+    let frames = match frames {
+        Some(path) => match FrameReport::from_trace(&path, frame_warmup, FrameTarget::default()) {
+            Ok(report) => Some(report),
+            Err(error) => {
+                eprintln!("failed to read frame trace {}: {error}", path.display());
+                std::process::exit(1);
+            }
+        },
+        None => None,
+    };
+
     let rss_start = proc::rss_bytes();
     let cpu_start = proc::cpu_time();
     let wall_start = Instant::now();
@@ -255,6 +307,7 @@ fn main() {
         cpu,
         latency,
         layout,
+        frames,
     };
 
     if let Err(error) = result.write(&out_dir) {
@@ -263,13 +316,18 @@ fn main() {
     }
 
     println!(
-        "wrote {} and {} ({} memory, {} layout, {} CPU, {} latency cases) in {}",
+        "wrote {} and {} ({} memory, {} layout, {} CPU, {} latency cases{}) in {}",
         out_dir.join("report.md").display(),
         out_dir.join("report.json").display(),
         result.memory.len(),
         result.layout.len(),
         result.cpu.len(),
         result.latency.len(),
+        if result.frames.is_some() {
+            ", 1 frame trace"
+        } else {
+            ""
+        },
         human_ns(wall_ns),
     );
 
@@ -955,6 +1013,111 @@ fn human_bytes(bytes: u64) -> String {
     format!("{:.1} MiB", bytes as f64 / (1024.0 * 1024.0))
 }
 
+fn frame_mode(args: &[String]) {
+    let mut input: Option<PathBuf> = None;
+    let mut out = PathBuf::from("target/frame");
+    let mut warmup = 0usize;
+    let mut target = FrameTarget::default();
+    let mut json = false;
+
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--input" => {
+                index += 1;
+                input = Some(PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--input needs a file")),
+                ));
+            }
+            "--warmup" => {
+                index += 1;
+                let value = args
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_else(|| usage("--warmup needs a frame count"));
+                warmup = value.parse().unwrap_or_else(|_| {
+                    usage(&format!("--warmup needs a whole number, got `{value}`"))
+                });
+            }
+            "--target-fps" => {
+                index += 1;
+                let value = args
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_else(|| usage("--target-fps needs a number"));
+                target.avg_fps = parse_positive(&value, "--target-fps");
+            }
+            "--one-percent-fps" => {
+                index += 1;
+                let value = args
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_else(|| usage("--one-percent-fps needs a number"));
+                target.one_percent_low_fps = parse_positive(&value, "--one-percent-fps");
+            }
+            "--hitch-ms" => {
+                index += 1;
+                let value = args
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_else(|| usage("--hitch-ms needs a number"));
+                let millis = parse_positive(&value, "--hitch-ms");
+                target.hitch_ns = (millis * 1e6).round() as u64;
+            }
+            "--out" => {
+                index += 1;
+                out = PathBuf::from(
+                    args.get(index)
+                        .unwrap_or_else(|| usage("--out needs a directory")),
+                );
+            }
+            "--json" => json = true,
+            other => usage(&format!("unknown frame argument `{other}`")),
+        }
+        index += 1;
+    }
+
+    let Some(input) = input else {
+        usage("frame needs --input <trace.csv>");
+    };
+    let report = match FrameReport::from_trace(&input, warmup, target) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("failed to read frame trace {}: {error}", input.display());
+            std::process::exit(1);
+        }
+    };
+    if let Err(error) = report.write(&out) {
+        eprintln!("failed to write frame report to {}: {error}", out.display());
+        std::process::exit(1);
+    }
+    let (md_path, json_path) = voxel_bench::frame::output_paths(&out);
+
+    if json {
+        let serialized = match serde_json::to_string_pretty(&report) {
+            Ok(serialized) => serialized,
+            Err(error) => {
+                eprintln!("failed to serialize frame report: {error}");
+                std::process::exit(1);
+            }
+        };
+        eprintln!("wrote {} and {}", md_path.display(), json_path.display());
+        println!("{serialized}");
+    } else {
+        println!("wrote {} and {}", md_path.display(), json_path.display());
+        print!("{}", report.markdown());
+    }
+}
+
+fn parse_positive(value: &str, flag: &str) -> f64 {
+    value
+        .parse::<f64>()
+        .ok()
+        .filter(|number| number.is_finite() && *number > 0.0)
+        .unwrap_or_else(|| usage(&format!("{flag} needs a positive number, got `{value}`")))
+}
+
 fn gate_mode(args: &[String]) {
     let Some(command) = args.first() else {
         usage(
@@ -1480,5 +1643,51 @@ fn human_ns(ns: u64) -> String {
         format!("{:.2} ms", ns / 1e6)
     } else {
         format!("{:.2} µs", ns / 1e3)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_nanos());
+        std::env::temp_dir().join(format!("voxel-bench-{name}-{}-{nanos}", std::process::id()))
+    }
+
+    #[test]
+    fn human_ns_picks_seconds_milliseconds_and_microseconds() {
+        assert_eq!(human_ns(0), "0.00 µs");
+        assert_eq!(human_ns(1_500), "1.50 µs");
+        assert_eq!(human_ns(999_999), "1000.00 µs");
+        assert_eq!(human_ns(1_000_000), "1.00 ms");
+        assert_eq!(human_ns(1_500_000), "1.50 ms");
+        assert_eq!(human_ns(999_999_999), "1000.00 ms");
+        assert_eq!(human_ns(1_000_000_000), "1.00 s");
+        assert_eq!(human_ns(4_000_000_000), "4.00 s");
+    }
+
+    #[test]
+    fn write_json_report_creates_parents_and_writes_pretty_json() {
+        let out = temp_dir("report").join("nested").join("gate.json");
+        let report = serde_json::json!({
+            "schema": 1,
+            "rows": [{ "id": "edit_latency", "verdict": "pass" }],
+        });
+
+        write_json_report(&out, &report);
+
+        let text = std::fs::read_to_string(&out).expect("report is readable");
+        assert_eq!(
+            text,
+            format!("{}\n", serde_json::to_string_pretty(&report).unwrap())
+        );
+        let parsed: serde_json::Value = serde_json::from_str(&text).expect("report is valid JSON");
+        assert_eq!(parsed, report);
+
+        std::fs::remove_dir_all(out.parent().unwrap().parent().unwrap()).ok();
     }
 }

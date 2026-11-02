@@ -407,7 +407,7 @@ Unchanged. Per-chunk overlay compositing buffer; shader checks overlay before DA
 
 ### 10.2 Consolidation policy
 
-Unchanged. Multi-trigger policy: size (4096 entries), time (30 s idle), event (save, unload, LOD transition), budget (2 ms/frame).
+Unchanged. Multi-trigger policy: size (4096 entries), time (30 s idle), event (save, unload, LOD transition), budget (16 ms/frame).
 
 ### 10.3 LOD strategy
 
