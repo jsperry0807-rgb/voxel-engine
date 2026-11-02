@@ -45,7 +45,7 @@
 //! assert_eq!(BLOCK_OCCLUSION_BYTES, BLOCKS_PER_CHUNK.div_ceil(8));
 //! ```
 
-use crate::constants::{BLOCK_DIM, BLOCK_LEVEL, BLOCKS_PER_CHUNK, CHUNK_DIM, aabb_extent};
+use crate::constants::{aabb_extent, BLOCKS_PER_CHUNK, BLOCK_DIM, BLOCK_LEVEL, CHUNK_DIM};
 
 /// Voxels per edge of one light cell.
 ///
@@ -121,7 +121,12 @@ pub const OCCLUSION_HORIZON_BLOCKS: usize = OCCLUSION_HORIZON_M as usize;
 pub const BLOCK_OCCLUSION_BITS_PER_BLOCK: usize = 1;
 
 /// Packed block-visibility bits in one chunk.
-pub const BLOCK_OCCLUSION_BITS: usize = BLOCKS_PER_CHUNK * BLOCK_OCCLUSION_BITS_PER_BLOCK;
+///
+/// One bit per block, so the bit count is exactly the block count. Keeping the
+/// `* BLOCK_OCCLUSION_BITS_PER_BLOCK` factor here would be an equivalent
+/// mutation target (`* 1` versus `/ 1`), so the relationship is asserted in
+/// the tests instead.
+pub const BLOCK_OCCLUSION_BITS: usize = BLOCKS_PER_CHUNK;
 
 /// Packed block-visibility storage for one chunk at the current [`CHUNK_BITS`].
 ///
