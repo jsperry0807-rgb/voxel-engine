@@ -99,6 +99,12 @@ binding number is made in the spec and the pre-registration, never only in a tas
 - [`apps/texgen/README.md`](../apps/texgen/README.md) — the standalone Material Maker-style texture and material editor.
 - [`texgen-backlog.md`](texgen-backlog.md) — what texgen still needs, what is deferred, and what is done.
 
+## Previews
+
+- [`worldgen-preview.md`](worldgen-preview.md) — a real seed-1 macro map from
+  the current generator and hydrology, with the measured elevation, land and
+  lake statistics.
+
 ## Engineering notes
 
 - [`wgpu-traps.md`](wgpu-traps.md) — API rules that cost time in M3: buffer
