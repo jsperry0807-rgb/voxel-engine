@@ -27,10 +27,8 @@ their spill surfaces.
 
 ## Reproduce
 
-The preview is rendered by the local `terrain_preview` working-tree example,
-which builds the full heightfield, runs `Hydrology::compute` and writes the
-PNG. The generator and hydrology it calls are committed; the preview helper is
-a local rendering aid rather than part of the library path.
+The preview is rendered by `examples/terrain_preview.rs`, which builds the full
+heightfield, runs `Hydrology::compute` and writes the PNG:
 
 ```bash
 cargo run -p voxel-worldgen --release --example terrain_preview -- \
