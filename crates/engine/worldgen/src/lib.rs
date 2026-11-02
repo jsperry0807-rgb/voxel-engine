@@ -24,6 +24,7 @@
 //! - [`overhangs`] — occasional 3D shelves and arches, with floating-rock pruning.
 //! - [`ores`] — depth-tiered ore veins.
 //! - [`landmarks`] — one terrain-fitted landmark per 32 km cell.
+//! - [`structures`] — 1–4 km structure anchors and terrain-fitted prefab stamps.
 //! - [`climate`] — latitude, altitude and ocean-distance climate fields.
 //! - [`generator`] — the seeded generator that fills a tile.
 //! - [`hydro`] — priority-flood depression fill, D8 flow and accumulation.
@@ -60,6 +61,7 @@ pub mod ores;
 pub mod overhangs;
 pub mod rivers;
 pub mod splines;
+pub mod structures;
 pub mod surface;
 pub mod tile;
 pub mod tile_store;
@@ -81,6 +83,7 @@ pub use ores::{OreField, OreKind};
 pub use overhangs::OverhangField;
 pub use rivers::{Mouth, River, RiverNetwork, RiverPoint};
 pub use splines::{PEAK, SEA_LEVEL, surface_height};
+pub use structures::{Prefab, PrefabBlock, Stamp, Structure, StructureGrid, StructureKind};
 pub use surface::{SurfaceColumn, SurfaceKind, SurfaceSample};
 pub use tile::{MacroTile, TileError, TileHeader};
 pub use tile_store::{Channel, DirectorySource, TileSource, TileStore};
