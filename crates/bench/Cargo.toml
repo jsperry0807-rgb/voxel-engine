@@ -3,6 +3,7 @@ name = "voxel-bench"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 voxel-block = { path = "../engine/block" }

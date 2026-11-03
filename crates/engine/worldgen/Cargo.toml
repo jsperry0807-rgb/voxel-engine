@@ -3,6 +3,7 @@ name = "voxel-worldgen"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 description = "Deterministic terrain world generation for the voxel engine"
 
 [dependencies]

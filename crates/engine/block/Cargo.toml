@@ -3,6 +3,7 @@ name = "voxel-block"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 voxel-core = { path = "../../core" }
