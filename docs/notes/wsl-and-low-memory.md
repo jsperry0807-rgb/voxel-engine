@@ -70,7 +70,7 @@ rm -rf target/debug/incremental
 
 ## What not to run on 4 GiB
 
-`scripts/health.sh` with external tools enabled, `cargo mutants`,
-`cargo llvm-cov`, `cargo bench --workspace`, and any `--features chunk128`
-build are all much larger than the test suite. Run them on a bigger machine, or
-one at a time with `HEALTH_BENCH=0 HEALTH_MUTANTS=0 HEALTH_COVERAGE=0`.
+`scripts/health.sh` caps its own cargo parallelism on a small host, but its
+external tools (`cargo mutants`, `cargo llvm-cov`, `cargo bench`, perf) are still
+much larger than the test suite. Keep them off with `HEALTH_EXTERNAL=0`, or run
+them on a bigger machine. `--features chunk128` builds are also much heavier.

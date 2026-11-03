@@ -64,6 +64,11 @@ python3 scripts/build-docs-site.py
 | `docs/` | specifications, ADRs, milestone reports and engineering notes |
 | `scripts/` | health, bench, constants and documentation-site tooling |
 
+Crates are registered in [`xtask/src/layers.rs`](xtask/src/layers.rs) and checked
+with `cargo xtask check-layers`: a crate may only depend on the layers below it,
+and its directory name is its package name without the `voxel-` prefix. CI and
+`scripts/health.sh` run the check.
+
 ## Conventions
 
 - Task IDs (`M1-07`, `M3-02`) are stable; quote them in commits.

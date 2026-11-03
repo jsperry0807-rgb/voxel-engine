@@ -49,6 +49,18 @@ if ! cd "$(dirname "${BASH_SOURCE[0]}")/.."; then
 fi
 ROOT="$PWD"
 
+# CI-sized parallelism can push a small or WSL2 guest into swap; the same cap
+# the test runner uses keeps the health run alive. See
+# docs/notes/wsl-and-low-memory.md. Override by exporting the variables.
+if [[ -z ${CARGO_BUILD_JOBS:-} ]] && [[ -r /proc/meminfo ]]; then
+  health_mem_gib=$(awk '/^MemTotal:/ {print int($2 / 1024 / 1024)}' /proc/meminfo)
+  if ((health_mem_gib > 0 && health_mem_gib <= 8)); then
+    export CARGO_BUILD_JOBS=2
+    export RUST_TEST_THREADS="${RUST_TEST_THREADS:-2}"
+  fi
+  unset health_mem_gib
+fi
+
 # Cargo's target directory, honouring CARGO_TARGET_DIR. Without this a build
 # with a shared target dir succeeds and the viewer/samply checks then look in
 # the wrong place.
@@ -604,6 +616,7 @@ check_viewer_smoke() {
 }
 
 run_in_repo_checks() {
+  run_check "in-repo" "workspace layering" cargo xtask check-layers
   run_check "in-repo" "cargo fmt" cargo fmt --all --check
   run_check "in-repo" "clippy" cargo clippy --workspace --all-targets -- -D warnings
   run_check "in-repo" "tests (workspace)" cargo test --workspace

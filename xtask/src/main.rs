@@ -12,6 +12,8 @@ use std::process::{Command, ExitCode, Stdio};
 
 use voxel_core::win_toolchain::{self, Missing, TARGET};
 
+mod layers;
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let command = args.first().map(String::as_str);
@@ -19,6 +21,7 @@ fn main() -> ExitCode {
     match command {
         Some("build-win") => build_win(rest),
         Some("doctor") => doctor(rest),
+        Some("check-layers") => check_layers(),
         Some("-h" | "--help") => {
             print_help();
             ExitCode::SUCCESS
@@ -109,6 +112,20 @@ fn doctor(args: &[String]) -> ExitCode {
     }
     println!("Windows cross-build toolchain is ready ({TARGET}).");
     ExitCode::SUCCESS
+}
+
+/// `cargo xtask check-layers`: enforce the crate layering table.
+fn check_layers() -> ExitCode {
+    match layers::check() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(problems) => {
+            for problem in &problems {
+                eprintln!("xtask: {problem}");
+            }
+            eprintln!("xtask: the workspace layout drifted; see xtask/src/layers.rs");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn ensure_toolchain(install: bool) -> Result<(), String> {
@@ -332,6 +349,7 @@ fn print_help() {
            cargo build-win [--install] [cargo build args...]     cross-build Windows\n\
            cargo setup-win                                       install the cross toolchain\n\
            cargo xtask doctor [--install]                        check the cross toolchain\n\
+           cargo xtask check-layers                              enforce the crate layering\n\
          \n\
          `cargo build-win` checks mingw-w64 and the {TARGET}\n\
          Rust target and fails with instructions when something is missing.\n\
