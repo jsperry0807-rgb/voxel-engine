@@ -33,6 +33,12 @@ struct TestGpu {
 fn gpu() -> Option<&'static TestGpu> {
     static GPU: OnceLock<Option<TestGpu>> = OnceLock::new();
     GPU.get_or_init(|| {
+        // `VOXEL_SKIP_GPU=1` opts out on hosts where the WSL/Dozen GPU
+        // path is unstable; the test then reports a skip, exactly like a
+        // host with no adapter.
+        if std::env::var_os("VOXEL_SKIP_GPU").is_some() {
+            return None;
+        }
         let instance =
             wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {

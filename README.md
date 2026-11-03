@@ -22,6 +22,7 @@ The measured position, open conditions and per-milestone evidence are in
 ```sh
 cargo run -p voxel-viewer      # the streaming viewer
 cargo test --workspace         # tests (GPU cases skip without an adapter)
+./scripts/test-local.sh        # capped parallelism for WSL / low-memory hosts
 ./scripts/health.sh            # in-repo gates plus optional external tools
 ```
 

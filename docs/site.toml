@@ -163,6 +163,7 @@ title = "Engineering notes"
 description = "Hard-won operational knowledge, previews and backlog notes."
 pages = [
   "docs/notes/wgpu-traps.md",
+  "docs/notes/wsl-and-low-memory.md",
   "docs/design/worldgen-preview.md",
   "docs/notes/texgen-backlog.md",
   "docs/notes/v1-pool-residency.md",
