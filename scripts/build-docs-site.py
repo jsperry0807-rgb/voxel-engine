@@ -38,9 +38,11 @@ OUTPUT = ROOT / "site"
 TAXONOMY = ROOT / "docs" / "site.toml"
 GENERATED_CONFIG = ROOT / ".docs-build-mkdocs.yml"
 
-# Build outputs and tool caches never contain documents.
+# Build outputs and tool caches never contain documents. GitHub community
+# files (`.github/`) are repository plumbing, not documentation pages.
 EXCLUDE_DIRS = {
     ".git",
+    ".github",
     ".docs-build",
     "assets",
     "__archive__",

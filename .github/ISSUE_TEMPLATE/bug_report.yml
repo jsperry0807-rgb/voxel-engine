@@ -1,0 +1,74 @@
+name: Bug report
+description: Something is broken in the engine, the viewer or a tool.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please search existing issues first, and check
+        `docs/status.md` — the milestone in progress may already list the defect.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: The observed behaviour, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The exact commands, seed and options that trigger it.
+      placeholder: |
+        1. cargo run -p voxel-viewer
+        2. ...
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: Output of `git rev-parse --short HEAD`.
+      placeholder: 12899b2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: edge
+    attributes:
+      label: Chunk edge
+      options:
+        - 64³ (default)
+        - 128³ (chunk128 feature)
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: OS, rustc version and wgpu backend.
+      placeholder: Linux, rustc 1.90, Vulkan
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant `RUST_LOG` output, or a link to a gist.
+      render: text
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues for this.
+          required: true
+        - label: This is not a security issue — those go to the Security tab, privately.
+          required: true

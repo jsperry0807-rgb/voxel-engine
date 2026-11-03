@@ -1,0 +1,50 @@
+name: Feature request
+description: Propose a change to the engine, the world or the tooling.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This project is planned through `docs/specs/task-list.md`. A request that
+        fits an existing task is much easier to accept than one that invents a
+        new direction, so say which task or milestone you think it belongs to if
+        you can.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What is hard or impossible today, and who it affects.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What you would change, and how it would be verified.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other designs, and why you rejected them.
+    validations:
+      required: true
+
+  - type: input
+    id: task
+    attributes:
+      label: Related task or milestone
+      description: A task ID such as M2.5-22, or the milestone you think this fits.
+      placeholder: M2.5-22
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Checks
+      options:
+        - label: I checked the roadmap, the task list and existing issues first.
+          required: true

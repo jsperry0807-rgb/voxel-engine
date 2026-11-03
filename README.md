@@ -73,4 +73,19 @@ python3 scripts/build-docs-site.py
 - Any change to a binding number is made in the spec and the pre-registration,
   never only in the task list.
 
+## Contributing
+
+[`CONTRIBUTING.md`](CONTRIBUTING.md) covers the build, the checks CI runs and
+the conventions a change has to follow. Every project space is covered by the
+[`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
+
+## License
+
+Source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE):
+free to read, run, change and share for any noncommercial purpose — personal
+projects, study, hobby work, research, schools, charities and public bodies.
+Publishing a noncommercial fork is allowed; commercial use needs a separate
+license from the copyright holder. Contributions are accepted under the terms
+in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
 Agent instructions live in [`AGENTS.md`](AGENTS.md).
