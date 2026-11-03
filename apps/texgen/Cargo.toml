@@ -3,6 +3,7 @@ name = "voxel-texgen"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 description = "Standalone node-graph texture and material editor for Voxel-Stuff"
 
 [lib]

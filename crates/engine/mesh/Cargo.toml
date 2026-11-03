@@ -3,6 +3,7 @@ name = "voxel-mesh"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 description = "Block-granular content pipeline for the voxel engine"
 
 [dependencies]

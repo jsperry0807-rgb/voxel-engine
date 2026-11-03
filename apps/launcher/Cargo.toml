@@ -3,6 +3,7 @@ name = "voxel-launcher"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 description = "Desktop launcher for the Voxel-Stuff viewer, texture tools, checks and builds"
 
 [[bin]]
