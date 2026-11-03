@@ -4,6 +4,7 @@
 //! atlas, camera and GPU types in a library also gives integration tests a
 //! stable target (`cargo test -p voxel-viewer --test gpu`).
 
+pub mod app;
 pub mod atlas;
 pub mod atlas_texture;
 pub mod bake;
@@ -20,6 +21,7 @@ pub mod frametime;
 pub mod gpu;
 pub mod hitch;
 pub mod input;
+pub mod look;
 pub mod memory;
 pub mod mesh_pool;
 pub mod naive_mesh;
@@ -27,6 +29,7 @@ pub mod pose;
 pub mod quads;
 pub mod scene;
 pub mod screenshot;
+pub mod startup;
 pub mod stats;
 pub mod streaming;
 pub mod tracker;
