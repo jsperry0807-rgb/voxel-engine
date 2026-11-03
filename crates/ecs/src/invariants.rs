@@ -9,7 +9,7 @@
 use crate::entity::SlotState;
 use crate::location::EntityLocation;
 use crate::prelude::*;
-use crate::sparse::{SparseSet, SENTINEL};
+use crate::sparse::{SENTINEL, SparseSet};
 use crate::table::Table;
 use crate::world::World;
 
@@ -180,9 +180,9 @@ pub(crate) fn check_world(world: &World) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Without;
     use crate::component::Storage;
     use crate::entity::Entity;
-    use crate::Without;
 
     #[allow(dead_code)]
     #[derive(Debug)]

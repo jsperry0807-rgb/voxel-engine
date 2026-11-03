@@ -5,7 +5,7 @@
 
 #![allow(missing_docs)] // criterion's generated harness has no rustdoc surface
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use voxel_ecs::{Storage, World};
 
 #[derive(Clone, Copy)]

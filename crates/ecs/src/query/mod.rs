@@ -8,7 +8,7 @@ use core::marker::PhantomData;
 use std::ops::ControlFlow;
 
 use crate::entity::Entity;
-use crate::query::plan::{validate_desc, QueryPlan};
+use crate::query::plan::{QueryPlan, validate_desc};
 use crate::world::World;
 #[doc(hidden)]
 pub use fetch::{Fetch, ReadOnlyFetch};

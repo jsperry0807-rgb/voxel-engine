@@ -1,7 +1,7 @@
 //! Deferred structural edits, eager reservation, and flush/cancel semantics.
 
 use core::any::{Any, TypeId};
-use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
+use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 
 use crate::component::{Bundle, ComponentId};
 use crate::entity::{Entity, SlotState};

@@ -3,8 +3,8 @@
 use core::marker::PhantomData;
 
 use crate::entity::SlotState;
-use crate::query::plan::{AnchorMode, QueryPlan};
 use crate::query::QuerySpec;
+use crate::query::plan::{AnchorMode, QueryPlan};
 use crate::world::World;
 
 pub(crate) enum Kind {

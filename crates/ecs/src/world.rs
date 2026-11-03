@@ -3,7 +3,7 @@
 use core::any::Any;
 use core::ptr;
 use std::cell::UnsafeCell;
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::archetype::Archetype;

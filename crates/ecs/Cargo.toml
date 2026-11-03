@@ -3,7 +3,7 @@ name = "voxel-ecs"
 # The ECS is a frozen 1.0.0 contract; it keeps its own version instead of
 # inheriting the engine workspace version.
 version = "1.0.0"
-edition = "2021"
+edition.workspace = true
 publish.workspace = true
 rust-version = "1.85"
 description = "A compact, table + sparse-set entity component system implementing docs/SPEC.md"

@@ -1,7 +1,7 @@
 //! §7 — component registry, ZSTs, and drop glue.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use voxel_ecs::{Storage, World};
 
