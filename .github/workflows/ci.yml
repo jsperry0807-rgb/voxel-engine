@@ -91,6 +91,11 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       # The optional ray-test occluder is feature-gated, so it needs its own pass.
       - run: cargo clippy -p voxel-mesh --features raytest --all-targets -- -D warnings
+      # The ECS carries a crate-local clippy.toml that bans std collections.
+      # Clippy resolves that config from the working directory, not the
+      # workspace root, so the workspace pass above does not apply it.
+      - run: cargo clippy --all-targets -- -D warnings
+        working-directory: crates/ecs
 
   test:
     name: test

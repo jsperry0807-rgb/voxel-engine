@@ -1,0 +1,36 @@
+[package]
+name = "voxel-ecs"
+# The ECS is a frozen 1.0.0 contract; it keeps its own version instead of
+# inheriting the engine workspace version.
+version = "1.0.0"
+edition = "2021"
+publish.workspace = true
+rust-version = "1.85"
+description = "A compact, table + sparse-set entity component system implementing docs/SPEC.md"
+license = "MIT OR Apache-2.0"
+keywords = ["ecs", "entity", "gamedev"]
+categories = ["game-engines", "data-structures"]
+
+[dependencies]
+hashbrown = { version = "0.15", default-features = false, features = ["alloc", "default-hasher"] }
+rustc-hash = "2"
+smallvec = "1"
+bitvec = "1"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_docs = "deny"
+
+[lints.clippy]
+missing_panics_doc = "deny"
+missing_safety_doc = "deny"
+undocumented_unsafe_blocks = "deny"
+disallowed_types = "deny"
+
+[[bench]]
+name = "ecs"
+harness = false
+test = false

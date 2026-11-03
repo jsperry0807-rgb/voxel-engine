@@ -155,7 +155,7 @@ description = "Crate-level READMEs and design notes."
 [[section.child]]
 id = "ecs"
 title = "ECS"
-match = ["crates/ECS/**"]
+match = ["crates/ecs/**"]
 
 [[section]]
 id = "notes"

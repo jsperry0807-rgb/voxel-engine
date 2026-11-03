@@ -1,0 +1,20 @@
+# Clippy configuration for voxel-ecs.
+#
+# Collections in src/ must be routed through crate::prelude so the crate stays
+# alloc-portable. Integration tests may use hashbrown directly; they must not
+# use std::collections either, so the same rule applies to every target.
+disallowed-types = [
+    { path = "std::collections::HashMap", reason = "use crate::prelude::HashMap (hashbrown)" },
+    { path = "std::collections::HashSet", reason = "use crate::prelude collections" },
+    { path = "std::collections::BTreeMap", reason = "use crate::prelude collections" },
+    { path = "std::collections::BTreeSet", reason = "use crate::prelude collections" },
+    { path = "std::collections::VecDeque", reason = "use crate::prelude collections" },
+    { path = "std::collections::BinaryHeap", reason = "use crate::prelude collections" },
+    { path = "std::sync::Mutex", reason = "the world is single-threaded and lock-free" },
+    { path = "std::sync::RwLock", reason = "the world is single-threaded and lock-free" },
+]
+
+disallowed-methods = [
+    { path = "std::thread::spawn", reason = "World is not Sync; use one thread per World" },
+    { path = "std::thread::scope", reason = "World is not Sync; use one thread per World" },
+]

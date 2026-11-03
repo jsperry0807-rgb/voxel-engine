@@ -58,7 +58,7 @@ python3 scripts/build-docs-site.py
 | Path | Contents |
 |---|---|
 | `crates/engine/` | block, mesh, render, storage, texgraph, worldgen |
-| `crates/` | core, profiling, app support, vendored ECS |
+| `crates/` | core, profiling, app support, ecs |
 | `apps/` | `viewer`, `launcher`, `texgen` and `bench` applications |
 | `benchmarks/` | recorded runs, history, fixtures and lens definitions |
 | `docs/` | specifications, ADRs, milestone reports and engineering notes |

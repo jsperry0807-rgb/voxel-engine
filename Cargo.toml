@@ -4,6 +4,7 @@ members = [
     "xtask",
     "crates/app-support",
     "crates/core",
+    "crates/ecs",
     "crates/profiling",
     "crates/engine/block",
     "crates/engine/mesh",
