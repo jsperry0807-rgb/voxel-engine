@@ -24,13 +24,42 @@ cargo test -p voxel-block texture_manifest
 ```
 
 Set `VOXEL_VIEWER_ATLAS` to an `atlas.png` path or a directory of
-`atlas-0.png`…`atlas-4.png` levels to override the committed one. Local texture
-sets (for example a resource pack) bake into that directory shape:
+`atlas-0.png`… levels to override the committed one. Local texture sets (for
+example a resource pack) bake into that directory shape:
 
 ```sh
 cargo run -p voxel-texgen -- bake-set resourcepack
 VOXEL_VIEWER_ATLAS=assets/atlas/resourcepack cargo run -p voxel-viewer
 ```
+
+## Texture density
+
+`VOXEL_VIEWER_TILE` picks the texels per 1 m face: `16` (the committed atlas),
+`32`, `64`, `128` or `256`. The 256² face sources are committed and
+hash-verified, so every step is an exact integer box filter; `256` keeps the
+authored pixels unchanged.
+
+```sh
+VOXEL_VIEWER_TILE=256 cargo run --release -p voxel-viewer
+```
+
+The atlas stays a 16×16 grid of 256 material slots, so material ids, meshes and
+the shader are unchanged; only the atlas edge (`16 × tile`) and the mip count
+grow. The shader reads the tile edge from the bound texture, so each density
+step doubles the texels per voxel face.
+
+| `VOXEL_VIEWER_TILE` | Atlas | Levels | RGBA8, all mips | Texel size |
+| --- | --- | --- | --- | --- |
+| 16 (default) | 256² | 5 | 0.3 MiB | 6.25 cm |
+| 32 | 512² | 6 | 1.3 MiB | 3.13 cm |
+| 64 | 1024² | 7 | 5.3 MiB | 1.56 cm |
+| 128 | 2048² | 8 | 21 MiB | 7.8 mm |
+| 256 | 4096² | 9 | 85 MiB | 3.9 mm |
+
+Densities above 16 are rebuilt at startup from `crates/engine/block`'s sources,
+so the viewer must run from a checkout. An explicit `VOXEL_VIEWER_ATLAS`
+directory or PNG keeps its own density, and the viewer logs that the tile
+override was ignored.
 
 ## Scene
 

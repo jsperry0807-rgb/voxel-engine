@@ -21,6 +21,14 @@
 //! Mip generation stops at [`MAX_MIP`] (level 4), where a 16×16 tile has shrunk
 //! to 1×1. Deeper levels would average texels from different tiles.
 //!
+//! # Runtime tile densities
+//!
+//! The layout above is the committed default. [`AtlasLayout`] expresses the
+//! same 16×16-slot model at any edge in [`TILE_SIZES`], so the viewer can build
+//! 32², 64², 128² or 256² tiles from the committed 256² sources without
+//! changing material ids, mesh data or the shader's tile addressing. Only the
+//! atlas edge (`16 × tile_size`) and the mip count grow.
+//!
 //! # Example
 //!
 //! ```
@@ -59,6 +67,123 @@ pub const MAX_MIP: u32 = 4;
 
 /// Number of mip levels in the atlas, including the base level.
 pub const MIP_LEVELS: u32 = MAX_MIP + 1;
+
+/// Edge of the committed face sources, in texels.
+///
+/// Every runtime tile edge divides this exactly, so one source face can feed
+/// any [`TILE_SIZES`] density with an integer box filter.
+pub const SOURCE_TILE_SIZE: u32 = 256;
+
+/// Tile edges the runtime can build, in texels.
+///
+/// The committed default is 16 (6.25 cm per texel). Larger tiles keep the same
+/// 16×16 grid and the same 256 material slots, so the atlas edge grows to
+/// `16 × TILE_SIZES[n]` (256 … 4096) and the shader reads 16× more texels per
+/// voxel face at each step.
+pub const TILE_SIZES: [u32; 5] = [16, 32, 64, 128, 256];
+
+/// Whether `tile_size` is one of [`TILE_SIZES`].
+pub const fn is_tile_size(tile_size: u32) -> bool {
+    matches!(tile_size, 16 | 32 | 64 | 128 | 256)
+}
+
+/// The layout of one atlas: 16×16 tiles of `tile_size` texels.
+///
+/// It generalizes the compile-time constants above. [`AtlasLayout::default`]
+/// is the committed 16-texel layout, and the runtime can request any
+/// [`TILE_SIZES`] edge without changing the slot model: `tileIndex =
+/// materialId`, row-major, and every tile stays mip-aligned.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct AtlasLayout {
+    tile_size: u32,
+}
+
+impl AtlasLayout {
+    /// The committed layout: 16×16 texels per tile, one 256×256 atlas.
+    pub const DEFAULT: Self = Self::new(TILE_SIZE);
+
+    /// A layout with `tile_size` texels per tile edge.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `tile_size` is not one of [`TILE_SIZES`]. Parse untrusted
+    /// input with [`Self::parse`] instead.
+    pub const fn new(tile_size: u32) -> Self {
+        assert!(
+            is_tile_size(tile_size),
+            "tile edge must be one of 16, 32, 64, 128 or 256"
+        );
+        Self { tile_size }
+    }
+
+    /// Parses a tile edge from text, such as an environment variable.
+    pub fn parse(text: &str) -> Option<Self> {
+        text.trim()
+            .parse::<u32>()
+            .ok()
+            .filter(|edge| is_tile_size(*edge))
+            .map(Self::new)
+    }
+
+    /// Tile edge in texels.
+    pub const fn tile_size(self) -> u32 {
+        self.tile_size
+    }
+
+    /// Atlas edge in texels: `TILES_PER_EDGE × tile_size`.
+    pub const fn atlas_size(self) -> u32 {
+        self.tile_size * TILES_PER_EDGE
+    }
+
+    /// RGBA8 bytes in one tile.
+    pub const fn tile_bytes(self) -> usize {
+        (self.tile_size * self.tile_size * 4) as usize
+    }
+
+    /// Mip levels including the base level.
+    pub const fn mip_count(self) -> u32 {
+        let mut count = 1;
+        let mut edge = self.tile_size;
+        while edge > 1 {
+            edge >>= 1;
+            count += 1;
+        }
+        count
+    }
+
+    /// Deepest mip level, where every tile is exactly one texel.
+    pub const fn max_mip(self) -> u32 {
+        self.mip_count() - 1
+    }
+
+    /// Upper-left texel of a tile in the atlas, as `(x, y)`.
+    pub const fn tile_origin(self, tile: u16) -> (u32, u32) {
+        assert!((tile as u32) < MAX_MATERIALS);
+        let tile = tile as u32;
+        (
+            (tile % TILES_PER_EDGE) * self.tile_size,
+            (tile / TILES_PER_EDGE) * self.tile_size,
+        )
+    }
+
+    /// Total RGBA8 bytes across every mip level.
+    pub const fn byte_len(self) -> usize {
+        let mut bytes = 0;
+        let mut level = 0;
+        while level < self.mip_count() {
+            let edge = self.atlas_size() >> level;
+            bytes += (edge * edge * 4) as usize;
+            level += 1;
+        }
+        bytes
+    }
+}
+
+impl Default for AtlasLayout {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
 
 const HALF_TEXEL: f32 = 0.5;
 const ATLAS_SIZE_F32: f32 = ATLAS_SIZE as f32;
@@ -159,6 +284,71 @@ mod tests {
         assert_eq!(MAX_MIP, 4);
         assert_eq!(MIP_LEVELS, MAX_MIP + 1);
         assert_eq!(MIP_LEVELS, 5);
+    }
+
+    #[test]
+    fn tile_sizes_cover_the_supported_densities() {
+        assert_eq!(TILE_SIZES, [16, 32, 64, 128, 256]);
+        assert_eq!(AtlasLayout::default(), AtlasLayout::DEFAULT);
+        assert_eq!(AtlasLayout::DEFAULT.tile_size(), TILE_SIZE);
+        assert_eq!(AtlasLayout::DEFAULT.atlas_size(), ATLAS_SIZE);
+        assert_eq!(AtlasLayout::DEFAULT.mip_count(), MIP_LEVELS);
+        assert_eq!(AtlasLayout::DEFAULT.max_mip(), MAX_MIP);
+        assert_eq!(AtlasLayout::DEFAULT.byte_len(), 349_184);
+
+        for (edge, atlas_edge, mips) in [
+            (16, 256, 5),
+            (32, 512, 6),
+            (64, 1024, 7),
+            (128, 2048, 8),
+            (256, 4096, 9),
+        ] {
+            let layout = AtlasLayout::new(edge);
+            assert_eq!(layout.atlas_size(), atlas_edge);
+            assert_eq!(layout.mip_count(), mips);
+            assert_eq!(layout.max_mip(), mips - 1);
+            assert_eq!(layout.tile_bytes(), (edge * edge * 4) as usize);
+            assert_eq!(SOURCE_TILE_SIZE % edge, 0, "source does not divide evenly");
+        }
+    }
+
+    #[test]
+    fn tile_sizes_parse_and_reject_unknown_edges() {
+        assert_eq!(AtlasLayout::parse("16"), Some(AtlasLayout::DEFAULT));
+        assert_eq!(AtlasLayout::parse(" 256 "), Some(AtlasLayout::new(256)));
+        for rejected in ["", "0", "8", "24", "512", "wide", "-16"] {
+            assert_eq!(AtlasLayout::parse(rejected), None, "{rejected:?}");
+        }
+    }
+
+    #[test]
+    fn every_density_keeps_tiles_row_major_and_mip_aligned() {
+        for edge in TILE_SIZES {
+            let layout = AtlasLayout::new(edge);
+            assert_eq!(layout.tile_origin(0), (0, 0));
+            assert_eq!(layout.tile_origin(15), (15 * edge, 0));
+            assert_eq!(layout.tile_origin(16), (0, edge));
+            assert_eq!(
+                layout.tile_origin((MAX_MATERIALS - 1) as u16),
+                (15 * edge, 15 * edge)
+            );
+
+            for level in 0..=layout.max_mip() {
+                let atlas_edge = layout.atlas_size() >> level;
+                let tile_edge = edge >> level;
+                assert!(tile_edge >= 1, "{edge}px tiles vanish at level {level}");
+                assert_eq!(atlas_edge % tile_edge, 0);
+
+                for tile in 0..MAX_MATERIALS {
+                    let (x, y) = layout.tile_origin(tile as u16);
+                    let (x, y) = (x >> level, y >> level);
+                    assert_eq!(x % tile_edge, 0);
+                    assert_eq!(y % tile_edge, 0);
+                    assert!(x + tile_edge <= atlas_edge);
+                    assert!(y + tile_edge <= atlas_edge);
+                }
+            }
+        }
     }
 
     #[test]

@@ -65,12 +65,49 @@ pub struct LauncherApp {
     notice: Option<String>,
 }
 
+/// Tile edges the viewer can build, in texels per 1 m face.
+const TILE_CHOICES: [u32; 5] = [16, 32, 64, 128, 256];
+
+/// The committed density: no override is sent for this edge.
+const DEFAULT_TILE: u32 = 16;
+
+/// The `WSLENV` value that makes a Windows executable see `pairs`.
+///
+/// WSL drops every variable that `WSLENV` does not name when it starts a
+/// Windows binary, so the launcher lists the variables it sets and keeps any
+/// entries from the inherited `WSLENV` (including their `/p`, `/u` and `/w`
+/// flags).
+fn windows_bridge(pairs: &[(String, String)]) -> String {
+    let mut names: Vec<String> = std::env::var("WSLENV")
+        .ok()
+        .map(|value| {
+            value
+                .split(':')
+                .filter(|entry| !entry.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default();
+    for (name, _) in pairs {
+        let known = names
+            .iter()
+            .any(|entry| entry.split('/').next() == Some(name.as_str()));
+        if !known {
+            names.push(name.clone());
+        }
+    }
+    names.join(":")
+}
+
 /// Options passed to the viewer as environment variables.
 struct ViewerOptions {
     /// Which atlas the viewer renders with.
     texture: TextureSource,
     /// Free-form path used when [`TextureSource::Custom`] is selected.
     atlas: String,
+    /// Texels per 1 m face; the committed Voxgen atlas is rebuilt when this is
+    /// not [`DEFAULT_TILE`].
+    tile: u32,
     log: String,
     wayland: bool,
 }
@@ -103,6 +140,7 @@ impl Default for ViewerOptions {
         Self {
             texture: TextureSource::Voxgen,
             atlas: String::new(),
+            tile: DEFAULT_TILE,
             log: "warn,voxel_viewer=info".to_owned(),
             wayland: false,
         }
@@ -135,6 +173,9 @@ impl ViewerOptions {
             let atlas = atlas.display().to_string();
             let atlas = if windows { windows_path(&atlas) } else { atlas };
             env.push(("VOXEL_VIEWER_ATLAS".to_owned(), atlas));
+        }
+        if self.tile != DEFAULT_TILE {
+            env.push(("VOXEL_VIEWER_TILE".to_owned(), self.tile.to_string()));
         }
         if self.wayland {
             env.push(("VOXEL_VIEWER_WAYLAND".to_owned(), "1".to_owned()));
@@ -319,18 +360,23 @@ impl LauncherApp {
     }
 
     fn start_viewer(&mut self, windows: bool) {
+        let label = format!("Viewer · {}²", self.viewer.tile);
+        let mut environment = self.viewer.environment(windows, &self.root);
+        if windows {
+            // WSL interop only forwards variables that WSLENV names to a
+            // Windows executable. Without this the exe never sees
+            // VOXEL_VIEWER_TILE, RUST_LOG or the atlas path, so every Windows
+            // launch silently used the committed 16-texel atlas.
+            environment.push(("WSLENV".to_owned(), windows_bridge(&environment)));
+        }
         let spec = if windows {
-            CommandSpec::new(
-                "Viewer (Windows)",
-                self.windows_exe().display().to_string(),
-                &[],
-            )
-            .note("native Win32 window from the cross-built exe; atlas paths are translated")
+            CommandSpec::new(label, self.windows_exe().display().to_string(), &[])
+                .note("native Win32 window from the cross-built exe; atlas paths are translated")
         } else {
-            CommandSpec::new("Viewer (Linux)", "cargo", &["run", "-p", "voxel-viewer"])
+            CommandSpec::new(label, "cargo", &["run", "-p", "voxel-viewer"])
                 .note("pointer capture prefers X11/XWayland; enable Force Wayland to override")
         };
-        let spec = spec.envs(self.viewer.environment(windows, &self.root));
+        let spec = spec.envs(environment);
         self.start(spec);
     }
 
@@ -528,14 +574,18 @@ impl LauncherApp {
             "Run",
             "Linux is the main test surface. The Windows exe exists so the same build can be tried without WSL.",
         );
-        if primary_button(ui, "Open viewer  ·  Linux", "cargo run -p voxel-viewer") {
+        if primary_button(
+            ui,
+            &format!("Open viewer  ·  Linux  ·  {}²", self.viewer.tile),
+            "cargo run -p voxel-viewer",
+        ) {
             self.start_viewer(false);
         }
         let exe = self.windows_exe();
         let ready = is_executable(&exe);
         if action_button(
             ui,
-            "Open viewer  ·  Windows",
+            &format!("Open viewer  ·  Windows  ·  {}²", self.viewer.tile),
             &format!(
                 "{} (cross-built, runs natively through WSL interop)",
                 exe.display()
@@ -605,6 +655,41 @@ impl LauncherApp {
                 );
             }
         }
+        ui.add_space(4.0);
+        let density_enabled = self.viewer.texture == TextureSource::Voxgen;
+        ui.label(RichText::new("Texture density").small().weak());
+        ui.horizontal_wrapped(|ui| {
+            ui.add_enabled_ui(density_enabled, |ui| {
+                for tile in TILE_CHOICES {
+                    let label = format!("{tile}²");
+                    let selected = self.viewer.tile == tile;
+                    if ui
+                        .selectable_label(selected, label)
+                        .on_hover_text(format!(
+                            "{tile}×{tile} texels per 1 m face ({}² atlas)",
+                            tile * 16
+                        ))
+                        .clicked()
+                        && density_enabled
+                    {
+                        self.viewer.tile = tile;
+                    }
+                }
+            });
+        });
+        ui.label(
+            RichText::new(if density_enabled {
+                format!(
+                    "Texels per 1 m face, rebuilt from the committed 256² sources. \
+                     {DEFAULT_TILE}² uses the committed atlas; 256² keeps every source pixel."
+                )
+            } else {
+                "The selected atlas keeps its own density; pick Voxgen to rebuild at another one."
+                    .to_owned()
+            })
+            .weak()
+            .small(),
+        );
         egui::CollapsingHeader::new("Viewer options")
             .default_open(false)
             .show(ui, |ui| {
@@ -648,7 +733,12 @@ impl LauncherApp {
         ) {
             self.start_texgen_tool("Texture generate", &["generate"]);
         }
-        if action_button(ui, "Bake atlas", "Writes the 256² atlas and its hash", true) {
+        if action_button(
+            ui,
+            "Bake atlas",
+            "Writes the committed 256² atlas and its hash; runtime densities are viewer options",
+            true,
+        ) {
             self.start_texgen_tool("Atlas bake", &["bake-atlas"]);
         }
         if action_button(
@@ -1172,7 +1262,8 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use super::{
-        LOG_TEXT_BASE, LOG_TEXT_MAX_SCALE, TextureSource, ViewerOptions, log_text_size_for,
+        DEFAULT_TILE, LOG_TEXT_BASE, LOG_TEXT_MAX_SCALE, TILE_CHOICES, TextureSource,
+        ViewerOptions, log_text_size_for, windows_bridge,
     };
 
     #[test]
@@ -1220,5 +1311,44 @@ mod tests {
         let options = ViewerOptions::default();
         let env = options.environment(false, Path::new("/workspace"));
         assert!(env.iter().all(|(name, _)| name != "VOXEL_VIEWER_ATLAS"));
+        assert_eq!(options.tile, DEFAULT_TILE);
+        assert!(env.iter().all(|(name, _)| name != "VOXEL_VIEWER_TILE"));
+    }
+
+    #[test]
+    fn windows_bridge_lists_every_forwarded_variable_once() {
+        let pairs = vec![
+            ("VOXEL_VIEWER_TILE".to_owned(), "256".to_owned()),
+            ("RUST_LOG".to_owned(), "info".to_owned()),
+            ("VOXEL_VIEWER_TILE".to_owned(), "256".to_owned()),
+        ];
+        let bridge = windows_bridge(&pairs);
+        let names: Vec<&str> = bridge.split(':').collect();
+        assert_eq!(
+            names
+                .iter()
+                .filter(|name| **name == "VOXEL_VIEWER_TILE")
+                .count(),
+            1
+        );
+        assert!(names.contains(&"RUST_LOG"));
+    }
+
+    #[test]
+    fn texture_density_reaches_the_viewer() {
+        let mut options = ViewerOptions::default();
+        for tile in TILE_CHOICES {
+            options.tile = tile;
+            let env = options.environment(false, Path::new("/workspace"));
+            let value = env
+                .iter()
+                .find(|(name, _)| name == "VOXEL_VIEWER_TILE")
+                .map(|(_, value)| value.as_str());
+            if tile == DEFAULT_TILE {
+                assert_eq!(value, None, "the committed density needs no override");
+            } else {
+                assert_eq!(value, Some(tile.to_string().as_str()));
+            }
+        }
     }
 }

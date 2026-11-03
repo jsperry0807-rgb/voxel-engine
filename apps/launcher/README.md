@@ -17,7 +17,7 @@ The launcher finds the workspace root by walking up from the working directory
 
 | Area | Actions |
 | --- | --- |
-| Run | Viewer on Linux (`cargo run -p voxel-viewer`), viewer from the Windows exe, the texture editor, and the Voxgen/resource-pack texture-source toggle |
+| Run | Viewer on Linux (`cargo run -p voxel-viewer`), viewer from the Windows exe, the texture editor, the Voxgen/resource-pack texture-source toggle, and the 16²/32²/64²/128²/256² texture density |
 | Textures | `check`, `generate`, `bake-atlas`, `update-all` from the texgen pipeline, plus `bake-set` for local resource packs |
 | Verify | fmt, clippy, workspace tests, texture manifest test, shader tests, chunk constants |
 | Bench | `gate report`, the full `scripts/bench.sh` suite |
@@ -36,10 +36,19 @@ committed procedural atlas is used, *Resource pack* points at
 `assets/atlas/resourcepack`, and *Custom path* uses the field below. X11/XWayland
 stays the default pointer backend.
 
+*Texture density* sets `VOXEL_VIEWER_TILE` to 16, 32, 64, 128 or 256 texels per
+1 m face. It is enabled for *Voxgen*: 16 uses the committed atlas, and larger
+values rebuild the same 16×16-slot atlas from the committed 256² sources at
+startup (256 keeps every source pixel, at 4096² / ~85 MiB of VRAM). A resource
+pack or custom atlas keeps the density that was baked into its files, and the
+viewer logs that the override was ignored.
+
 ## Voxgen vs resource-pack textures
 
 Both sides are 256² face sources that the same box filter bakes into the
-viewer's 16×16 atlas tiles, so switching sources compares like with like.
+viewer's atlas tiles, so switching sources compares like with like. The
+committed bake stays at 16² tiles; the launcher's *Texture density* only
+changes the view-time rebuild of the Voxgen set.
 
 ```text
 assets/textures/voxgen/        generated faces (copy of the committed set)

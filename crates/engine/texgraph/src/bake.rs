@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use voxel_block::texture_manifest::{AlphaClass, TextureEntry, TextureManifest};
-use voxel_core::atlas::{ATLAS_SIZE, MAX_MIP, MIP_LEVELS, TILE_SIZE, tile_origin};
+use voxel_core::atlas::{AtlasLayout, TILE_SIZE, TILE_SIZES, is_tile_size};
 
 use crate::luts::{LINEAR_TO_SRGB, SRGB_TO_LINEAR};
 use crate::png::encode_rgba;
@@ -106,34 +106,36 @@ impl From<pipeline::PipelineError> for BakeError {
 }
 
 /// Builds the atlas from the committed manifest and sources, without writing.
+///
+/// This is the committed 16-texel layout; [`build_levels_at`] builds any
+/// supported runtime density.
 pub fn build_atlas(workspace: &pipeline::Workspace) -> Result<AtlasBuild, BakeError> {
-    let manifest_path = workspace.manifest_path();
-    let manifest_bytes = fs::read(&manifest_path).map_err(|source| BakeError::Io {
-        path: manifest_path.clone(),
-        source,
-    })?;
-    // Parse the bytes that were hashed: a second read could pick up an edit
-    // and stamp the atlas with the previous revision's hash.
-    let manifest: TextureManifest = ron::from_str(
-        std::str::from_utf8(&manifest_bytes)
-            .map_err(|error| BakeError::Invalid(format!("manifest is not UTF-8: {error}")))?,
-    )
-    .map_err(|error| BakeError::Invalid(format!("manifest parse error: {error}")))?;
-    voxel_block::texture_manifest::validate(&manifest, &workspace.block_crate())
-        .map_err(BakeError::Manifest)?;
+    build_atlas_layout(workspace, AtlasLayout::DEFAULT)
+}
 
-    let mut base = vec![0u8; (ATLAS_SIZE * ATLAS_SIZE * 4) as usize];
-    for entry in manifest.sorted() {
-        let image = voxel_block::texture_manifest::load_source(&workspace.block_crate(), entry)
-            .map_err(BakeError::Manifest)?;
-        let tile = downsample(&image.pixels, entry.alpha)?;
-        blit_tile(&mut base, entry.slot, &tile, TILE_SIZE)?;
-    }
+/// Builds the atlas at an explicit runtime tile density, without writing.
+///
+/// The 256² sources are box-filtered by `256 / tile_size`, so every supported
+/// edge is an exact integer reduction. The manifest's source hashes are
+/// verified by the same loader the committed bake uses.
+pub fn build_levels_at(
+    workspace: &pipeline::Workspace,
+    layout: AtlasLayout,
+) -> Result<Vec<Level>, BakeError> {
+    let (_, manifest) = read_manifest(workspace)?;
+    build_levels(workspace, &manifest, layout)
+}
 
-    let slots: Vec<u16> = manifest.sorted().iter().map(|entry| entry.slot).collect();
-    let levels = mip_chain(base, &slots)?;
+/// Builds the committed atlas at `layout` and encodes it for `bake-atlas`.
+pub fn build_atlas_layout(
+    workspace: &pipeline::Workspace,
+    layout: AtlasLayout,
+) -> Result<AtlasBuild, BakeError> {
+    let (manifest_bytes, manifest) = read_manifest(workspace)?;
+    let levels = build_levels(workspace, &manifest, layout)?;
 
-    let png = encode_rgba(ATLAS_SIZE, ATLAS_SIZE, &levels[0].pixels).map_err(BakeError::Png)?;
+    let edge = layout.atlas_size();
+    let png = encode_rgba(edge, edge, &levels[0].pixels).map_err(BakeError::Png)?;
     let atlas_png_blake3 = blake3::hash(&png).to_hex().to_string();
     let mut hasher = blake3::Hasher::new();
     for level in &levels {
@@ -152,28 +154,87 @@ pub fn build_atlas(workspace: &pipeline::Workspace) -> Result<AtlasBuild, BakeEr
     })
 }
 
+fn read_manifest(workspace: &pipeline::Workspace) -> Result<(Vec<u8>, TextureManifest), BakeError> {
+    let manifest_path = workspace.manifest_path();
+    let manifest_bytes = fs::read(&manifest_path).map_err(|source| BakeError::Io {
+        path: manifest_path.clone(),
+        source,
+    })?;
+    // Parse the bytes that were hashed: a second read could pick up an edit
+    // and stamp the atlas with the previous revision's hash.
+    let manifest: TextureManifest = ron::from_str(
+        std::str::from_utf8(&manifest_bytes)
+            .map_err(|error| BakeError::Invalid(format!("manifest is not UTF-8: {error}")))?,
+    )
+    .map_err(|error| BakeError::Invalid(format!("manifest parse error: {error}")))?;
+    voxel_block::texture_manifest::validate(&manifest, &workspace.block_crate())
+        .map_err(BakeError::Manifest)?;
+    Ok((manifest_bytes, manifest))
+}
+
+fn build_levels(
+    workspace: &pipeline::Workspace,
+    manifest: &TextureManifest,
+    layout: AtlasLayout,
+) -> Result<Vec<Level>, BakeError> {
+    let edge = layout.atlas_size();
+    let mut base = vec![0u8; (edge * edge * 4) as usize];
+    for entry in manifest.sorted() {
+        let image = voxel_block::texture_manifest::load_source(&workspace.block_crate(), entry)
+            .map_err(BakeError::Manifest)?;
+        let tile = downsample_to(
+            &image.pixels,
+            SOURCE_EDGE as u32,
+            layout.tile_size(),
+            entry.alpha,
+        )?;
+        blit_region(
+            &mut base,
+            edge,
+            layout.tile_origin(entry.slot),
+            &tile,
+            layout.tile_size(),
+        )?;
+    }
+
+    let slots: Vec<u16> = manifest.sorted().iter().map(|entry| entry.slot).collect();
+    mip_chain_at(base, &slots, layout)
+}
+
 /// Builds the full mip chain from a base level whose atlas tiles are at `slots`.
 ///
-/// The base level is the 256x256 atlas, so the first call needs no padding.
-/// Each later level halves each tile separately and never filters across tile
-/// seams, which is what keeps neighbouring materials from bleeding.
+/// The committed 16-texel layout; [`mip_chain_at`] takes any density.
 pub(crate) fn mip_chain(base: Vec<u8>, slots: &[u16]) -> Result<Vec<Level>, BakeError> {
-    let mut levels = Vec::with_capacity(MIP_LEVELS as usize);
+    mip_chain_at(base, slots, AtlasLayout::DEFAULT)
+}
+
+/// Builds the full mip chain for `layout`, tile by tile.
+///
+/// Each level halves every tile separately and never filters across a tile
+/// seam, which is what keeps neighbouring materials from bleeding. The chain
+/// stops when each tile is 1×1.
+pub(crate) fn mip_chain_at(
+    base: Vec<u8>,
+    slots: &[u16],
+    layout: AtlasLayout,
+) -> Result<Vec<Level>, BakeError> {
+    let atlas_edge = layout.atlas_size();
+    let mut levels = Vec::with_capacity(layout.mip_count() as usize);
     levels.push(Level {
-        width: ATLAS_SIZE,
-        height: ATLAS_SIZE,
+        width: atlas_edge,
+        height: atlas_edge,
         pixels: base,
     });
-    for level in 1..=MAX_MIP {
-        let edge = ATLAS_SIZE >> level;
+    for level in 1..layout.mip_count() {
+        let edge = atlas_edge >> level;
         let mut pixels = vec![0u8; (edge * edge * 4) as usize];
-        let tile_edge = TILE_SIZE >> level;
+        let tile_edge = layout.tile_size() >> level;
         for &slot in slots {
-            let origin = tile_origin(slot);
+            let origin = layout.tile_origin(slot);
             let source_origin = (origin.0 >> (level - 1), origin.1 >> (level - 1));
             let previous = &levels[(level - 1) as usize];
-            let tile = read_region(previous, source_origin, TILE_SIZE >> (level - 1))?;
-            let reduced = halve(&tile, TILE_SIZE >> (level - 1));
+            let tile = read_region(previous, source_origin, tile_edge << 1)?;
+            let reduced = halve(&tile, tile_edge << 1);
             blit_region(
                 &mut pixels,
                 edge,
@@ -269,7 +330,29 @@ pub fn downsample_edge(
     source_edge: u32,
     alpha: AlphaClass,
 ) -> Result<[u8; TILE_BYTES], BakeError> {
-    let tile_edge = TILE_EDGE as u32;
+    let tile = downsample_to(source, source_edge, TILE_SIZE, alpha)?;
+    Ok(tile
+        .try_into()
+        .expect("16x16 RGBA8 tile is exactly TILE_BYTES"))
+}
+
+/// Box-filters a square RGBA8 source to a `tile_edge` tile.
+///
+/// `box_edge = source_edge / tile_edge` source texels per output texel; any
+/// supported density is an exact integer reduction of the 256² sources. A
+/// one-texel box copies the source colour unchanged, so the 256² density keeps
+/// the authored pixels rather than round-tripping them through the sRGB LUT.
+pub fn downsample_to(
+    source: &[u8],
+    source_edge: u32,
+    tile_edge: u32,
+    alpha: AlphaClass,
+) -> Result<Vec<u8>, BakeError> {
+    if !is_tile_size(tile_edge) {
+        return Err(BakeError::Invalid(format!(
+            "tile edge {tile_edge} is not one of {TILE_SIZES:?}"
+        )));
+    }
     if source_edge < tile_edge || !source_edge.is_multiple_of(tile_edge) {
         return Err(BakeError::Invalid(format!(
             "source edge {source_edge} must be a positive multiple of {tile_edge}"
@@ -286,11 +369,33 @@ pub fn downsample_edge(
             source.len(),
         )));
     }
-    let box_edge = edge / TILE_EDGE;
+    let box_edge = edge / tile_edge as usize;
     let source_edge = source_edge as usize;
-    let mut tile = [0u8; TILE_BYTES];
-    for ty in 0..TILE_EDGE {
-        for tx in 0..TILE_EDGE {
+    let mut tile = vec![0u8; (tile_edge * tile_edge * 4) as usize];
+
+    if box_edge == 1 {
+        for offset in (0..expected).step_by(4) {
+            let alpha = match alpha {
+                AlphaClass::Opaque => 255,
+                AlphaClass::Cutout => {
+                    if source[offset + 3] >= 128 {
+                        255
+                    } else {
+                        0
+                    }
+                }
+                AlphaClass::Translucent => source[offset + 3],
+            };
+            tile[offset] = source[offset];
+            tile[offset + 1] = source[offset + 1];
+            tile[offset + 2] = source[offset + 2];
+            tile[offset + 3] = alpha;
+        }
+        return Ok(tile);
+    }
+
+    for ty in 0..tile_edge as usize {
+        for tx in 0..tile_edge as usize {
             let mut sums = [0u64; 3];
             let mut sum_alpha = 0u64;
             for by in 0..box_edge {
@@ -305,7 +410,7 @@ pub fn downsample_edge(
                     sums[2] += SRGB_TO_LINEAR[source[offset + 2] as usize] as u64 * a;
                 }
             }
-            let destination = (ty * TILE_EDGE + tx) * 4;
+            let destination = (ty * tile_edge as usize + tx) * 4;
             if sum_alpha == 0 {
                 tile[destination] = 0;
                 tile[destination + 1] = 0;
@@ -345,8 +450,14 @@ pub(crate) fn blit_tile(
     tile: &[u8],
     tile_edge: u32,
 ) -> Result<(), BakeError> {
-    let origin = tile_origin(slot);
-    blit_region(base, ATLAS_SIZE, origin, tile, tile_edge)
+    let layout = AtlasLayout::DEFAULT;
+    blit_region(
+        base,
+        layout.atlas_size(),
+        layout.tile_origin(slot),
+        tile,
+        tile_edge,
+    )
 }
 
 fn blit_region(
@@ -477,5 +588,127 @@ mod tests {
 
         let ok = vec![0u8; 64 * 64 * 4];
         assert!(downsample_edge(&ok, 64, AlphaClass::Opaque).is_ok());
+    }
+
+    #[test]
+    fn dense_tile_keeps_the_authored_pixels() {
+        // A 256² tile is one source texel per output texel: no box, no LUT
+        // round trip. Alpha still follows the class rule.
+        let mut source = vec![0u8; SOURCE_EDGE * SOURCE_EDGE * 4];
+        for (index, texel) in source.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+            *texel = [index as u8, (index >> 3) as u8, 7, 128];
+        }
+        let tile =
+            downsample_to(&source, 256, 256, AlphaClass::Translucent).expect("256x256 RGBA8");
+        assert_eq!(tile.len(), 256 * 256 * 4);
+        assert_eq!(tile, source.as_slice());
+
+        let opaque = downsample_to(&source, 256, 256, AlphaClass::Opaque).expect("opaque");
+        assert!(
+            opaque
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|texel| texel[3] == 255)
+        );
+
+        // Coverage >= 50% is opaque, so alpha 128 stays filled at 1:1.
+        let cutout = downsample_to(&source, 256, 256, AlphaClass::Cutout).expect("cutout");
+        assert!(
+            cutout
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|texel| texel[3] == 255)
+        );
+    }
+
+    #[test]
+    fn every_density_reduces_the_same_source() {
+        let mut source = vec![0u8; SOURCE_EDGE * SOURCE_EDGE * 4];
+        for texel in source.as_chunks_mut::<4>().0 {
+            *texel = [200, 100, 50, 255];
+        }
+        for edge in TILE_SIZES {
+            let tile = downsample_to(&source, SOURCE_EDGE as u32, edge, AlphaClass::Opaque)
+                .unwrap_or_else(|error| panic!("{edge}px: {error}"));
+            assert_eq!(tile.len(), (edge * edge * 4) as usize);
+            assert!(
+                tile.as_chunks::<4>()
+                    .0
+                    .iter()
+                    .all(|texel| *texel == [200, 100, 50, 255]),
+                "{edge}px tile changed a solid colour"
+            );
+        }
+
+        assert!(
+            downsample_to(&source, 256, 24, AlphaClass::Opaque).is_err(),
+            "only the supported densities are accepted"
+        );
+    }
+
+    #[test]
+    fn dense_mip_chain_stops_at_one_texel_and_keeps_tiles_apart() {
+        let layout = AtlasLayout::new(64);
+        let edge = layout.atlas_size();
+        let mut base = vec![0u8; (edge * edge * 4) as usize];
+        let solid =
+            |color: [u8; 4]| -> Vec<u8> { std::iter::repeat_n(color, 64 * 64).flatten().collect() };
+        blit_region(
+            &mut base,
+            edge,
+            layout.tile_origin(0),
+            &solid([255, 0, 0, 255]),
+            64,
+        )
+        .unwrap();
+        blit_region(
+            &mut base,
+            edge,
+            layout.tile_origin(1),
+            &solid([0, 0, 255, 255]),
+            64,
+        )
+        .unwrap();
+
+        let levels = mip_chain_at(base, &[0, 1], layout).expect("mip chain");
+        assert_eq!(levels.len(), layout.mip_count() as usize);
+        for level in &levels {
+            assert_eq!(level.width, level.height);
+            assert_eq!(
+                level.pixels.len(),
+                (level.width * level.height * 4) as usize
+            );
+        }
+        assert_eq!(levels.last().unwrap().width, 16);
+
+        // The deepest level is one texel per tile: red tile 0, blue tile 1,
+        // transparent empty tile 2.
+        let deepest = levels.last().unwrap();
+        let deepest_texels = deepest.pixels.as_chunks::<4>().0;
+        assert_eq!(
+            &deepest_texels[..3],
+            &[[255, 0, 0, 255], [0, 0, 255, 255], [0, 0, 0, 0]]
+        );
+        assert!(
+            deepest_texels[3..]
+                .iter()
+                .all(|texel| *texel == [0, 0, 0, 0]),
+            "empty slots stay transparent"
+        );
+
+        // Level 1 halves each tile in place: the last red texel is adjacent to
+        // the first blue texel, never blended with it.
+        let level = &levels[1];
+        let tile_edge = level.width / 16;
+        let texel = |x: u32, y: u32| -> [u8; 4] {
+            let offset = ((y * level.width + x) * 4) as usize;
+            level.pixels[offset..offset + 4].try_into().unwrap()
+        };
+        assert_eq!(tile_edge, 32);
+        assert_eq!(texel(tile_edge - 1, 0), [255, 0, 0, 255]);
+        assert_eq!(texel(tile_edge, 0), [0, 0, 255, 255]);
+        assert_eq!(texel(2 * tile_edge, 0), [0, 0, 0, 0]);
     }
 }

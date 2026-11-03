@@ -119,3 +119,27 @@ slots, `tileIndex = materialID`, per-fragment UV and mips capped at level 4.**
 None. Layout, addressing, UV derivation and the mip cap are closed. Slot pressure is
 governed by the freeze cap, and the only named follow-up — visible coarse-mip bleed —
 has a measured trigger and a fixed fallback, so it cannot reopen the decision.
+
+## Amendment: runtime tile density (2026-11-02)
+
+The 256-slot, 16×16-grid contract stands; the **tile edge** is now a runtime
+choice of 16, 32, 64, 128 or 256 texels (`VOXEL_VIEWER_TILE`). Every edge
+divides the committed 256² sources evenly, so the bake is an exact integer box
+filter and the 256 edge is a straight copy of the authored pixels.
+
+What stays fixed:
+
+- 16×16 tile grid, 256 material slots, `tileIndex = materialId`.
+- Tiles are mip-aligned at every level; mips never filter across a seam.
+- Material ids, mesh data and vertex format are unchanged.
+- The committed `atlas.png` and `atlas.hash.ron` remain the 16-texel layout and
+  the default.
+
+What scales: the atlas edge (`16 × tile`, 256² … 4096²), the mip count (5 … 9),
+and the texels per voxel face (1 … 16). The shader reads the tile edge from the
+bound atlas with `textureDimensions`, so there is no per-density pipeline.
+
+Consequences: the 256 edge costs 85 MiB for the base level plus mips, and the
+viewer must run from a checkout to rebuild it from the committed sources. The
+16-texel default keeps the M3 memory budget (107.5 MiB of VRAM in the 256-chunk
+scene) unchanged.
