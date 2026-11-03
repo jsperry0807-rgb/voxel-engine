@@ -2,7 +2,7 @@
 //!
 //! Both entry points used to carry their own copy of the target, the tool list
 //! and the `PATH` probe, so adding or renaming a mingw tool silently made one
-//! of them wrong. They now ask this module.
+//! of them wrong. They now ask this crate.
 
 use std::path::Path;
 use std::process::{Command, Stdio};

@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "xtask",
     "crates/app-support",
+    "crates/build-support",
     "crates/core",
     "crates/ecs",
     "crates/profiling",

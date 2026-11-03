@@ -27,6 +27,7 @@ use serde::Deserialize;
 const ALLOWED: &[(&str, &[&str])] = &[
     ("voxel-core", &[]),
     ("voxel-app-support", &[]),
+    ("voxel-build-support", &[]),
     ("voxel-profiling", &[]),
     ("voxel-ecs", &[]),
     ("voxel-block", &["voxel-core"]),
@@ -46,7 +47,10 @@ const ALLOWED: &[(&str, &[&str])] = &[
             "voxel-profiling",
         ],
     ),
-    ("voxel-launcher", &["voxel-core", "voxel-app-support"]),
+    (
+        "voxel-launcher",
+        &["voxel-app-support", "voxel-build-support"],
+    ),
     (
         "voxel-texgen",
         &["voxel-app-support", "voxel-block", "voxel-texgraph"],
@@ -62,7 +66,7 @@ const ALLOWED: &[(&str, &[&str])] = &[
             "voxel-viewer",
         ],
     ),
-    ("xtask", &["voxel-core"]),
+    ("xtask", &["voxel-build-support"]),
 ];
 
 #[derive(Deserialize)]

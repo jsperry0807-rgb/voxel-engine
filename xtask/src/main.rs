@@ -10,7 +10,7 @@ use std::io::{self, IsTerminal};
 use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
 
-use voxel_core::win_toolchain::{self, Missing, TARGET};
+use voxel_build_support::{self as win_toolchain, Missing, TARGET};
 
 mod layers;
 

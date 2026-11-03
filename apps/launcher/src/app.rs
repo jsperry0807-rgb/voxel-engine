@@ -13,7 +13,7 @@ use eframe::egui::{self, Color32, RichText};
 use crate::jobs::{CommandSpec, Job, Runner, Status};
 
 /// The Windows target, shared with `xtask` so the two entry points cannot drift.
-const WINDOWS_TARGET: &str = voxel_core::win_toolchain::TARGET;
+const WINDOWS_TARGET: &str = voxel_build_support::TARGET;
 /// True when the Windows build is a cross-build (Unix host). On Windows the
 /// "Windows build" is just the host build, with no mingw-w64 toolchain.
 const CROSS_BUILD: bool = cfg!(unix);
@@ -1205,9 +1205,9 @@ fn log_text_size_for(width: f32, height: f32) -> f32 {
 
 /// True when both the Rust target and every mingw-w64 tool are installed.
 ///
-/// The probe itself lives in `voxel_core::win_toolchain`, shared with `xtask`.
+/// The probe itself lives in `voxel_build_support`, shared with `xtask`.
 fn windows_toolchain_ready() -> bool {
-    voxel_core::win_toolchain::missing().is_empty()
+    voxel_build_support::missing().is_empty()
 }
 
 /// True when `path` is a file with an execute bit.

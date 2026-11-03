@@ -3503,6 +3503,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "voxel-build-support"
+version = "0.1.0"
+
+[[package]]
 name = "voxel-core"
 version = "0.1.0"
 
@@ -3524,7 +3528,7 @@ dependencies = [
  "eframe",
  "libc",
  "voxel-app-support",
- "voxel-core",
+ "voxel-build-support",
  "winit",
 ]
 
@@ -4529,7 +4533,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "voxel-core",
+ "voxel-build-support",
 ]
 
 [[package]]
