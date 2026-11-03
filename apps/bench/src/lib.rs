@@ -36,6 +36,7 @@
 //! its hashes and rebuilds it from the manifest recipe. [`gate`] holds the
 //! pre-registered M1 measurements over that fixture (M1-35 onward).
 
+pub mod cli;
 pub mod fixture;
 pub mod fixtures;
 pub mod frame;
