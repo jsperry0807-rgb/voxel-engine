@@ -145,21 +145,13 @@ group_by = "directory"
 [[section]]
 id = "applications"
 title = "Applications"
-description = "The desktop launcher and the standalone texture editor."
+description = "The desktop viewer, launcher, texture editor and benchmark suite."
 match = ["apps/**/*.md"]
 
 [[section]]
 id = "crates"
 title = "Crates"
 description = "Crate-level READMEs and design notes."
-[[section.child]]
-id = "engine_viewer"
-title = "engine / viewer"
-match = ["crates/engine/viewer/**"]
-[[section.child]]
-id = "bench"
-title = "bench"
-match = ["crates/bench/**"]
 [[section.child]]
 id = "ecs"
 title = "ECS"

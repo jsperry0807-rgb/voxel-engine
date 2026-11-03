@@ -461,7 +461,7 @@ impl Atlas {
         }
         let manifest_path = path
             .parent()
-            .map(|directory| directory.join("../../../../engine/block/data/textures.ron"))
+            .map(|directory| directory.join("../../../../crates/engine/block/data/textures.ron"))
             .unwrap_or_else(|| PathBuf::from("crates/engine/block/data/textures.ron"));
         let manifest = fs::read(&manifest_path).map_err(|source| AtlasLoadError::Io {
             path: manifest_path.clone(),

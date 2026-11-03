@@ -617,7 +617,7 @@ impl LauncherApp {
             TextureSource::Voxgen => {
                 ui.label(
                     RichText::new(
-                        "Committed atlas from the texgen graphs (crates/engine/viewer/assets/atlas).",
+                        "Committed atlas from the texgen graphs (apps/viewer/assets/atlas).",
                     )
                     .weak()
                     .small(),

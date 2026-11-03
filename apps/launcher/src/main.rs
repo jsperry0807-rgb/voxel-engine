@@ -130,7 +130,7 @@ fn validate_root(root: PathBuf) -> Result<PathBuf, String> {
 /// A workspace root contains the launcher and the viewer crate.
 fn is_root(directory: &Path) -> bool {
     directory.join("apps/launcher/Cargo.toml").is_file()
-        && directory.join("crates/engine/viewer/Cargo.toml").is_file()
+        && directory.join("apps/viewer/Cargo.toml").is_file()
 }
 
 fn print_help() {

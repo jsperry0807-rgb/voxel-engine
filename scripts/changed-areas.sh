@@ -87,10 +87,10 @@ while IFS= read -r path; do
   if [[ $path == *.wgsl || $path == crates/engine/render/* ]]; then
     shaders=true
   fi
-  if [[ $path == crates/engine/viewer/* || $path == apps/launcher/* ]]; then
+  if [[ $path == apps/viewer/* || $path == apps/launcher/* ]]; then
     viewer=true
   fi
-  if [[ $path == crates/bench/* || $path == crates/profiling/* ]]; then
+  if [[ $path == apps/bench/* || $path == crates/profiling/* ]]; then
     bench=true
   fi
   case $path in

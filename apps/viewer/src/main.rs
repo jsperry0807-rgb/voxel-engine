@@ -267,7 +267,7 @@ fn build_dense_atlas(layout: AtlasLayout) -> Result<Atlas, ViewerError> {
 }
 
 /// The committed atlas path, relative to the repository root.
-const COMMITTED_ATLAS: &str = "crates/engine/viewer/assets/atlas/atlas.png";
+const COMMITTED_ATLAS: &str = "apps/viewer/assets/atlas/atlas.png";
 
 /// Loads and verifies the committed atlas, or builds the requested density.
 ///

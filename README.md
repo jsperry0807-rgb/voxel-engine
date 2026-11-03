@@ -26,7 +26,7 @@ cargo test --workspace         # tests (GPU cases skip without an adapter)
 ```
 
 Controls and scene options are in
-[`crates/engine/viewer/README.md`](crates/engine/viewer/README.md). Texture and
+[`apps/viewer/README.md`](apps/viewer/README.md). Texture and
 material work uses the standalone editor in [`apps/texgen/README.md`](apps/texgen/README.md).
 
 ## Documentation
@@ -56,9 +56,9 @@ python3 scripts/build-docs-site.py
 
 | Path | Contents |
 |---|---|
-| `crates/engine/` | block, mesh, render, storage, viewer, texgraph, worldgen |
-| `crates/` | core, bench, profiling, app support, vendored ECS |
-| `apps/` | `launcher` and `texgen` desktop applications |
+| `crates/engine/` | block, mesh, render, storage, texgraph, worldgen |
+| `crates/` | core, profiling, app support, vendored ECS |
+| `apps/` | `viewer`, `launcher`, `texgen` and `bench` applications |
 | `benchmarks/` | recorded runs, history, fixtures and lens definitions |
 | `docs/` | specifications, ADRs, milestone reports and engineering notes |
 | `scripts/` | health, bench, constants and documentation-site tooling |

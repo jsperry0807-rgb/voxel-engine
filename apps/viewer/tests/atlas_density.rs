@@ -7,7 +7,7 @@ use voxel_texgraph::pipeline::Workspace;
 use voxel_viewer::atlas::{Atlas, AtlasLayout, MipLevel};
 
 fn workspace() -> Workspace {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     Workspace::at(root).expect("the viewer test runs inside the workspace")
 }
 

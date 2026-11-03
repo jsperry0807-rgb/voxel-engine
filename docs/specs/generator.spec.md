@@ -12,7 +12,7 @@ Tasks: M1.5-06, -07, -08, -09, -12, -13, -14, -15, -16 (done); -17 (texel-densit
 | --- | ---------- | -------------- |
 | D1 | Manifest fields / enums | `textures.ron` schema 1, fields in 4.2; `Opaque`, `Cutout`, `Translucent` |
 | D2 | Licence/provenance | Top-level, one each (`CC0-1.0`); per-entry override allowed later |
-| D3 | Bake outputs | `crates/engine/viewer/assets/atlas/atlas.png` + `atlas.hash.ron` |
+| D3 | Bake outputs | `apps/viewer/assets/atlas/atlas.png` + `atlas.hash.ron` |
 | D4 | Downsample filter | 16x16 box, linear light, alpha-weighted, integer math, round-half-up (6.2); runtime densities use the same filter at 32²/64²/128²/256², where 256² is a 1×1 box (copy) |
 | D5 | Material table file | `crates/engine/block/data/materials.gen.ron` (7.3) |
 | D6 | Block vs material | `BlockId` = identity; `MaterialId(u8)` = face variant; `FaceMaterials` = 6 ids (7.1) |
@@ -183,8 +183,8 @@ Command: `cargo run -p voxel-viewer -- bake-atlas [--check]`
 
 ### 6.3 Outputs (D3)
 
-- `crates/engine/viewer/assets/atlas/atlas.png`: 256x256 RGBA8 base level, encoder per 5.4. Mips are not stored; `AtlasBuilder` regenerates them at load (per tile, never across tiles).
-- `crates/engine/viewer/assets/atlas/atlas.hash.ron`:
+- `apps/viewer/assets/atlas/atlas.png`: 256x256 RGBA8 base level, encoder per 5.4. Mips are not stored; `AtlasBuilder` regenerates them at load (per tile, never across tiles).
+- `apps/viewer/assets/atlas/atlas.hash.ron`:
 
 ```ron
 (

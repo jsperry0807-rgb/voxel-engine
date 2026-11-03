@@ -15,12 +15,12 @@ pollster = "1"
 ron = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-voxel-app-support = { path = "../../app-support" }
-voxel-core = { path = "../../core" }
-voxel-mesh = { path = "../mesh" }
-voxel-profiling = { path = "../../profiling" }
-voxel-storage = { path = "../storage" }
-voxel-texgraph = { path = "../texgraph" }
+voxel-app-support = { path = "../../crates/app-support" }
+voxel-core = { path = "../../crates/core" }
+voxel-mesh = { path = "../../crates/engine/mesh" }
+voxel-profiling = { path = "../../crates/profiling" }
+voxel-storage = { path = "../../crates/engine/storage" }
+voxel-texgraph = { path = "../../crates/engine/texgraph" }
 wgpu = "30"
 winit = "0.30"
 

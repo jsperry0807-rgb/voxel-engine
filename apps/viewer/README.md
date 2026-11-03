@@ -15,7 +15,7 @@ cargo run -p voxel-viewer
 ```
 
 The viewer opens at 1920×1080 and loads
-`crates/engine/viewer/assets/atlas/atlas.png`, verifying it against
+`apps/viewer/assets/atlas/atlas.png`, verifying it against
 `atlas.hash.ron`. Regenerate the atlas with:
 
 ```sh
@@ -74,7 +74,7 @@ VOXEL_SCENE_SEED=0xCAFE cargo run -p voxel-viewer
 ```
 
 The same seed always produces the same world; `VOXEL_SCENE_SEED` accepts decimal
-or `0x` hex. See [`docs/milestones/m3/m3-08-stress-scene.md`](../../../docs/milestones/m3/m3-08-stress-scene.md)
+or `0x` hex. See [`docs/milestones/m3/m3-08-stress-scene.md`](../../docs/milestones/m3/m3-08-stress-scene.md)
 for the variants, the canopy rules and the u16 index budget.
 
 ## Controls
@@ -112,7 +112,7 @@ writes one `frame,t_ns,frame_ns` row per presented frame. The default one-second
 line stays at `debug` because it is noise on a display that does not pace
 presents. Use `--warmup` on the bench command to discard startup frames, and run
 the scripted flight from
-[`docs/specs/reference-machine.md`](../../../docs/specs/reference-machine.md) before
+[`docs/specs/reference-machine.md`](../../docs/specs/reference-machine.md) before
 quoting a 60 Hz result. `VOXEL_FRAME_PROFILE=0` disables the collector.
 
 ## Validation
@@ -142,7 +142,7 @@ default 1200; `VOXEL_FRAMETIME_SETTLE`, default 12), writes the JSON — average
 1% / 0.1% lows, frame and stage percentiles, adapter, resolution, seed — and
 exits 0. `_EYE`/`_TARGET` pin the pose so runs are comparable; without them the
 interactive start camera is used. See
-[`docs/milestones/m3/m3-10-60hz.md`](../../../docs/milestones/m3/m3-10-60hz.md).
+[`docs/milestones/m3/m3-10-60hz.md`](../../docs/milestones/m3/m3-10-60hz.md).
 
 ## Screenshots
 
@@ -161,21 +161,21 @@ counts frames **after** the ring is loaded (default 12); `_EYE`/`_TARGET` pin a
 fixed pose in world units and are optional. The capture copies the swap-chain
 texture in the frame's own encoder, so it is the frame that would have been
 presented. The M3-08 scene image is
-[`docs/images/m3-08-stress-scene.png`](../../../docs/images/m3-08-stress-scene.png).
+[`docs/images/m3-08-stress-scene.png`](../../docs/images/m3-08-stress-scene.png).
 
 The M1.5-15 acceptance set lives in `docs/images/`:
 
-- [`m1.5-15-face-sheet.png`](../../../docs/images/m1.5-15-face-sheet.png) — slots
+- [`m1.5-15-face-sheet.png`](../../docs/images/m1.5-15-face-sheet.png) — slots
   1–40 row-major on an 8×5 grid, 256² each at 1:1.
-- [`m1.5-15-grass-block.png`](../../../docs/images/m1.5-15-grass-block.png) — top
+- [`m1.5-15-grass-block.png`](../../docs/images/m1.5-15-grass-block.png) — top
   and side view plus a bottom view.
-- [`m1.5-15-sandstone-block.png`](../../../docs/images/m1.5-15-sandstone-block.png)
-- [`m1.5-15-log-and-leaves.png`](../../../docs/images/m1.5-15-log-and-leaves.png)
-- [`m1.5-15-ores.png`](../../../docs/images/m1.5-15-ores.png) — stone, coal, iron,
+- [`m1.5-15-sandstone-block.png`](../../docs/images/m1.5-15-sandstone-block.png)
+- [`m1.5-15-log-and-leaves.png`](../../docs/images/m1.5-15-log-and-leaves.png)
+- [`m1.5-15-ores.png`](../../docs/images/m1.5-15-ores.png) — stone, coal, iron,
   gold and diamond.
-- [`m1.5-15-translucent.png`](../../../docs/images/m1.5-15-translucent.png) — water
+- [`m1.5-15-translucent.png`](../../docs/images/m1.5-15-translucent.png) — water
   and ice over the dark background.
-- [`m1.5-15-chunk-1080p.png`](../../../docs/images/m1.5-15-chunk-1080p.png) — one
+- [`m1.5-15-chunk-1080p.png`](../../docs/images/m1.5-15-chunk-1080p.png) — one
   chunk at near, mid and far distances.
 
 Regenerate them with:
@@ -190,6 +190,6 @@ and the committed 16×16-tile atlas (`m1.5-17-after-16px-<hash>.png`). Both side
 sample level 0 with nearest filtering so the pair isolates density from the
 runtime mip path. `<hash>` is the first eight hex characters of
 `atlas_png_blake3`. The current pair is
-[`m1.5-17-before-256px-851e3b6e.png`](../../../docs/images/m1.5-17-before-256px-851e3b6e.png)
+[`m1.5-17-before-256px-851e3b6e.png`](../../docs/images/m1.5-17-before-256px-851e3b6e.png)
 and
-[`m1.5-17-after-16px-851e3b6e.png`](../../../docs/images/m1.5-17-after-16px-851e3b6e.png).
+[`m1.5-17-after-16px-851e3b6e.png`](../../docs/images/m1.5-17-after-16px-851e3b6e.png).

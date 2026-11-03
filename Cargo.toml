@@ -3,16 +3,16 @@ resolver = "3"
 members = [
     "xtask",
     "crates/app-support",
-    "crates/bench",
     "crates/core",
     "crates/profiling",
     "crates/engine/block",
     "crates/engine/mesh",
     "crates/engine/render",
     "crates/engine/storage",
-    "crates/engine/viewer",
     "crates/engine/texgraph",
     "crates/engine/worldgen",
+    "apps/bench",
+    "apps/viewer",
     "apps/texgen",
     "apps/launcher",
 ]

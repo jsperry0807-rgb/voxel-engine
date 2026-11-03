@@ -368,11 +368,11 @@ check_frame_profiling() {
   {
     echo "Searching the bench suite for frame-time, 1% low, hitch or FPS evidence."
     grep -RniE 'frame.?time|1% ?low|frametime|hitch|\bfps\b' \
-      crates/bench/src crates/bench/benches --include='*.rs' 2>/dev/null || true
+      apps/bench/src apps/bench/benches --include='*.rs' 2>/dev/null || true
   } >"$log" 2>&1
 
   if grep -RqiE 'frame.?time|1% ?low|frametime|hitch|\bfps\b' \
-      crates/bench/src crates/bench/benches --include='*.rs' 2>/dev/null; then
+      apps/bench/src apps/bench/benches --include='*.rs' 2>/dev/null; then
     end_check "in-repo" "$name" PASS "bench suite has a frame-time/hitch lens" "$log" 0
   else
     FRAME_GAP=1
@@ -402,9 +402,9 @@ check_gpu_validation() {
 
 check_viewer_validation() {
   local name="GPU validation test"
-  local test_file="crates/engine/viewer/tests/validation.rs"
+  local test_file="apps/viewer/tests/validation.rs"
   if [[ ! -f "$test_file" ]]; then
-    skip_check "in-repo" "$name" "crates/engine/viewer/tests/validation.rs is not present"
+    skip_check "in-repo" "$name" "apps/viewer/tests/validation.rs is not present"
     return
   fi
 

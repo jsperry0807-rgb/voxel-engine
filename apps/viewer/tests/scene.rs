@@ -22,7 +22,7 @@ use voxel_viewer::streaming::ring_chunks;
 const M1_5_14_SLOTS: std::ops::RangeInclusive<u16> = 1..=23;
 
 fn root() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
 /// The committed face table, in slot order.

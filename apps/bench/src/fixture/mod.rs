@@ -578,7 +578,7 @@ fn provenance(fixture_root: &Path) -> Provenance {
     Provenance {
         kind: "synthetic-engine-generated".to_owned(),
         generator: format!("voxel-bench fixture world ({GENERATOR} v{GENERATOR_VERSION})"),
-        generator_source: "crates/bench/src/fixture/world.rs".to_owned(),
+        generator_source: "apps/bench/src/fixture/world.rs".to_owned(),
         captured_from_gameplay: false,
         external_data: false,
         generated_by: "cargo run -p voxel-bench -- fixture build".to_owned(),

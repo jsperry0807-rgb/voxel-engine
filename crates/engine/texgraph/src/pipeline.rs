@@ -125,7 +125,7 @@ impl Workspace {
     }
 
     pub fn atlas_dir(&self) -> PathBuf {
-        self.root.join("crates/engine/viewer/assets/atlas")
+        self.root.join("apps/viewer/assets/atlas")
     }
 
     pub fn atlas_png_path(&self) -> PathBuf {

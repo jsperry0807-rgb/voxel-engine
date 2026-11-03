@@ -16,7 +16,7 @@ use voxel_viewer::streaming::{PUMP_BUDGET, RING_CHUNKS, RING_HALF};
 use voxel_viewer::upload;
 
 fn config() -> serde_json::Value {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks/m3-scene.json");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../benchmarks/m3-scene.json");
     let text = std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
     serde_json::from_str(&text).unwrap_or_else(|error| panic!("parse {}: {error}", path.display()))
@@ -89,7 +89,7 @@ fn the_frozen_gate_settings_match_the_code() {
     let reference = gate["reference_image"].as_str().expect("a reference path");
     assert!(
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../..")
+            .join("../..")
             .join(reference)
             .is_file(),
         "the frozen reference image exists: {reference}"

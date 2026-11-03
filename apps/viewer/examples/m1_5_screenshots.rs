@@ -209,7 +209,7 @@ impl LegacyAtlas {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut out = root.join("docs/images");
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -224,7 +224,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let gpu = Gpu::new(&root)?;
     let legacy = LegacyAtlas::new(&gpu, &root)?;
     let atlas_hash: AtlasHash = ron::from_str(&std::fs::read_to_string(
-        root.join("crates/engine/viewer/assets/atlas/atlas.hash.ron"),
+        root.join("apps/viewer/assets/atlas/atlas.hash.ron"),
     )?)?;
     let hash = atlas_hash
         .atlas_png_blake3
@@ -434,8 +434,7 @@ impl Gpu {
         })?;
         let (device, queue) =
             pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))?;
-        let atlas =
-            Atlas::load_verified(&root.join("crates/engine/viewer/assets/atlas/atlas.png"))?;
+        let atlas = Atlas::load_verified(&root.join("apps/viewer/assets/atlas/atlas.png"))?;
         let atlas = AtlasTexture::new(&device, &queue, &atlas);
         let camera_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("screenshot camera"),

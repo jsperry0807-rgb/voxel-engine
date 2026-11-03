@@ -67,7 +67,7 @@ and the open conditions.
 ## Tools
 
 - [`apps/launcher/README.md`](../apps/launcher/README.md) — the desktop launcher: viewer, texture tools, checks and the Linux/Windows builds.
-- [`crates/engine/viewer/README.md`](../crates/engine/viewer/README.md) — the M1.5 viewer: run instructions, controls and the slice screenshot.
+- [`apps/viewer/README.md`](../apps/viewer/README.md) — the M1.5 viewer: run instructions, controls and the slice screenshot.
 - [`apps/texgen/README.md`](../apps/texgen/README.md) — the standalone Material Maker-style texture and material editor.
 - [`texgen-backlog.md`](notes/texgen-backlog.md) — what texgen still needs, what is deferred, and what is done.
 
@@ -135,7 +135,7 @@ where they conflict with the spec.
 - [`reference-machine.md`](specs/reference-machine.md) — the 60 Hz frame-time target and the viewer trace command
 - [`../benchmarks/README.md`](../benchmarks/README.md) — run archive, lenses, caveats
 - [`../benchmarks/HISTORY.md`](../benchmarks/HISTORY.md) — every recorded run with deltas
-- [`../crates/bench/README.md`](../crates/bench/README.md) — harness internals
+- [`../apps/bench/README.md`](../apps/bench/README.md) — harness internals
 
 ## Tooling
 

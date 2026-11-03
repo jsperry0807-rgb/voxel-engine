@@ -171,7 +171,7 @@ crates/engine/texgraph          deterministic core (no GUI dependency)
   pipeline.rs                   graphs → PNGs → manifest → materials → atlas
 crates/engine/block/textures    committed graphs and source PNGs
 crates/engine/block/data        committed manifest and material table
-crates/engine/viewer/assets     committed atlas and atlas hash
+apps/viewer/assets     committed atlas and atlas hash
 ```
 
 ## Contract
